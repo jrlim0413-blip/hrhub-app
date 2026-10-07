@@ -1,0 +1,344 @@
+[
+  {
+    "id": "greeting_0",
+    "audioUrl": "/audio/greeting_0.mp3",
+    "display": "Hello! I am your HRHub AI Buddy, ready to assist you today! ✨",
+    "spoken": "Hello! I am your HR Hub AI Buddy, ready to assist you today!",
+    "words": [
+      "Hello!",
+      "I",
+      "am",
+      "your",
+      "HRHub",
+      "AI",
+      "Buddy,",
+      "ready",
+      "to",
+      "assist",
+      "you",
+      "today!",
+      "✨"
+    ],
+    "boundaries": [
+      {
+        "word": "Hello",
+        "offsetMs": 100,
+        "durationMs": 575
+      },
+      {
+        "word": "I",
+        "offsetMs": 1538,
+        "durationMs": 163
+      },
+      {
+        "word": "am",
+        "offsetMs": 1713,
+        "durationMs": 100
+      },
+      {
+        "word": "your",
+        "offsetMs": 1825,
+        "durationMs": 188
+      },
+      {
+        "word": "HR",
+        "offsetMs": 2025,
+        "durationMs": 338
+      },
+      {
+        "word": "Hub",
+        "offsetMs": 2375,
+        "durationMs": 188
+      },
+      {
+        "word": "AI",
+        "offsetMs": 2575,
+        "durationMs": 225
+      },
+      {
+        "word": "Buddy",
+        "offsetMs": 2813,
+        "durationMs": 375
+      },
+      {
+        "word": "ready",
+        "offsetMs": 3375,
+        "durationMs": 225
+      },
+      {
+        "word": "to",
+        "offsetMs": 3613,
+        "durationMs": 125
+      },
+      {
+        "word": "assist",
+        "offsetMs": 3750,
+        "durationMs": 388
+      },
+      {
+        "word": "you",
+        "offsetMs": 4150,
+        "durationMs": 100
+      },
+      {
+        "word": "today",
+        "offsetMs": 4263,
+        "durationMs": 450
+      }
+    ]
+  },
+  {
+    "id": "greeting_1",
+    "audioUrl": "/audio/greeting_1.mp3",
+    "display": "Ask me anything about company policies, memos, and HR operations! 💬",
+    "spoken": "Ask me anything about company policies, memos, and HR operations!",
+    "words": [
+      "Ask",
+      "me",
+      "anything",
+      "about",
+      "company",
+      "policies,",
+      "memos,",
+      "and",
+      "HR",
+      "operations!",
+      "💬"
+    ],
+    "boundaries": [
+      {
+        "word": "Ask",
+        "offsetMs": 100,
+        "durationMs": 275
+      },
+      {
+        "word": "me",
+        "offsetMs": 388,
+        "durationMs": 150
+      },
+      {
+        "word": "anything",
+        "offsetMs": 550,
+        "durationMs": 413
+      },
+      {
+        "word": "about",
+        "offsetMs": 975,
+        "durationMs": 263
+      },
+      {
+        "word": "company",
+        "offsetMs": 1250,
+        "durationMs": 363
+      },
+      {
+        "word": "policies",
+        "offsetMs": 1625,
+        "durationMs": 738
+      },
+      {
+        "word": "memos",
+        "offsetMs": 2475,
+        "durationMs": 563
+      },
+      {
+        "word": "and",
+        "offsetMs": 3163,
+        "durationMs": 163
+      },
+      {
+        "word": "HR",
+        "offsetMs": 3338,
+        "durationMs": 338
+      },
+      {
+        "word": "operations",
+        "offsetMs": 3688,
+        "durationMs": 888
+      }
+    ]
+  },
+  {
+    "id": "greeting_2",
+    "audioUrl": "/audio/greeting_2.mp3",
+    "display": "Need help drafting a memo or computing employee benefits? Just let me know! 📋",
+    "spoken": "Need help drafting a memo or computing employee benefits? Just let me know!",
+    "words": [
+      "Need",
+      "help",
+      "drafting",
+      "a",
+      "memo",
+      "or",
+      "computing",
+      "employee",
+      "benefits?",
+      "Just",
+      "let",
+      "me",
+      "know!",
+      "📋"
+    ],
+    "boundaries": [
+      {
+        "word": "Need",
+        "offsetMs": 100,
+        "durationMs": 225
+      },
+      {
+        "word": "help",
+        "offsetMs": 338,
+        "durationMs": 213
+      },
+      {
+        "word": "drafting",
+        "offsetMs": 563,
+        "durationMs": 425
+      },
+      {
+        "word": "a",
+        "offsetMs": 1000,
+        "durationMs": 50
+      },
+      {
+        "word": "memo",
+        "offsetMs": 1063,
+        "durationMs": 400
+      },
+      {
+        "word": "or",
+        "offsetMs": 1475,
+        "durationMs": 150
+      },
+      {
+        "word": "computing",
+        "offsetMs": 1638,
+        "durationMs": 475
+      },
+      {
+        "word": "employee",
+        "offsetMs": 2125,
+        "durationMs": 375
+      },
+      {
+        "word": "benefits",
+        "offsetMs": 2513,
+        "durationMs": 713
+      },
+      {
+        "word": "Just",
+        "offsetMs": 4088,
+        "durationMs": 288
+      },
+      {
+        "word": "let",
+        "offsetMs": 4388,
+        "durationMs": 113
+      },
+      {
+        "word": "me",
+        "offsetMs": 4513,
+        "durationMs": 113
+      },
+      {
+        "word": "know",
+        "offsetMs": 4638,
+        "durationMs": 413
+      }
+    ]
+  },
+  {
+    "id": "greeting_3",
+    "audioUrl": "/audio/greeting_3.mp3",
+    "display": "Welcome to HRHub! Feel free to click here to chat with me anytime! 😊",
+    "spoken": "Welcome to HR Hub! Feel free to click here to chat with me anytime!",
+    "words": [
+      "Welcome",
+      "to",
+      "HRHub!",
+      "Feel",
+      "free",
+      "to",
+      "click",
+      "here",
+      "to",
+      "chat",
+      "with",
+      "me",
+      "anytime!",
+      "😊"
+    ],
+    "boundaries": [
+      {
+        "word": "Welcome",
+        "offsetMs": 100,
+        "durationMs": 363
+      },
+      {
+        "word": "to",
+        "offsetMs": 475,
+        "durationMs": 113
+      },
+      {
+        "word": "HR",
+        "offsetMs": 600,
+        "durationMs": 375
+      },
+      {
+        "word": "Hub",
+        "offsetMs": 988,
+        "durationMs": 338
+      },
+      {
+        "word": "Feel",
+        "offsetMs": 2188,
+        "durationMs": 263
+      },
+      {
+        "word": "free",
+        "offsetMs": 2463,
+        "durationMs": 175
+      },
+      {
+        "word": "to",
+        "offsetMs": 2650,
+        "durationMs": 100
+      },
+      {
+        "word": "click",
+        "offsetMs": 2763,
+        "durationMs": 250
+      },
+      {
+        "word": "here",
+        "offsetMs": 3025,
+        "durationMs": 188
+      },
+      {
+        "word": "to",
+        "offsetMs": 3225,
+        "durationMs": 88
+      },
+      {
+        "word": "chat",
+        "offsetMs": 3325,
+        "durationMs": 250
+      },
+      {
+        "word": "with",
+        "offsetMs": 3588,
+        "durationMs": 138
+      },
+      {
+        "word": "me",
+        "offsetMs": 3738,
+        "durationMs": 150
+      },
+      {
+        "word": "anytime",
+        "offsetMs": 3900,
+        "durationMs": 688
+      }
+    ]
+  }
+]

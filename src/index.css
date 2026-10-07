@@ -1,0 +1,345 @@
+@import "tailwindcss";
+
+@media print {
+  tr, td, th, .cell-wrap {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+    -webkit-column-break-inside: avoid !important;
+  }
+
+  /* Strict A4 Portrait Paper */
+  @page {
+    size: A4 portrait;
+    margin: 0;
+  }
+
+  html, body {
+    width: 210mm !important;
+    height: 297mm !important;
+    max-height: 297mm !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  body.printing-agent-id-card {
+    background: #ffffff !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 210mm !important;
+    height: 297mm !important;
+    max-height: 297mm !important;
+    overflow: hidden !important;
+  }
+
+  body.printing-agent-id-card * {
+    visibility: hidden !important;
+  }
+
+  body.printing-agent-id-card #printable-id-card-area,
+  body.printing-agent-id-card #printable-id-card-area * {
+    visibility: visible !important;
+  }
+
+  /* Completely suppress preview UI badges and helpers during print */
+  body.printing-agent-id-card .no-print,
+  body.printing-agent-id-card .no-print * {
+    display: none !important;
+    visibility: hidden !important;
+  }
+
+  /* Positioned near the top of A4 Sheet (5mm top offset, 4.5mm side margins)
+     Card size: 99.5mm x 140mm
+     Total card width: 99.5mm + 2mm + 99.5mm = 201mm
+     Leaves safe 4.5mm margin on left and right
+     Guarantees all 4 borders (top, bottom, left, and RIGHT edge) are 100% visible!
+  */
+  body.printing-agent-id-card #printable-id-card-area {
+    position: relative !important;
+    width: 100% !important;
+    max-width: 210mm !important;
+    height: auto !important;
+    max-height: 155mm !important;
+    overflow: visible !important;
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    justify-content: center !important;
+    align-items: flex-start !important;
+    padding-top: 5mm !important; /* Lowered by 5mm so top line is 100% visible */
+    padding-left: 4.5mm !important; /* 4.5mm margin protects left edge */
+    padding-right: 4.5mm !important; /* 4.5mm margin protects right edge */
+    margin-top: 0 !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    gap: 2mm !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    page-break-after: avoid !important;
+    break-after: avoid !important;
+  }
+
+  /* Calibrated Card Face in Print:
+     Width: 99.5mm
+     Height: 140mm
+     Heavy, distinct 2px solid black outline on all 4 borders!
+  */
+  body.printing-agent-id-card #printable-id-card-area.print-top-side-by-side .id-card-face,
+  body.printing-agent-id-card .id-card-face {
+    width: 99.5mm !important;
+    height: 140mm !important;
+    min-width: 99.5mm !important;
+    min-height: 140mm !important;
+    max-width: 99.5mm !important;
+    max-height: 140mm !important;
+    box-sizing: border-box !important;
+    box-shadow: none !important;
+    border: 2px solid #000000 !important; /* Solid black outline on all 4 sides */
+    border-radius: 0 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+    margin: 0 !important;
+    padding: 2.5mm 3.5mm !important;
+  }
+
+  body.printing-agent-id-card .id-card-front {
+    padding: 0 !important;
+  }
+
+  /* Shortened ID number line: exactly 1 1/2 inches (38.1mm) in print */
+  body.printing-agent-id-card .id-number-line {
+    width: 38.1mm !important;
+    max-width: 38.1mm !important;
+  }
+}
+
+
+/* Sleek custom scrollbars for sticky sidebars */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.35);
+  border-radius: 9999px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 116, 139, 0.6);
+}
+
+/* Ensure details disclosure triangle marker is visible across all browsers */
+summary {
+  display: list-item;
+}
+
+/* Modern professional skeleton shimmer wave */
+@keyframes shimmerWave {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.shimmer-wave {
+  background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+  background-size: 200% 100%;
+  animation: shimmerWave 2s infinite ease-in-out;
+}
+
+/* Holographic Laser Scan Beam */
+@keyframes scanBeam {
+  0% {
+    top: 0%;
+    opacity: 0.2;
+  }
+  50% {
+    top: 92%;
+    opacity: 0.85;
+  }
+  100% {
+    top: 0%;
+    opacity: 0.2;
+  }
+}
+
+.animate-scan-beam {
+  animation: scanBeam 2.6s ease-in-out infinite;
+}
+
+/* Precision Orbital Rings */
+@keyframes spinSlow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes spinReverseSlow {
+  from { transform: rotate(360deg); }
+  to { transform: rotate(0deg); }
+}
+
+.animate-spin-slow {
+  animation: spinSlow 9s linear infinite;
+}
+
+.animate-spin-reverse-slow {
+  animation: spinReverseSlow 6s linear infinite;
+}
+
+/* Dynamic Live Data Equalizer Bars */
+@keyframes dataBarPulse {
+  0%, 100% {
+    height: 6px;
+    opacity: 0.45;
+  }
+  50% {
+    height: 22px;
+    opacity: 1;
+  }
+}
+
+.data-bar-1 { animation: dataBarPulse 1.1s ease-in-out infinite 0.1s; }
+.data-bar-2 { animation: dataBarPulse 1.3s ease-in-out infinite 0.35s; }
+.data-bar-3 { animation: dataBarPulse 0.9s ease-in-out infinite 0.2s; }
+.data-bar-4 { animation: dataBarPulse 1.4s ease-in-out infinite 0.5s; }
+.data-bar-5 { animation: dataBarPulse 1.0s ease-in-out infinite 0.15s; }
+
+/* Stream Flow Beam */
+@keyframes streamFlow {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+.animate-stream-flow {
+  animation: streamFlow 1.6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+/* Physics-based Spring Bounce for Hero Badge */
+@keyframes springBounce {
+  0%, 100% {
+    transform: translateY(0) scale(1, 1);
+    animation-timing-function: cubic-bezier(0.8, 0, 1, 1);
+  }
+  50% {
+    transform: translateY(-22px) scale(0.96, 1.05);
+    animation-timing-function: cubic-bezier(0, 0, 0.2, 1);
+  }
+  85% {
+    transform: translateY(0) scale(1.06, 0.92);
+  }
+  92% {
+    transform: translateY(-5px) scale(0.98, 1.02);
+  }
+}
+
+.animate-spring-bounce {
+  animation: springBounce 1.6s infinite;
+}
+
+/* Floor Shadow Squash & Stretch */
+@keyframes shadowSquash {
+  0%, 100% {
+    transform: scale(1.1);
+    opacity: 0.55;
+    animation-timing-function: cubic-bezier(0.8, 0, 1, 1);
+  }
+  50% {
+    transform: scale(0.45);
+    opacity: 0.15;
+    animation-timing-function: cubic-bezier(0, 0, 0.2, 1);
+  }
+}
+
+.animate-shadow-squash {
+  animation: shadowSquash 1.6s infinite;
+}
+
+/* Harmonic 3-Dot Bounce Wave */
+@keyframes dotWaveBounce {
+  0%, 100% {
+    transform: translateY(0) scale(1);
+    opacity: 0.45;
+  }
+  50% {
+    transform: translateY(-14px) scale(1.2);
+    opacity: 1;
+  }
+}
+
+.animate-dot-bounce-1 {
+  animation: dotWaveBounce 1.1s cubic-bezier(0.34, 1.56, 0.64, 1) infinite 0s;
+}
+
+.animate-dot-bounce-2 {
+  animation: dotWaveBounce 1.1s cubic-bezier(0.34, 1.56, 0.64, 1) infinite 0.18s;
+}
+
+.animate-dot-bounce-3 {
+  animation: dotWaveBounce 1.1s cubic-bezier(0.34, 1.56, 0.64, 1) infinite 0.36s;
+}
+
+/* Pipeline Step Hop / Bounce */
+@keyframes stepHop {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+.animate-step-hop-1 {
+  animation: stepHop 1.8s cubic-bezier(0.34, 1.56, 0.64, 1) infinite 0.1s;
+}
+
+.animate-step-hop-2 {
+  animation: stepHop 1.8s cubic-bezier(0.34, 1.56, 0.64, 1) infinite 0.4s;
+}
+
+.animate-step-hop-3 {
+  animation: stepHop 1.8s cubic-bezier(0.34, 1.56, 0.64, 1) infinite 0.7s;
+}
+
+/* Float Bounce for Avatar */
+@keyframes floatBounce {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+.animate-float-bounce {
+  animation: floatBounce 2.5s ease-in-out infinite;
+}
+
+/* News Marquee & Radar Animations */
+@keyframes marquee {
+  0% {
+    transform: translateX(100%);
+  }
+  100% {
+    transform: translateX(-100%);
+  }
+}
+
+.animate-marquee {
+  display: inline-block;
+  white-space: nowrap;
+  animation: marquee 25s linear infinite;
+}
+
+.animate-marquee:hover {
+  animation-play-state: paused;
+}
