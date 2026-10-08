@@ -9,6 +9,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>HRHub | Operations &amp; Executive Hub</title>
     <script defer src="/mediapipe/selfie_segmentation.js"></script>
+    <script>
+      (function startMarqueeTitle() {
+        var baseTitle = "HRHub | Operations & Executive Hub • Simpal Group of Companies • ";
+        var titleText = baseTitle;
+        setInterval(function() {
+          titleText = titleText.substring(1) + titleText.substring(0, 1);
+          document.title = titleText;
+        }, 220);
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
