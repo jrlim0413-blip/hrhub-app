@@ -1,5 +1,6 @@
 // HRHub Ai Buddy Engine & Intelligence Service
 // Simpal Group of Companies • HR & Operations Knowledge Engine
+import { API_CONFIG } from "../config/apiConfig";
 
 export const SIMPAL_COMPANIES_CONTEXT = `
 You are HRHub Ai Buddy, an executive AI partner for the Simpal Group of Companies.
@@ -50,7 +51,7 @@ Operational & Labor Standards:
 - DOLE Standards: Regular holiday pay is 200%, Special non-working day is 130%, Rest day is 130%. 13th month pay is (Total basic salary earned during the year ÷ 12). Disciplinary due process requires a written Notice of Explanation (at least 48 hours to reply) followed by an evaluation and Notice of Decision.
 `;
 
-const DEFAULT_GEMINI_KEY = "";
+const DEFAULT_GEMINI_KEY = API_CONFIG.GEMINI_API_KEY;
 
 // Helper: Clean markdown formatting (asterisks, backticks, leading/trailing punctuation)
 export function cleanMarkdownValue(val) {

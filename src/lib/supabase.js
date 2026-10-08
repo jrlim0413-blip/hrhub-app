@@ -1,11 +1,8 @@
 import { createClient } from "@supabase/supabase-js";
+import { API_CONFIG } from "../config/apiConfig";
 
-const supabaseUrl = import.meta.env.VITE_API_URL || import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_API_ANON || import.meta.env.VITE_SUPABASE_ANON_KEY;
+const supabaseUrl = API_CONFIG.SUPABASE_URL;
+const supabaseAnonKey = API_CONFIG.SUPABASE_ANON;
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.warn("Supabase credentials missing: check VITE_API_URL / VITE_API_ANON in .env");
-}
-
-export const supabase = createClient(supabaseUrl || "", supabaseAnonKey || "");
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 export default supabase;

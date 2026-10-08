@@ -6,14 +6,15 @@ import {
   Layers, ListFilter, Hash, ChevronLeft, ChevronRight, Eye, ArrowDownToLine,
   Radio, RotateCw, Receipt, SlidersHorizontal, BadgeCheck, Clock3, Activity, Sparkles, Timer
 } from "lucide-react";
+import { API_CONFIG } from "../config/apiConfig";
 
-const DEFAULT_GROSS_URL = "https://stl-mandaue-api.com/api/accountant/TellerGrossPerDateRange?id=2";
-const DEFAULT_SUPERVISOR_URL = "https://stl-mandaue-api.com/api/accountant/supervisor?id=2";
-const DEFAULT_ACTIVE_TELLERS_URL = "https://stl-mandaue-api.com/api/accountant/ActiveTellers?id=2";
-const DEFAULT_BACKUP_TELLERS_URL = "https://stl-mandaue-api.com/api/accountant/teller?id=2";
-const DEFAULT_TOKEN = import.meta.env.VITE_TELLER_GROSS_TOKEN || "";
-const DEFAULT_BET_URL = "https://stl-mandaue-api.com/api/teller/bet";
-const DEFAULT_BET_TOKEN = import.meta.env.VITE_TELLER_BET_API_TOKEN || "";
+const DEFAULT_GROSS_URL = API_CONFIG.GROSS_REPORT_URL;
+const DEFAULT_SUPERVISOR_URL = API_CONFIG.SUPERVISOR_URL;
+const DEFAULT_ACTIVE_TELLERS_URL = API_CONFIG.ACTIVE_TELLERS_URL;
+const DEFAULT_BACKUP_TELLERS_URL = API_CONFIG.AGENTS_URL;
+const DEFAULT_TOKEN = API_CONFIG.GROSS_REPORT_TOKEN;
+const DEFAULT_BET_URL = API_CONFIG.TELLER_BET_URL;
+const DEFAULT_BET_TOKEN = API_CONFIG.TELLER_BET_TOKEN;
 
 const formatDate = (date) => [
   date.getFullYear(),

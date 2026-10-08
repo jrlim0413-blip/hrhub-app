@@ -1,10 +1,7 @@
 import { useState } from "react";
 import { AlertCircle, Bot, Download, LoaderCircle, RefreshCw, Search, Users } from "lucide-react";
 import AgentProfile from "./AgentProfile";
-
-const DEFAULT_AGENTS_URL = "https://stl-mandaue-api.com/api/accountant/teller?id=2";
-const DEFAULT_SUPERVISORS_URL = "https://stl-mandaue-api.com/api/accountant/supervisor?id=2";
-const DEFAULT_BARANGAYS_URL = "https://stl-mandaue-api.com/api/admin/barangay";
+import { API_CONFIG } from "../config/apiConfig";
 
 function getAgentList(payload) {
   if (Array.isArray(payload)) return payload;
@@ -92,18 +89,18 @@ export default function AgentsPanel({ onClose }) {
     setError("");
 
     try {
-      const token = import.meta.env.VITE_AGENTS_API_TOKEN;
+      const token = API_CONFIG.AGENTS_TOKEN;
       if (!token) {
-        throw new Error("Missing VITE_AGENTS_API_TOKEN in .env.local");
+        throw new Error("Missing AGENTS_TOKEN in API_CONFIG");
       }
 
       const headers = { Accept: "application/json" };
       headers.Authorization = `Bearer ${token}`;
 
       const [agentsResponse, supervisorsResponse, barangaysResponse] = await Promise.all([
-        fetch(import.meta.env.VITE_AGENTS_API_URL || DEFAULT_AGENTS_URL, { headers }),
-        fetch(import.meta.env.VITE_SUPERVISORS_API_URL || DEFAULT_SUPERVISORS_URL, { headers }),
-        fetch(import.meta.env.VITE_BARANGAYS_API_URL || DEFAULT_BARANGAYS_URL, { headers })
+        fetch(API_CONFIG.AGENTS_URL, { headers }),
+        fetch(API_CONFIG.SUPERVISOR_URL, { headers }),
+        fetch(API_CONFIG.BARANGAYS_URL, { headers })
       ]);
       if (!agentsResponse.ok) throw new Error(`Agents API returned ${agentsResponse.status}`);
       if (!supervisorsResponse.ok) throw new Error(`Supervisors API returned ${supervisorsResponse.status}`);
