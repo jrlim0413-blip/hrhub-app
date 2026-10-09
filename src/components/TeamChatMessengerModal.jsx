@@ -2,8 +2,10 @@ import { useState, useRef, useEffect } from "react";
 import {
   X, Send, Image, Smile, Reply, Trash2, Check, CheckCheck,
   ThumbsUp, Heart, Laugh, Flame, Sparkles, Download, Maximize2,
-  Paperclip, CornerUpLeft, MoreVertical, Search, Phone, Video
+  Paperclip, CornerUpLeft, MoreVertical, Search, Phone, Video,
+  Loader2
 } from "lucide-react";
+import { compressImageFile, uploadChatAttachment } from "../lib/chatService";
 
 const EMOJI_REACTIONS = [
   { emoji: "👍", label: "Like" },
@@ -29,7 +31,9 @@ export default function TeamChatMessengerModal({
 }) {
   const [inputText, setInputText] = useState("");
   const [selectedImage, setSelectedImage] = useState(null);
+  const [selectedImageBlob, setSelectedImageBlob] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [replyingTo, setReplyingTo] = useState(null);
   const [hoveredMessageId, setHoveredMessageId] = useState(null);
   const [activeReactionPickerId, setActiveReactionPickerId] = useState(null);
@@ -66,8 +70,8 @@ export default function TeamChatMessengerModal({
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isRecipientTyping, imagePreview]);
 
-  // Handle image file selection
-  const handleImageSelect = (e) => {
+  // Handle image file selection with automatic compression
+  const handleImageSelect = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -76,18 +80,27 @@ export default function TeamChatMessengerModal({
       return;
     }
 
-    // Limit to 4MB for optimal performance
-    if (file.size > 4 * 1024 * 1024) {
-      alert("Image is too large. Please select an image under 4MB.");
+    if (file.size > 10 * 1024 * 1024) {
+      alert("Image is too large. Please select an image under 10MB.");
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      setImagePreview(reader.result);
-      setSelectedImage(reader.result);
-    };
-    reader.readAsDataURL(file);
+    try {
+      // Auto-compress image down to ~40KB - 80KB WebP
+      const compressed = await compressImageFile(file, 1200, 0.75);
+      setImagePreview(compressed.dataUrl);
+      setSelectedImage(compressed.dataUrl);
+      setSelectedImageBlob(compressed.blob);
+    } catch (err) {
+      console.warn("Compression fallback:", err);
+      const reader = new FileReader();
+      reader.onload = () => {
+        setImagePreview(reader.result);
+        setSelectedImage(reader.result);
+        setSelectedImageBlob(file);
+      };
+      reader.readAsDataURL(file);
+    }
 
     // Reset input
     e.target.value = "";
@@ -95,11 +108,12 @@ export default function TeamChatMessengerModal({
 
   const removeSelectedImage = () => {
     setSelectedImage(null);
+    setSelectedImageBlob(null);
     setImagePreview(null);
   };
 
   // Submit message
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     if (e) e.preventDefault();
     if (!inputText.trim() && !selectedImage) return;
 
@@ -108,9 +122,26 @@ export default function TeamChatMessengerModal({
       onTypingSignal(recipientEmail, false);
     }
 
+    let finalImageUrl = selectedImage;
+
+    // Upload compressed blob to Supabase Storage if available
+    if (selectedImageBlob) {
+      setIsUploadingImage(true);
+      try {
+        const uploadedUrl = await uploadChatAttachment(selectedImageBlob, myEmail);
+        if (uploadedUrl) {
+          finalImageUrl = uploadedUrl;
+        }
+      } catch (uploadErr) {
+        console.warn("Storage upload notice (using compressed dataUrl):", uploadErr);
+      } finally {
+        setIsUploadingImage(false);
+      }
+    }
+
     onSendMessage({
       text: inputText.trim(),
-      image: selectedImage || undefined,
+      image: finalImageUrl || undefined,
       replyTo: replyingTo ? {
         id: replyingTo.id,
         senderName: replyingTo.senderName,
@@ -121,6 +152,7 @@ export default function TeamChatMessengerModal({
 
     setInputText("");
     setSelectedImage(null);
+    setSelectedImageBlob(null);
     setImagePreview(null);
     setReplyingTo(null);
     setActiveReactionPickerId(null);
@@ -511,10 +543,11 @@ export default function TeamChatMessengerModal({
           {inputText.trim() || selectedImage ? (
             <button
               type="submit"
-              className="p-2.5 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-600/20 transition cursor-pointer shrink-0"
+              disabled={isUploadingImage}
+              className="p-2.5 rounded-2xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 text-white shadow-md shadow-emerald-600/20 transition cursor-pointer shrink-0"
               title="Send message"
             >
-              <Send size={15} />
+              {isUploadingImage ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
             </button>
           ) : (
             <button

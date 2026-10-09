@@ -344,3 +344,103 @@ export async function deleteChatMessage({
 
   return updatedThread;
 }
+
+/**
+ * Compress an image file using browser Canvas (downscales to max 1200px, 75% quality WebP)
+ * Drops file size from 4MB to ~40KB - 80KB!
+ */
+export async function compressImageFile(file, maxWidth = 1200, quality = 0.75) {
+  return new Promise((resolve) => {
+    if (!file || !file.type.startsWith("image/")) {
+      resolve({ file, dataUrl: null, blob: null });
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxWidth) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
+        }
+
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, width, height);
+
+        const mimeType = "image/webp";
+        let dataUrl = "";
+        try {
+          dataUrl = canvas.toDataURL(mimeType, quality);
+        } catch {
+          dataUrl = canvas.toDataURL("image/jpeg", quality);
+        }
+
+        canvas.toBlob(
+          (blob) => {
+            resolve({
+              blob: blob || file,
+              dataUrl,
+              originalSize: file.size,
+              compressedSize: blob ? blob.size : dataUrl.length
+            });
+          },
+          mimeType,
+          quality
+        );
+      };
+      img.onerror = () => resolve({ file, dataUrl: e.target.result, blob: file });
+      img.src = e.target.result;
+    };
+    reader.onerror = () => resolve({ file, dataUrl: null, blob: file });
+    reader.readAsDataURL(file);
+  });
+}
+
+/**
+ * Upload image to Supabase Storage bucket 'chat-attachments'
+ * Returns the short public URL (~80 chars) if uploaded, or returns null to use compressed dataUrl
+ */
+export async function uploadChatAttachment(blobOrFile, senderEmail) {
+  if (!blobOrFile) return null;
+
+  try {
+    const cleanSender = (senderEmail || "user").replace(/[^a-zA-Z0-9]/g, "_").slice(0, 20);
+    const filename = `${cleanSender}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}.webp`;
+    const filePath = `chats/${filename}`;
+
+    const { data, error } = await supabase.storage
+      .from("chat-attachments")
+      .upload(filePath, blobOrFile, {
+        contentType: blobOrFile.type || "image/webp",
+        upsert: true
+      });
+
+    if (error) {
+      console.warn("Supabase Storage bucket notice:", error.message);
+      return null;
+    }
+
+    if (data) {
+      const { data: publicData } = supabase.storage
+        .from("chat-attachments")
+        .getPublicUrl(filePath);
+
+      if (publicData?.publicUrl) {
+        return publicData.publicUrl;
+      }
+    }
+  } catch (err) {
+    console.warn("Storage upload exception:", err);
+  }
+
+  return null;
+}
+
