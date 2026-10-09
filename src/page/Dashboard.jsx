@@ -339,11 +339,47 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
     }));
   };
 
+  // Periodic background synchronization for open chat modal (live zero-miss fallback)
+  useEffect(() => {
+    if (!activeDirectChatUser) return;
+    const myEmail = (currentUser?.email || profileEmail || "").trim().toLowerCase();
+    const recipientEmail = (activeDirectChatUser.email || "").trim().toLowerCase();
+    if (!myEmail || !recipientEmail) return;
+
+    const threadKey = getChatThreadKey(myEmail, recipientEmail);
+
+    const syncActiveThread = async () => {
+      try {
+        const msgs = await fetchConversationMessages(myEmail, recipientEmail);
+        if (msgs && Array.isArray(msgs)) {
+          setDirectMessagesMap((prev) => {
+            const currentMsgs = prev[threadKey] || [];
+            if (
+              currentMsgs.length !== msgs.length ||
+              JSON.stringify(currentMsgs.map((m) => m.id)) !== JSON.stringify(msgs.map((m) => m.id))
+            ) {
+              return {
+                ...prev,
+                [threadKey]: msgs
+              };
+            }
+            return prev;
+          });
+        }
+      } catch (err) {
+        console.warn("Active thread live sync notice:", err);
+      }
+    };
+
+    const intervalId = setInterval(syncActiveThread, 2000);
+    return () => clearInterval(intervalId);
+  }, [activeDirectChatUser?.email, currentUser?.email, profileEmail]);
+
   const handleSendDirectMessage = async ({ text, image, replyTo }) => {
     if ((!text && !image) || !activeDirectChatUser) return;
-    const myEmail = (currentUser?.email || profileEmail || "admin@hrhub.com").toLowerCase();
+    const myEmail = (currentUser?.email || profileEmail || "admin@hrhub.com").toLowerCase().trim();
     const myName = profileName || currentUser?.name || "Team Member";
-    const recipientEmail = (activeDirectChatUser.email || "").toLowerCase();
+    const recipientEmail = (activeDirectChatUser.email || "").toLowerCase().trim();
     const threadKey = getChatThreadKey(myEmail, recipientEmail);
 
     const newMsg = await sendChatMessage({
@@ -357,14 +393,29 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
 
     setDirectMessagesMap((prev) => ({
       ...prev,
-      [threadKey]: [...(prev[threadKey] || []), newMsg]
+      [threadKey]: [...(prev[threadKey] || []).filter((m) => m.id !== newMsg.id), newMsg]
     }));
+
+    // Broadcast instant real-time message event to receiver
+    if (channelRef.current) {
+      channelRef.current.send({
+        type: "broadcast",
+        event: "direct_chat_message",
+        payload: {
+          action: "new",
+          message: newMsg,
+          threadKey,
+          senderEmail: myEmail,
+          receiverEmail: recipientEmail
+        }
+      }).catch((err) => console.warn("Broadcast direct message error:", err));
+    }
   };
 
   const handleReactDirectMessage = async (messageId, emoji) => {
     if (!activeDirectChatUser || !messageId || !emoji) return;
-    const myEmail = (currentUser?.email || profileEmail || "admin@hrhub.com").toLowerCase();
-    const recipientEmail = (activeDirectChatUser.email || "").toLowerCase();
+    const myEmail = (currentUser?.email || profileEmail || "admin@hrhub.com").toLowerCase().trim();
+    const recipientEmail = (activeDirectChatUser.email || "").toLowerCase().trim();
     const threadKey = getChatThreadKey(myEmail, recipientEmail);
 
     const updatedThread = await reactChatMessage({
@@ -379,12 +430,29 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
       ...prev,
       [threadKey]: updatedThread
     }));
+
+    if (channelRef.current) {
+      channelRef.current.send({
+        type: "broadcast",
+        event: "direct_chat_message",
+        payload: {
+          action: "react",
+          messageId,
+          emoji,
+          userEmail: myEmail,
+          threadKey,
+          senderEmail: myEmail,
+          receiverEmail: recipientEmail,
+          updatedThread
+        }
+      }).catch((err) => console.warn("Broadcast reaction error:", err));
+    }
   };
 
   const handleDeleteDirectMessage = async (messageId) => {
     if (!activeDirectChatUser || !messageId) return;
-    const recipientEmail = (activeDirectChatUser.email || "").toLowerCase();
-    const myEmail = (currentUser?.email || profileEmail || "admin@hrhub.com").toLowerCase();
+    const recipientEmail = (activeDirectChatUser.email || "").toLowerCase().trim();
+    const myEmail = (currentUser?.email || profileEmail || "admin@hrhub.com").toLowerCase().trim();
     const threadKey = getChatThreadKey(myEmail, recipientEmail);
 
     const updatedThread = await deleteChatMessage({
@@ -397,6 +465,21 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
       ...prev,
       [threadKey]: updatedThread
     }));
+
+    if (channelRef.current) {
+      channelRef.current.send({
+        type: "broadcast",
+        event: "direct_chat_message",
+        payload: {
+          action: "delete",
+          messageId,
+          threadKey,
+          senderEmail: myEmail,
+          receiverEmail: recipientEmail,
+          updatedThread
+        }
+      }).catch((err) => console.warn("Broadcast delete message error:", err));
+    }
   };
 
   const handleUpdateProfile = (id, data) => {
@@ -599,6 +682,58 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
       .on("presence", { event: "sync" }, parsePresenceState)
       .on("presence", { event: "join" }, parsePresenceState)
       .on("presence", { event: "leave" }, parsePresenceState)
+      .on("broadcast", { event: "direct_chat_message" }, (eventData) => {
+        const payload = eventData?.payload;
+        if (!payload) return;
+        const myEmail = (currentUser?.email || profileEmail || "").toLowerCase().trim();
+        const { action, message, threadKey, senderEmail, receiverEmail, updatedThread } = payload;
+
+        const isMeSender = senderEmail && senderEmail.toLowerCase().trim() === myEmail;
+        const isMeReceiver = receiverEmail && receiverEmail.toLowerCase().trim() === myEmail;
+
+        if (isMeReceiver || isMeSender) {
+          if (action === "new" && message) {
+            const formattedMsg = {
+              ...message,
+              isIncoming: message.senderEmail?.toLowerCase().trim() !== myEmail
+            };
+
+            setDirectMessagesMap((prev) => {
+              const currentList = prev[threadKey] || [];
+              if (currentList.some((m) => m.id === formattedMsg.id)) {
+                return prev;
+              }
+              const nextList = [...currentList, formattedMsg];
+              const localMap = getStoredChatMap();
+              localMap[threadKey] = nextList;
+              saveStoredChatMap(localMap);
+
+              return {
+                ...prev,
+                [threadKey]: nextList
+              };
+            });
+
+            // If active chat window with this sender is open, mark read immediately
+            if (
+              activeDirectChatUserRef.current &&
+              senderEmail &&
+              activeDirectChatUserRef.current.email?.toLowerCase().trim() === senderEmail.toLowerCase().trim()
+            ) {
+              const updatedReceipts = markThreadAsRead(myEmail, senderEmail);
+              if (updatedReceipts) setReadReceipts(updatedReceipts);
+            }
+          } else if ((action === "react" || action === "delete") && updatedThread) {
+            setDirectMessagesMap((prev) => {
+              const nextMap = { ...prev, [threadKey]: updatedThread };
+              const localMap = getStoredChatMap();
+              localMap[threadKey] = updatedThread;
+              saveStoredChatMap(localMap);
+              return nextMap;
+            });
+          }
+        }
+      })
       .on("broadcast", { event: "user_typing" }, ({ payload }) => {
         if (!payload) return;
         const { senderEmail, receiverEmail, isTyping } = payload;
