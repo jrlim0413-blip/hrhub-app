@@ -62,7 +62,7 @@ export default function WorkspaceSwitcher({
 
   const handleSelect = (id) => {
     if (onSelectWorkspace) {
-      onSelectWorkspace({ view: id, tab: id === "sop" ? "sops" : "bulletin" });
+      onSelectWorkspace({ view: id, tab: id === "sop" ? "home" : "bulletin" });
     } else if (setActiveView) {
       setActiveView(id);
     }

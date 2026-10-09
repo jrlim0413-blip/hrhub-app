@@ -8,7 +8,8 @@ import {
 import { supabase } from "../lib/supabase";
 import {
   saveStoredEmployee,
-  updateStoredEmployeeApproval
+  updateStoredEmployeeApproval,
+  deleteStoredEmployee
 } from "../lib/employeeStorage";
 
 const SUBSIDIARIES = [
@@ -39,7 +40,8 @@ export default function EmployeeDirectoryPanel({
   currentEmail = "",
   loading = false,
   onRefresh,
-  onUpdateProfile
+  onUpdateProfile,
+  onDeleteProfile
 }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedFilter, setSelectedFilter] = useState("all"); // 'all' | 'online' | 'pending' | 'approved'
@@ -59,14 +61,19 @@ export default function EmployeeDirectoryPanel({
     isApproved: true
   });
 
-  // Calculate statistics
+  // Managed Personnel Profiles (Excludes Master Superadmin/HRMD so it can never be revoked or deleted)
+  const managedProfiles = useMemo(() => {
+    return (profiles || []).filter((p) => (p.email || "").trim().toLowerCase() !== "admin@hrhub.com");
+  }, [profiles]);
+
+  // Calculate statistics for managed personnel
   const stats = useMemo(() => {
-    let total = profiles.length;
+    let total = managedProfiles.length;
     let onlineCount = 0;
     let approvedCount = 0;
     let pendingCount = 0;
 
-    profiles.forEach((p) => {
+    managedProfiles.forEach((p) => {
       const email = p.email?.toLowerCase() || "";
       const isOnline = (currentEmail && email === currentEmail) || onlineEmails.has(email);
       if (isOnline) onlineCount++;
@@ -75,11 +82,11 @@ export default function EmployeeDirectoryPanel({
     });
 
     return { total, onlineCount, approvedCount, pendingCount };
-  }, [profiles, onlineEmails, currentEmail]);
+  }, [managedProfiles, onlineEmails, currentEmail]);
 
   // Filtered & Sorted profiles
   const filteredProfiles = useMemo(() => {
-    return profiles.filter((p) => {
+    return managedProfiles.filter((p) => {
       const email = p.email?.toLowerCase() || "";
       const name = (p.name || email.split("@")[0].replace(/[._]/g, " ")).toLowerCase();
       const company = (p.company || "Simpal Group of Companies").toLowerCase();
@@ -116,29 +123,61 @@ export default function EmployeeDirectoryPanel({
       // 3. Alphabetical by email
       return aEmail.localeCompare(bEmail);
     });
-  }, [profiles, searchQuery, selectedFilter, selectedSubsidiary, onlineEmails, currentEmail]);
+  }, [managedProfiles, searchQuery, selectedFilter, selectedSubsidiary, onlineEmails, currentEmail]);
 
   // Toggle approval status
   const handleToggleApproval = async (profile) => {
     const newApprovedState = !profile.is_approved;
-    const targetEmail = profile.email;
+    const targetEmail = (profile.email || "").trim().toLowerCase();
+    if (!targetEmail) return;
 
-    // Save to persistent storage
+    // 1. Save to persistent storage immediately
     updateStoredEmployeeApproval(targetEmail, newApprovedState);
+    saveStoredEmployee({
+      ...profile,
+      email: targetEmail,
+      is_approved: newApprovedState
+    });
 
+    // 2. Update UI state immediately in parent
     if (onUpdateProfile) {
-      onUpdateProfile(profile.id, { is_approved: newApprovedState });
+      onUpdateProfile(profile.id, { is_approved: newApprovedState, email: targetEmail });
     }
 
+    // 3. Sync to Supabase Database
     try {
-      if (profile.id && !String(profile.id).startsWith("prof-")) {
-        await supabase
+      if (profile.id && !String(profile.id).startsWith("prof-") && !String(profile.id).startsWith("db-") && !String(profile.id).startsWith("emp-")) {
+        const { error: idErr } = await supabase
           .from("profiles")
           .update({ is_approved: newApprovedState })
           .eq("id", profile.id);
+        if (idErr) console.warn("Supabase update by ID notice:", idErr.message || idErr);
+      }
+
+      const { data: updatedRows, error: emailErr } = await supabase
+        .from("profiles")
+        .update({ is_approved: newApprovedState })
+        .eq("email", targetEmail)
+        .select();
+
+      if (emailErr) {
+        console.warn("Supabase update by email notice:", emailErr.message || emailErr);
+      }
+
+      if (!updatedRows || updatedRows.length === 0) {
+        const { error: upsertErr } = await supabase
+          .from("profiles")
+          .upsert({
+            email: targetEmail,
+            is_approved: newApprovedState,
+            name: profile.name,
+            company: profile.company,
+            role: profile.role
+          }, { onConflict: "email" });
+        if (upsertErr) console.warn("Supabase upsert notice:", upsertErr.message || upsertErr);
       }
     } catch (err) {
-      console.warn("Approval toggle notice:", err);
+      console.warn("Approval toggle db sync error:", err);
     }
 
     setNotice({
@@ -146,6 +185,43 @@ export default function EmployeeDirectoryPanel({
       message: `${targetEmail} is now ${newApprovedState ? "APPROVED" : "SUSPENDED"}.`
     });
     setTimeout(() => setNotice(null), 4000);
+  };
+
+  // Delete employee handler
+  const handleDeleteEmployee = async (profile) => {
+    const targetEmail = profile.email || "this employee";
+    const confirmDelete = window.confirm(
+      `Are you sure you want to remove ${targetEmail} from the Employee Directory?\n\nThis will remove their profile and access permissions.`
+    );
+    if (!confirmDelete) return;
+
+    // 1. Delete from local persistent storage
+    if (profile.email) deleteStoredEmployee(profile.email);
+    if (profile.id) deleteStoredEmployee(profile.id);
+
+    // 2. Notify parent dashboard
+    if (onDeleteProfile) {
+      onDeleteProfile(profile.id, profile.email);
+    }
+
+    // 3. Delete from Supabase
+    try {
+      if (profile.id && !String(profile.id).startsWith("prof-") && !String(profile.id).startsWith("db-") && !String(profile.id).startsWith("emp-")) {
+        await supabase.from("profiles").delete().eq("id", profile.id);
+      } else if (profile.email) {
+        await supabase.from("profiles").delete().ilike("email", profile.email);
+      }
+    } catch (err) {
+      console.warn("Delete profile db notice:", err);
+    }
+
+    setNotice({
+      type: "success",
+      message: `Successfully removed ${targetEmail} from directory.`
+    });
+    setTimeout(() => setNotice(null), 4000);
+
+    if (onRefresh) onRefresh();
   };
 
   // Add new employee handler
@@ -175,14 +251,21 @@ export default function EmployeeDirectoryPanel({
         onUpdateProfile(null, newRecord);
       }
 
-      // 3. Try database insert in background
+      // 3. Try database upsert in background
       try {
-        await supabase
+        const { error: insertError } = await supabase
           .from("profiles")
-          .insert([{
+          .upsert({
             email: trimmedEmail,
+            name: newRecord.name,
+            company: newRecord.company,
+            role: newRecord.role,
             is_approved: Boolean(newEmployee.isApproved)
-          }]);
+          }, { onConflict: "email" });
+
+        if (insertError) {
+          console.warn("Direct db upsert note:", insertError.message || insertError);
+        }
       } catch (insertError) {
         console.warn("Direct db insert note:", insertError);
       }
@@ -554,6 +637,15 @@ export default function EmployeeDirectoryPanel({
                   >
                     {copiedId === prof.id ? <Check size={14} className="text-emerald-600" /> : <Copy size={14} />}
                   </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteEmployee(prof)}
+                    title="Remove from Directory"
+                    className="p-1.5 rounded-xl border border-slate-200 text-slate-400 hover:text-rose-600 hover:border-rose-200 hover:bg-rose-50 transition cursor-pointer"
+                  >
+                    <Trash2 size={14} />
+                  </button>
                 </div>
               </div>
             );
@@ -634,11 +726,11 @@ export default function EmployeeDirectoryPanel({
                         )}
                       </td>
                       <td className="py-3 px-4 text-right">
-                        <div className="flex items-center justify-end gap-2">
+                        <div className="flex items-center justify-end gap-1.5">
                           <button
                             type="button"
                             onClick={() => handleToggleApproval(prof)}
-                            className={`px-3 py-1 rounded-xl text-[11px] font-bold transition cursor-pointer ${prof.is_approved
+                            className={`px-2.5 py-1 rounded-xl text-[11px] font-bold transition cursor-pointer ${prof.is_approved
                                 ? "bg-slate-100 hover:bg-slate-200 text-slate-700"
                                 : "bg-emerald-600 hover:bg-emerald-500 text-white"
                               }`}
@@ -652,6 +744,14 @@ export default function EmployeeDirectoryPanel({
                             className="p-1 rounded-lg border border-slate-200 text-slate-400 hover:text-slate-700 transition cursor-pointer"
                           >
                             {copiedId === prof.id ? <Check size={13} className="text-emerald-600" /> : <Copy size={13} />}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteEmployee(prof)}
+                            title="Remove employee"
+                            className="p-1 rounded-lg border border-slate-200 text-slate-400 hover:text-rose-600 hover:border-rose-200 hover:bg-rose-50 transition cursor-pointer"
+                          >
+                            <Trash2 size={13} />
                           </button>
                         </div>
                       </td>

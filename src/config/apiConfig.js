@@ -25,7 +25,16 @@ export const API_CONFIG = {
   GEMINI_API_KEY: (typeof import.meta !== "undefined" && import.meta.env?.VITE_GEMINI_API_KEY) || (typeof atob !== "undefined" ? atob("QVEuQWI4Uk42SUtwLTc4bDlnSmFfWDl6UlpDbTNOTXBBS3RsVHppRFdJX1VrTzYwbXRHNFE=") : ""),
 
   // HR Email Webhook URL
-  HR_EMAIL_WEBHOOK_URL: (typeof import.meta !== "undefined" && import.meta.env?.VITE_HR_EMAIL_WEBHOOK_URL) || ""
+  HR_EMAIL_WEBHOOK_URL: (typeof import.meta !== "undefined" && import.meta.env?.VITE_HR_EMAIL_WEBHOOK_URL) || "",
+
+  // Zoom Web Meeting SDK & REST API Credentials
+  ZOOM_CONFIG: {
+    SDK_KEY: (typeof import.meta !== "undefined" && import.meta.env?.VITE_ZOOM_SDK_KEY) || "kuZ0EnZWQ1WKsvU16cO3Ug",
+    SDK_SECRET: (typeof import.meta !== "undefined" && import.meta.env?.VITE_ZOOM_SDK_SECRET) || "Ga7WezKPKlXnwXO1Jd6AfawgY0BV6wPv",
+    ACCOUNT_ID: (typeof import.meta !== "undefined" && import.meta.env?.VITE_ZOOM_ACCOUNT_ID) || "",
+    CLIENT_ID: (typeof import.meta !== "undefined" && import.meta.env?.VITE_ZOOM_CLIENT_ID) || "kuZ0EnZWQ1WKsvU16cO3Ug",
+    CLIENT_SECRET: (typeof import.meta !== "undefined" && import.meta.env?.VITE_ZOOM_CLIENT_SECRET) || "Ga7WezKPKlXnwXO1Jd6AfawgY0BV6wPv"
+  }
 };
 
 export default API_CONFIG;

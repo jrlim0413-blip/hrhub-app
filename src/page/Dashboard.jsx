@@ -1,11 +1,11 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Bell, MessageSquare, Search, Users, ShieldCheck,
   ThumbsUp, MessageCircle, Share2, Send,
   Megaphone, Award, Calendar, LogOut,
   BriefcaseBusiness, FileText, Sparkles, BarChart3,
   Database, RefreshCw, CheckCircle2, AlertCircle, Clock,
-  Bot, Layers
+  Bot, Layers, Home, X, CheckCheck
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import ProfileModal from "../components/ProfileModal";
@@ -18,7 +18,22 @@ import MemoGeneratorPanel from "../components/MemoGeneratorPanel";
 import AiAssistantDrawer from "../components/AiAssistantDrawer";
 import AiAgentAvatar from "../components/AiAgentAvatar";
 import AiAssistantGirlWidget from "../components/AiAssistantGirlWidget";
-import { mergeProfilesWithStored } from "../lib/employeeStorage";
+import MondayStyleSidebar from "../components/MondayStyleSidebar";
+import HomeWorkspaceView from "../components/HomeWorkspaceView";
+import TeamChatMessengerModal from "../components/TeamChatMessengerModal";
+import { mergeProfilesWithStored, deleteStoredEmployee } from "../lib/employeeStorage";
+import {
+  getChatThreadKey,
+  getStoredChatMap,
+  fetchConversationMessages,
+  fetchAllUserThreads,
+  sendChatMessage,
+  reactChatMessage,
+  deleteChatMessage,
+  getStoredReadReceipts,
+  markThreadAsRead,
+  formatMessengerTime
+} from "../lib/chatService";
 
 function formatTimeAgo(dateString) {
   if (!dateString) return "Recently";
@@ -53,14 +68,36 @@ function getCategoryBadgeColor(category) {
   }
 }
 
-// Mock Data para sa Online Users (fallback)
-const ONLINE_USERS = [
-  { id: 1, name: "Quennie Lim", role: "HR Manager", company: "Simpal Group", avatar: "QL", status: "online" },
-  { id: 2, name: "Genievie Esterliah", role: "Software Engineer", company: "SIMCON", avatar: "GE", status: "online" },
-  { id: 3, name: "Mark Anthony", role: "Site Supervisor", company: "SIMCON", avatar: "MA", status: "idle" },
-  { id: 4, name: "Sarah Jane", role: "Compliance Officer", company: "Lucky Betplay", avatar: "SJ", status: "online" },
-  { id: 5, name: "Dave Wilson", role: "HR Specialist", company: "5A Royal Gaming", avatar: "DW", status: "offline" }
-];
+// Helpers for Clean Team Member Directory & Chat
+function formatShortCompany(companyName) {
+  if (!companyName) return "Simpal Group";
+  const c = companyName.toLowerCase();
+  if (c.includes("simcon") || c.includes("construction")) return "SIMCON";
+  if (c.includes("lucky") || c.includes("betplay") || c.includes("lbc")) return "Lucky Betplay";
+  if (c.includes("5a") || c.includes("royal")) return "5A Royal Gaming";
+  if (c.includes("imperial")) return "Imperial Gaming";
+  if (c.includes("glowing") || c.includes("fortune")) return "Glowing Fortune";
+  if (c.includes("simpal")) return "Simpal Group";
+  return companyName;
+}
+
+function getProfileDisplayName(prof) {
+  if (!prof) return "Team Member";
+  if (prof.name && prof.name.trim()) return prof.name.trim();
+  if (prof.email) {
+    return prof.email.split("@")[0].replace(/[._]/g, " ").replace(/\b\w/g, (l) => l.toUpperCase());
+  }
+  return "Team Member";
+}
+
+function getProfileInitials(prof) {
+  const name = getProfileDisplayName(prof);
+  const parts = name.trim().split(/\s+/);
+  if (parts.length >= 2) {
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  }
+  return name.slice(0, 2).toUpperCase();
+}
 
 const INITIAL_POSTS = [
   {
@@ -162,7 +199,13 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
   const [loadingMemos, setLoadingMemos] = useState(true);
   const [supabaseProfiles, setSupabaseProfiles] = useState([]);
   const [loadingProfiles, setLoadingProfiles] = useState(true);
-  const [onlineUserEmails, setOnlineUserEmails] = useState(new Set());
+  const [presenceMap, setPresenceMap] = useState({});
+  const [typingUsersMap, setTypingUsersMap] = useState({});
+  const [isUserIdle, setIsUserIdle] = useState(false);
+  const channelRef = useRef(null);
+  const isUserIdleRef = useRef(false);
+  const idleTimerRef = useRef(null);
+  const typingTimeoutsRef = useRef({});
   const [newPostContent, setNewPostContent] = useState("");
   const [memoTitle, setMemoTitle] = useState("");
   const [memoCategory, setMemoCategory] = useState("Official Memo");
@@ -170,35 +213,231 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
   const [memoNotice, setMemoNotice] = useState(null);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [messagesOpen, setMessagesOpen] = useState(false);
-  const [activeView, setActiveView] = useState("communication");
+  const [activeView, setActiveView] = useState(() => {
+    try {
+      return localStorage.getItem("hrhub_active_view") || "communication";
+    } catch {
+      return "communication";
+    }
+  });
   const [viewSwitcherOpen, setViewSwitcherOpen] = useState(false);
   const [activeTheme, setActiveTheme] = useState("sky");
   const [accountModal, setAccountModal] = useState(null);
-  const [profileName, setProfileName] = useState(currentUser?.name || "HR Administrator");
-  const [profileRole, setProfileRole] = useState(currentUser?.role || "HR Administrator");
-  const [profileEmail, setProfileEmail] = useState(currentUser?.email || "hr.admin@hrhub.com");
+  const [profileName, setProfileName] = useState(() => {
+    const raw = currentUser?.name;
+    if (!raw || raw === "Admin" || raw === "Super Administrator" || raw.toLowerCase() === "hrmd" || raw.toLowerCase() === "h r m d") {
+      return "H R M D";
+    }
+    return raw;
+  });
+  const [profileRole, setProfileRole] = useState(() => {
+    const raw = currentUser?.role;
+    if (!raw || raw === "Super Administrator") return "HR Administrator";
+    return raw;
+  });
+  const [profileEmail, setProfileEmail] = useState(currentUser?.email || "admin@hrhub.com");
+  const [profileCompany, setProfileCompany] = useState(currentUser?.company || "Simpal Group of Companies");
   const [profilePhone, setProfilePhone] = useState("+63 917 555 0148");
   const [profileLocation, setProfileLocation] = useState("Makati City, Philippines");
   const [profileDepartment, setProfileDepartment] = useState("People Operations");
   const [profileBio, setProfileBio] = useState("Supporting people, culture, and better work across the Simpal Group.");
   const [profileSaved, setProfileSaved] = useState(false);
   const [passwordSaved, setPasswordSaved] = useState(false);
-  const [workspaceTab, setWorkspaceTab] = useState("sops"); // Default to 'sops' so classic workspace process boards display first
+
+  useEffect(() => {
+    if (currentUser) {
+      if (currentUser.name) {
+        const isDefaultHrmd =
+          currentUser.name === "Admin" ||
+          currentUser.name === "Super Administrator" ||
+          currentUser.name.toLowerCase() === "hrmd" ||
+          currentUser.name.toLowerCase() === "h r m d";
+        setProfileName(isDefaultHrmd ? "H R M D" : currentUser.name);
+      }
+      if (currentUser.role) {
+        setProfileRole(currentUser.role === "Super Administrator" ? "HR Administrator" : currentUser.role);
+      }
+      if (currentUser.email) setProfileEmail(currentUser.email);
+      if (currentUser.company) setProfileCompany(currentUser.company);
+    }
+  }, [currentUser]);
+
+  const userInitials = profileName
+    ? (profileName.replace(/\s+/g, "").toLowerCase() === "hrmd"
+        ? "HR"
+        : profileName.split(" ").filter(Boolean).map((n) => n[0]).join("").slice(0, 2).toUpperCase())
+    : (profileEmail ? profileEmail.slice(0, 2).toUpperCase() : "HR");
+  const displayRole = profileRole || currentUser?.role || "Team Member";
+  const displayCompany = profileCompany || currentUser?.company || "Simpal Group of Companies";
+  const [workspaceTab, setWorkspaceTab] = useState(() => {
+    try {
+      return localStorage.getItem("hrhub_workspace_tab") || "home";
+    } catch {
+      return "home";
+    }
+  }); // Default to 'home' so HR Home Dashboard displays first
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("hrhub_active_view", activeView);
+    } catch (e) {
+      console.error(e);
+    }
+  }, [activeView]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("hrhub_workspace_tab", workspaceTab);
+    } catch (e) {
+      console.error(e);
+    }
+  }, [workspaceTab]);
   const [agentsPanelOpen, setAgentsPanelOpen] = useState(false);
   const [grossReportOpen, setGrossReportOpen] = useState(false);
   const [memoGeneratorOpen, setMemoGeneratorOpen] = useState(false);
   const [aiDrawerOpen, setAiDrawerOpen] = useState(false);
   const [aiGeneratedMemoDraft, setAiGeneratedMemoDraft] = useState(null);
   const [communicationTab, setCommunicationTab] = useState("bulletin"); // 'bulletin' | 'directory'
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(true);
+
+  // Direct Team Chat State
+  const [activeDirectChatUser, setActiveDirectChatUser] = useState(null);
+  const activeDirectChatUserRef = useRef(null);
+  useEffect(() => {
+    activeDirectChatUserRef.current = activeDirectChatUser;
+  }, [activeDirectChatUser]);
+
+  const [directChatInput, setDirectChatInput] = useState("");
+  const [directMessagesMap, setDirectMessagesMap] = useState(() => getStoredChatMap());
+  const [readReceipts, setReadReceipts] = useState(() => getStoredReadReceipts());
+  const [chatSearchQuery, setChatSearchQuery] = useState("");
+
+  const getChatKey = (userEmail) => {
+    const cur = (currentUser?.email || profileEmail || "admin@hrhub.com").toLowerCase();
+    const target = (userEmail || "").toLowerCase();
+    return getChatThreadKey(cur, target);
+  };
+
+  const handleOpenDirectChat = async (prof) => {
+    if (!prof) return;
+    setActiveDirectChatUser(prof);
+    setMessagesOpen(false);
+
+    const myEmail = (currentUser?.email || profileEmail || "admin@hrhub.com").toLowerCase();
+    const recipientEmail = (prof.email || "").toLowerCase();
+    const threadKey = getChatThreadKey(myEmail, recipientEmail);
+
+    // Mark thread as read
+    const updatedReceipts = markThreadAsRead(myEmail, recipientEmail);
+    if (updatedReceipts) setReadReceipts(updatedReceipts);
+
+    // Fetch conversation from Supabase database (with local cache fallback)
+    const msgs = await fetchConversationMessages(myEmail, recipientEmail);
+    setDirectMessagesMap((prev) => ({
+      ...prev,
+      [threadKey]: msgs
+    }));
+  };
+
+  const handleSendDirectMessage = async ({ text, image, replyTo }) => {
+    if ((!text && !image) || !activeDirectChatUser) return;
+    const myEmail = (currentUser?.email || profileEmail || "admin@hrhub.com").toLowerCase();
+    const myName = profileName || currentUser?.name || "Team Member";
+    const recipientEmail = (activeDirectChatUser.email || "").toLowerCase();
+    const threadKey = getChatThreadKey(myEmail, recipientEmail);
+
+    const newMsg = await sendChatMessage({
+      senderEmail: myEmail,
+      senderName: myName,
+      receiverEmail: recipientEmail,
+      text,
+      image,
+      replyTo
+    });
+
+    setDirectMessagesMap((prev) => ({
+      ...prev,
+      [threadKey]: [...(prev[threadKey] || []), newMsg]
+    }));
+  };
+
+  const handleReactDirectMessage = async (messageId, emoji) => {
+    if (!activeDirectChatUser || !messageId || !emoji) return;
+    const myEmail = (currentUser?.email || profileEmail || "admin@hrhub.com").toLowerCase();
+    const recipientEmail = (activeDirectChatUser.email || "").toLowerCase();
+    const threadKey = getChatThreadKey(myEmail, recipientEmail);
+
+    const updatedThread = await reactChatMessage({
+      messageId,
+      emoji,
+      userEmail: myEmail,
+      threadKey,
+      currentMessages: directMessagesMap[threadKey] || []
+    });
+
+    setDirectMessagesMap((prev) => ({
+      ...prev,
+      [threadKey]: updatedThread
+    }));
+  };
+
+  const handleDeleteDirectMessage = async (messageId) => {
+    if (!activeDirectChatUser || !messageId) return;
+    const recipientEmail = (activeDirectChatUser.email || "").toLowerCase();
+    const myEmail = (currentUser?.email || profileEmail || "admin@hrhub.com").toLowerCase();
+    const threadKey = getChatThreadKey(myEmail, recipientEmail);
+
+    const updatedThread = await deleteChatMessage({
+      messageId,
+      threadKey,
+      currentMessages: directMessagesMap[threadKey] || []
+    });
+
+    setDirectMessagesMap((prev) => ({
+      ...prev,
+      [threadKey]: updatedThread
+    }));
+  };
 
   const handleUpdateProfile = (id, data) => {
-    if (!id && data) {
+    if (!id && data && !data.email) return;
+    if (!id && data && data.email) {
       setSupabaseProfiles((prev) => [data, ...prev.filter(p => p.email?.toLowerCase() !== data.email?.toLowerCase())]);
-    } else if (id && data) {
+    } else if (data) {
       setSupabaseProfiles((prev) =>
-        prev.map((p) => (p.id === id ? { ...p, ...data } : p))
+        prev.map((p) => {
+          const matchId = id && String(p.id) === String(id);
+          const matchEmail = data.email && p.email?.toLowerCase() === data.email.toLowerCase();
+          return matchId || matchEmail ? { ...p, ...data } : p;
+        })
       );
     }
+  };
+
+  const handleDeleteProfile = async (id, email) => {
+    // 1. Remove from local storage
+    if (email) deleteStoredEmployee(email);
+    if (id) deleteStoredEmployee(id);
+
+    // 2. Remove from Supabase
+    try {
+      if (id && !String(id).startsWith("prof-") && !String(id).startsWith("db-") && !String(id).startsWith("emp-")) {
+        await supabase.from("profiles").delete().eq("id", id);
+      } else if (email) {
+        await supabase.from("profiles").delete().ilike("email", email);
+      }
+    } catch (err) {
+      console.warn("Delete from Supabase notice:", err);
+    }
+
+    // 3. Update state immediately
+    setSupabaseProfiles((prev) =>
+      prev.filter((p) => {
+        const matchId = id && String(p.id) === String(id);
+        const matchEmail = email && (p.email || "").toLowerCase() === (email || "").toLowerCase();
+        return !matchId && !matchEmail;
+      })
+    );
   };
 
   const isCommunicationView = activeView === "communication";
@@ -246,14 +485,74 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
     }
   };
 
+  // User AFK / Idle Detection (2 minutes of inactivity or tab hidden)
+  useEffect(() => {
+    const IDLE_TIMEOUT_MS = 2 * 60 * 1000; // 2 minutes
+
+    const setIdle = (idle) => {
+      if (isUserIdleRef.current !== idle) {
+        isUserIdleRef.current = idle;
+        setIsUserIdle(idle);
+
+        const myEmail = (currentUser?.email || profileEmail || "").trim().toLowerCase();
+        if (channelRef.current && myEmail && !myEmail.startsWith("guest-")) {
+          channelRef.current.track({
+            email: myEmail,
+            name: profileName || currentUser?.name || "Team Member",
+            status: idle ? "away" : "active",
+            online_at: new Date().toISOString()
+          }).catch(() => {});
+        }
+      }
+    };
+
+    const resetIdleTimer = () => {
+      if (document.visibilityState === "hidden") {
+        setIdle(true);
+        return;
+      }
+      setIdle(false);
+      if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+      idleTimerRef.current = setTimeout(() => {
+        setIdle(true);
+      }, IDLE_TIMEOUT_MS);
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        setIdle(true);
+      } else {
+        resetIdleTimer();
+      }
+    };
+
+    const activityEvents = ["mousemove", "mousedown", "keydown", "touchstart", "scroll"];
+    activityEvents.forEach((evt) => window.addEventListener(evt, resetIdleTimer, { passive: true }));
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    resetIdleTimer();
+
+    return () => {
+      if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+      activityEvents.forEach((evt) => window.removeEventListener(evt, resetIdleTimer));
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [currentUser?.email, profileEmail, profileName]);
+
   useEffect(() => {
     fetchMemos();
     fetchProfiles();
 
     const currentEmail = (currentUser?.email || profileEmail || "").trim().toLowerCase();
+    if (currentEmail) {
+      fetchAllUserThreads(currentEmail).then((threads) => {
+        if (threads) setDirectMessagesMap(threads);
+      });
+    }
+
     const presenceKey = currentEmail || `guest-${Math.random().toString(36).slice(2, 8)}`;
 
-    // Realtime channel with Presence tracking for reliable online status
+    // Realtime channel with Presence and Typing indicator broadcast
     const channel = supabase.channel("hrhub-realtime-presence", {
       config: {
         presence: {
@@ -262,22 +561,25 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
       }
     });
 
-    const updatePresenceState = () => {
+    channelRef.current = channel;
+
+    const parsePresenceState = () => {
       const state = channel.presenceState();
-      const activeEmails = new Set();
+      const newMap = {};
       Object.keys(state).forEach((key) => {
-        if (key && !key.startsWith("guest-")) {
-          activeEmails.add(key.toLowerCase());
-        }
         const presences = state[key] || [];
         presences.forEach((p) => {
-          if (p?.email) activeEmails.add(p.email.toLowerCase());
+          const email = (p?.email || key || "").toLowerCase().trim();
+          if (email && !email.startsWith("guest-")) {
+            newMap[email] = {
+              status: p?.status === "away" ? "away" : "active",
+              name: p?.name,
+              online_at: p?.online_at
+            };
+          }
         });
       });
-      if (currentEmail && !currentEmail.startsWith("guest-")) {
-        activeEmails.add(currentEmail);
-      }
-      setOnlineUserEmails(activeEmails);
+      setPresenceMap(newMap);
     };
 
     channel
@@ -287,37 +589,54 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
       .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, () => {
         fetchProfiles();
       })
-      .on("presence", { event: "sync" }, updatePresenceState)
-      .on("presence", { event: "join" }, ({ key, newPresences }) => {
-        setOnlineUserEmails((prev) => {
-          const next = new Set(prev);
-          if (key && !key.startsWith("guest-")) next.add(key.toLowerCase());
-          (newPresences || []).forEach((p) => {
-            if (p?.email) next.add(p.email.toLowerCase());
-          });
-          return next;
-        });
+      .on("postgres_changes", { event: "*", schema: "public", table: "chat_messages" }, async () => {
+        const cEmail = (currentUser?.email || profileEmail || "").toLowerCase();
+        if (cEmail) {
+          const freshThreads = await fetchAllUserThreads(cEmail);
+          if (freshThreads) setDirectMessagesMap(freshThreads);
+        }
       })
-      .on("presence", { event: "leave" }, ({ key, leftPresences }) => {
-        setOnlineUserEmails((prev) => {
-          const next = new Set(prev);
-          if (key && key.toLowerCase() !== currentEmail) {
-            next.delete(key.toLowerCase());
-          }
-          (leftPresences || []).forEach((p) => {
-            if (p?.email && p.email.toLowerCase() !== currentEmail) {
-              next.delete(p.email.toLowerCase());
+      .on("presence", { event: "sync" }, parsePresenceState)
+      .on("presence", { event: "join" }, parsePresenceState)
+      .on("presence", { event: "leave" }, parsePresenceState)
+      .on("broadcast", { event: "user_typing" }, ({ payload }) => {
+        if (!payload) return;
+        const { senderEmail, receiverEmail, isTyping } = payload;
+        const myEmail = (currentUser?.email || profileEmail || "").toLowerCase().trim();
+        if (receiverEmail && receiverEmail.toLowerCase().trim() === myEmail && senderEmail) {
+          const senderKey = senderEmail.toLowerCase().trim();
+          setTypingUsersMap((prev) => {
+            const next = { ...prev };
+            if (isTyping) {
+              next[senderKey] = true;
+            } else {
+              delete next[senderKey];
             }
+            return next;
           });
-          return next;
-        });
+
+          // Clear typing indicator automatically after 3.5s if no follow-up received
+          if (typingTimeoutsRef.current[senderKey]) {
+            clearTimeout(typingTimeoutsRef.current[senderKey]);
+          }
+          if (isTyping) {
+            typingTimeoutsRef.current[senderKey] = setTimeout(() => {
+              setTypingUsersMap((prev) => {
+                const next = { ...prev };
+                delete next[senderKey];
+                return next;
+              });
+            }, 3500);
+          }
+        }
       })
       .subscribe(async (status) => {
-        if (status === "SUBSCRIBED") {
+        if (status === "SUBSCRIBED" && currentEmail && !currentEmail.startsWith("guest-")) {
           try {
             await channel.track({
               email: currentEmail,
               name: profileName || currentUser?.name || "Team Member",
+              status: isUserIdleRef.current ? "away" : "active",
               online_at: new Date().toISOString()
             });
           } catch (trackErr) {
@@ -326,25 +645,9 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
         }
       });
 
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible") {
-        fetchMemos();
-        fetchProfiles();
-        if (channel) {
-          channel.track({
-            email: currentEmail,
-            name: profileName || currentUser?.name || "Team Member",
-            online_at: new Date().toISOString()
-          }).catch(() => {});
-        }
-      }
-    };
-
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-
     return () => {
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
       supabase.removeChannel(channel);
+      channelRef.current = null;
     };
   }, [currentUser?.email, profileEmail, profileName]);
 
@@ -444,173 +747,253 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
 
   const currentEmail = (currentUser?.email || profileEmail || "").trim().toLowerCase();
 
-  const sortedProfiles = [...supabaseProfiles].sort((a, b) => {
+  // Helper to determine exact presence status: 'active' | 'away' | 'offline'
+  // HRMD is NOT hardcoded; reflects 100% real live session presence
+  const getUserPresenceStatus = (email) => {
+    if (!email) return "offline";
+    const clean = email.toLowerCase().trim();
+    if (currentEmail && clean === currentEmail) {
+      return isUserIdle ? "away" : "active";
+    }
+    const presence = presenceMap[clean];
+    if (!presence) return "offline";
+    return presence.status === "away" ? "away" : "active";
+  };
+
+  const isUserOnline = (email) => {
+    return getUserPresenceStatus(email) !== "offline";
+  };
+
+  const getStatusBadgeDot = (status) => {
+    if (status === "active") return "bg-[#00c875]";
+    if (status === "away") return "bg-amber-400";
+    return "bg-slate-400";
+  };
+
+  const getStatusTextLabel = (status) => {
+    if (status === "active") return "Active now";
+    if (status === "away") return "Away (AFK)";
+    return "Offline";
+  };
+
+  const handleSendTypingSignal = (recipientEmail, isTyping) => {
+    if (!channelRef.current || !recipientEmail) return;
+    const myEmail = (currentUser?.email || profileEmail || "admin@hrhub.com").toLowerCase().trim();
+    channelRef.current.send({
+      type: "broadcast",
+      event: "user_typing",
+      payload: {
+        senderEmail: myEmail,
+        receiverEmail: recipientEmail.toLowerCase().trim(),
+        isTyping: Boolean(isTyping)
+      }
+    }).catch((err) => console.warn("Typing broadcast notice:", err));
+  };
+
+  // Filter out the logged-in user so the widget only displays their colleagues / team members
+  const colleaguesProfiles = supabaseProfiles.filter((p) => {
+    const pEmail = (p.email || "").trim().toLowerCase();
+    return currentEmail ? pEmail !== currentEmail : true;
+  });
+
+  const sortedProfiles = [...colleaguesProfiles].sort((a, b) => {
     const aEmail = a.email?.toLowerCase() || "";
     const bEmail = b.email?.toLowerCase() || "";
-    const aOnline = (currentEmail && aEmail === currentEmail) || onlineUserEmails.has(aEmail);
-    const bOnline = (currentEmail && bEmail === currentEmail) || onlineUserEmails.has(bEmail);
+    if (aEmail === "admin@hrhub.com") return -1;
+    if (bEmail === "admin@hrhub.com") return 1;
+
+    const aOnline = isUserOnline(aEmail);
+    const bOnline = isUserOnline(bEmail);
     if (aOnline && !bOnline) return -1;
     if (!aOnline && bOnline) return 1;
     return aEmail.localeCompare(bEmail);
   });
 
-  const activeOnlineCount = sortedProfiles.filter((p) => {
-    const pEmail = p.email?.toLowerCase() || "";
-    return (currentEmail && pEmail === currentEmail) || onlineUserEmails.has(pEmail);
-  }).length;
+  const activeOnlineCount = sortedProfiles.filter((p) => isUserOnline(p.email)).length;
+
+  const getThreadLastMessage = (targetEmail) => {
+    const myEmail = (currentUser?.email || profileEmail || "admin@hrhub.com").toLowerCase();
+    const threadKey = getChatThreadKey(myEmail, targetEmail);
+    const msgs = directMessagesMap[threadKey] || [];
+    return msgs.length > 0 ? msgs[msgs.length - 1] : null;
+  };
+
+  const isThreadUnread = (targetEmail) => {
+    const myEmail = (currentUser?.email || profileEmail || "admin@hrhub.com").toLowerCase();
+    const threadKey = getChatThreadKey(myEmail, targetEmail);
+    const msgs = directMessagesMap[threadKey] || [];
+    if (msgs.length === 0) return false;
+    const lastMsg = msgs[msgs.length - 1];
+    if (lastMsg.senderEmail === myEmail || !lastMsg.isIncoming) return false;
+    const lastRead = readReceipts[threadKey] || 0;
+    return (lastMsg.timestamp || 0) > lastRead;
+  };
+
+  const totalUnreadChatCount = sortedProfiles.filter((prof) => isThreadUnread(prof.email)).length;
+
+  const handleMarkAllChatsRead = () => {
+    const myEmail = (currentUser?.email || profileEmail || "admin@hrhub.com").toLowerCase();
+    const receipts = { ...readReceipts };
+    sortedProfiles.forEach((prof) => {
+      const key = getChatThreadKey(myEmail, prof.email);
+      receipts[key] = Date.now();
+    });
+    try {
+      localStorage.setItem("hrhub_chat_read_receipts_v1", JSON.stringify(receipts));
+    } catch {}
+    setReadReceipts(receipts);
+  };
+
+  const dropdownProfiles = [...sortedProfiles]
+    .filter((prof) => {
+      if (!chatSearchQuery.trim()) return true;
+      const q = chatSearchQuery.toLowerCase();
+      const name = getProfileDisplayName(prof).toLowerCase();
+      const email = (prof.email || "").toLowerCase();
+      const last = getThreadLastMessage(prof.email);
+      const lastText = (last?.text || "").toLowerCase();
+      return name.includes(q) || email.includes(q) || lastText.includes(q);
+    })
+    .sort((a, b) => {
+      const aUnread = isThreadUnread(a.email);
+      const bUnread = isThreadUnread(b.email);
+      if (aUnread && !bUnread) return -1;
+      if (!aUnread && bUnread) return 1;
+
+      const aLast = getThreadLastMessage(a.email);
+      const bLast = getThreadLastMessage(b.email);
+      const aTime = aLast?.timestamp || 0;
+      const bTime = bLast?.timestamp || 0;
+      if (aTime !== bTime) return bTime - aTime;
+
+      const aOnline = isUserOnline(a.email);
+      const bOnline = isUserOnline(b.email);
+      if (aOnline && !bOnline) return -1;
+      if (!aOnline && bOnline) return 1;
+
+      return (a.email || "").localeCompare(b.email || "");
+    });
 
   const renderColleaguesDirectoryWidget = () => (
-    <div className="bg-[#f2f5f7] border border-slate-200 rounded-2xl p-4 shadow-sm space-y-3">
-      <div className="flex items-center justify-between pb-2 border-b border-slate-200">
+    <div className="bg-[#f2f5f7] border border-slate-200/80 rounded-3xl p-4 shadow-xs space-y-3 font-sans">
+      <div className="flex items-center justify-between pb-2 border-b border-slate-200/80">
         <div>
           <h3 className="font-bold text-slate-900 text-xs flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-            Colleagues &amp; Directory
+            Registered Team Members ({sortedProfiles.length})
           </h3>
-          <p className="text-[9px] text-emerald-700 font-bold flex items-center gap-1 mt-0.5">
-            <Users size={9} /> {activeOnlineCount} Active Now
+          <p className="text-[10px] text-emerald-700 font-bold flex items-center gap-1 mt-0.5">
+            <Users size={10} /> {activeOnlineCount} Online Now
           </p>
         </div>
         <button
           type="button"
           onClick={fetchProfiles}
           title="Refresh Team Directory"
-          className="p-1 text-slate-400 hover:text-emerald-600 transition"
+          className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-slate-200/60 rounded-xl transition cursor-pointer"
         >
-          <RefreshCw size={12} className={loadingProfiles ? "animate-spin text-emerald-600" : ""} />
+          <RefreshCw size={13} className={loadingProfiles ? "animate-spin text-emerald-600" : ""} />
         </button>
       </div>
 
-      <div className="space-y-2">
-        {sortedProfiles.length > 0 && (
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between px-1">
-              <p className="text-[9px] font-black uppercase tracking-wider text-slate-400">
-                Registered Team Members ({sortedProfiles.length})
-              </p>
-              <span className="text-[8px] font-semibold text-emerald-600">
-                {activeOnlineCount} online
-              </span>
-            </div>
-            {sortedProfiles.map((prof) => {
-              const pEmail = prof.email?.toLowerCase() || "";
-              const isCurrentUser = Boolean(currentEmail && pEmail === currentEmail);
-              const isOnline = isCurrentUser || onlineUserEmails.has(pEmail);
-              const initials = prof.email ? prof.email.slice(0, 2).toUpperCase() : "HR";
-              const displayName = prof.email ? prof.email.split("@")[0].replace(/[._]/g, " ").replace(/\b\w/g, (l) => l.toUpperCase()) : "User";
+      <div className="space-y-1.5">
+        {sortedProfiles.length > 0 ? (
+          sortedProfiles.map((prof) => {
+            const pEmail = prof.email?.toLowerCase() || "";
+            const presenceStatus = getUserPresenceStatus(pEmail);
+            const isOnline = presenceStatus !== "offline";
+            const isTyping = Boolean(typingUsersMap[pEmail]);
+            const initials = getProfileInitials(prof);
+            const displayName = getProfileDisplayName(prof);
+            const shortCompany = formatShortCompany(prof.company);
+            const isChatActive = activeDirectChatUser?.email?.toLowerCase() === pEmail;
 
-              return (
-                <div
-                  key={prof.id}
-                  className={`flex items-center justify-between p-2 rounded-xl transition cursor-pointer shadow-xs border ${
-                    isOnline
-                      ? "bg-white border-emerald-200/90 hover:border-emerald-300 ring-1 ring-emerald-500/10"
-                      : "bg-white/80 border-slate-200/70 hover:border-slate-300"
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <div className="relative shrink-0">
-                      <div className={`w-8 h-8 rounded-full font-bold text-xs flex items-center justify-center shrink-0 ${
-                        isOnline ? "bg-slate-900 text-emerald-400" : "bg-slate-700 text-slate-300"
-                      }`}>
-                        {initials}
-                      </div>
-                      {isOnline ? (
-                        <span className="absolute bottom-0 right-0 flex h-2.5 w-2.5">
-                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                          <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500 ring-2 ring-white"></span>
-                        </span>
-                      ) : (
-                        <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full ring-2 ring-white bg-slate-300"></span>
-                      )}
+            return (
+              <div
+                key={prof.id || prof.email}
+                onClick={() => handleOpenDirectChat(prof)}
+                className={`w-full flex items-center justify-between p-2.5 rounded-2xl transition cursor-pointer group ${
+                  isChatActive
+                    ? "bg-white shadow-sm border border-slate-200/90 ring-2 ring-emerald-500/20"
+                    : "hover:bg-white/90 border border-transparent hover:border-slate-200/60"
+                }`}
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  {/* Round Dark Avatar with 2-letter uppercase initials and online/away/offline status dot */}
+                  <div className="relative shrink-0">
+                    <div className="w-10 h-10 rounded-full bg-[#101e2e] text-white font-bold text-xs flex items-center justify-center shrink-0 tracking-wider shadow-2xs">
+                      {initials}
                     </div>
-                    <div className="min-w-0">
-                      <p className="text-xs font-bold text-slate-800 truncate flex items-center gap-1.5">
-                        {displayName}
-                        {isCurrentUser && (
-                          <span className="text-[8px] font-black text-emerald-700 bg-emerald-100/70 px-1 py-0.2 rounded border border-emerald-200">
-                            You
-                          </span>
-                        )}
-                      </p>
-                      <p className="text-[10px] text-slate-400 truncate">{prof.email}</p>
-                    </div>
+                    {/* Status Dot */}
+                    <span
+                      className={`absolute bottom-0 right-0 w-3 h-3 rounded-full ring-2 ring-white ${getStatusBadgeDot(presenceStatus)}`}
+                      title={`${displayName} is ${getStatusTextLabel(presenceStatus)}`}
+                    />
                   </div>
 
-                  <div className="flex flex-col items-end gap-0.5 shrink-0">
-                    {isOnline ? (
-                      <span className="inline-flex items-center gap-1 text-[9px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                        Active
-                      </span>
+                  {/* Name and Company / Typing */}
+                  <div className="min-w-0 text-left">
+                    <p className="text-[13px] font-bold text-slate-900 truncate leading-tight group-hover:text-emerald-700 transition-colors">
+                      {displayName}
+                    </p>
+                    {isTyping ? (
+                      <p className="text-[11px] text-emerald-600 font-bold truncate mt-0.5 animate-pulse flex items-center gap-1">
+                        <span>typing...</span>
+                        <span className="flex gap-0.5">
+                          <span className="w-1 h-1 bg-emerald-500 rounded-full animate-bounce"></span>
+                          <span className="w-1 h-1 bg-emerald-500 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
+                          <span className="w-1 h-1 bg-emerald-500 rounded-full animate-bounce"></span>
+                        </span>
+                      </p>
                     ) : (
-                      <span className="inline-flex items-center gap-1 text-[9px] font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 border border-slate-200">
-                        <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
-                        Offline
-                      </span>
-                    )}
-                    {prof.is_approved ? (
-                      <span className="text-[8px] font-bold text-emerald-600/90 flex items-center gap-0.5">
-                        <ShieldCheck size={9} /> Approved
-                      </span>
-                    ) : (
-                      <span className="text-[8px] font-medium text-amber-600 flex items-center gap-0.5">
-                        Pending
-                      </span>
+                      <p className="text-[11px] text-slate-400 font-medium truncate mt-0.5">
+                        {shortCompany}
+                      </p>
                     )}
                   </div>
                 </div>
-              );
-            })}
+
+                {/* Right Chat Message Outline Icon */}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleOpenDirectChat(prof);
+                  }}
+                  className="text-slate-400 hover:text-emerald-600 p-1.5 rounded-xl hover:bg-slate-100/80 transition cursor-pointer shrink-0"
+                  title={`Chat with ${displayName}`}
+                >
+                  <MessageSquare size={16} />
+                </button>
+              </div>
+            );
+          })
+        ) : (
+          <div className="p-4 text-center text-xs text-slate-400 bg-white/60 rounded-2xl border border-slate-200/60">
+            No other team members registered yet.
           </div>
         )}
-
-        <div className="space-y-1.5 pt-2 border-t border-slate-200">
-          <p className="text-[9px] font-black uppercase tracking-wider text-slate-400 px-1">
-            Branch Team Directory
-          </p>
-          {ONLINE_USERS.slice(0, 3).map((user) => (
-            <div key={user.id} className="flex items-center justify-between hover:bg-white p-1.5 rounded-xl transition cursor-pointer">
-              <div className="flex items-center gap-2.5 min-w-0">
-                <div className="relative">
-                  <div className="w-7 h-7 rounded-full bg-slate-800 text-slate-300 font-bold text-[10px] flex items-center justify-center shrink-0">
-                    {user.avatar}
-                  </div>
-                  <span className={`absolute bottom-0 right-0 w-2 h-2 rounded-full ring-2 ring-[#f2f5f7] ${user.status === 'online' ? 'bg-emerald-500' : 'bg-amber-400'}`}></span>
-                </div>
-                <div className="min-w-0">
-                  <p className="text-xs font-semibold text-slate-800 truncate">{user.name}</p>
-                  <p className="text-[10px] text-slate-400 truncate">{user.company}</p>
-                </div>
-              </div>
-
-              <button className="text-slate-400 hover:text-emerald-600 p-1 transition">
-                <MessageSquare size={13} />
-              </button>
-            </div>
-          ))}
-        </div>
-
-        {communicationTab !== "directory" ? (
-          <button
-            type="button"
-            onClick={() => setCommunicationTab("directory")}
-            className="w-full mt-2 py-2 px-3 text-center text-xs font-bold text-emerald-800 bg-white border border-slate-200 hover:border-emerald-300 hover:bg-emerald-50/60 rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5 shadow-2xs"
-          >
-            <Users size={14} className="text-emerald-600" />
-            <span>Open Full Employee Directory &rarr;</span>
-          </button>
-        ) : (
-          <button
-            type="button"
-            onClick={() => setCommunicationTab("bulletin")}
-            className="w-full mt-2 py-2 px-3 text-center text-xs font-bold text-slate-700 bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5 shadow-2xs"
-          >
-            <Megaphone size={14} className="text-emerald-600" />
-            <span>&larr; Back to Company Bulletin</span>
-          </button>
-        )}
       </div>
+
+      {communicationTab !== "directory" ? (
+        <button
+          type="button"
+          onClick={() => setCommunicationTab("directory")}
+          className="w-full mt-2 py-2 px-3 text-center text-xs font-bold text-emerald-800 bg-white border border-slate-200 hover:border-emerald-300 hover:bg-emerald-50/60 rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5 shadow-2xs"
+        >
+          <Users size={14} className="text-emerald-600" />
+          <span>Open Full Employee Directory &rarr;</span>
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setCommunicationTab("bulletin")}
+          className="w-full mt-2 py-2 px-3 text-center text-xs font-bold text-slate-700 bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5 shadow-2xs"
+        >
+          <Megaphone size={14} className="text-emerald-600" />
+          <span>&larr; Back to Company Bulletin</span>
+        </button>
+      )}
     </div>
   );
 
@@ -635,7 +1018,7 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
-            {/* DIRECT MESSAGES DROPDOWN */}
+            {/* DIRECT MESSAGES DROPDOWN (Messenger Style) */}
             <div className="relative">
               <button
                 onClick={() => {
@@ -644,33 +1027,161 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
                   setViewSwitcherOpen(false);
                 }}
                 className="p-2 bg-[#1b2b3d] hover:bg-slate-700 text-slate-300 hover:text-emerald-400 rounded-full transition relative cursor-pointer"
-                title="Direct Messages"
+                title="Chats & Direct Messages"
               >
                 <MessageSquare size={17} />
-                <span className="absolute top-0 right-0 w-2.5 h-2.5 bg-emerald-500 rounded-full ring-2 ring-[#0d1b2a]"></span>
+                {totalUnreadChatCount > 0 ? (
+                  <span className="absolute -top-1 -right-1 px-1.5 py-0.2 min-w-[17px] h-[17px] bg-rose-500 text-white font-black text-[9.5px] rounded-full flex items-center justify-center ring-2 ring-[#0d1b2a] shadow-sm animate-pulse">
+                    {totalUnreadChatCount}
+                  </span>
+                ) : (
+                  <span className="absolute top-0 right-0 w-2.5 h-2.5 bg-emerald-500 rounded-full ring-2 ring-[#0d1b2a]"></span>
+                )}
               </button>
 
               {messagesOpen && (
-                <div className="absolute right-0 mt-2 w-80 bg-white border border-slate-200 rounded-2xl shadow-2xl p-4 text-slate-900 z-50 animate-fade-in">
-                  <div className="flex justify-between items-center mb-3 pb-2 border-b border-slate-100">
-                    <h4 className="font-bold text-sm">Direct Messages</h4>
-                    <span className="text-[10px] bg-emerald-100 text-emerald-700 font-bold px-2 py-0.5 rounded-full">3 New</span>
+                <div className="absolute right-0 mt-2 w-84 sm:w-92 bg-white border border-slate-200/90 rounded-3xl shadow-2xl p-4 text-slate-900 z-50 animate-in fade-in slide-in-from-top-2 duration-150 flex flex-col max-h-[500px]">
+                  {/* Dropdown Header */}
+                  <div className="flex justify-between items-center pb-2.5 border-b border-slate-100">
+                    <div className="flex items-center gap-2">
+                      <h4 className="font-extrabold text-slate-900 text-sm tracking-tight">Chats</h4>
+                      {totalUnreadChatCount > 0 ? (
+                        <span className="text-[10px] bg-rose-100 text-rose-700 font-bold px-2 py-0.5 rounded-full">
+                          {totalUnreadChatCount} unread
+                        </span>
+                      ) : (
+                        <span className="text-[10px] bg-emerald-50 text-emerald-700 font-bold px-2 py-0.5 rounded-full">
+                          All caught up
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {totalUnreadChatCount > 0 && (
+                        <button
+                          type="button"
+                          onClick={handleMarkAllChatsRead}
+                          className="text-[10.5px] text-emerald-700 hover:text-emerald-800 font-bold cursor-pointer transition flex items-center gap-1 hover:underline"
+                        >
+                          <CheckCheck size={13} />
+                          <span>Mark all read</span>
+                        </button>
+                      )}
+                      <span className="text-[10px] bg-slate-100 text-slate-600 font-bold px-2 py-0.5 rounded-full">
+                        {activeOnlineCount} Online
+                      </span>
+                    </div>
                   </div>
-                  <div className="space-y-3">
-                    {ONLINE_USERS.slice(0, 3).map(user => (
-                      <div key={user.id} className="flex items-center gap-3 p-2 hover:bg-slate-50 rounded-xl cursor-pointer transition">
-                        <div className="w-8 h-8 rounded-full bg-slate-900 text-emerald-400 font-bold text-xs flex items-center justify-center shrink-0">
-                          {user.avatar}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex justify-between items-baseline">
-                            <p className="text-xs font-bold text-slate-800 truncate">{user.name}</p>
-                            <span className="text-[10px] text-slate-400">10m</span>
+
+                  {/* Messenger Search Input */}
+                  <div className="relative my-2.5">
+                    <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="text"
+                      value={chatSearchQuery}
+                      onChange={(e) => setChatSearchQuery(e.target.value)}
+                      placeholder="Search messages or team members..."
+                      className="w-full pl-8 pr-3 py-1.5 bg-slate-100/80 border border-slate-200/80 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-emerald-500 focus:bg-white transition"
+                    />
+                  </div>
+
+                  {/* Conversation List */}
+                  <div className="space-y-1 overflow-y-auto custom-scrollbar flex-1 pr-0.5">
+                    {dropdownProfiles.length > 0 ? (
+                      dropdownProfiles.map((prof) => {
+                        const pEmail = prof.email?.toLowerCase() || "";
+                        const presenceStatus = getUserPresenceStatus(pEmail);
+                        const isOnline = presenceStatus !== "offline";
+                        const isTyping = Boolean(typingUsersMap[pEmail]);
+                        const displayName = getProfileDisplayName(prof);
+                        const initials = getProfileInitials(prof);
+                        const shortCompany = formatShortCompany(prof.company);
+                        const lastMsg = getThreadLastMessage(prof.email);
+                        const isUnread = isThreadUnread(prof.email);
+
+                        const isSentByMe = lastMsg && (lastMsg.senderEmail === (currentUser?.email || profileEmail || "").toLowerCase() || !lastMsg.isIncoming);
+
+                        let previewSnippet = "Click to start conversation...";
+                        if (isTyping) {
+                          previewSnippet = "typing...";
+                        } else if (lastMsg) {
+                          if (lastMsg.text) {
+                            previewSnippet = isSentByMe ? `You: ${lastMsg.text}` : lastMsg.text;
+                          } else if (lastMsg.image) {
+                            previewSnippet = isSentByMe ? "You sent a photo 📷" : "Sent a photo 📷";
+                          }
+                        }
+
+                        const timeSnippet = lastMsg ? formatMessengerTime(lastMsg.timestamp) : "";
+
+                        return (
+                          <div
+                            key={prof.id || prof.email}
+                            onClick={() => handleOpenDirectChat(prof)}
+                            className={`flex items-center gap-3 p-2.5 rounded-2xl cursor-pointer transition group ${
+                              isUnread
+                                ? "bg-emerald-50/70 hover:bg-emerald-100/60 border border-emerald-200/60 shadow-2xs"
+                                : "hover:bg-slate-100/80 border border-transparent"
+                            }`}
+                          >
+                            {/* Avatar with Status */}
+                            <div className="relative shrink-0">
+                              <div className="w-10 h-10 rounded-full bg-[#101e2e] text-emerald-400 font-extrabold text-xs flex items-center justify-center shrink-0 shadow-2xs">
+                                {initials}
+                              </div>
+                              <span
+                                className={`absolute bottom-0 right-0 w-3 h-3 rounded-full ring-2 ring-white ${getStatusBadgeDot(presenceStatus)}`}
+                                title={`${displayName} is ${getStatusTextLabel(presenceStatus)}`}
+                              />
+                            </div>
+
+                            {/* Message Details */}
+                            <div className="flex-1 min-w-0 text-left">
+                              <div className="flex justify-between items-baseline gap-1">
+                                <p className={`text-xs truncate ${isUnread ? "font-black text-slate-950" : "font-bold text-slate-800"}`}>
+                                  {displayName}
+                                </p>
+                                {timeSnippet && (
+                                  <span className={`text-[10px] shrink-0 ${isUnread ? "font-bold text-emerald-700" : "text-slate-400"}`}>
+                                    {timeSnippet}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex items-center justify-between gap-1.5 mt-0.5">
+                                {isTyping ? (
+                                  <p className="text-[11px] font-bold text-emerald-600 animate-pulse flex items-center gap-1 truncate">
+                                    <span>typing...</span>
+                                    <span className="flex gap-0.5">
+                                      <span className="w-1 h-1 bg-emerald-500 rounded-full animate-bounce"></span>
+                                      <span className="w-1 h-1 bg-emerald-500 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
+                                      <span className="w-1 h-1 bg-emerald-500 rounded-full animate-bounce"></span>
+                                    </span>
+                                  </p>
+                                ) : (
+                                  <p
+                                    className={`text-[11px] truncate max-w-[170px] sm:max-w-[210px] ${
+                                      isUnread
+                                        ? "font-bold text-slate-900"
+                                        : lastMsg
+                                        ? "text-slate-600 font-normal"
+                                        : "text-slate-400 font-normal italic"
+                                    }`}
+                                  >
+                                    {previewSnippet}
+                                  </p>
+                                )}
+                                {isUnread && (
+                                  <span className="w-2.5 h-2.5 rounded-full bg-[#00c875] ring-2 ring-emerald-200 shrink-0 animate-pulse" title="Unread message" />
+                                )}
+                              </div>
+                            </div>
                           </div>
-                          <p className="text-[11px] text-slate-500 truncate">Sir, updated na po ang attendance record...</p>
-                        </div>
+                        );
+                      })
+                    ) : (
+                      <div className="p-6 text-center text-xs text-slate-400">
+                        No conversations match your search.
                       </div>
-                    ))}
+                    )}
                   </div>
                 </div>
               )}
@@ -727,9 +1238,11 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
                 workspaceTab={workspaceTab}
                 onSelectWorkspace={({ view, tab }) => {
                   setActiveView(view);
-                  if (tab) {
-                    if (view === "sop") setWorkspaceTab(tab);
-                    else if (view === "communication") setCommunicationTab(tab);
+                  if (view === "sop") {
+                    setWorkspaceTab(tab || "home");
+                    setIsSidebarCollapsed(true);
+                  } else if (view === "communication") {
+                    if (tab) setCommunicationTab(tab);
                   }
                   setViewSwitcherOpen(false);
                 }}
@@ -782,12 +1295,13 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
           <aside className="hidden md:block md:col-span-3 space-y-4 sticky top-20 self-start max-h-[calc(100vh-6rem)] overflow-y-auto custom-scrollbar pr-1">
             <div className="bg-[#f2f5f7] border border-slate-200 rounded-2xl p-4 shadow-sm space-y-3">
               <div className="flex items-center gap-3 pb-3 border-b border-slate-200">
-                <div className="w-10 h-10 rounded-xl bg-slate-900 text-emerald-400 font-bold flex items-center justify-center text-sm">
-                  HR
+                <div className="w-10 h-10 rounded-xl bg-slate-900 text-emerald-400 font-bold flex items-center justify-center text-sm shrink-0 shadow-xs">
+                  {userInitials}
                 </div>
-                <div>
-                  <h3 className="font-bold text-slate-900 text-sm">HR Administrator</h3>
-                  <p className="text-[11px] text-slate-500">Simpal Group Executive</p>
+                <div className="min-w-0 flex-1">
+                  <h3 className="font-bold text-slate-900 text-sm truncate">{profileName}</h3>
+                  <p className="text-[11px] text-slate-600 font-medium truncate">{displayRole}</p>
+                  <p className="text-[10px] text-slate-400 truncate">{displayCompany}</p>
                 </div>
               </div>
 
@@ -838,11 +1352,12 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
             {communicationTab === "directory" ? (
               <EmployeeDirectoryPanel
                 profiles={supabaseProfiles}
-                onlineEmails={onlineUserEmails}
+                onlineEmails={new Set(Object.keys(presenceMap).filter(e => presenceMap[e]?.status !== "offline"))}
                 currentEmail={currentEmail}
                 loading={loadingProfiles}
                 onRefresh={fetchProfiles}
                 onUpdateProfile={handleUpdateProfile}
+                onDeleteProfile={handleDeleteProfile}
               />
             ) : (
               <>
@@ -850,11 +1365,11 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <div className="w-8 h-8 rounded-full bg-slate-900 text-emerald-400 font-bold text-xs flex items-center justify-center shrink-0">
-                    {profileName ? profileName.slice(0, 2).toUpperCase() : "HR"}
+                    {userInitials}
                   </div>
                   <div>
                     <span className="text-xs font-bold text-slate-800">{profileName}</span>
-                    <span className="text-[10px] text-slate-400 block">{profileRole}</span>
+                    <span className="text-[10px] text-slate-400 block">{displayRole} · {displayCompany}</span>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -1007,7 +1522,15 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
           )}
         </div>
       ) : (
-        <div className="max-w-[1280px] mx-auto px-4 py-6">
+        <div className="flex items-start min-h-[calc(100vh-53px)]">
+          <MondayStyleSidebar
+            workspaceTab={workspaceTab}
+            setWorkspaceTab={setWorkspaceTab}
+            onOpenAiBuddy={() => setAiDrawerOpen(true)}
+            isCollapsed={isSidebarCollapsed}
+            setIsCollapsed={setIsSidebarCollapsed}
+          />
+          <div className="flex-1 min-w-0 p-4 md:p-6 transition-all duration-300 overflow-x-hidden">
           {/* WORKSPACE CENTRAL OPERATIONS HUB */}
           <div className="mb-6 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
@@ -1017,6 +1540,19 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
 
             {/* WORKSPACE INTEGRATED TABS */}
             <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setWorkspaceTab("home")}
+                className={`inline-flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-bold transition shadow-xs cursor-pointer ${
+                  workspaceTab === "home"
+                    ? "bg-[#008559] text-white ring-2 ring-emerald-300"
+                    : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                }`}
+              >
+                <Home size={14} className={workspaceTab === "home" ? "text-white" : "text-emerald-600"} />
+                <span>Home Dashboard</span>
+              </button>
+
               <button
                 type="button"
                 onClick={() => setWorkspaceTab("sops")}
@@ -1071,6 +1607,17 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
             </div>
           </div>
 
+          {/* TAB 0: HOME HR DASHBOARD & MEETING SCHEDULER */}
+          {workspaceTab === "home" && (
+            <HomeWorkspaceView
+              currentUser={currentUser}
+              profileName={profileName}
+              onOpenAiBuddy={() => setAiDrawerOpen(true)}
+              setWorkspaceTab={setWorkspaceTab}
+              profiles={supabaseProfiles}
+            />
+          )}
+
           {/* TAB 1: OFFICIAL MEMO GENERATOR */}
           {workspaceTab === "memo" && (
             <MemoGeneratorPanel
@@ -1079,6 +1626,10 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
               currentUser={currentUser}
               initialDraft={aiGeneratedMemoDraft}
               onOpenAiBuddy={() => setAiDrawerOpen(true)}
+              onNavigateToDirectory={() => {
+                setActiveView("communication");
+                setCommunicationTab("directory");
+              }}
             />
           )}
 
@@ -1129,12 +1680,14 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
             </>
           )}
         </div>
-      )}
+      </div>
+    )}
 
-      {/* ================= ANIMATED AI ASSISTANT GIRL FLOATING ON THE SIDE ================= */}
+      {/* ================= ANIMATED AI ASSISTANT FLOATING ON THE SIDE ================= */}
       <AiAssistantGirlWidget
         isChatOpen={aiDrawerOpen}
         onOpenChat={() => setAiDrawerOpen(true)}
+        hidden={activeView === "sop" && (workspaceTab === "home" || workspaceTab === "memo")}
       />
 
       {/* Floating AI Assistant Drawer/Modal */}
@@ -1150,6 +1703,22 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
           setAiDrawerOpen(false);
         }}
       />
+
+      {/* ================= ADVANCED MESSENGER TEAM CHAT MODAL ================= */}
+      {activeDirectChatUser && (
+        <TeamChatMessengerModal
+          activeUser={activeDirectChatUser}
+          currentUser={currentUser}
+          presenceStatus={getUserPresenceStatus(activeDirectChatUser.email)}
+          isRecipientTyping={Boolean(typingUsersMap[activeDirectChatUser.email?.toLowerCase().trim()])}
+          onTypingSignal={handleSendTypingSignal}
+          messages={directMessagesMap[getChatKey(activeDirectChatUser.email)] || []}
+          onClose={() => setActiveDirectChatUser(null)}
+          onSendMessage={handleSendDirectMessage}
+          onReactMessage={handleReactDirectMessage}
+          onDeleteMessage={handleDeleteDirectMessage}
+        />
+      )}
     </div>
   );
 }

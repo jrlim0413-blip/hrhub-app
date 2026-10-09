@@ -31,11 +31,6 @@ const SUBSIDIARY_COMPANIES = [
   ["Imperial Gaming OPC", "Gaming & Entertainment", "One Person Corporation specialized in leisure and gaming operations within the group.", "/logos/IMP.png", "Gaming"]
 ].map(([name, category, desc, logoUrl, tag]) => ({ name, category, desc, logoUrl, tag }));
 
-const demoCredentials = {
-  email: "admin@hrhub.com",
-  password: "admin123"
-};
-
 const Feature = ({ icon: Icon, children, emerald = false }) => (
   <div className="p-3 bg-white rounded-lg border border-slate-200 shadow-sm flex items-center justify-center gap-2">
     <Icon size={16} className={emerald ? "text-emerald-500" : "text-slate-700"} />
@@ -64,9 +59,23 @@ const App = () => {
   const [currentPhraseIndex, setCurrentPhraseIndex] = useState(0);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [currentUser, setCurrentUser] = useState(() => {
+    try {
+      const savedUserStr = localStorage.getItem("hrhub_auth_user");
+      return savedUserStr ? JSON.parse(savedUserStr) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [isLoggedIn, setIsLoggedIn] = useState(() => {
+    try {
+      const savedUserStr = localStorage.getItem("hrhub_auth_user");
+      return Boolean(savedUserStr);
+    } catch {
+      return false;
+    }
+  });
   const [currentPage, setCurrentPage] = useState("dashboard"); // "dashboard" | "directory"
-  const [currentUser, setCurrentUser] = useState(null);
   const [loginOpen, setLoginOpen] = useState(false);
   const [authTab, setAuthTab] = useState("signin"); // "signin" | "activate" | "forgot"
   const [showPassword, setShowPassword] = useState(false);
@@ -75,24 +84,80 @@ const App = () => {
   const [authSuccessNotice, setAuthSuccessNotice] = useState("");
   const [isSubmittingAuth, setIsSubmittingAuth] = useState(false);
 
-  // Check existing Supabase session on mount
+  // Check existing persistent session or Supabase session on mount
   useEffect(() => {
+    try {
+      const savedUserStr = localStorage.getItem("hrhub_auth_user");
+      if (savedUserStr) {
+        let savedUser = JSON.parse(savedUserStr);
+        if (savedUser && savedUser.email) {
+          if (
+            savedUser.email.toLowerCase() === "admin@hrhub.com" ||
+            savedUser.name === "Admin" ||
+            savedUser.name === "Super Administrator" ||
+            savedUser.name === "hrmd"
+          ) {
+            savedUser = {
+              ...savedUser,
+              name: "H R M D",
+              role: "HR Administrator"
+            };
+            try {
+              localStorage.setItem("hrhub_auth_user", JSON.stringify(savedUser));
+            } catch {}
+          }
+          setCurrentUser(savedUser);
+          setIsLoggedIn(true);
+        }
+      }
+    } catch (e) {
+      console.error(e);
+    }
+
+    // Ensure HR Administrator account is registered in Supabase database
+    const initSuperAdminAccount = async () => {
+      try {
+        if (!verifyActivatedPassword("admin@hrhub.com", "admin123")) {
+          saveActivatedPassword("admin@hrhub.com", "admin123");
+        }
+
+        await supabase.from("profiles").upsert({
+          email: "admin@hrhub.com",
+          name: "H R M D",
+          company: "Simpal Group of Companies",
+          role: "HR Administrator",
+          is_approved: true
+        }, { onConflict: "email" });
+      } catch (err) {
+        console.warn("HR admin sync notice:", err);
+      }
+    };
+    initSuperAdminAccount();
+
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) {
-        const email = session.user.email || "user@hrhub.com";
-        const name = email.split("@")[0].replace(/[._]/g, " ").replace(/\b\w/g, (l) => l.toUpperCase());
-        setCurrentUser({
+        const email = session.user.email || "admin@hrhub.com";
+        const isDefaultAdmin = email.toLowerCase() === "admin@hrhub.com";
+        const name = isDefaultAdmin ? "H R M D" : email.split("@")[0].replace(/[._]/g, " ").replace(/\b\w/g, (l) => l.toUpperCase());
+        const userObj = {
           id: session.user.id,
           email,
           name,
           role: "HR Administrator",
           is_approved: true,
           source: "supabase"
-        });
+        };
+        setCurrentUser(userObj);
         setIsLoggedIn(true);
+        try {
+          localStorage.setItem("hrhub_auth_user", JSON.stringify(userObj));
+        } catch (e) {
+          console.error(e);
+        }
       }
     });
   }, []);
+
 
   useEffect(() => {
     const phrase = PHRASES[currentPhraseIndex];
@@ -168,68 +233,94 @@ const App = () => {
           ? authData.user.email.split("@")[0].replace(/[._]/g, " ").replace(/\b\w/g, (l) => l.toUpperCase())
           : "User";
 
-        setCurrentUser({
+        const userObj = {
           id: authData.user.id,
           email: authData.user.email,
           name,
           role: "HR Administrator",
           is_approved: profile ? profile.is_approved : true,
           source: "supabase"
-        });
-        setIsLoggedIn(true);
-        setLoginOpen(false);
-        setForm({ email: "", password: "", confirmPassword: "" });
-        return;
-      }
-
-      // 2. Demo credentials check (Strict Email + Password verification)
-      if (trimmedEmail === demoCredentials.email && trimmedPassword === demoCredentials.password) {
-        setCurrentUser({
-          id: "demo-admin",
-          email: "admin@hrhub.com",
-          name: "HR Administrator",
-          role: "HR Administrator",
-          company: "Simpal Group of Companies",
-          is_approved: true,
-          source: "demo"
-        });
-        setIsLoggedIn(true);
-        setLoginOpen(false);
-        setForm({ email: "", password: "", confirmPassword: "" });
-        return;
-      }
-
-      // 3. Activated employee password verification
-      if (verifyActivatedPassword(trimmedEmail, trimmedPassword)) {
-        const stored = getStoredEmployees();
-        const effective = stored.find((e) => (e.email || "").toLowerCase() === trimmedEmail.toLowerCase()) || {
-          email: trimmedEmail,
-          name: trimmedEmail.split("@")[0].replace(/[._]/g, " ").replace(/\b\w/g, (l) => l.toUpperCase()),
-          company: "Simpal Group of Companies",
-          role: "Team Member",
-          is_approved: true
         };
+        try {
+          localStorage.setItem("hrhub_auth_user", JSON.stringify(userObj));
+          localStorage.setItem("hrhub_active_view", "communication");
+          localStorage.setItem("hrhub_workspace_tab", "home");
+        } catch (e) {
+          console.error(e);
+        }
+        setCurrentUser(userObj);
+        setIsLoggedIn(true);
+        setLoginOpen(false);
+        setForm({ email: "", password: "", confirmPassword: "" });
+        return;
+      }
 
-        if (effective.is_approved === false) {
+      // 2. Database-verified credentials check (Activated accounts & HR Admin)
+      if (verifyActivatedPassword(trimmedEmail, trimmedPassword)) {
+        let isApprovedStatus = true;
+        let isDefaultAdmin = trimmedEmail.toLowerCase() === "admin@hrhub.com";
+        let effectiveName = isDefaultAdmin ? "H R M D" : trimmedEmail.split("@")[0].replace(/[._]/g, " ").replace(/\b\w/g, (l) => l.toUpperCase());
+        let effectiveCompany = "Simpal Group of Companies";
+        let effectiveRole = isDefaultAdmin ? "HR Administrator" : "Team Member";
+        let effectiveId = `act-${Date.now()}`;
+
+        try {
+          const { data: dbProf } = await supabase
+            .from("profiles")
+            .select("*")
+            .ilike("email", trimmedEmail)
+            .maybeSingle();
+
+          if (dbProf) {
+            if (typeof dbProf.is_approved === "boolean") isApprovedStatus = dbProf.is_approved;
+            if (dbProf.name && dbProf.name !== "Admin" && dbProf.name !== "Super Administrator") effectiveName = dbProf.name;
+            if (dbProf.company) effectiveCompany = dbProf.company;
+            if (dbProf.role && dbProf.role !== "Super Administrator") effectiveRole = dbProf.role;
+            if (dbProf.id) effectiveId = dbProf.id;
+          } else {
+            const stored = getStoredEmployees();
+            const effective = stored.find((e) => (e.email || "").toLowerCase() === trimmedEmail.toLowerCase());
+            if (effective) {
+              if (typeof effective.is_approved === "boolean") isApprovedStatus = effective.is_approved;
+              if (effective.name && effective.name !== "Admin" && effective.name !== "Super Administrator") effectiveName = effective.name;
+              if (effective.company) effectiveCompany = effective.company;
+              if (effective.role && effective.role !== "Super Administrator") effectiveRole = effective.role;
+              if (effective.id) effectiveId = effective.id;
+            }
+          }
+        } catch (err) {
+          console.warn("User profile check notice:", err);
+        }
+
+        if (isApprovedStatus === false) {
           setLoginError("Your account is pending HR approval. Please contact your system administrator.");
           setIsSubmittingAuth(false);
           return;
         }
 
-        setCurrentUser({
-          id: effective.id || `act-${Date.now()}`,
+        const actUser = {
+          id: effectiveId,
           email: trimmedEmail,
-          name: effective.name || trimmedEmail.split("@")[0].replace(/[._]/g, " ").replace(/\b\w/g, (l) => l.toUpperCase()),
-          role: effective.role || "Team Member",
-          company: effective.company || "Simpal Group of Companies",
+          name: effectiveName,
+          role: effectiveRole,
+          company: effectiveCompany,
           is_approved: true,
           source: "activated"
-        });
+        };
+        try {
+          localStorage.setItem("hrhub_auth_user", JSON.stringify(actUser));
+          localStorage.setItem("hrhub_active_view", "communication");
+          localStorage.setItem("hrhub_workspace_tab", "home");
+        } catch (e) {
+          console.error(e);
+        }
+        setCurrentUser(actUser);
         setIsLoggedIn(true);
         setLoginOpen(false);
         setForm({ email: "", password: "", confirmPassword: "" });
         return;
       }
+
 
       // If password check failed, check if the email exists in profiles or stored directory to provide helpful guidance
       const { data: matchedProfile } = await supabase
@@ -319,7 +410,7 @@ const App = () => {
       }
 
       const name = effectiveProfile.name || trimmedEmail.split("@")[0].replace(/[._]/g, " ").replace(/\b\w/g, (l) => l.toUpperCase());
-      setCurrentUser({
+      const actUser = {
         id: effectiveProfile.id || `act-${Date.now()}`,
         email: trimmedEmail,
         name,
@@ -327,7 +418,15 @@ const App = () => {
         company: effectiveProfile.company || "Simpal Group of Companies",
         is_approved: true,
         source: "activated"
-      });
+      };
+      try {
+        localStorage.setItem("hrhub_auth_user", JSON.stringify(actUser));
+        localStorage.setItem("hrhub_active_view", "communication");
+        localStorage.setItem("hrhub_workspace_tab", "home");
+      } catch (e) {
+        console.error(e);
+      }
+      setCurrentUser(actUser);
       setIsLoggedIn(true);
       setLoginOpen(false);
       setForm({ email: "", password: "", confirmPassword: "" });
@@ -373,6 +472,13 @@ const App = () => {
       await supabase.auth.signOut();
     } catch (err) {
       // ignore
+    }
+    try {
+      localStorage.removeItem("hrhub_auth_user");
+      localStorage.removeItem("hrhub_active_view");
+      localStorage.removeItem("hrhub_workspace_tab");
+    } catch (e) {
+      console.error(e);
     }
     setCurrentUser(null);
     setIsLoggedIn(false);
@@ -571,7 +677,7 @@ const App = () => {
 
       <section className="py-16 bg-gradient-to-b from-slate-100 to-white text-center">
         <div className="max-w-4xl mx-auto px-6 space-y-4">
-          <h2 className="text-2xl md:text-3xl font-bold text-slate-900">One HR Engine for Construction, Gaming, and Holding Enterprises.</h2>
+          <h2 className="text-2xl md:text-3xl font-bold text-Nslate-900">One HR Engine for Construction, Gaming, and Holding Enterprises.</h2>
           <p className="text-slate-600 text-sm md:text-base leading-relaxed">Manage attendance, shifting schedules, and payroll independently per subsidiary or consolidated under the Simpal Group master portal.</p>
           <div className="pt-4 grid grid-cols-2 md:grid-cols-4 gap-4 text-xs font-semibold text-slate-700">
             {["Multi-Company Payroll", "Branch Hierarchy", "Site & Field Timekeeping", "Consolidated Analytics"].map(x => <Feature key={x} icon={CheckCircle2} emerald>{x}</Feature>)}
@@ -602,7 +708,7 @@ const App = () => {
           visual={<div className="bg-white p-6 rounded-2xl shadow-xl w-full max-w-sm space-y-3 border border-slate-200">
             <div className="text-xs font-bold text-slate-400 uppercase tracking-wider">Simpal Group Structure</div>
             {["Construction Division|SIMCON", "Gaming Operations|Lucky Betplay / Imperial"].map(x => {
-              const [a,b] = x.split("|");
+              const [a, b] = x.split("|");
               return <div key={a} className="p-2.5 bg-slate-50 rounded-lg border border-slate-200 text-xs font-semibold flex justify-between"><span>{a}</span><span className="text-emerald-600">{b}</span></div>;
             })}
           </div>}
@@ -623,7 +729,7 @@ const App = () => {
           text="Activate site biometric tracking for construction projects or shifting/overtime computing for 24/7 gaming branches."
           reverse iconBg
           visual={<div className="grid grid-cols-2 gap-3 w-full max-w-sm">
-            {[[Clock,"Site Attendance"],[DollarSign,"Group Payroll"],[Calendar,"Shift Roster"],[Award,"Compliance"]].map(([Icon,text], i) =>
+            {[[Clock, "Site Attendance"], [DollarSign, "Group Payroll"], [Calendar, "Shift Roster"], [Award, "Compliance"]].map(([Icon, text], i) =>
               <div key={text} className="bg-white p-3 rounded-xl shadow-sm border border-slate-200 text-center space-y-1"><Icon size={20} className={`mx-auto ${i % 2 ? "text-emerald-500" : "text-slate-700"}`} /><div className="text-xs font-bold text-slate-800">{text}</div></div>
             )}
           </div>}
@@ -718,22 +824,20 @@ const App = () => {
                     <button
                       type="button"
                       onClick={() => { setAuthTab("signin"); setLoginError(""); setAuthSuccessNotice(""); }}
-                      className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-xs font-bold rounded-xl transition cursor-pointer ${
-                        authTab === "signin"
+                      className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-xs font-bold rounded-xl transition cursor-pointer ${authTab === "signin"
                           ? "bg-slate-900 text-emerald-400 shadow-sm"
                           : "text-slate-600 hover:text-slate-900"
-                      }`}
+                        }`}
                     >
                       <LogIn size={14} /> Sign In
                     </button>
                     <button
                       type="button"
                       onClick={() => { setAuthTab("activate"); setLoginError(""); setAuthSuccessNotice(""); }}
-                      className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-xs font-bold rounded-xl transition cursor-pointer ${
-                        authTab === "activate"
+                      className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-xs font-bold rounded-xl transition cursor-pointer ${authTab === "activate"
                           ? "bg-slate-900 text-emerald-400 shadow-sm"
                           : "text-slate-600 hover:text-slate-900"
-                      }`}
+                        }`}
                     >
                       <Sparkles size={14} /> Activate Account
                     </button>
@@ -774,7 +878,7 @@ const App = () => {
                           type="email"
                           value={form.email}
                           onChange={(e) => setForm({ ...form, email: e.target.value })}
-                          placeholder="admin@hrhub.com"
+                          placeholder="name@simpalgroup.com"
                           className="w-full border-0 bg-transparent text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none"
                         />
                       </div>
@@ -827,15 +931,12 @@ const App = () => {
                       )}
                     </button>
 
-                    <div className="rounded-2xl border border-emerald-200 bg-emerald-50/80 p-3 text-xs text-emerald-900 space-y-1.5">
+                    <div className="rounded-2xl border border-emerald-200 bg-emerald-50/80 p-3 text-xs text-emerald-900 space-y-1">
                       <p className="font-bold flex items-center gap-1.5 text-emerald-950">
-                        <ShieldCheck size={14} className="text-emerald-600 shrink-0" /> Quick Access Guide:
+                        <ShieldCheck size={14} className="text-emerald-600 shrink-0" /> Employee Notice:
                       </p>
-                      <p className="text-[11px] text-emerald-800">
-                        • Demo Administrator: <span className="font-bold text-slate-900">admin@hrhub.com</span> / <span className="font-bold text-slate-900">admin123</span>
-                      </p>
-                      <p className="text-[11px] text-emerald-800">
-                        • First time using your email? Switch to the <strong className="text-emerald-950 cursor-pointer underline" onClick={() => { setAuthTab("activate"); setLoginError(""); setAuthSuccessNotice(""); }}>Activate Account</strong> tab above to set your personal password.
+                      <p className="text-[11px] text-emerald-800 leading-relaxed">
+                        First time using your pre-registered work email? Switch to the <strong className="text-emerald-950 cursor-pointer underline" onClick={() => { setAuthTab("activate"); setLoginError(""); setAuthSuccessNotice(""); }}>Activate Account</strong> tab above to set your personal password.
                       </p>
                     </div>
                   </form>

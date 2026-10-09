@@ -119,9 +119,10 @@ export function getFemaleVoice() {
 
 export default function AiAssistantGirlWidget({
   onOpenChat,
-  isChatOpen = false
+  isChatOpen = false,
+  hidden = false
 }) {
-  const [isMinimized, setIsMinimized] = useState(false);
+  const [isMinimized, setIsMinimized] = useState(false); // Animated waving anime character visible by default
   const [bubbleDismissed, setBubbleDismissed] = useState(false);
   const [isBlinking, setIsBlinking] = useState(false);
   const [mouthState, setMouthState] = useState("resting"); // "resting", "open", "shut"
@@ -140,8 +141,24 @@ export default function AiAssistantGirlWidget({
     activeTimersRef.current = [];
   };
 
+  // Stop audio and timers when hidden or chat is open
+  useEffect(() => {
+    if (hidden || isChatOpen) {
+      clearAllTimers();
+      if (audioPlayerRef.current) {
+        try {
+          audioPlayerRef.current.pause();
+        } catch {}
+      }
+      if (typeof window !== "undefined" && window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+      }
+    }
+  }, [hidden, isChatOpen]);
+
   // 1. Natural Anime Blinking Engine (Eyes are wide OPEN by default, blinks naturally)
   useEffect(() => {
+    if (hidden || isChatOpen || isMinimized) return;
     let t1, t2, t3;
     const blinkInterval = setInterval(() => {
       setIsBlinking(true);
@@ -162,10 +179,11 @@ export default function AiAssistantGirlWidget({
       clearTimeout(t2);
       clearTimeout(t3);
     };
-  }, []);
+  }, [hidden, isChatOpen, isMinimized]);
 
   // 2. Play Natural Neural Voice Greeting with Exact Millisecond Word Sync
   const playGreeting = (index) => {
+    if (hidden || isChatOpen || isMinimized) return;
     clearAllTimers();
     if (audioPlayerRef.current) {
       try {
@@ -189,7 +207,6 @@ export default function AiAssistantGirlWidget({
         const audio = new Audio(item.audioUrl);
         audioPlayerRef.current = audio;
         audio.play().catch((err) => {
-          // Normal browser behavior when autoplay is waiting for gesture or interrupted by pause
           if (err.name !== "AbortError" && !err.message.includes("pause")) {
             console.debug("Audio waiting for user gesture:", err.message);
           }
@@ -219,7 +236,6 @@ export default function AiAssistantGirlWidget({
       setIsTyping(false);
       setMouthState("resting"); // Resting closed smile
 
-      // Display full message for 60 seconds (1 minute interval) before speaking again
       const tNext = setTimeout(() => {
         setMsgIndex((prev) => (prev + 1) % DIALOG_PLAYLIST.length);
       }, 60000);
@@ -230,7 +246,9 @@ export default function AiAssistantGirlWidget({
   };
 
   useEffect(() => {
-    playGreeting(msgIndex);
+    if (!hidden && !isChatOpen && !isMinimized) {
+      playGreeting(msgIndex);
+    }
 
     return () => {
       clearAllTimers();
@@ -241,7 +259,7 @@ export default function AiAssistantGirlWidget({
         window.speechSynthesis.cancel();
       }
     };
-  }, [msgIndex]);
+  }, [msgIndex, hidden, isChatOpen, isMinimized]);
 
   const handleCharacterInteraction = () => {
     setMsgIndex((prev) => (prev + 1) % DIALOG_PLAYLIST.length);
@@ -258,43 +276,55 @@ export default function AiAssistantGirlWidget({
     }
   };
 
-  // If the full chat modal is already open, hide the floating character to prevent overlap
-  if (isChatOpen) return null;
+  // If hidden (active page has its own AI button) or chat modal is open, completely hide floating widget
+  if (hidden || isChatOpen) return null;
 
   if (isMinimized) {
     return (
-      <div className="fixed bottom-6 right-6 z-40 animate-in fade-in zoom-in-95 duration-200">
+      <div className="fixed bottom-6 right-6 z-40 animate-fade-in">
         <button
           type="button"
-          onClick={() => setIsMinimized(false)}
-          className="group flex items-center gap-3 rounded-full bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 hover:from-blue-700 hover:to-indigo-700 text-white pl-2 pr-4 py-2 shadow-2xl hover:shadow-cyan-500/30 transition-all duration-300 hover:scale-105 active:scale-95 border border-cyan-400/40 cursor-pointer ring-4 ring-blue-500/15"
-          title="Expand HRHub AI Assistant"
+          onClick={() => {
+            if (onOpenChat) onOpenChat();
+          }}
+          className="group relative flex items-center gap-3.5 rounded-full bg-slate-900/90 hover:bg-slate-900 backdrop-blur-xl pl-2.5 pr-4 py-2 text-white shadow-[0_10px_35px_-5px_rgba(0,0,0,0.5),0_0_20px_-3px_rgba(16,185,129,0.3)] hover:shadow-[0_16px_45px_-5px_rgba(0,0,0,0.6),0_0_30px_0_rgba(16,185,129,0.45)] transition-all duration-300 hover:scale-[1.03] active:scale-[0.97] border border-emerald-500/30 hover:border-emerald-400/70 cursor-pointer ring-1 ring-emerald-500/20 hover:ring-emerald-400/50"
+          title="Open HRHub AI Assistant"
         >
+          {/* Subtle glowing ambient backdrop mesh */}
+          <div className="absolute inset-0 rounded-full bg-gradient-to-r from-emerald-500/15 via-teal-500/10 to-indigo-500/15 opacity-60 group-hover:opacity-100 transition-opacity pointer-events-none" />
+
           {/* Circular mini avatar */}
-          <div className="relative flex h-9 w-9 items-center justify-center rounded-full bg-slate-900 border border-cyan-400/60 overflow-hidden shadow-inner">
+          <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-950 border-2 border-emerald-400 shadow-md ring-2 ring-emerald-500/30 overflow-hidden group-hover:ring-emerald-400/70 transition-all">
             <img
               src="/ai_buddy_avatar.png"
               alt="HRHub AI Buddy"
-              className="w-full h-full object-cover object-center"
+              className="w-full h-full object-cover object-center group-hover:scale-110 transition-transform duration-300"
             />
-            <span className="absolute top-0 right-0 flex h-2.5 w-2.5">
+            <span className="absolute top-0.5 right-0.5 flex h-2.5 w-2.5">
               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-80"></span>
-              <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500 border border-white"></span>
+              <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500 border border-slate-950"></span>
             </span>
           </div>
 
-          <div className="flex flex-col text-left leading-tight">
-            <div className="flex items-center gap-1.5">
-              <span className="font-extrabold text-xs text-white tracking-tight">
+          <div className="flex flex-col text-left leading-tight z-10">
+            <div className="flex items-center gap-2">
+              <span className="font-extrabold text-xs text-white tracking-tight group-hover:text-emerald-300 transition-colors">
                 HRHub Ai Buddy
               </span>
-              <span className="rounded-full bg-white/20 border border-white/30 px-1.5 py-0.2 text-[8px] font-black uppercase text-white">
-                Online
+              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/20 border border-emerald-400/40 px-2 py-0.5 text-[8px] font-black uppercase text-emerald-300 tracking-wider shadow-xs">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                ONLINE
               </span>
             </div>
-            <span className="text-[10px] text-blue-100 font-medium">
+            <span className="text-[10px] text-slate-300/90 font-medium flex items-center gap-1 mt-0.5 group-hover:text-white transition-colors">
+              <Sparkles size={11} className="text-emerald-400 shrink-0" />
               Click to summon assistant
             </span>
+          </div>
+
+          {/* Glowing launcher trigger */}
+          <div className="z-10 pl-1 text-slate-400 group-hover:text-emerald-400 group-hover:translate-x-0.5 transition-all">
+            <Sparkles size={14} className="animate-pulse" />
           </div>
         </button>
       </div>

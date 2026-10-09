@@ -7,27 +7,8 @@
 const STORAGE_KEY = "hrhub_employee_directory";
 const PASSWORDS_KEY = "hrhub_employee_passwords";
 
-// Default pre-seeded company profiles for Simpal Group
-const DEFAULT_PRE_SEEDED = [
-  {
-    id: "43eb7f87-a4e5-4e38-8c00-dcbdabd7b66b",
-    email: "efilfonimda@gmail.com",
-    name: "Efil Fonimda",
-    company: "Simpal Group of Companies",
-    role: "HR Manager",
-    is_approved: true,
-    created_at: "2026-08-12T00:33:27.743681+00:00"
-  },
-  {
-    id: "d85b51e6-2631-4a8d-aba9-b0d8a85057e3",
-    email: "jrlim0413@gmail.com",
-    name: "Jay Ryan Lim",
-    company: "Simpal Construction (SIMCON)",
-    role: "Site Supervisor",
-    is_approved: true,
-    created_at: "2026-08-11T13:06:02.810151+00:00"
-  }
-];
+// No hardcoded mock profiles - Supabase database is single source of truth
+const DEFAULT_PRE_SEEDED = [];
 
 /**
  * Retrieve all locally stored employee records from localStorage
@@ -36,14 +17,53 @@ export function getStoredEmployees() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(DEFAULT_PRE_SEEDED));
-      return DEFAULT_PRE_SEEDED;
+      return [];
     }
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : DEFAULT_PRE_SEEDED;
+    if (!Array.isArray(parsed)) return [];
+
+    // Filter out old legacy hardcoded dummy IDs if any were cached in user's browser
+    const legacyMockIds = new Set([
+      "43eb7f87-a4e5-4e38-8c00-dcbdabd7b66b",
+      "d85b51e6-2631-4a8d-aba9-b0d8a85057e3"
+    ]);
+    const cleaned = parsed.filter((item) => !legacyMockIds.has(item?.id));
+    if (cleaned.length !== parsed.length) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(cleaned));
+    }
+    return cleaned;
   } catch (err) {
     console.warn("Error reading employee storage:", err);
-    return DEFAULT_PRE_SEEDED;
+    return [];
+  }
+}
+
+/**
+ * Delete an employee from persistent storage by email or id
+ */
+export function deleteStoredEmployee(emailOrId) {
+  if (!emailOrId) return [];
+  try {
+    const current = getStoredEmployees();
+    const query = String(emailOrId).trim().toLowerCase();
+    const updated = current.filter((item) => {
+      const itemEmail = (item.email || "").trim().toLowerCase();
+      const itemId = String(item.id || "").trim().toLowerCase();
+      return itemEmail !== query && itemId !== query;
+    });
+
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+
+    // Also clear password for this email if stored
+    const passwords = getStoredPasswords();
+    if (passwords[query]) {
+      delete passwords[query];
+      localStorage.setItem(PASSWORDS_KEY, JSON.stringify(passwords));
+    }
+    return updated;
+  } catch (err) {
+    console.warn("Error deleting employee from storage:", err);
+    return [];
   }
 }
 
@@ -76,7 +96,8 @@ export function saveStoredEmployee(employee) {
           company: employee.company || "Simpal Group of Companies",
           role: employee.role || "Team Member",
           is_approved: typeof employee.is_approved === "boolean" ? employee.is_approved : true,
-          created_at: employee.created_at || new Date().toISOString()
+          created_at: employee.created_at || new Date().toISOString(),
+          is_local_draft: true
         },
         ...current
       ];
@@ -96,16 +117,27 @@ export function saveStoredEmployee(employee) {
 export function updateStoredEmployeeApproval(emailOrId, isApproved) {
   try {
     const current = getStoredEmployees();
-    const query = (emailOrId || "").trim().toLowerCase();
-    
+    const query = String(emailOrId || "").trim().toLowerCase();
+    if (!query) return current;
+
+    let found = false;
     const updated = current.map((item) => {
       const matchEmail = (item.email || "").trim().toLowerCase() === query;
-      const matchId = String(item.id) === String(emailOrId);
+      const matchId = String(item.id || "").trim().toLowerCase() === query;
       if (matchEmail || matchId) {
+        found = true;
         return { ...item, is_approved: Boolean(isApproved) };
       }
       return item;
     });
+
+    if (!found) {
+      updated.push({
+        id: `emp-${Date.now()}`,
+        email: query,
+        is_approved: Boolean(isApproved)
+      });
+    }
 
     localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
     return updated;
@@ -117,45 +149,82 @@ export function updateStoredEmployeeApproval(emailOrId, isApproved) {
 
 /**
  * Merge Supabase database profiles with persistent stored employees
- * Ensures no pre-registered employee disappears when fetchProfiles runs.
+ * Supabase profiles are the authoritative database source of truth.
  */
 export function mergeProfilesWithStored(supabaseProfiles = []) {
   const stored = getStoredEmployees();
+  const storedMap = new Map();
+  stored.forEach((item) => {
+    if (item?.email) {
+      storedMap.set(item.email.trim().toLowerCase(), item);
+    }
+  });
+
   const resultMap = new Map();
 
-  // 1. Put stored employees first to guarantee all pre-registered users exist
-  stored.forEach((item) => {
-    if (item.email) {
-      resultMap.set(item.email.toLowerCase(), { ...item });
-    }
-  });
-
-  // 2. Overlay Supabase profiles
+  // 1. Real Supabase profiles
   (supabaseProfiles || []).forEach((sp) => {
     if (!sp?.email) return;
-    const emailKey = sp.email.toLowerCase();
-    const existing = resultMap.get(emailKey);
+    const emailKey = sp.email.trim().toLowerCase();
+    const localItem = storedMap.get(emailKey);
 
-    if (existing) {
-      resultMap.set(emailKey, {
-        ...existing,
-        id: sp.id || existing.id,
-        // If Supabase has explicit is_approved, prefer local override if modified, or fallback to sp
-        is_approved: typeof existing.is_approved === "boolean" ? existing.is_approved : sp.is_approved,
-        created_at: sp.created_at || existing.created_at
-      });
-    } else {
-      resultMap.set(emailKey, {
-        id: sp.id || `db-${Date.now()}`,
-        email: sp.email,
-        name: sp.name || sp.email.split("@")[0].replace(/[._]/g, " ").replace(/\b\w/g, (l) => l.toUpperCase()),
-        company: sp.company || "Simpal Group of Companies",
-        role: sp.role || "Team Member",
-        is_approved: typeof sp.is_approved === "boolean" ? sp.is_approved : true,
-        created_at: sp.created_at || new Date().toISOString()
-      });
+    // Prioritize explicit local approval state if modified, otherwise use Supabase
+    let isApproved = true;
+    if (localItem && typeof localItem.is_approved === "boolean") {
+      isApproved = localItem.is_approved;
+    } else if (typeof sp.is_approved === "boolean") {
+      isApproved = sp.is_approved;
+    }
+
+    resultMap.set(emailKey, {
+      id: sp.id || localItem?.id || `db-${Date.now()}`,
+      email: sp.email.trim(),
+      name: sp.name || localItem?.name || sp.email.split("@")[0].replace(/[._]/g, " ").replace(/\b\w/g, (l) => l.toUpperCase()),
+      company: sp.company || localItem?.company || "Simpal Group of Companies",
+      role: sp.role || localItem?.role || "Team Member",
+      is_approved: isApproved,
+      created_at: sp.created_at || localItem?.created_at || new Date().toISOString()
+    });
+  });
+
+  // 2. Overlay any active offline/local drafts
+  stored.forEach((item) => {
+    if (!item?.email) return;
+    const emailKey = item.email.trim().toLowerCase();
+    if (!resultMap.has(emailKey)) {
+      resultMap.set(emailKey, { ...item });
     }
   });
+
+  // 3. Ensure official HRMD (HR Administrator) account is always present for all team members
+  const HRMD_ADMIN_EMAIL = "admin@hrhub.com";
+  if (!resultMap.has(HRMD_ADMIN_EMAIL)) {
+    resultMap.set(HRMD_ADMIN_EMAIL, {
+      id: "admin-hrmd-master",
+      email: HRMD_ADMIN_EMAIL,
+      name: "H R M D",
+      company: "Simpal Group of Companies",
+      role: "HR Administrator",
+      is_approved: true,
+      created_at: new Date().toISOString()
+    });
+  } else {
+    const adminRecord = resultMap.get(HRMD_ADMIN_EMAIL);
+    if (adminRecord) {
+      if (
+        !adminRecord.name ||
+        adminRecord.name === "Admin" ||
+        adminRecord.name === "Super Administrator" ||
+        adminRecord.name.toLowerCase() === "hrmd"
+      ) {
+        adminRecord.name = "H R M D";
+      }
+      if (!adminRecord.role || adminRecord.role === "Super Administrator") {
+        adminRecord.role = "HR Administrator";
+      }
+      adminRecord.is_approved = true;
+    }
+  }
 
   return Array.from(resultMap.values());
 }

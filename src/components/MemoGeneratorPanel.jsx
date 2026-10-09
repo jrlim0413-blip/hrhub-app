@@ -1,15 +1,76 @@
 import { useState, useMemo, useEffect } from "react";
+import html2canvas from "html2canvas";
 import {
   FileText, Building2, Send, Printer, Copy, Check, Sparkles,
   Layers, RefreshCw, X, Mail, Eye, Sliders, CheckCircle2,
-  AlertCircle, Users, PenTool, Calendar, Bookmark,
+  AlertCircle, Users, UserPlus, PenTool, Calendar, Bookmark,
   RotateCcw, ArrowRight, ArrowLeft, ExternalLink, Zap,
   Maximize2, ZoomIn, ZoomOut, Save, Archive, Trash2, Clock, Plus,
-  Upload, Image, CheckSquare, Square, XCircle
+  Upload, Image, CheckSquare, Square, XCircle, Code, ShieldCheck, Key,
+  Camera, Download
 } from "lucide-react";
 import { processSignatureToTransparentPng } from "../lib/signatureImageProcessor";
+import { mergeProfilesWithStored, getStoredEmployees } from "../lib/employeeStorage";
 export const HR_OFFICIAL_EMAIL = "imsoroglohr@gmail.com";
 export const CORPORATE_GROUP_EMBLEM = "/logos/group_emblem.jpg";
+
+/**
+ * Match an employee record with its target company entity accurately.
+ * Uses exact matches and dedicated entity mapping to prevent substring collision (e.g. 'imp' matching 'simpal').
+ */
+export function matchEmployeeToCompany(employee, comp) {
+  if (!employee || !comp) return false;
+  const empComp = (employee.company || "").trim().toLowerCase();
+  const compId = (comp.id || "").toLowerCase();
+  const compCode = (comp.code || "").toLowerCase();
+  const compName = (comp.name || "").trim().toLowerCase();
+  const compLegal = (comp.legalName || "").trim().toLowerCase();
+
+  // If employee has no company assigned, default to Parent Holding (SGC)
+  if (!empComp) {
+    return compId === "sgc" || compCode === "sgc";
+  }
+
+  // Exact matches first
+  if (empComp === compName || empComp === compLegal || empComp === compCode || empComp === compId) {
+    return true;
+  }
+
+  // Specific Entity Discriminators
+  switch (compId) {
+    case "simcon":
+      return empComp.includes("simcon") || empComp.includes("construction");
+
+    case "lucky_betplay":
+      return empComp.includes("lucky") || empComp.includes("betplay") || empComp.includes("lbc");
+
+    case "5a_royal":
+      return (
+        empComp.includes("5a") ||
+        empComp.includes("royal") ||
+        empComp.includes("5arg") ||
+        (empComp.includes("gaming") && !empComp.includes("imperial"))
+      );
+
+    case "imperial_gaming":
+      return empComp.includes("imperial") || empComp === "imp";
+
+    case "glowing_fortune":
+      return empComp.includes("glowing") || empComp.includes("fortune");
+
+    case "sgc":
+      // Simpal Group (holding) - exclude construction, imperial, lucky, etc.
+      return (
+        empComp === "sgc" ||
+        empComp === "simpal group" ||
+        empComp === "simpal group of companies" ||
+        (empComp.includes("simpal") && !empComp.includes("construction") && !empComp.includes("simcon"))
+      );
+
+    default:
+      return empComp === compName || empComp === compLegal;
+  }
+}
 
 export const COMPANIES = [
   {
@@ -362,10 +423,12 @@ export default function MemoGeneratorPanel({
   profiles = [],
   currentUser = null,
   initialDraft = null,
-  onOpenAiBuddy
+  onOpenAiBuddy,
+  onNavigateToDirectory
 }) {
   // Stepper State: 1 = Header & Addressing, 2 = Body Directives, 3 = Signatories, 4 = Final Memo & Multi-Company
   const [currentStep, setCurrentStep] = useState(1);
+  const [unlinkedNoticeModalOpen, setUnlinkedNoticeModalOpen] = useState(false);
 
   // Selected Company State - Default to Lucky Betplay Corporation (LBC)
   const [selectedCompanyId, setSelectedCompanyId] = useState("lucky_betplay");
@@ -491,15 +554,118 @@ export default function MemoGeneratorPanel({
   const [archiveModalOpen, setArchiveModalOpen] = useState(false);
   const [saveSuccessNotice, setSaveSuccessNotice] = useState(false);
 
-  // Email & Dispatch States
+  // Email & Dispatch States (Company-Specific Segregation)
   const [emailModalOpen, setEmailModalOpen] = useState(false);
   const [copiedNotice, setCopiedNotice] = useState(false);
-  const backendWebhookUrl = (
-    (typeof import.meta !== "undefined" && import.meta.env?.VITE_HR_EMAIL_WEBHOOK_URL ? import.meta.env.VITE_HR_EMAIL_WEBHOOK_URL : "") ||
-    (typeof localStorage !== "undefined" ? localStorage.getItem("hrhub_gmail_webhook_url") || "" : "")
-  ).trim();
+  const [customWebhookUrl, setCustomWebhookUrl] = useState(() => {
+    try {
+      return (
+        (typeof localStorage !== "undefined" ? localStorage.getItem("hrhub_gmail_webhook_url") : "") ||
+        (typeof import.meta !== "undefined" && import.meta.env?.VITE_HR_EMAIL_WEBHOOK_URL ? import.meta.env.VITE_HR_EMAIL_WEBHOOK_URL : "") ||
+        ""
+      ).trim();
+    } catch {
+      return "";
+    }
+  });
+  const [showScriptGuideModal, setShowScriptGuideModal] = useState(false);
+  const [copiedScriptNotice, setCopiedScriptNotice] = useState(false);
+  const [isEditingWebhook, setIsEditingWebhook] = useState(false);
   const [isSendingDirect, setIsSendingDirect] = useState(false);
   const [directSendStatus, setDirectSendStatus] = useState(null);
+  const [copyingImageId, setCopyingImageId] = useState(null);
+  const [copiedImageId, setCopiedImageId] = useState(null);
+  const [companyLogoDataMap, setCompanyLogoDataMap] = useState({});
+  const [fadedWatermarkMap, setFadedWatermarkMap] = useState({});
+  const [groupEmblemDataUrl, setGroupEmblemDataUrl] = useState("");
+
+  // Pre-process and cache company logo images and group emblem into self-contained base64 Data URLs
+  useEffect(() => {
+    let isMounted = true;
+    const loadLogos = async () => {
+      const rawMap = {};
+      const fadedMap = {};
+
+      // 1. Process all company logos
+      for (const comp of COMPANIES) {
+        if (!comp.logoUrl) continue;
+        try {
+          const img = new window.Image();
+          img.crossOrigin = "anonymous";
+          await new Promise((resolve) => {
+            img.onload = resolve;
+            img.onerror = resolve;
+            img.src = comp.logoUrl;
+          });
+
+          if (img.naturalWidth && img.naturalHeight) {
+            // Raw Logo Data URL
+            const canvas = document.createElement("canvas");
+            canvas.width = img.naturalWidth;
+            canvas.height = img.naturalHeight;
+            const ctx = canvas.getContext("2d");
+            ctx.drawImage(img, 0, 0);
+            rawMap[comp.id] = canvas.toDataURL("image/png");
+
+            // Faded Watermark Data URL (clean, transparent background for email card & PDF)
+            const fCanvas = document.createElement("canvas");
+            const targetW = 600;
+            const targetH = Math.round((img.naturalHeight / img.naturalWidth) * targetW);
+            fCanvas.width = targetW;
+            fCanvas.height = targetH;
+            const fCtx = fCanvas.getContext("2d");
+            fCtx.globalAlpha = 0.08; // subtle, readable behind text in email
+            fCtx.drawImage(img, 0, 0, targetW, targetH);
+            fadedMap[comp.id] = fCanvas.toDataURL("image/png");
+          }
+        } catch (err) {
+          console.warn("Could not pre-process logo for", comp.id, err);
+        }
+      }
+
+      // 2. Process corporate group emblem
+      try {
+        const gImg = new window.Image();
+        gImg.crossOrigin = "anonymous";
+        await new Promise((resolve) => {
+          gImg.onload = resolve;
+          gImg.onerror = resolve;
+          gImg.src = CORPORATE_GROUP_EMBLEM;
+        });
+        if (gImg.naturalWidth && gImg.naturalHeight) {
+          const gCanvas = document.createElement("canvas");
+          gCanvas.width = gImg.naturalWidth;
+          gCanvas.height = gImg.naturalHeight;
+          const gCtx = gCanvas.getContext("2d");
+          gCtx.drawImage(gImg, 0, 0);
+          if (isMounted) {
+            setGroupEmblemDataUrl(gCanvas.toDataURL("image/jpeg"));
+          }
+        }
+      } catch (gErr) {
+        console.warn("Could not pre-process corporate emblem", gErr);
+      }
+
+      if (isMounted) {
+        setCompanyLogoDataMap(rawMap);
+        setFadedWatermarkMap(fadedMap);
+      }
+    };
+
+    loadLogos();
+    return () => { isMounted = false; };
+  }, []);
+
+  const saveCustomWebhookUrl = (urlToSave) => {
+    const trimmed = urlToSave.trim();
+    setCustomWebhookUrl(trimmed);
+    try {
+      localStorage.setItem("hrhub_gmail_webhook_url", trimmed);
+    } catch (e) {
+      console.error(e);
+    }
+    setIsEditingWebhook(false);
+  };
 
   // Sync initial draft from HRHub Ai Buddy if provided or stored
   useEffect(() => {
@@ -532,37 +698,66 @@ export default function MemoGeneratorPanel({
     }
   }, [initialDraft]);
 
-  // Recipient filtering matching all currently INCLUDED/CHECKED companies
-  const companyEmployees = useMemo(() => {
-    return profiles.filter((p) => {
-      const c = (p.company || "").toLowerCase();
-      return activeCompanies.some((comp) => {
-        const target = comp.name.toLowerCase();
-        const code = comp.code.toLowerCase();
-        return (
-          c.includes(target) ||
-          c.includes(code) ||
-          (comp.id === "sgc" && (c.includes("simpal") || c === ""))
-        );
-      });
-    });
-  }, [profiles, activeCompanies]);
+  // Company-Specific Dispatches List: Strictly pre-registered employees' work emails only!
+  const companyDispatches = useMemo(() => {
+    const allEmployees = mergeProfilesWithStored(profiles);
 
+    return activeCompanies.map((comp) => {
+      const matchingEmployees = allEmployees.filter((emp) => matchEmployeeToCompany(emp, comp));
+      const compEmailSet = new Set();
+      
+      matchingEmployees.forEach((emp) => {
+        // Must be a valid work email address from pre-registered employees
+        const workEmail = (emp.email || emp.work_email || emp.workEmail || "").trim();
+        if (workEmail && workEmail.includes("@")) {
+          compEmailSet.add(workEmail);
+        }
+      });
+
+      // STRICT: Zero fallback to generic company contacts. Pre-registered work emails only!
+      const recipients = Array.from(compEmailSet);
+      const compMemoRef = `MEMO-2026-${comp.code}-${memoRef.split("-").pop() || "001"}`;
+
+      return {
+        companyId: comp.id,
+        companyName: comp.name,
+        legalName: comp.legalName || comp.name,
+        code: comp.code,
+        memoRef: compMemoRef,
+        recipients,
+        employees: matchingEmployees,
+        accentColor: comp.accentColor || "#059669"
+      };
+    });
+  }, [activeCompanies, profiles, memoRef]);
+
+  // Companies with 0 linked pre-registered employee emails
+  const unlinkedEntities = useMemo(() => {
+    return companyDispatches.filter((d) => d.recipients.length === 0);
+  }, [companyDispatches]);
+
+  // Companies with at least 1 linked pre-registered employee email
+  const linkedEntities = useMemo(() => {
+    return companyDispatches.filter((d) => d.recipients.length > 0);
+  }, [companyDispatches]);
+
+  // Total unique recipients across all company entities
+  const totalCompanyRecipients = useMemo(() => {
+    const set = new Set();
+    companyDispatches.forEach((d) => {
+      d.recipients.forEach((email) => set.add(email));
+    });
+    return set.size;
+  }, [companyDispatches]);
+
+  // All recipient emails combined for generic clients
   const recipientEmails = useMemo(() => {
     const set = new Set();
-    companyEmployees.forEach((e) => {
-      if (e.email) set.add(e.email.trim());
+    companyDispatches.forEach((d) => {
+      d.recipients.forEach((email) => set.add(email));
     });
-    if (set.size === 0) {
-      activeCompanies.forEach((comp) => {
-        const baseCompany = COMPANIES.find((company) => company.id === comp.id) || comp;
-        const emailPart = baseCompany.contact.split("|")[0].trim();
-        if (emailPart && emailPart.includes("@")) set.add(emailPart);
-      });
-      if (currentUser?.email) set.add(currentUser.email);
-    }
     return Array.from(set);
-  }, [companyEmployees, activeCompanies, currentUser]);
+  }, [companyDispatches]);
 
   // Switch Company Entity
   const handleSelectCompany = (companyId) => {
@@ -790,20 +985,24 @@ ${distributionCompany.legalName || distributionCompany.name}
     });
   };
 
-  // Email Generators
-  const generateEmailBody = () => {
+  // Email & PDF Generators (Company-Tailored)
+  const generateEmailBody = (targetComp = distributionCompany) => {
+    const comp = targetComp || distributionCompany;
+    const compMemoRef = `MEMO-2026-${comp.code}-${memoRef.split("-").pop() || "001"}`;
+    const compLegal = comp.legalName || comp.name;
+
     return `Dear Team,
 
-Please see the Official Memorandum issued by ${distributionCompany.name}.
+Please see the Official Memorandum issued by ${comp.name}.
 
-${distributionCompany.legalName || distributionCompany.name}
-${distributionCompany.tagline || ""}
-${distributionCompany.address}
-${distributionCompany.contact}
+${compLegal}
+${comp.tagline || ""}
+${comp.address || ""}
+${comp.contact || ""}
 
 --------------------------------------------------
 MEMORANDUM DETAILS:
-Ref Number: ${distributionMemoRef}
+Ref Number: ${compMemoRef}
 Date: ${memoDate}
 To: ${memoTo}
 From: ${memoFrom} (HR Dispatch: ${HR_OFFICIAL_EMAIL})
@@ -818,107 +1017,479 @@ ${memoContent}
 ISSUED BY:
 ${signatoryName}
 ${signatoryTitle}
-${getSignatoryAffiliation(distributionCompany)}
+${getSignatoryAffiliation(comp)}
 
 ${signatoryLayout === "dual" ? `NOTED & APPROVED BY:
 ${approverName}
 ${approverTitle}
-${distributionCompany.legalName || distributionCompany.name}
- ` : ""}
-Please acknowledge receipt of this memorandum.
+${compLegal}
+` : ""}
+Please acknowledge receipt of this memorandum. Official PDF is attached.
 
 Office of the Human Resources & Corporate Administration
-${distributionCompany.legalName}
+${compLegal}
 HR Contact: ${HR_OFFICIAL_EMAIL}`;
   };
 
-  const generateEmailHtml = () => {
-    return `<div style="font-family: Arial, sans-serif; max-width: 650px; margin: 0 auto; padding: 25px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff; color: #1e293b;">
-  <div style="text-align: center; border-bottom: 2px solid ${distributionCompany.accentColor || '#059669'}; padding-bottom: 15px; margin-bottom: 20px;">
-    <h2 style="margin: 0; color: #0f172a; font-size: 20px; font-weight: 800; letter-spacing: 0.5px;">${escapeHtml(distributionCompany.legalName || distributionCompany.name)}</h2>
-    ${distributionCompany.tagline ? `<p style="margin: 3px 0 0 0; color: #047857; font-size: 11px; font-weight: 700;">${escapeHtml(distributionCompany.tagline)}</p>` : ""}
-    <p style="margin: 4px 0 0 0; color: #64748b; font-size: 11px;">${escapeHtml(distributionCompany.address || "")}</p>
-    <p style="margin: 2px 0 0 0; color: #64748b; font-size: 10px;">${escapeHtml(distributionCompany.contact || "")}</p>
-    <p style="margin: 2px 0 0 0; color: #059669; font-size: 11px; font-weight: 600;">HR Dispatch: ${HR_OFFICIAL_EMAIL}</p>
-  </div>
+  const generateCompanyEmailHtml = (targetComp = distributionCompany) => {
+    const comp = targetComp || distributionCompany;
+    const compMemoRef = `MEMO-2026-${comp.code}-${memoRef.split("-").pop() || "001"}`;
+    const compLegal = comp.legalName || comp.name;
+    const accentColor = comp.accentColor || "#059669";
 
-  <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 16px; margin-bottom: 20px; font-size: 13px;">
-    <table style="width: 100%; border-collapse: collapse;">
-      <tr>
-        <td style="padding: 4px 0; color: #64748b; width: 90px; font-weight: bold;">MEMO REF:</td>
-        <td style="padding: 4px 0; font-weight: bold; color: #0f172a;">${distributionMemoRef}</td>
-        <td style="padding: 4px 0; color: #64748b; width: 60px; font-weight: bold;">DATE:</td>
-        <td style="padding: 4px 0; color: #0f172a;">${memoDate}</td>
-      </tr>
-      <tr>
-        <td style="padding: 4px 0; color: #64748b; font-weight: bold;">TO:</td>
-        <td colspan="3" style="padding: 4px 0; color: #0f172a;">${memoTo}</td>
-      </tr>
-      <tr>
-        <td style="padding: 4px 0; color: #64748b; font-weight: bold;">FROM:</td>
-        <td colspan="3" style="padding: 4px 0; color: #0f172a;">${memoFrom}</td>
-      </tr>
-      <tr>
-        <td style="padding: 4px 0; color: #64748b; font-weight: bold;">SUBJECT:</td>
-        <td colspan="3" style="padding: 4px 0; font-weight: bold; color: ${distributionCompany.accentColor || '#059669'};">${memoSubject}</td>
-      </tr>
-    </table>
-  </div>
+    // Category badge color accents
+    let catBadgeBg = "#ecfdf5";
+    let catBadgeColor = "#065f46";
+    let catBadgeBorder = "#a7f3d0";
+    if (memoCategory === "Mandatory Compliance") {
+      catBadgeBg = "#fef2f2";
+      catBadgeColor = "#991b1b";
+      catBadgeBorder = "#fecaca";
+    } else if (memoCategory === "Executive Order") {
+      catBadgeBg = "#eff6ff";
+      catBadgeColor = "#1e40af";
+      catBadgeBorder = "#bfdbfe";
+    } else if (memoCategory === "Safety & Health") {
+      catBadgeBg = "#fffbeb";
+      catBadgeColor = "#92400e";
+      catBadgeBorder = "#fde68a";
+    }
 
-  <div style="font-size: 14px; line-height: 1.7; color: #334155; margin-bottom: 25px; white-space: pre-wrap; text-align: justify;">
-    ${memoContent.replace(/\n/g, "<br>")}
-  </div>
+    return `<div style="background-color: #f1f5f9; padding: 32px 12px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased;">
+  <div style="max-width: 680px; margin: 0 auto; background-color: #ffffff; border-radius: 20px; overflow: hidden; box-shadow: 0 20px 40px -15px rgba(15, 23, 42, 0.12), 0 0 0 1px rgba(226, 232, 240, 0.9); position: relative;">
+    
+    <!-- Top Modern Gradient Header Accent -->
+    <div style="height: 7px; background: linear-gradient(90deg, ${accentColor} 0%, #0d9488 40%, #0284c7 80%, #6366f1 100%);"></div>
 
-  <div style="border-top: 1px solid #e2e8f0; padding-top: 15px; margin-top: 25px; font-size: 12px;">
-    <table style="width: 100%; border-collapse: collapse;">
-      <tr>
-        <td style="width: 50%; vertical-align: top;">
-          <p style="margin: 0; color: #64748b; font-size: 10px; font-weight: bold; text-transform: uppercase;">Issued By:</p>
-          <p style="margin: 8px 0 2px 0; font-weight: bold; color: #0f172a; font-size: 13px;">${signatoryName}</p>
-          <p style="margin: 0; color: #64748b;">${signatoryTitle}</p>
-          <p style="margin: 0; color: #059669; font-weight: 600;">${getSignatoryAffiliation(selectedCompany)}</p>
-        </td>
-        ${signatoryLayout === "dual" ? `
-        <td style="width: 50%; vertical-align: top;">
-          <p style="margin: 0; color: #64748b; font-size: 10px; font-weight: bold; text-transform: uppercase;">Noted & Approved By:</p>
-          <p style="margin: 8px 0 2px 0; font-weight: bold; color: #0f172a; font-size: 13px;">${approverName}</p>
-          <p style="margin: 0; color: #64748b;">${approverTitle}</p>
-          <p style="margin: 0; color: #64748b; font-weight: 600;">${distributionCompany.legalName || distributionCompany.name}</p>
-        </td>` : ""}
-      </tr>
-    </table>
-  </div>
+    <!-- Executive Letterhead Banner with Left Company Logo & Right Corporate Group Emblem -->
+    <div style="padding: 24px 30px 18px 30px; background: linear-gradient(180deg, #ffffff 0%, #fbfcfd 100%); border-bottom: 1px solid #f1f5f9;">
+      <table style="width: 100%; border-collapse: collapse;">
+        <tr>
+          <!-- Left: Company Logo -->
+          <td style="width: 75px; vertical-align: middle; text-align: center; padding-right: 12px;">
+            ${(companyLogoDataMap[comp.id] || comp.logoUrl) ? `
+              <img src="${companyLogoDataMap[comp.id] || comp.logoUrl}" style="max-height: 64px; max-width: 75px; display: block; margin: 0 auto; object-fit: contain;" alt="${escapeHtml(comp.name)} Logo">
+            ` : ""}
+          </td>
 
-  <div style="margin-top: 25px; padding-top: 10px; border-top: 1px dashed #cbd5e1; text-align: center; font-size: 10px; color: #94a3b8;">
-    This is an official administrative transmission sent via HrHub Executive Dispatch on behalf of ${distributionCompany.name}.<br>
-    For inquiries, coordinate with Human Resources at <a href="mailto:${HR_OFFICIAL_EMAIL}" style="color: #059669; text-decoration: none;">${HR_OFFICIAL_EMAIL}</a>.
+          <!-- Center: Corporate Entity Details -->
+          <td style="vertical-align: middle; text-align: center; padding: 0 4px;">
+            <div style="margin-bottom: 6px;">
+              <span style="display: inline-block; font-size: 8.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 1.5px; color: ${accentColor}; background: #f0fdf4; border: 1px solid #bbf7d0; padding: 2px 10px; border-radius: 9999px;">
+                ★ OFFICIAL HR ADMINISTRATIVE TRANSMISSION ★
+              </span>
+            </div>
+            <h1 style="margin: 0; color: #0f172a; font-size: 18px; font-weight: 900; letter-spacing: 0.5px; text-transform: uppercase; line-height: 1.2;">
+              ${escapeHtml(compLegal)}
+            </h1>
+            ${comp.tagline ? `<p style="margin: 2px 0 0 0; color: ${accentColor}; font-size: 10.5px; font-weight: 700; letter-spacing: 0.3px;">${escapeHtml(comp.tagline)}</p>` : ""}
+            <p style="margin: 4px 0 0 0; color: #64748b; font-size: 10px; line-height: 1.35;">${escapeHtml(comp.address || "")}</p>
+            <p style="margin: 2px 0 0 0; color: #94a3b8; font-size: 9.5px; font-family: monospace;">${escapeHtml(comp.contact || "")}</p>
+          </td>
+
+          <!-- Right: Corporate Group Emblem -->
+          <td style="width: 75px; vertical-align: middle; text-align: center; padding-left: 12px;">
+            ${(groupEmblemDataUrl || comp.rightLogoUrl || CORPORATE_GROUP_EMBLEM) ? `
+              <img src="${groupEmblemDataUrl || comp.rightLogoUrl || CORPORATE_GROUP_EMBLEM}" style="max-height: 58px; max-width: 68px; display: block; margin: 0 auto; object-fit: contain; border-radius: 4px;" alt="Corporate Emblem">
+            ` : ""}
+          </td>
+        </tr>
+      </table>
+    </div>
+
+    <!-- Sleek Memorandum Ribbon -->
+    <div style="background: #0f172a; color: #ffffff; padding: 12px 36px; border-top: 1px solid rgba(255,255,255,0.1);">
+      <table style="width: 100%; border-collapse: collapse;">
+        <tr>
+          <td style="font-size: 14px; font-weight: 900; letter-spacing: 3px; color: #ffffff; text-transform: uppercase; vertical-align: middle;">
+            MEMORANDUM
+          </td>
+          <td style="text-align: right; vertical-align: middle;">
+            <span style="background: rgba(16, 185, 129, 0.15); border: 1px solid #10b981; padding: 4px 12px; border-radius: 8px; font-family: monospace; font-size: 11.5px; font-weight: 800; color: #6ee7b7; letter-spacing: 0.5px;">
+              REF: ${compMemoRef}
+            </span>
+          </td>
+        </tr>
+      </table>
+    </div>
+
+    <!-- Metadata Matrix (Executive Summary Grid) -->
+    <div style="padding: 24px 36px 14px 36px;">
+      <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 14px; padding: 16px 20px; box-shadow: inset 0 1px 3px rgba(0,0,0,0.02);">
+        <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+          <tr>
+            <td style="padding: 6px 0; color: #64748b; font-weight: 800; width: 90px; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.5px;">DATE:</td>
+            <td style="padding: 6px 0; color: #0f172a; font-weight: 800; font-size: 12.5px;">${memoDate}</td>
+            <td style="padding: 6px 0; color: #64748b; font-weight: 800; width: 110px; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.5px;">CLASSIFICATION:</td>
+            <td style="padding: 6px 0;">
+              <span style="background: ${catBadgeBg}; color: ${catBadgeColor}; border: 1px solid ${catBadgeBorder}; font-size: 10px; font-weight: 800; padding: 3px 9px; border-radius: 6px; text-transform: uppercase;">
+                ${memoCategory}
+              </span>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 6px 0; color: #64748b; font-weight: 800; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.5px;">TO:</td>
+            <td colspan="3" style="padding: 6px 0; color: #0f172a; font-weight: 800; font-size: 12.5px; letter-spacing: 0.2px;">${memoTo}</td>
+          </tr>
+          <tr>
+            <td style="padding: 6px 0; color: #64748b; font-weight: 800; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.5px;">FROM:</td>
+            <td colspan="3" style="padding: 6px 0; color: #0f172a; font-weight: 800; font-size: 12.5px;">
+              ${memoFrom} <span style="font-weight: 600; color: #64748b; font-size: 11px;">(${HR_OFFICIAL_EMAIL})</span>
+            </td>
+          </tr>
+          <tr>
+            <td colspan="4" style="padding: 10px 0 2px 0; border-top: 1px dashed #cbd5e1;">
+              <div style="display: table; width: 100%;">
+                <span style="display: table-cell; color: #64748b; font-weight: 800; font-size: 10.5px; text-transform: uppercase; width: 90px; vertical-align: top; padding-top: 2px;">SUBJECT:</span>
+                <span style="display: table-cell; color: ${accentColor}; font-size: 13.5px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.3px; line-height: 1.4;">
+                  ${memoSubject}
+                </span>
+              </div>
+            </td>
+          </tr>
+        </table>
+      </div>
+    </div>
+
+    <!-- Directives / Body Content with Company Logo Watermark Backdrop (Safe for all email clients) -->
+    <div style="padding: 10px 36px 20px 36px;">
+      <div style="background-color: #ffffff; ${fadedWatermarkMap[comp.id] ? `background-image: url('${fadedWatermarkMap[comp.id]}'); background-repeat: no-repeat; background-position: center center; background-size: 280px auto;` : ''} border-left: 4px solid ${accentColor}; padding: 22px 24px; border-radius: 0 12px 12px 0; border: 1px solid #e2e8f0; border-left: 4px solid ${accentColor}; box-shadow: 0 2px 8px rgba(0,0,0,0.02);">
+        <p style="margin: 0 0 12px 0; font-size: 11px; font-weight: 900; text-transform: uppercase; letter-spacing: 1px; color: #64748b;">
+          OFFICIAL DIRECTIVES &amp; PROVISIONS:
+        </p>
+        <div style="color: #0f172a; font-size: 13.5px; line-height: 1.8; text-align: justify; white-space: pre-wrap; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+${memoContent.replace(/\n/g, "<br>")}
+        </div>
+      </div>
+    </div>
+
+    <!-- Attached PDF Callout Card -->
+    <div style="margin: 0 36px 20px 36px; background: linear-gradient(135deg, #ecfdf5 0%, #f0fdf4 100%); border: 1.5px solid #a7f3d0; border-radius: 12px; padding: 12px 18px; box-shadow: 0 2px 8px rgba(16,185,129,0.06);">
+      <table style="width: 100%; border-collapse: collapse;">
+        <tr>
+          <td style="width: 32px; vertical-align: middle; font-size: 22px;">📄</td>
+          <td style="vertical-align: middle;">
+            <p style="margin: 0; font-size: 12px; font-weight: 900; color: #064e3b; letter-spacing: 0.2px;">
+              Official PDF Memorandum Document Attached
+            </p>
+            <p style="margin: 2px 0 0 0; font-size: 10.5px; color: #047857;">
+              Attached File: <strong style="font-family: monospace; color: #065f46;">${compMemoRef} - ${comp.name}.pdf</strong> • Includes Official Corporate Watermark &amp; E-Signatures
+            </p>
+          </td>
+        </tr>
+      </table>
+    </div>
+
+    <!-- Signatories & Executive Verification Block -->
+    <div style="padding: 22px 36px 26px 36px; border-top: 1px solid #f1f5f9; background: #fafbfc;">
+      <table style="width: 100%; border-collapse: collapse;">
+        <tr>
+          <td style="width: 50%; vertical-align: top; padding-right: 18px;">
+            <p style="margin: 0; color: #64748b; font-size: 9.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.8px;">ISSUED BY:</p>
+            <div style="height: 52px; display: flex; align-items: flex-end; margin-bottom: 4px;">
+              ${signatorySignature ? `<img src="${signatorySignature}" style="max-height: 50px; max-width: 170px; display: block;" alt="Signatory Signature">` : '<div style="height: 38px;"></div>'}
+            </div>
+            <div style="border-bottom: 2px solid #0f172a; width: 190px; margin: 4px 0 6px 0;"></div>
+            <p style="margin: 0; font-weight: 900; color: #0f172a; font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.2px;">${signatoryName}</p>
+            <p style="margin: 2px 0 0 0; color: #475569; font-size: 11px; font-weight: 600;">${signatoryTitle}</p>
+            <p style="margin: 1px 0 0 0; color: ${accentColor}; font-size: 10px; font-weight: 700;">${getSignatoryAffiliation(comp)}</p>
+          </td>
+          ${signatoryLayout === "dual" ? `
+          <td style="width: 50%; vertical-align: top; padding-left: 18px;">
+            <p style="margin: 0; color: #64748b; font-size: 9.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.8px;">NOTED &amp; APPROVED BY:</p>
+            <div style="height: 52px; display: flex; align-items: flex-end; margin-bottom: 4px;">
+              ${approverSignature ? `<img src="${approverSignature}" style="max-height: 50px; max-width: 170px; display: block;" alt="Approver Signature">` : '<div style="height: 38px;"></div>'}
+            </div>
+            <div style="border-bottom: 2px solid #0f172a; width: 190px; margin: 4px 0 6px 0;"></div>
+            <p style="margin: 0; font-weight: 900; color: #0f172a; font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.2px;">${approverName}</p>
+            <p style="margin: 2px 0 0 0; color: #475569; font-size: 11px; font-weight: 600;">${approverTitle}</p>
+            <p style="margin: 1px 0 0 0; color: #64748b; font-size: 10px; font-weight: 700;">${compLegal}</p>
+          </td>` : ""}
+        </tr>
+      </table>
+    </div>
+
+    <!-- Official Security & Support Footer -->
+    <div style="background-color: #090d16; color: #94a3b8; padding: 20px 36px; text-align: center; font-size: 9.5px; line-height: 1.6; border-top: 1px solid rgba(255,255,255,0.08);">
+      <div style="display: inline-block; margin-bottom: 6px;">
+        <span style="background: rgba(255,255,255,0.08); color: #e2e8f0; font-weight: 800; font-size: 9px; padding: 2px 10px; border-radius: 4px; text-transform: uppercase; letter-spacing: 1px;">
+          HR MANAGEMENT &amp; CORPORATE GOVERNANCE DIVISION
+        </span>
+      </div>
+      <p style="margin: 4px 0 0 0; color: #cbd5e1; font-weight: 600;">
+        Official administrative notice issued on behalf of <strong>${comp.name}</strong>.
+      </p>
+      <p style="margin: 4px 0 0 0; color: #64748b; font-size: 9px;">
+        Strict compliance mandated for all concerned personnel • HR Inquiries &amp; Submissions: <a href="mailto:${HR_OFFICIAL_EMAIL}" style="color: #34d399; text-decoration: none; font-weight: bold;">${HR_OFFICIAL_EMAIL}</a>
+      </p>
+      <p style="margin: 6px 0 0 0; color: #475569; font-size: 8.5px; font-family: monospace;">
+        CONFIDENTIALITY NOTICE: This transmission is intended solely for the designated addressee(s).
+      </p>
+    </div>
+
   </div>
 </div>`;
   };
 
-  // Direct Send to Personnel via configured Backend Webhook or Gmail Web
+  /**
+   * Dynamic calculation to ensure the memorandum fits seamlessly on 1 sheet of bond paper.
+   * If text is long, automatically switches to Long Bond Paper (8.5 x 13 in / Folio)
+   * and compacts typography and margins so header, metadata, directives, signatures, and footer
+   * fit effortlessly without splitting to a 2nd page.
+   */
+  const getMemoFitMetrics = (content = memoContent) => {
+    const text = (content || "").trim();
+    const charLen = text.length;
+    const lineCount = text.split(/\r?\n/).length;
+
+    // Auto-detection rules:
+    // Long Bond Paper needed when content exceeds ~1250 chars or > 20 lines
+    const isLongPaper = charLen > 1250 || lineCount > 20;
+    const isCompact = charLen > 700 || lineCount > 13;
+
+    return {
+      isLongPaper,
+      isCompact,
+      paperSize: isLongPaper ? "8.5in 13in" : "A4 portrait",
+      paperLabel: isLongPaper ? "Long Bond Paper (8.5 x 13 in)" : "Standard Bond Paper (A4 / Short)",
+      pageMargin: isLongPaper ? "2mm 6mm 3mm 6mm" : (isCompact ? "2mm 8mm 3mm 8mm" : "3mm 10mm 4mm 10mm"),
+      containerPadding: isLongPaper ? "6px 20px 10px 20px" : (isCompact ? "6px 22px 10px 22px" : "10px 26px 14px 26px"),
+      topAccentHeight: "5px",
+      headerMarginBottom: isCompact ? "8px" : "14px",
+      headerPaddingBottom: isCompact ? "8px" : "12px",
+      titleFontSize: isCompact ? "17pt" : "19pt",
+      bannerPadding: isCompact ? "5px 12px" : "7px 16px",
+      bannerFontSize: isCompact ? "11.5pt" : "13pt",
+      tableMarginBottom: isCompact ? "8px" : "14px",
+      tableCellPadding: isCompact ? "3.5px 8px" : "5.5px 10px",
+      tableFontSize: isCompact ? "8.5pt" : "9.5pt",
+      bodyFontSize: isLongPaper ? "9.5pt" : (isCompact ? "9.5pt" : "10.5pt"),
+      bodyLineHeight: isLongPaper ? "1.52" : (isCompact ? "1.52" : "1.72"),
+      bodyMarginBottom: isCompact ? "12px" : "20px",
+      bodyMinHeight: isLongPaper ? "380px" : (isCompact ? "200px" : "260px"),
+      sigHeight: isCompact ? "36px" : "48px",
+      sigMarginTop: isCompact ? "12px" : "20px",
+      footerMarginTop: isCompact ? "12px" : "22px",
+      footerPaddingTop: isCompact ? "6px" : "10px",
+      watermarkFontSize: isLongPaper ? "50pt" : (isCompact ? "42pt" : "46pt"),
+    };
+  };
+
+  const generateCompanyPrintHtml = (targetComp = distributionCompany) => {
+    const comp = targetComp || distributionCompany;
+    const addrLines = formatAddressLines(escapeHtml(comp.address || ""));
+    const addressHtml = addrLines.length > 1
+      ? `${addrLines[0]}<br>${addrLines[1]}`
+      : addrLines[0];
+    const compMemoRef = `MEMO-2026-${comp.code}-${memoRef.split("-").pop() || "001"}`;
+    const compLegal = comp.legalName || comp.name;
+    const accentColor = comp.accentColor || "#059669";
+    const metrics = getMemoFitMetrics(memoContent);
+
+    return `
+      <div style="position: relative; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 780px; margin: 0 auto; padding: ${metrics.containerPadding}; color: #0f172a; background: #ffffff; box-sizing: border-box; overflow: hidden; page-break-inside: avoid; break-inside: avoid; min-height: ${metrics.isLongPaper ? '1180px' : '980px'}; display: flex; flex-direction: column; justify-content: space-between;">
+        
+        <!-- ================= COMPANY-SPECIFIC EXECUTIVE WATERMARK LAYER ================= -->
+        <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: ${watermarkSize}px; height: ${watermarkSize}px; pointer-events: none; z-index: 0; user-select: none; display: flex; align-items: center; justify-content: center; opacity: ${watermarkOpacity / 100};">
+          <img src="${companyLogoDataMap[comp.id] || comp.logoUrl}" style="max-width: 100%; max-height: 100%; object-fit: contain; filter: grayscale(15%);" alt="${comp.name} Watermark" />
+        </div>
+
+        ${showDiagonalStamp ? `
+        <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-35deg); pointer-events: none; z-index: 1; white-space: nowrap; border: 3px dashed rgba(225, 29, 72, 0.22); color: rgba(225, 29, 72, 0.22); font-weight: 900; font-size: 18pt; padding: 10px 32px; letter-spacing: 5px; text-transform: uppercase;">
+          ${escapeHtml(diagonalStampText)}
+        </div>` : ""}
+
+        <!-- Foreground Official Content (Flush top, flexible middle, sagad sa baba footer) -->
+        <div style="position: relative; z-index: 10; display: flex; flex-direction: column; justify-content: space-between; flex: 1; height: 100%;">
+          
+          <!-- Top Section: Accent Bar + Header + Banner + Metadata Table + Directives -->
+          <div style="display: flex; flex-direction: column; flex: 1;">
+            <!-- Top Accent Border Line - Sagad sa taas -->
+            <div style="height: ${metrics.topAccentHeight}; background: linear-gradient(90deg, ${accentColor} 0%, #0d9488 50%, #0284c7 100%); margin-bottom: ${metrics.headerMarginBottom}; border-radius: 2px;"></div>
+
+            <!-- Official Executive Letterhead (Left Company Logo, Center Info, Right Corporate Emblem) -->
+            <div style="border-bottom: 2px solid ${accentColor}; padding-bottom: ${metrics.headerPaddingBottom}; margin-bottom: ${metrics.headerMarginBottom};">
+              <table style="width: 100%; border-collapse: collapse;">
+                <tr>
+                  <!-- Left: Company Logo -->
+                  <td style="width: 72px; vertical-align: middle; text-align: left;">
+                    ${(companyLogoDataMap[comp.id] || comp.logoUrl) ? `
+                      <img src="${companyLogoDataMap[comp.id] || comp.logoUrl}" style="max-height: 56px; max-width: 70px; display: block; object-fit: contain;" alt="${escapeHtml(comp.name)} Logo">
+                    ` : ""}
+                  </td>
+
+                  <!-- Center: Corporate Entity Details -->
+                  <td style="vertical-align: middle; text-align: center; padding: 0 8px;">
+                    <div style="display: inline-block; font-size: 7.5pt; font-weight: 800; text-transform: uppercase; letter-spacing: 1.5px; color: ${accentColor}; background: #ecfdf5; border: 1px solid #a7f3d0; padding: 1px 8px; border-radius: 9999px; margin-bottom: 2px;">
+                      OFFICIAL CORPORATE MEMORANDUM
+                    </div>
+                    <h1 style="font-size: ${metrics.titleFontSize}; font-weight: 900; margin: 0; color: #0f172a; text-transform: uppercase; letter-spacing: 0.5px; line-height: 1.15;">
+                      ${escapeHtml(compLegal)}
+                    </h1>
+                    ${comp.tagline ? `<div style="font-size: 8.5pt; color: ${accentColor}; font-weight: 800; margin-top: 1px; letter-spacing: 0.3px;">${escapeHtml(comp.tagline)}</div>` : ""}
+                    <div style="font-size: 8pt; color: #475569; margin-top: 2px; line-height: 1.3;">${addressHtml}</div>
+                    <div style="font-size: 7.5pt; color: #64748b; margin-top: 1px; font-family: monospace;">${escapeHtml(comp.contact || "")}</div>
+                  </td>
+
+                  <!-- Right: Corporate Group Emblem -->
+                  <td style="width: 72px; vertical-align: middle; text-align: right;">
+                    ${(groupEmblemDataUrl || comp.rightLogoUrl || CORPORATE_GROUP_EMBLEM) ? `
+                      <img src="${groupEmblemDataUrl || comp.rightLogoUrl || CORPORATE_GROUP_EMBLEM}" style="max-height: 52px; max-width: 65px; display: inline-block; object-fit: contain; border-radius: 4px;" alt="Corporate Group Emblem">
+                    ` : ""}
+                  </td>
+                </tr>
+              </table>
+            </div>
+
+            <!-- Memorandum Dark Banner Bar -->
+            <table style="width: 100%; border-collapse: collapse; background: #0f172a; border-radius: 4px; margin-bottom: ${metrics.tableMarginBottom};">
+              <tr>
+                <td style="padding: ${metrics.bannerPadding}; font-weight: 900; font-size: ${metrics.bannerFontSize}; letter-spacing: 3px; color: #ffffff; text-transform: uppercase;">
+                  MEMORANDUM
+                </td>
+                <td style="padding: ${metrics.bannerPadding}; text-align: right;">
+                  <span style="background: rgba(16, 185, 129, 0.2); border: 1px solid #10b981; padding: 2px 8px; border-radius: 4px; font-family: monospace; font-size: 9.5pt; font-weight: 900; color: #6ee7b7; letter-spacing: 0.5px;">
+                    REF: ${compMemoRef}
+                  </span>
+                </td>
+              </tr>
+            </table>
+
+            <!-- Metadata Matrix Grid -->
+            <table style="width: 100%; border-collapse: collapse; margin-bottom: ${metrics.tableMarginBottom}; font-size: ${metrics.tableFontSize}; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px;">
+              <tr>
+                <td style="padding: ${metrics.tableCellPadding}; font-weight: 900; width: 95px; color: #475569; border-bottom: 1px solid #e2e8f0; text-transform: uppercase; font-size: 8pt; letter-spacing: 0.5px;">DATE:</td>
+                <td style="padding: ${metrics.tableCellPadding}; font-weight: 800; color: #0f172a; border-bottom: 1px solid #e2e8f0; font-size: 9pt;">${memoDate}</td>
+                <td style="padding: ${metrics.tableCellPadding}; font-weight: 900; width: 105px; color: #475569; border-bottom: 1px solid #e2e8f0; text-transform: uppercase; font-size: 8pt; letter-spacing: 0.5px;">CLASSIFICATION:</td>
+                <td style="padding: ${metrics.tableCellPadding}; font-weight: 800; color: ${accentColor}; border-bottom: 1px solid #e2e8f0; font-size: 8.5pt; text-transform: uppercase;">
+                  ${memoCategory}
+                </td>
+              </tr>
+              <tr>
+                <td style="padding: ${metrics.tableCellPadding}; font-weight: 900; color: #475569; border-bottom: 1px solid #e2e8f0; text-transform: uppercase; font-size: 8pt; letter-spacing: 0.5px;">TO:</td>
+                <td colspan="3" style="padding: ${metrics.tableCellPadding}; color: #0f172a; border-bottom: 1px solid #e2e8f0; font-weight: 800; font-size: 9pt;">${memoTo}</td>
+              </tr>
+              <tr>
+                <td style="padding: ${metrics.tableCellPadding}; font-weight: 900; color: #475569; border-bottom: 1px solid #e2e8f0; text-transform: uppercase; font-size: 8pt; letter-spacing: 0.5px;">FROM:</td>
+                <td colspan="3" style="padding: ${metrics.tableCellPadding}; color: #0f172a; border-bottom: 1px solid #e2e8f0; font-weight: 800; font-size: 9pt;">${memoFrom}</td>
+              </tr>
+              <tr>
+                <td style="padding: ${metrics.tableCellPadding}; font-weight: 900; color: #475569; text-transform: uppercase; font-size: 8pt; letter-spacing: 0.5px;">SUBJECT:</td>
+                <td colspan="3" style="padding: ${metrics.tableCellPadding}; font-weight: 900; color: ${accentColor}; font-size: 10pt; text-transform: uppercase; letter-spacing: 0.3px;">
+                  ${memoSubject}
+                </td>
+              </tr>
+            </table>
+
+            <!-- Directives Body Content -->
+            <div style="font-size: ${metrics.bodyFontSize}; line-height: ${metrics.bodyLineHeight}; color: #1e293b; margin-bottom: ${metrics.bodyMarginBottom}; text-align: justify; white-space: pre-wrap; flex: 1; padding: 0 2px;">
+${memoContent}
+            </div>
+          </div>
+
+          <!-- Bottom Section: Signatories + Footer - Sagad sa baba -->
+          <div style="margin-top: auto; padding-top: ${metrics.sigMarginTop};">
+            <!-- Signatory Sign-off Block -->
+            <table style="width: 100%; border-collapse: collapse; font-size: 9.5pt; page-break-inside: avoid; break-inside: avoid; margin-bottom: ${metrics.footerMarginTop};">
+              <tr>
+                <td style="width: 50%; vertical-align: top; padding-right: 18px;">
+                  <p style="margin: 0; color: #64748b; font-size: 8pt; font-weight: 900; text-transform: uppercase; letter-spacing: 0.8px;">ISSUED BY:</p>
+                  <div style="height: ${metrics.sigHeight}; display: flex; align-items: flex-end; margin-bottom: 2px;">
+                    ${signatorySignature ? `<img src="${signatorySignature}" style="max-height: ${metrics.sigHeight}; max-width: 170px; display: block;" alt="Signatory Signature">` : '<div style="height: 30px;"></div>'}
+                  </div>
+                  <div style="border-bottom: 2px solid #0f172a; width: 190px; margin: 3px 0 4px 0;"></div>
+                  <p style="margin: 0; font-weight: 900; color: #0f172a; font-size: 10.5pt; text-transform: uppercase; letter-spacing: 0.2px;">${signatoryName}</p>
+                  <p style="margin: 1px 0 0 0; color: #475569; font-size: 9pt; font-weight: 600;">${signatoryTitle}</p>
+                  <p style="margin: 1px 0 0 0; color: ${accentColor}; font-weight: 700; font-size: 8.5pt;">${getSignatoryAffiliation(comp)}</p>
+                </td>
+                ${signatoryLayout === "dual" ? `
+                <td style="width: 50%; vertical-align: top; padding-left: 18px;">
+                  <p style="margin: 0; color: #64748b; font-size: 8pt; font-weight: 900; text-transform: uppercase; letter-spacing: 0.8px;">NOTED &amp; APPROVED BY:</p>
+                  <div style="height: ${metrics.sigHeight}; display: flex; align-items: flex-end; margin-bottom: 2px;">
+                    ${approverSignature ? `<img src="${approverSignature}" style="max-height: ${metrics.sigHeight}; max-width: 170px; display: block;" alt="Approver Signature">` : '<div style="height: 30px;"></div>'}
+                  </div>
+                  <div style="border-bottom: 2px solid #0f172a; width: 190px; margin: 3px 0 4px 0;"></div>
+                  <p style="margin: 0; font-weight: 900; color: #0f172a; font-size: 10.5pt; text-transform: uppercase; letter-spacing: 0.2px;">${approverName}</p>
+                  <p style="margin: 1px 0 0 0; color: #475569; font-size: 9pt; font-weight: 600;">${approverTitle}</p>
+                  <p style="margin: 1px 0 0 0; color: #64748b; font-weight: 700; font-size: 8.5pt;">${compLegal}</p>
+                </td>` : ""}
+              </tr>
+            </table>
+
+            <!-- Print & Archival Official Footer -->
+            <div style="padding-top: ${metrics.footerPaddingTop}; border-top: 1px solid #cbd5e1; text-align: center; font-size: 7.5pt; color: #94a3b8; font-weight: 600; page-break-inside: avoid; break-inside: avoid;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;">
+                <span>OFFICE OF THE HUMAN RESOURCES &amp; ADMINISTRATION</span>
+                <span style="font-weight: 900; color: #0f172a;">STRICT COMPLIANCE MANDATED</span>
+                <span>${comp.code} • OFFICIAL TRANSMISSION</span>
+              </div>
+              <div style="letter-spacing: 0.4px;">
+                Official Administrative Record • HR Helpdesk: <span style="font-family: monospace; color: #059669;">${HR_OFFICIAL_EMAIL}</span>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    `;
+  };
+
+  // Direct Send to Personnel via configured Google Apps Script Webhook
   const handleSendDirect = async () => {
-    if (!backendWebhookUrl) {
-      handleSendViaGmailWeb();
+    const effectiveUrl = (customWebhookUrl || "").trim();
+    if (!effectiveUrl) {
+      setShowScriptGuideModal(true);
       return;
     }
 
     setIsSendingDirect(true);
     setDirectSendStatus(null);
+    const metrics = getMemoFitMetrics(memoContent);
+
+    // Build segregated packages for active companies that have recipients
+    const dispatchesPayload = companyDispatches
+      .filter((d) => d.recipients.length > 0)
+      .map((d) => {
+        const comp = companies.find((c) => c.id === d.companyId) || distributionCompany;
+        return {
+          companyId: d.companyId,
+          companyName: d.companyName,
+          legalName: d.legalName,
+          code: d.code,
+          memoRef: d.memoRef,
+          recipients: d.recipients,
+          subject: `[OFFICIAL MEMO] ${d.memoRef}: ${memoSubject} - ${d.companyName}`,
+          htmlBody: generateCompanyEmailHtml(comp),
+          pdfHtml: generateCompanyPrintHtml(comp),
+          body: generateEmailBody(comp),
+          senderEmail: HR_OFFICIAL_EMAIL,
+          isLongPaper: metrics.isLongPaper,
+          paperSize: metrics.paperSize
+        };
+      });
+
+    if (dispatchesPayload.length === 0) {
+      setDirectSendStatus({
+        type: "error",
+        message: "Walang pre-registered employee work email na naka-link para sa mga aktibong kumpanya. Naka-block ang pag-dispatch."
+      });
+      setIsSendingDirect(false);
+      setUnlinkedNoticeModalOpen(true);
+      return;
+    }
 
     const payload = {
-      recipients: recipientEmails,
-      subject: `[OFFICIAL MEMO] ${distributionMemoRef}: ${memoSubject} - ${distributionCompany.name}`,
-      body: generateEmailBody(),
-      htmlBody: generateEmailHtml(),
-      companyName: distributionCompany.name,
-      companyLegal: distributionCompany.legalName,
-      memoRef: distributionMemoRef,
-      senderEmail: HR_OFFICIAL_EMAIL
+      action: "dispatch_company_memos",
+      senderEmail: HR_OFFICIAL_EMAIL,
+      totalCompanies: dispatchesPayload.length,
+      totalRecipients: totalCompanyRecipients,
+      isLongPaper: metrics.isLongPaper,
+      paperSize: metrics.paperSize,
+      dispatches: dispatchesPayload
     };
 
     try {
-      await fetch(backendWebhookUrl, {
+      await fetch(effectiveUrl, {
         method: "POST",
         mode: "no-cors",
         headers: { "Content-Type": "text/plain;charset=utf-8" },
@@ -927,18 +1498,18 @@ HR Contact: ${HR_OFFICIAL_EMAIL}`;
 
       setDirectSendStatus({
         type: "success",
-        message: `Memo successfully dispatched to ${recipientEmails.length} personnel via ${HR_OFFICIAL_EMAIL}!`
+        message: `Memo & PDF (${metrics.paperLabel}) successfully dispatched to ${totalCompanyRecipients} personnel across ${dispatchesPayload.length} company entities via ${HR_OFFICIAL_EMAIL}!`
       });
 
       setTimeout(() => {
         setEmailModalOpen(false);
         setDirectSendStatus(null);
-      }, 3000);
+      }, 3500);
     } catch (err) {
       console.error("Direct dispatch error:", err);
       setDirectSendStatus({
         type: "error",
-        message: "Failed to dispatch via backend: " + (err.message || "Connection issue")
+        message: "Failed to dispatch via Google Apps Script: " + (err.message || "Connection issue")
       });
     } finally {
       setIsSendingDirect(false);
@@ -964,7 +1535,7 @@ HR Contact: ${HR_OFFICIAL_EMAIL}`;
     setEmailModalOpen(false);
   };
 
-  // Print Document with embedded CSS to preserve watermark, page breaks, and A4 dimensions
+  // Print Document with embedded CSS to preserve watermark, page breaks, and exact 1-page paper dimensions
   const handlePrintMemo = (targetCompany = null) => {
     const printWindow = window.open("", "_blank", "width=920,height=1100");
     if (!printWindow) {
@@ -972,436 +1543,132 @@ HR Contact: ${HR_OFFICIAL_EMAIL}`;
       return;
     }
 
+    const metrics = getMemoFitMetrics(memoContent);
+
     const companiesToPrint = targetCompany && targetCompany !== "all"
       ? [typeof targetCompany === "string" ? (companies.find((company) => company.id === targetCompany) || companies[0]) : targetCompany]
       : activeCompanies;
 
     const sheetsHtml = companiesToPrint.map((comp, idx) => {
-      const addrLines = formatAddressLines(escapeHtml(comp.address || ""));
-      const addressHtml = addrLines.length > 1
-        ? `${addrLines[0]}<br>${addrLines[1]}`
-        : addrLines[0];
-
-      const compMemoRef = `MEMO-2026-${comp.code}-${memoRef.split("-").pop() || "001"}`;
-
-      return `
-        <div class="memo-container ${idx < companiesToPrint.length - 1 ? 'page-break' : ''}">
-          <div class="watermark-layer">
-            <img src="${comp.logoUrl}" alt="${comp.name} Watermark">
-          </div>
-
-          ${showDiagonalStamp ? `<div class="diagonal-stamp">${diagonalStampText}</div>` : ""}
-
-          <div class="content-layer">
-            <div class="letterhead">
-              <img src="${comp.logoUrl}" class="company-logo-left" alt="${comp.name}">
-              <div class="company-info">
-                <h1>${escapeHtml(comp.legalName || comp.name)}</h1>
-                ${comp.tagline ? `<div class="tagline">${escapeHtml(comp.tagline)}</div>` : ""}
-                <div class="address">${addressHtml}</div>
-                <div class="contact">${escapeHtml(comp.contact || "")}</div>
-              </div>
-              <img src="${comp.rightLogoUrl || CORPORATE_GROUP_EMBLEM}" class="company-logo-right" alt="Corporate Emblem">
-            </div>
-
-            <div class="header-divider"></div>
-
-            <div class="memo-banner">
-              <div class="memo-banner-title">MEMORANDUM</div>
-              <div class="memo-banner-sub">
-                <span><strong>REF NO:</strong> <span class="ref-pill">${compMemoRef}</span></span>
-                <span class="classification-tag">${memoCategory}</span>
-              </div>
-            </div>
-
-            <table class="metadata-table">
-              <tr>
-                <td class="meta-label">TO:</td>
-                <td class="meta-val">${memoTo}</td>
-              </tr>
-              <tr>
-                <td class="meta-label">FROM:</td>
-                <td class="meta-val">${memoFrom}</td>
-              </tr>
-              <tr>
-                <td class="meta-label">DATE:</td>
-                <td class="meta-val">${memoDate}</td>
-              </tr>
-              <tr>
-                <td class="meta-label">SUBJECT:</td>
-                <td class="meta-val meta-subject">${memoSubject}</td>
-              </tr>
-            </table>
-
-            <div class="section-divider"></div>
-
-            <div class="memo-body">${memoContent}</div>
-
-            <div class="signatories-grid">
-              <div class="sig-box">
-                <div class="sig-header-label">ISSUED BY:</div>
-                <div class="sig-signature-area">
-                  ${signatorySignature ? `<img src="${signatorySignature}" class="sig-img" alt="Signatory Signature">` : `<div class="sig-empty-space"></div>`}
-                </div>
-                <div class="sig-rule"></div>
-                <div class="sig-name">${signatoryName}</div>
-                <div class="sig-title">${signatoryTitle}</div>
-                <div class="sig-comp">${getSignatoryAffiliation(comp)}</div>
-              </div>
-
-              ${signatoryLayout === "dual" ? `
-                <div class="sig-box">
-                  <div class="sig-header-label">NOTED &amp; APPROVED BY:</div>
-                  <div class="sig-signature-area">
-                    ${approverSignature ? `<img src="${approverSignature}" class="sig-img" alt="Approver Signature">` : `<div class="sig-empty-space"></div>`}
-                  </div>
-                  <div class="sig-rule"></div>
-                  <div class="sig-name">${approverName}</div>
-                  <div class="sig-title">${approverTitle}</div>
-                  <div class="sig-comp">${comp.legalName || comp.name}</div>
-                </div>
-              ` : ""}
-            </div>
-
-            <div class="memo-footer">
-              <div class="footer-top-line">
-                <span>OFFICE OF THE HUMAN RESOURCES &amp; ADMINISTRATION</span>
-                <span class="footer-mandate">STRICT COMPLIANCE MANDATED</span>
-                <span>${comp.code} • OFFICIAL TRANSMISSION</span>
-              </div>
-              <div class="footer-division">HUMAN RESOURCE MANAGEMENT DIVISION</div>
-            </div>
-          </div>
-        </div>
-      `;
-    }).join("");
+      return generateCompanyPrintHtml(comp);
+    }).join(companiesToPrint.length > 1 ? '<div style="page-break-after: always; break-after: page;"></div>' : "");
 
     const printHtml = `<!doctype html>
 <html>
 <head>
   <meta charset="utf-8">
-  <title>${memoRef} - ${memoSubject} (${companiesToPrint.length} Entities Distribution)</title>
+  <title>${memoRef} - ${memoSubject} (${metrics.paperLabel})</title>
   <style>
     @page {
-      size: A4 portrait;
-      margin: 14mm 18mm 14mm 18mm;
+      size: ${metrics.paperSize};
+      margin: ${metrics.pageMargin};
     }
     * {
       box-sizing: border-box;
       margin: 0;
       padding: 0;
       -webkit-font-smoothing: antialiased;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
     }
-    body {
+    html, body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
       color: #0f172a;
       background: #ffffff;
-      padding: 16px;
-      line-height: 1.6;
-    }
-    .page-break {
-      page-break-after: always;
-      break-after: page;
-    }
-    .memo-container {
-      position: relative;
-      max-width: 760px;
-      margin: 0 auto 30px auto;
-      padding: 24px 28px;
-      min-height: 980px;
-      border: 1px solid #e2e8f0;
-      background: #ffffff;
-    }
-    .watermark-layer {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      width: ${watermarkSize}px;
-      height: ${watermarkSize}px;
-      opacity: ${watermarkOpacity / 100};
-      pointer-events: none;
-      z-index: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-    .watermark-layer img {
-      max-width: 100%;
-      max-height: 100%;
-      object-fit: contain;
-      filter: grayscale(15%);
-    }
-    .diagonal-stamp {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%) rotate(-35deg);
-      font-size: 24px;
-      font-weight: 900;
-      color: rgba(220, 38, 38, 0.12);
-      border: 3px dashed rgba(220, 38, 38, 0.18);
-      padding: 10px 30px;
-      letter-spacing: 4px;
-      text-transform: uppercase;
-      white-space: nowrap;
-      pointer-events: none;
-      z-index: 1;
-    }
-    .content-layer {
-      position: relative;
-      z-index: 2;
-    }
-    .letterhead {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 16px;
-      padding-bottom: 8px;
-    }
-    .company-logo-left {
-      width: 72px;
-      height: 72px;
-      object-fit: contain;
-      flex-shrink: 0;
-    }
-    .company-info {
-      text-align: center;
-      flex: 1;
-    }
-    .company-info h1 {
-      font-size: 13.5pt;
-      font-weight: 900;
-      letter-spacing: 0.03em;
-      color: #020617;
-      text-transform: uppercase;
-      margin-bottom: 2px;
-    }
-    .tagline {
-      font-size: 8.5pt;
-      font-weight: 700;
-      color: #065f46;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      margin-bottom: 3px;
-    }
-    .company-info .address {
-      font-size: 9pt;
-      color: #334155;
-      font-weight: 700;
-      line-height: 1.35;
-      text-transform: uppercase;
-    }
-    .contact {
-      font-size: 8pt;
-      color: #64748b;
-      margin-top: 2px;
-    }
-    .company-logo-right {
-      width: 72px;
-      height: 72px;
-      object-fit: contain;
-      flex-shrink: 0;
-    }
-    .header-divider {
-      border-bottom: 2px solid #0f172a;
-      margin: 8px 0 12px 0;
-    }
-    .memo-banner {
-      margin: 10px 0 14px 0;
-      padding: 8px 0;
-      border-top: 2px solid #0f172a;
-      border-bottom: 2px solid #0f172a;
-      text-align: center;
-    }
-    .memo-banner-title {
-      font-size: 16pt;
-      font-weight: 900;
-      letter-spacing: 0.35em;
-      color: #020617;
-      text-transform: uppercase;
-      margin-bottom: 5px;
-    }
-    .memo-banner-sub {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      font-size: 9.5pt;
-      color: #334155;
-      font-weight: 700;
-      padding: 4px 6px 0 6px;
-      border-top: 1px solid #e2e8f0;
-    }
-    .ref-pill {
-      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-      font-weight: 900;
-      color: #0f172a;
-    }
-    .classification-tag {
-      background: #ecfdf5;
-      color: #065f46;
-      border: 1px solid #a7f3d0;
-      padding: 2px 10px;
-      border-radius: 9999px;
-      font-size: 8pt;
-      font-weight: 900;
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-    }
-    .metadata-table {
-      width: 100%;
-      margin-top: 8px;
-      margin-bottom: 12px;
-      border-collapse: collapse;
-      font-size: 10.5pt;
-    }
-    .metadata-table td {
-      padding: 3.5px 0;
-      vertical-align: top;
-    }
-    .meta-label {
-      width: 90px;
-      font-weight: 900;
-      color: #0f172a;
-      text-transform: uppercase;
-      font-size: 10.5pt;
-    }
-    .meta-val {
-      font-weight: 800;
-      color: #0f172a;
-      text-transform: uppercase;
-      font-size: 10.5pt;
-    }
-    .meta-subject {
-      font-weight: 900;
-      color: #020617;
-    }
-    .section-divider {
-      border-bottom: 2px solid #0f172a;
-      margin-bottom: 18px;
-    }
-    .memo-body {
-      font-size: 10.5pt;
-      line-height: 1.75;
-      color: #0f172a;
-      white-space: pre-wrap;
-      font-weight: 500;
-      text-align: justify;
-      text-justify: inter-word;
-    }
-    .signatories-grid {
-      margin-top: 36px;
-      display: grid;
-      grid-template-columns: ${signatoryLayout === "dual" ? "1fr 1fr" : "1fr"};
-      gap: 28px;
-      page-break-inside: avoid;
-      break-inside: avoid;
-    }
-    .sig-box {
-      text-align: left;
-    }
-    .sig-header-label {
-      font-size: 8.5pt;
-      font-weight: 900;
-      color: #334155;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      margin-bottom: 4px;
-    }
-    .sig-signature-area {
-      height: 54px;
-      display: flex;
-      align-items: flex-end;
-    }
-    .sig-img {
-      max-height: 54px;
-      max-width: 210px;
-      object-fit: contain;
-      margin-bottom: -6px;
-    }
-    .sig-empty-space {
-      height: 38px;
-    }
-    .sig-rule {
-      width: 240px;
-      border-bottom: 2px solid #020617;
-      margin-top: 2px;
-      margin-bottom: 6px;
-    }
-    .sig-name {
-      font-size: 10.5pt;
-      font-weight: 900;
-      color: #020617;
-      text-transform: uppercase;
-      letter-spacing: 0.02em;
-    }
-    .sig-title {
-      font-size: 9.5pt;
-      color: #1e293b;
-      font-weight: 700;
-    }
-    .sig-comp {
-      font-size: 9pt;
-      color: #475569;
-      font-weight: 600;
-    }
-    .memo-footer {
-      margin-top: 50px;
-      page-break-inside: avoid;
-      break-inside: avoid;
-    }
-    .footer-top-line {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      font-size: 8pt;
-      color: #64748b;
-      font-weight: 800;
-      letter-spacing: 0.05em;
-      border-top: 1px solid #cbd5e1;
-      padding-top: 8px;
-    }
-    .footer-mandate {
-      color: #020617;
-      font-weight: 900;
-    }
-    .footer-division {
-      text-align: center;
-      font-size: 8pt;
-      font-weight: 900;
-      color: #94a3b8;
-      letter-spacing: 0.22em;
-      margin-top: 4px;
+      padding: 0;
+      margin: 0;
+      line-height: 1.5;
     }
     @media print {
       body {
-        padding: 0;
-        -webkit-print-color-adjust: exact;
-        print-color-adjust: exact;
-      }
-      .memo-container {
-        border: none;
-        padding: 0;
-        margin-bottom: 0;
-        min-height: auto;
+        padding: 0 !important;
+        margin: 0 !important;
       }
     }
   </style>
 </head>
 <body>
   ${sheetsHtml}
-
-  <script>
-    window.onload = function() {
-      window.print();
-      window.onafterprint = function() { window.close(); };
-    };
-  </script>
 </body>
 </html>`;
 
+    printWindow.document.open();
     printWindow.document.write(printHtml);
     printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => {
+      printWindow.print();
+    }, 350);
+  };
+
+  // High-Resolution Image Generation & Clipboard Copying (for chat apps: Viber, Messenger, Telegram, WhatsApp, Gmail)
+  const handleCopyMemoAsImage = async (company) => {
+    const sheetEl = document.getElementById(`memo-sheet-preview-${company.id}`);
+    if (!sheetEl) return;
+
+    try {
+      setCopyingImageId(company.id);
+      const canvas = await html2canvas(sheetEl, {
+        scale: 2.5,
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: "#ffffff",
+        logging: false,
+      });
+
+      canvas.toBlob(async (blob) => {
+        if (!blob) {
+          throw new Error("Canvas blob conversion failed");
+        }
+        try {
+          if (navigator.clipboard && window.ClipboardItem) {
+            const item = new ClipboardItem({ "image/png": blob });
+            await navigator.clipboard.write([item]);
+            setCopiedImageId(company.id);
+            setTimeout(() => setCopiedImageId(null), 3500);
+          } else {
+            handleDownloadMemoImage(company);
+          }
+        } catch (clipErr) {
+          console.warn("Direct clipboard write fallback to download:", clipErr);
+          handleDownloadMemoImage(company);
+        } finally {
+          setCopyingImageId(null);
+        }
+      }, "image/png", 1.0);
+    } catch (err) {
+      console.error("Failed to copy memo image:", err);
+      setCopyingImageId(null);
+    }
+  };
+
+  const handleDownloadMemoImage = async (company) => {
+    const sheetEl = document.getElementById(`memo-sheet-preview-${company.id}`);
+    if (!sheetEl) return;
+
+    try {
+      setCopyingImageId(company.id);
+      const canvas = await html2canvas(sheetEl, {
+        scale: 2.5,
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: "#ffffff",
+        logging: false,
+      });
+
+      const dataUrl = canvas.toDataURL("image/png", 1.0);
+      const compMemoRef = `MEMO-2026-${company.code}-${memoRef.split("-").pop() || "001"}`;
+      const link = document.createElement("a");
+      link.download = `${compMemoRef} - ${company.name}.png`;
+      link.href = dataUrl;
+      link.click();
+      setCopiedImageId(company.id);
+      setTimeout(() => setCopiedImageId(null), 3500);
+    } catch (err) {
+      console.error("Failed to download memo image:", err);
+    } finally {
+      setCopyingImageId(null);
+    }
   };
 
   return (
@@ -2464,12 +2731,31 @@ Write numbered directives or formal paragraphs.
 
                 <button
                   type="button"
-                  onClick={() => setEmailModalOpen(true)}
-                  className="inline-flex items-center gap-2 rounded-xl bg-emerald-700 hover:bg-emerald-600 text-white font-black px-4 py-2 text-xs shadow-md shadow-emerald-700/20 transition cursor-pointer"
-                  title="Send via Email to employee recipients of active entities"
+                  onClick={() => {
+                    if (totalCompanyRecipients === 0) {
+                      setUnlinkedNoticeModalOpen(true);
+                    } else {
+                      setEmailModalOpen(true);
+                    }
+                  }}
+                  className={`inline-flex items-center gap-2 rounded-xl text-white font-black px-4 py-2 text-xs shadow-md transition cursor-pointer ${
+                    totalCompanyRecipients === 0
+                      ? "bg-amber-700 hover:bg-amber-600 shadow-amber-700/20"
+                      : "bg-emerald-700 hover:bg-emerald-600 shadow-emerald-700/20"
+                  }`}
+                  title={
+                    totalCompanyRecipients === 0
+                      ? "Walang pre-registered employee work email na naka-link. I-click para sa dahilan."
+                      : "Send via Email to pre-registered employee recipients"
+                  }
                 >
                   <Send size={15} />
                   <span>Send via Email ({recipientEmails.length})</span>
+                  {unlinkedEntities.length > 0 && totalCompanyRecipients > 0 && (
+                    <span className="bg-amber-400 text-amber-950 text-[9.5px] font-black px-1.5 py-0.2 rounded-full">
+                      {unlinkedEntities.length} unlinked
+                    </span>
+                  )}
                 </button>
 
                 <button
@@ -2541,7 +2827,7 @@ Write numbered directives or formal paragraphs.
                   >
                     {/* Company Section Header Pill */}
                     <div className="w-full flex items-center justify-between px-3 text-xs font-bold text-slate-600">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <span className={`h-6 w-6 rounded-full flex items-center justify-center text-[11px] font-black ${
                           isIncluded ? "bg-emerald-700 text-white" : "bg-slate-400 text-white"
                         }`}>
@@ -2558,9 +2844,61 @@ Write numbered directives or formal paragraphs.
                         }`}>
                           {isIncluded ? "✓ Included" : "✕ Excluded"}
                         </span>
+                        <span className="text-[9.5px] font-bold text-blue-800 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-md">
+                          📄 {getMemoFitMetrics(memoContent).paperLabel} • 1-Page Fit
+                        </span>
                       </div>
 
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center flex-wrap gap-2">
+                        {isIncluded && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => handleCopyMemoAsImage(company)}
+                              disabled={copyingImageId === company.id}
+                              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer bg-slate-900 hover:bg-slate-800 text-white shadow-xs"
+                              title="Copy high-res memorandum image to clipboard for Viber, Messenger, Telegram, WhatsApp or Gmail"
+                            >
+                              {copyingImageId === company.id ? (
+                                <>
+                                  <RefreshCw size={13} className="animate-spin" />
+                                  <span>Generating Image...</span>
+                                </>
+                              ) : copiedImageId === company.id ? (
+                                <>
+                                  <Check size={13} className="text-emerald-400" />
+                                  <span className="text-emerald-300">Copied to Clipboard!</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Camera size={13} className="text-emerald-400" />
+                                  <span>Copy Memo Image</span>
+                                </>
+                              )}
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => handleDownloadMemoImage(company)}
+                              disabled={copyingImageId === company.id}
+                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer bg-white hover:bg-slate-100 text-slate-700 border border-slate-300"
+                              title="Download memo as high-res PNG image"
+                            >
+                              <Download size={13} className="text-slate-500" />
+                              <span>PNG</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => handlePrintMemo(company)}
+                              className="text-[11px] text-emerald-700 hover:text-emerald-950 font-bold underline cursor-pointer px-1"
+                              title={`Print only the ${company.name} memorandum`}
+                            >
+                              Print this copy only
+                            </button>
+                          </>
+                        )}
+
                         <button
                           type="button"
                           onClick={() => toggleCompanyInclusion(company.id)}
@@ -2573,7 +2911,7 @@ Write numbered directives or formal paragraphs.
                           {isIncluded ? (
                             <>
                               <XCircle size={13} />
-                              <span>Untoggle / Exclude</span>
+                              <span>Exclude</span>
                             </>
                           ) : (
                             <>
@@ -2582,17 +2920,6 @@ Write numbered directives or formal paragraphs.
                             </>
                           )}
                         </button>
-
-                        {isIncluded && (
-                          <button
-                            type="button"
-                            onClick={() => handlePrintMemo(company)}
-                            className="text-[11px] text-emerald-700 hover:text-emerald-950 font-bold underline cursor-pointer"
-                            title={`Print only the ${company.name} memorandum`}
-                          >
-                            Print this copy only
-                          </button>
-                        )}
                       </div>
                     </div>
 
@@ -2609,12 +2936,13 @@ Write numbered directives or formal paragraphs.
                       </div>
                     )}
 
-                    {/* Executive A4 Sheet Representation */}
+                    {/* Executive Sheet Representation - Sagad sa taas at sagad sa baba */}
                     <div
+                      id={`memo-sheet-preview-${company.id}`}
                       style={{
                         zoom: previewZoom === 100 ? undefined : `${previewZoom}%`,
                       }}
-                      className={`relative w-full bg-white border border-slate-300 rounded-sm shadow-xl p-8 sm:p-12 min-h-[960px] overflow-hidden select-none transition-all duration-150 ${
+                      className={`relative w-full bg-white border border-slate-300 rounded-sm shadow-xl px-6 py-5 sm:px-9 sm:py-6 min-h-[960px] overflow-hidden select-none transition-all duration-150 flex flex-col justify-between ${
                         !isIncluded ? "opacity-40 grayscale-[25%] pointer-events-none" : ""
                       }`}
                     >
@@ -2641,201 +2969,207 @@ Write numbered directives or formal paragraphs.
                         </div>
                       )}
 
-                      {/* Foreground Content */}
-                      <div className="relative z-10 space-y-3">
-                        {/* Corporate Letterhead (Left Logo, Center Info, Right Corporate Group Emblem) */}
-                        <div className="flex items-center justify-between gap-4 pb-1">
-                          <div className="h-18 w-18 p-1 flex items-center justify-center shrink-0">
-                            <img
-                              src={company.logoUrl}
-                              alt={company.name}
-                              className="max-h-full max-w-full object-contain"
-                            />
+                      {/* Foreground Content (Flush Top, Flex Middle, Flush Bottom Signatories & Footer) */}
+                      <div className="relative z-10 flex flex-col justify-between flex-1 h-full space-y-3">
+                        {/* Top Section: Letterhead + Memorandum Title Banner + Metadata Grid + Directives */}
+                        <div className="flex flex-col flex-1 space-y-2">
+                          {/* Corporate Letterhead (Left Logo, Center Info, Right Corporate Group Emblem) */}
+                          <div className="flex items-center justify-between gap-4 pb-1">
+                            <div className="h-18 w-18 p-1 flex items-center justify-center shrink-0">
+                              <img
+                                src={company.logoUrl}
+                                alt={company.name}
+                                className="max-h-full max-w-full object-contain"
+                              />
+                            </div>
+                            <div className="min-w-0 flex-1 text-center">
+                              <h1 className="text-base sm:text-lg font-black text-slate-950 tracking-wide uppercase leading-tight font-sans">
+                                {company.legalName || company.name}
+                              </h1>
+                              {company.tagline && (
+                                <div className="text-[10px] text-emerald-800 font-bold uppercase tracking-wider mt-0.5">
+                                  {company.tagline}
+                                </div>
+                              )}
+                              <div className="text-[10px] sm:text-[10.5px] text-slate-700 font-semibold uppercase leading-snug mt-1">
+                                {formatAddressLines(company.address).map((line, idx) => (
+                                  <div key={idx}>{line}</div>
+                                ))}
+                              </div>
+                              <div className="text-[9.5px] text-slate-500 font-medium tracking-tight mt-0.5">
+                                {company.contact}
+                              </div>
+                            </div>
+                            <div className="h-18 w-18 p-1 flex items-center justify-center shrink-0">
+                              <img
+                                src={company.rightLogoUrl || CORPORATE_GROUP_EMBLEM}
+                                alt="Corporate Emblem"
+                                className="max-h-full max-w-full object-contain"
+                              />
+                            </div>
                           </div>
-                          <div className="min-w-0 flex-1 text-center">
-                            <h1 className="text-base sm:text-lg font-black text-slate-950 tracking-wide uppercase leading-tight font-sans">
-                              {company.legalName || company.name}
-                            </h1>
-                            {company.tagline && (
-                              <div className="text-[10px] text-emerald-800 font-bold uppercase tracking-wider mt-0.5">
-                                {company.tagline}
+
+                          {/* Top Letterhead Divider Line */}
+                          <div className="mt-1 mb-1 border-b-2 border-slate-900"></div>
+
+                          {/* Prominent MEMORANDUM Title Banner with Ref No & Classification */}
+                          <div className="py-2 my-1 border-y-2 border-slate-900 text-center space-y-1">
+                            <h2 className="text-lg sm:text-xl font-black tracking-[0.35em] text-slate-950 uppercase leading-none font-sans">
+                              MEMORANDUM
+                            </h2>
+                            <div className="flex items-center justify-between text-[11px] px-2 font-bold pt-1 border-t border-slate-200">
+                              <span className="text-slate-700 font-bold">
+                                REF NO: <strong className="text-slate-950 font-mono font-black">{compMemoRef}</strong>
+                              </span>
+                              <span className="inline-flex items-center px-3 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-900 border border-emerald-300 shadow-2xs">
+                                {memoCategory}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Official HR Memo Header Grid */}
+                          <div className="space-y-1 text-xs py-1.5">
+                            <div className="grid grid-cols-[90px_1fr] items-baseline">
+                              <span className="font-black text-[12px] text-slate-900 uppercase">TO:</span>
+                              <span className="font-extrabold text-slate-950 uppercase text-[12px] tracking-wide">{memoTo}</span>
+                            </div>
+                            <div className="grid grid-cols-[90px_1fr] items-baseline">
+                              <span className="font-black text-[12px] text-slate-900 uppercase">FROM:</span>
+                              <span className="font-extrabold text-slate-950 uppercase text-[12px] tracking-wide">{memoFrom}</span>
+                            </div>
+                            <div className="grid grid-cols-[90px_1fr] items-baseline">
+                              <span className="font-black text-[12px] text-slate-900 uppercase">DATE:</span>
+                              <span className="font-extrabold text-slate-950 uppercase text-[12px] tracking-wide">{memoDate}</span>
+                            </div>
+                            <div className="grid grid-cols-[90px_1fr] items-baseline">
+                              <span className="font-black text-[12px] text-slate-900 uppercase">SUBJECT:</span>
+                              <span className="font-black text-slate-950 uppercase text-[13px] tracking-tight">{memoSubject}</span>
+                            </div>
+                          </div>
+
+                          {/* Solid Divider between Header and Directives */}
+                          <div className="border-b-2 border-slate-900 my-1"></div>
+
+                          {/* Memo Body Content */}
+                          <div className="pt-2 text-[12.5px] sm:text-[13px] text-slate-900 font-normal leading-[1.8] font-sans whitespace-pre-wrap text-justify flex-1">
+                            {memoContent || (
+                              <span className="text-slate-400 italic">
+                                (No directives entered. Return to Step 2 to write or generate them with AI.)
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Bottom Section: Signatories + Official Footer - Sagad sa baba */}
+                        <div className="mt-auto pt-6 space-y-4">
+                          {/* Signatory Block with E-Signatures and Crisp Solid Underline */}
+                          <div>
+                            {signatoryLayout === "dual" ? (
+                              <div className="grid grid-cols-2 gap-8 items-start">
+                                {/* Left: Issued By */}
+                                <div className="space-y-0.5 text-left">
+                                  <p className="text-[10.5px] font-black uppercase text-slate-700 tracking-wider">
+                                    ISSUED BY:
+                                  </p>
+                                  <div className="h-16 flex items-end mb-1">
+                                    {signatorySignature ? (
+                                      <img
+                                        src={signatorySignature}
+                                        alt="Signatory E-Signature"
+                                        className="max-h-16 max-w-[210px] object-contain object-bottom pointer-events-none select-none -mb-2"
+                                      />
+                                    ) : (
+                                      <div className="h-10 text-[11px] text-slate-400 italic flex items-center">
+                                        (Signature over printed name)
+                                      </div>
+                                    )}
+                                  </div>
+                                  <div className="w-64 border-b-2 border-slate-950 mb-1.5"></div>
+                                  <p className="text-xs sm:text-[13.5px] font-black text-slate-950 uppercase tracking-tight">
+                                    {signatoryName}
+                                  </p>
+                                  <p className="text-[11.5px] font-bold text-slate-800 leading-tight">
+                                    {signatoryTitle}
+                                  </p>
+                                  <p className="text-[10px] text-slate-600 font-semibold">
+                                    {getSignatoryAffiliation(company)}
+                                  </p>
+                                </div>
+
+                                {/* Right: Noted & Approved By */}
+                                <div className="space-y-0.5 text-left">
+                                  <p className="text-[10.5px] font-black uppercase text-slate-700 tracking-wider">
+                                    NOTED &amp; APPROVED BY:
+                                  </p>
+                                  <div className="h-16 flex items-end mb-1">
+                                    {approverSignature ? (
+                                      <img
+                                        src={approverSignature}
+                                        alt="Approver E-Signature"
+                                        className="max-h-16 max-w-[210px] object-contain object-bottom pointer-events-none select-none -mb-2"
+                                      />
+                                    ) : (
+                                      <div className="h-10 text-[11px] text-slate-400 italic flex items-center">
+                                        (Signature over printed name)
+                                      </div>
+                                    )}
+                                  </div>
+                                  <div className="w-64 border-b-2 border-slate-950 mb-1.5"></div>
+                                  <p className="text-xs sm:text-[13.5px] font-black text-slate-950 uppercase tracking-tight">
+                                    {approverName}
+                                  </p>
+                                  <p className="text-[11.5px] font-bold text-slate-800 leading-tight">
+                                    {approverTitle}
+                                  </p>
+                                  <p className="text-[10px] text-slate-600 font-semibold">
+                                    {company.legalName || company.name}
+                                  </p>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="flex items-start justify-start">
+                                <div className="space-y-0.5 text-left max-w-[320px]">
+                                  <p className="text-[10.5px] font-black uppercase text-slate-700 tracking-wider">
+                                    ISSUED BY:
+                                  </p>
+                                  <div className="h-16 flex items-end mb-1">
+                                    {signatorySignature ? (
+                                      <img
+                                        src={signatorySignature}
+                                        alt="Signatory E-Signature"
+                                        className="max-h-16 max-w-[210px] object-contain object-bottom pointer-events-none select-none -mb-2"
+                                      />
+                                    ) : (
+                                      <div className="h-10 text-[11px] text-slate-400 italic flex items-center">
+                                        (Signature over printed name)
+                                      </div>
+                                    )}
+                                  </div>
+                                  <div className="w-64 border-b-2 border-slate-950 mb-1.5"></div>
+                                  <p className="text-xs sm:text-[13.5px] font-black text-slate-950 uppercase tracking-tight">
+                                    {signatoryName}
+                                  </p>
+                                  <p className="text-[11.5px] font-bold text-slate-800 leading-tight">
+                                    {signatoryTitle}
+                                  </p>
+                                  <p className="text-[10px] text-slate-600 font-semibold">
+                                    {getSignatoryAffiliation(company)}
+                                  </p>
+                                </div>
                               </div>
                             )}
-                            <div className="text-[10px] sm:text-[10.5px] text-slate-700 font-semibold uppercase leading-snug mt-1">
-                              {formatAddressLines(company.address).map((line, idx) => (
-                                <div key={idx}>{line}</div>
-                              ))}
+                          </div>
+
+                          {/* Bottom Official Division Footer - Sagad sa pinaka-baba */}
+                          <div className="pt-4 pb-1">
+                            <div className="border-t border-slate-300 pt-2.5 flex items-center justify-between text-[9.5px] sm:text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">
+                              <span>OFFICE OF THE HUMAN RESOURCES &amp; ADMINISTRATION</span>
+                              <span className="font-black text-slate-800">STRICT COMPLIANCE MANDATED</span>
+                              <span>{company.code} • OFFICIAL TRANSMISSION</span>
                             </div>
-                            <div className="text-[9.5px] text-slate-500 font-medium tracking-tight mt-0.5">
-                              {company.contact}
+                            <div className="text-center text-[9px] text-slate-400 font-black uppercase tracking-[0.25em] mt-1">
+                              HUMAN RESOURCE MANAGEMENT DIVISION
                             </div>
-                          </div>
-                          <div className="h-18 w-18 p-1 flex items-center justify-center shrink-0">
-                            <img
-                              src={company.rightLogoUrl || CORPORATE_GROUP_EMBLEM}
-                              alt="Corporate Emblem"
-                              className="max-h-full max-w-full object-contain"
-                            />
-                          </div>
-                        </div>
-
-                        {/* Top Letterhead Divider Line */}
-                        <div className="mt-2 mb-2 border-b-2 border-slate-900"></div>
-
-                        {/* Prominent MEMORANDUM Title Banner with Ref No & Classification */}
-                        <div className="py-2.5 my-2 border-y-2 border-slate-900 text-center space-y-1">
-                          <h2 className="text-lg sm:text-xl font-black tracking-[0.35em] text-slate-950 uppercase leading-none font-sans">
-                            MEMORANDUM
-                          </h2>
-                          <div className="flex items-center justify-between text-[11px] px-2 font-bold pt-1.5 border-t border-slate-200">
-                            <span className="text-slate-700 font-bold">
-                              REF NO: <strong className="text-slate-950 font-mono font-black">{compMemoRef}</strong>
-                            </span>
-                            <span className="inline-flex items-center px-3 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-900 border border-emerald-300 shadow-2xs">
-                              {memoCategory}
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* Official HR Memo Header Grid */}
-                        <div className="space-y-1.5 text-xs py-2">
-                          <div className="grid grid-cols-[90px_1fr] items-baseline">
-                            <span className="font-black text-[12px] text-slate-900 uppercase">TO:</span>
-                            <span className="font-extrabold text-slate-950 uppercase text-[12px] tracking-wide">{memoTo}</span>
-                          </div>
-                          <div className="grid grid-cols-[90px_1fr] items-baseline">
-                            <span className="font-black text-[12px] text-slate-900 uppercase">FROM:</span>
-                            <span className="font-extrabold text-slate-950 uppercase text-[12px] tracking-wide">{memoFrom}</span>
-                          </div>
-                          <div className="grid grid-cols-[90px_1fr] items-baseline">
-                            <span className="font-black text-[12px] text-slate-900 uppercase">DATE:</span>
-                            <span className="font-extrabold text-slate-950 uppercase text-[12px] tracking-wide">{memoDate}</span>
-                          </div>
-                          <div className="grid grid-cols-[90px_1fr] items-baseline">
-                            <span className="font-black text-[12px] text-slate-900 uppercase">SUBJECT:</span>
-                            <span className="font-black text-slate-950 uppercase text-[13px] tracking-tight">{memoSubject}</span>
-                          </div>
-                        </div>
-
-                        {/* Solid Divider between Header and Directives */}
-                        <div className="border-b-2 border-slate-900 my-2"></div>
-
-                        {/* Memo Body Content */}
-                        <div className="pt-2 text-[12.5px] sm:text-[13px] text-slate-900 font-normal leading-[1.8] font-sans whitespace-pre-wrap text-justify min-h-[260px]">
-                          {memoContent || (
-                            <span className="text-slate-400 italic">
-                              (No directives entered. Return to Step 2 to write or generate them with AI.)
-                            </span>
-                          )}
-                        </div>
-
-                        {/* Signatory Block with E-Signatures and Crisp Solid Underline */}
-                        <div className="pt-8">
-                          {signatoryLayout === "dual" ? (
-                            <div className="grid grid-cols-2 gap-8 items-start">
-                              {/* Left: Issued By */}
-                              <div className="space-y-0.5 text-left">
-                                <p className="text-[10.5px] font-black uppercase text-slate-700 tracking-wider">
-                                  ISSUED BY:
-                                </p>
-                                <div className="h-16 flex items-end mb-1">
-                                  {signatorySignature ? (
-                                    <img
-                                      src={signatorySignature}
-                                      alt="Signatory E-Signature"
-                                      className="max-h-16 max-w-[210px] object-contain object-bottom pointer-events-none select-none -mb-2"
-                                    />
-                                  ) : (
-                                    <div className="h-10 text-[11px] text-slate-400 italic flex items-center">
-                                      (Signature over printed name)
-                                    </div>
-                                  )}
-                                </div>
-                                <div className="w-64 border-b-2 border-slate-950 mb-1.5"></div>
-                                <p className="text-xs sm:text-[13.5px] font-black text-slate-950 uppercase tracking-tight">
-                                  {signatoryName}
-                                </p>
-                                <p className="text-[11.5px] font-bold text-slate-800 leading-tight">
-                                  {signatoryTitle}
-                                </p>
-                                <p className="text-[10px] text-slate-600 font-semibold">
-                                  {getSignatoryAffiliation(company)}
-                                </p>
-                              </div>
-
-                              {/* Right: Noted & Approved By */}
-                              <div className="space-y-0.5 text-left">
-                                <p className="text-[10.5px] font-black uppercase text-slate-700 tracking-wider">
-                                  NOTED &amp; APPROVED BY:
-                                </p>
-                                <div className="h-16 flex items-end mb-1">
-                                  {approverSignature ? (
-                                    <img
-                                      src={approverSignature}
-                                      alt="Approver E-Signature"
-                                      className="max-h-16 max-w-[210px] object-contain object-bottom pointer-events-none select-none -mb-2"
-                                    />
-                                  ) : (
-                                    <div className="h-10 text-[11px] text-slate-400 italic flex items-center">
-                                      (Signature over printed name)
-                                    </div>
-                                  )}
-                                </div>
-                                <div className="w-64 border-b-2 border-slate-950 mb-1.5"></div>
-                                <p className="text-xs sm:text-[13.5px] font-black text-slate-950 uppercase tracking-tight">
-                                  {approverName}
-                                </p>
-                                <p className="text-[11.5px] font-bold text-slate-800 leading-tight">
-                                  {approverTitle}
-                                </p>
-                                <p className="text-[10px] text-slate-600 font-semibold">
-                                  {company.legalName || company.name}
-                                </p>
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="flex items-start justify-start">
-                              <div className="space-y-0.5 text-left max-w-[320px]">
-                                <p className="text-[10.5px] font-black uppercase text-slate-700 tracking-wider">
-                                  ISSUED BY:
-                                </p>
-                                <div className="h-16 flex items-end mb-1">
-                                  {signatorySignature ? (
-                                    <img
-                                      src={signatorySignature}
-                                      alt="Signatory E-Signature"
-                                      className="max-h-16 max-w-[210px] object-contain object-bottom pointer-events-none select-none -mb-2"
-                                    />
-                                  ) : (
-                                    <div className="h-10 text-[11px] text-slate-400 italic flex items-center">
-                                      (Signature over printed name)
-                                    </div>
-                                  )}
-                                </div>
-                                <div className="w-64 border-b-2 border-slate-950 mb-1.5"></div>
-                                <p className="text-xs sm:text-[13.5px] font-black text-slate-950 uppercase tracking-tight">
-                                  {signatoryName}
-                                </p>
-                                <p className="text-[11.5px] font-bold text-slate-800 leading-tight">
-                                  {signatoryTitle}
-                                </p>
-                                <p className="text-[10px] text-slate-600 font-semibold">
-                                  {getSignatoryAffiliation(company)}
-                                </p>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Bottom Official Division Footer */}
-                        <div className="pt-16 pb-2">
-                          <div className="border-t border-slate-300 pt-3 flex items-center justify-between text-[9.5px] sm:text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">
-                            <span>OFFICE OF THE HUMAN RESOURCES &amp; ADMINISTRATION</span>
-                            <span className="font-black text-slate-800">STRICT COMPLIANCE MANDATED</span>
-                            <span>{company.code} • OFFICIAL TRANSMISSION</span>
-                          </div>
-                          <div className="text-center text-[9px] text-slate-400 font-black uppercase tracking-[0.25em] mt-1.5">
-                            HUMAN RESOURCE MANAGEMENT DIVISION
                           </div>
                         </div>
                       </div>
@@ -2877,10 +3211,11 @@ Write numbered directives or formal paragraphs.
         )}
       </div>
 
-      {/* ================= MODAL: DIRECT EMAIL DISPATCH ================= */}
+      {/* ================= MODAL: DIRECT EMAIL & PDF DISPATCH WITH COMPANY SEGREGATION ================= */}
       {emailModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-xs animate-in fade-in duration-150">
-          <div className="w-full max-w-lg rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl space-y-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 p-4 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="w-full max-w-2xl rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl space-y-4 max-h-[92vh] overflow-y-auto custom-scrollbar">
+            {/* Modal Header */}
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2.5">
                 <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700">
@@ -2888,10 +3223,10 @@ Write numbered directives or formal paragraphs.
                 </div>
                 <div>
                   <h4 className="text-sm font-black text-slate-900">
-                    Dispatch Memo to Personnel
+                    Dispatch Official Memo &amp; PDF to Personnel
                   </h4>
-                  <p className="text-[11px] text-slate-500">
-                    Official transmission for {distributionCompany.name}
+                  <p className="text-[11px] text-slate-500 font-medium">
+                    Company-Segregated Distribution • Official Sender: <strong className="font-mono text-emerald-700">{HR_OFFICIAL_EMAIL}</strong>
                   </p>
                 </div>
               </div>
@@ -2905,53 +3240,176 @@ Write numbered directives or formal paragraphs.
               </button>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-2.5 flex items-center justify-between">
-                <span className="text-[10px] font-bold uppercase text-slate-400">Official HR Sender:</span>
-                <span className="font-mono font-bold text-emerald-800 text-[11px] truncate ml-2">
-                  {HR_OFFICIAL_EMAIL}
-                </span>
+            {/* Overview Summary Banner */}
+            <div className="rounded-2xl border border-emerald-200 bg-gradient-to-r from-emerald-50 via-teal-50 to-sky-50 p-3.5 flex items-center justify-between flex-wrap gap-2 text-xs">
+              <div className="flex items-center gap-2">
+                <ShieldCheck size={18} className="text-emerald-600 shrink-0" />
+                <div>
+                  <p className="font-bold text-slate-900">Strict Pre-Registered Employee Delivery</p>
+                  <p className="text-[11px] text-slate-600">
+                    Personnel will <strong>strictly receive memos &amp; PDFs</strong> linked to their assigned entity using their verified pre-registered work email.
+                  </p>
+                </div>
               </div>
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-2.5 flex items-center justify-between">
-                <span className="text-[10px] font-bold uppercase text-slate-400">Target Entity:</span>
-                <span className="font-bold text-slate-800 text-[11px] truncate ml-2">
-                  {distributionCompany.code}
-                </span>
-              </div>
+              <span className="font-mono font-black text-emerald-900 bg-white/90 border border-emerald-300 px-3 py-1 rounded-full text-xs shrink-0 shadow-2xs">
+                {totalCompanyRecipients} Personnel • {linkedEntities.length} of {companyDispatches.length} Entities
+              </span>
             </div>
 
-            <div className="rounded-2xl border border-emerald-200 bg-emerald-50/70 p-4 space-y-2">
-              <div className="flex items-center justify-between text-xs">
-                <span className="font-extrabold text-emerald-950 flex items-center gap-1.5">
-                  <Users size={14} className="text-emerald-700" />
-                  Target Recipients:
-                </span>
-                <span className="font-mono font-black text-emerald-800 bg-emerald-200/80 px-2.5 py-0.5 rounded-full text-[10px]">
-                  {recipientEmails.length} Email{recipientEmails.length === 1 ? "" : "s"}
-                </span>
+            {/* Unlinked Entities Alert Banner (If some active companies have 0 pre-registered emails) */}
+            {unlinkedEntities.length > 0 && (
+              <div className="rounded-2xl border border-amber-300 bg-amber-50/90 p-3.5 flex items-center justify-between gap-3 flex-wrap">
+                <div className="flex items-center gap-2.5">
+                  <AlertCircle size={18} className="text-amber-700 shrink-0" />
+                  <div>
+                    <p className="font-extrabold text-xs text-amber-950">
+                      {unlinkedEntities.length} {unlinkedEntities.length === 1 ? "Company has" : "Companies have"} no linked Pre-Registered Work Emails
+                    </p>
+                    <p className="text-[11px] text-amber-800 font-medium">
+                      Memos cannot be dispatched to these entities until employee work emails are registered in the Employee Directory.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setUnlinkedNoticeModalOpen(true)}
+                  className="text-[11px] font-black text-amber-900 bg-white hover:bg-amber-100 border border-amber-300 px-3 py-1 rounded-xl shadow-2xs transition cursor-pointer shrink-0"
+                >
+                  View Details →
+                </button>
               </div>
+            )}
 
-              <div className="max-h-28 overflow-y-auto rounded-xl bg-white border border-emerald-200/80 p-2.5 text-[11px] font-mono text-slate-700 space-y-1">
-                {recipientEmails.map((email, idx) => (
-                  <div key={idx} className="flex items-center justify-between py-0.5 border-b border-slate-50 last:border-0">
-                    <span className="truncate">{email}</span>
-                    <CheckCircle2 size={12} className="text-emerald-600 shrink-0 ml-2" />
+            {/* List of Company Segregated Dispatches */}
+            <div className="space-y-2.5">
+              <p className="text-[10.5px] font-extrabold uppercase tracking-wider text-slate-500">
+                Company Distribution Roster ({companyDispatches.length} Active {companyDispatches.length === 1 ? "Entity" : "Entities"}):
+              </p>
+
+              <div className="space-y-2.5 max-h-60 overflow-y-auto custom-scrollbar pr-1">
+                {companyDispatches.map((dispatch) => (
+                  <div
+                    key={dispatch.companyId}
+                    className={`rounded-2xl border p-3.5 space-y-2 transition ${
+                      dispatch.recipients.length > 0
+                        ? "border-slate-200 bg-slate-50/80 hover:border-slate-300"
+                        : "border-rose-200 bg-rose-50/40"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${dispatch.recipients.length > 0 ? "bg-emerald-500" : "bg-rose-500"}`}></span>
+                        <span className="font-extrabold text-xs text-slate-900 truncate">
+                          {dispatch.companyName}
+                        </span>
+                        <span className="font-mono text-[10px] font-bold text-slate-500 bg-white border border-slate-200 px-2 py-0.5 rounded-md">
+                          {dispatch.memoRef}
+                        </span>
+                      </div>
+                      <span className={`font-mono font-bold text-[11px] px-2.5 py-0.5 rounded-full border ${
+                        dispatch.recipients.length > 0
+                          ? "text-emerald-700 bg-emerald-100/70 border-emerald-200"
+                          : "text-rose-700 bg-rose-100/80 border-rose-300"
+                      }`}>
+                        {dispatch.recipients.length > 0
+                          ? `${dispatch.recipients.length} Recipient${dispatch.recipients.length === 1 ? "" : "s"}`
+                          : "0 Work Emails (Blocked)"}
+                      </span>
+                    </div>
+
+                    {/* Recipients Email Badges for this company */}
+                    <div className="flex flex-wrap gap-1.5 pt-0.5">
+                      {dispatch.recipients.length > 0 ? (
+                        dispatch.recipients.map((email) => (
+                          <span
+                            key={email}
+                            className="inline-flex items-center gap-1 bg-white border border-slate-200 rounded-lg px-2 py-0.5 text-[10.5px] font-mono font-medium text-slate-700 shadow-2xs"
+                          >
+                            <CheckCircle2 size={11} className="text-emerald-600 shrink-0" />
+                            <span className="truncate max-w-[200px]">{email}</span>
+                          </span>
+                        ))
+                      ) : (
+                        <div className="flex items-center justify-between w-full pt-0.5">
+                          <span className="text-[10.5px] text-rose-700 font-bold flex items-center gap-1">
+                            <AlertCircle size={12} className="text-rose-600 shrink-0" />
+                            <span>No pre-registered employee work emails found for this company.</span>
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setUnlinkedNoticeModalOpen(true)}
+                            className="text-[10.5px] font-bold text-rose-800 underline cursor-pointer hover:text-rose-950"
+                          >
+                            Why is this blocked?
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>
             </div>
 
-            <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3 text-xs space-y-1">
-              <div className="flex justify-between">
-                <span className="text-slate-400 font-bold text-[10px] uppercase">Memo Ref:</span>
-                <span className="font-bold font-mono text-slate-800">{distributionMemoRef}</span>
+            {/* Google Apps Script Webhook Configuration Bar */}
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3.5 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-slate-700 flex items-center gap-1.5">
+                  <Code size={13} className="text-blue-600" />
+                  <span>Google Apps Script Webhook URL (Gmail Dispatcher)</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setShowScriptGuideModal(true)}
+                  className="text-[10.5px] font-bold text-blue-600 hover:text-blue-800 underline cursor-pointer"
+                >
+                  View Deployment Guide &amp; Code →
+                </button>
               </div>
-              <div className="flex justify-between gap-2">
-                <span className="text-slate-400 font-bold text-[10px] uppercase shrink-0">Subject:</span>
-                <span className="font-bold text-emerald-900 truncate text-right">{memoSubject}</span>
-              </div>
+
+              {isEditingWebhook ? (
+                <div className="flex gap-2">
+                  <input
+                    type="url"
+                    placeholder="https://script.google.com/macros/s/.../exec"
+                    defaultValue={customWebhookUrl}
+                    id="hrhub-webhook-url-input"
+                    className="flex-1 px-3 py-1.5 rounded-xl border border-slate-300 text-xs font-mono focus:outline-none focus:border-emerald-500 bg-white"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const input = document.getElementById("hrhub-webhook-url-input");
+                      if (input) saveCustomWebhookUrl(input.value);
+                    }}
+                    className="px-3 py-1.5 rounded-xl bg-emerald-600 text-white font-bold text-xs hover:bg-emerald-500 cursor-pointer"
+                  >
+                    Save URL
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsEditingWebhook(false)}
+                    className="px-2 py-1.5 rounded-xl border border-slate-200 text-slate-600 text-xs font-bold hover:bg-slate-100 cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center justify-between p-2 rounded-xl bg-white border border-slate-200 text-xs">
+                  <span className="font-mono text-[11px] text-slate-600 truncate flex-1 pr-2">
+                    {customWebhookUrl || <span className="italic text-slate-400">No Webhook URL configured. Click 'Configure Webhook' or 'View Deployment Guide'</span>}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setIsEditingWebhook(true)}
+                    className="text-xs font-bold text-emerald-700 hover:text-emerald-900 shrink-0 ml-2 px-2 py-0.5 rounded-lg hover:bg-emerald-50 cursor-pointer"
+                  >
+                    {customWebhookUrl ? "Edit URL" : "+ Configure Webhook"}
+                  </button>
+                </div>
+              )}
             </div>
 
+            {/* Direct Send Status Feedback */}
             {directSendStatus && (
               <div
                 className={`rounded-2xl p-3 text-xs flex items-center gap-2 border ${
@@ -2969,26 +3427,43 @@ Write numbered directives or formal paragraphs.
               </div>
             )}
 
+            {/* Main Action Button */}
             <button
               type="button"
-              disabled={isSendingDirect || recipientEmails.length === 0}
-              onClick={handleSendDirect}
-              className="w-full inline-flex items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-6 py-3.5 text-xs font-black text-white shadow-lg shadow-emerald-600/25 hover:bg-emerald-500 disabled:opacity-60 transition cursor-pointer"
+              disabled={isSendingDirect}
+              onClick={() => {
+                if (totalCompanyRecipients === 0) {
+                  setUnlinkedNoticeModalOpen(true);
+                } else {
+                  handleSendDirect();
+                }
+              }}
+              className={`w-full inline-flex items-center justify-center gap-2 rounded-2xl px-6 py-3.5 text-xs font-black text-white shadow-lg transition cursor-pointer ${
+                totalCompanyRecipients === 0
+                  ? "bg-amber-600 hover:bg-amber-500 shadow-amber-700/20"
+                  : "bg-[#008559] hover:bg-[#00704a] shadow-emerald-700/20"
+              }`}
             >
               {isSendingDirect ? (
                 <>
                   <RefreshCw size={16} className="animate-spin" />
-                  <span>Delivering memo via {HR_OFFICIAL_EMAIL}...</span>
+                  <span>Dispatching company-segregated memos &amp; PDFs via {HR_OFFICIAL_EMAIL}...</span>
+                </>
+              ) : totalCompanyRecipients === 0 ? (
+                <>
+                  <AlertCircle size={16} />
+                  <span>Hindi Maipapadala: Walang Pre-Registered Work Email (I-click para sa detalye)</span>
                 </>
               ) : (
                 <>
                   <Send size={16} />
-                  <span>Send Memo to {recipientEmails.length} Personnel ({HR_OFFICIAL_EMAIL})</span>
+                  <span>Dispatch Memos &amp; Attached PDFs to {totalCompanyRecipients} Personnel ({HR_OFFICIAL_EMAIL})</span>
                 </>
               )}
             </button>
 
-            <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2 text-xs">
+            {/* Alternative Dispatch Options */}
+            <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2 text-xs flex-wrap">
               <button
                 type="button"
                 onClick={handleSendViaGmailWeb}
@@ -3015,6 +3490,299 @@ Write numbered directives or formal paragraphs.
                 className="rounded-lg border border-slate-200 px-3 py-1 text-xs font-bold text-slate-500 hover:bg-slate-50 transition cursor-pointer ml-auto"
               >
                 Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================= MODAL: UNLINKED WORK EMAIL NOTIFICATION & EXPLANATION ================= */}
+      {unlinkedNoticeModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="w-full max-w-2xl rounded-3xl border border-amber-200/90 bg-white p-6 shadow-2xl space-y-4 max-h-[92vh] flex flex-col">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3 shrink-0">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-amber-100 text-amber-800 shrink-0">
+                  <AlertCircle size={22} className="text-amber-700" />
+                </div>
+                <div>
+                  <h4 className="text-base font-black text-slate-900 leading-tight">
+                    Unable to Dispatch Email Memorandum
+                  </h4>
+                  <p className="text-[11.5px] text-amber-800 font-bold">
+                    No Linked Pre-Registered Employee Work Email Address Found
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setUnlinkedNoticeModalOpen(false)}
+                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto custom-scrollbar space-y-4 pr-1 text-xs text-slate-700">
+              {/* Core Explanation Box */}
+              <div className="rounded-2xl border border-amber-200 bg-amber-50/70 p-4 space-y-2">
+                <h5 className="font-black text-amber-950 text-xs flex items-center gap-1.5">
+                  <ShieldCheck size={16} className="text-amber-700" />
+                  <span>Reason for Dispatch Restriction:</span>
+                </h5>
+                <p className="text-[12px] leading-relaxed text-slate-800 font-medium">
+                  The corporate dispatch system strictly adheres to confidentiality and security policies. 
+                  Memos can only be dispatched to verified <strong>Work Email Addresses</strong> of personnel registered under the <strong>Employee Directory (Pre-Register Employee)</strong>.
+                </p>
+                <p className="text-[11.5px] text-amber-900 font-bold bg-white/80 border border-amber-200 rounded-xl p-2.5">
+                  ⚠️ HRHub intentionally disables generic fallback contact emails to preserve document security and ensure verified delivery only to authorized staff.
+                </p>
+              </div>
+
+              {/* List of Affected Entities with 0 emails */}
+              <div className="space-y-2">
+                <p className="text-[11px] font-black uppercase tracking-wider text-slate-500">
+                  Entities with No Pre-Registered Work Emails ({unlinkedEntities.length} {unlinkedEntities.length === 1 ? "Entity" : "Entities"}):
+                </p>
+
+                <div className="space-y-2">
+                  {unlinkedEntities.map((item) => (
+                    <div
+                      key={item.companyId}
+                      className="rounded-2xl border border-rose-200 bg-rose-50/50 p-3.5 flex items-center justify-between flex-wrap gap-2.5"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-8 h-8 rounded-lg bg-white border border-rose-200 p-1 flex items-center justify-center shrink-0">
+                          <Building2 size={16} className="text-rose-600" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="font-extrabold text-xs text-slate-900 truncate">
+                            {item.companyName}
+                          </p>
+                          <p className="font-mono text-[10.5px] text-slate-500">
+                            {item.memoRef} • {item.code}
+                          </p>
+                        </div>
+                      </div>
+
+                      <span className="text-[11px] font-black uppercase text-rose-700 bg-white border border-rose-300 px-3 py-1 rounded-full shadow-2xs">
+                        ✕ 0 Registered Personnel
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Step-by-Step Resolution Guide */}
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 space-y-2">
+                <h6 className="font-black text-slate-900 text-xs flex items-center gap-1.5">
+                  <UserPlus size={15} className="text-emerald-700" />
+                  <span>How to Link Personnel (Step-by-Step):</span>
+                </h6>
+                <ol className="list-decimal list-inside space-y-1.5 text-[11.5px] text-slate-700 leading-relaxed font-medium">
+                  <li>
+                    Navigate to the <strong>Employee Directory</strong> from the navigation menu or click the button below.
+                  </li>
+                  <li>
+                    Click the <strong>"+ Pre-Register Employee"</strong> button.
+                  </li>
+                  <li>
+                    Enter the employee's official <strong>Work Email Address</strong> and assign their corresponding <strong>Company Entity</strong>.
+                  </li>
+                  <li>
+                    Click <strong>Complete Pre-Registration</strong>. Their work email will immediately reflect under the Memo Generator for that company.
+                  </li>
+                </ol>
+              </div>
+            </div>
+
+            {/* Modal Actions */}
+            <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-3 shrink-0 flex-wrap">
+              {onNavigateToDirectory && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setUnlinkedNoticeModalOpen(false);
+                    setEmailModalOpen(false);
+                    onNavigateToDirectory();
+                  }}
+                  className="inline-flex items-center gap-2 rounded-xl bg-emerald-700 hover:bg-emerald-600 text-white font-black px-4 py-2.5 text-xs shadow-md shadow-emerald-700/20 transition cursor-pointer"
+                >
+                  <Users size={15} />
+                  <span>Go to Pre-Register Employee Directory →</span>
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={() => setUnlinkedNoticeModalOpen(false)}
+                className="rounded-xl border border-slate-300 bg-white hover:bg-slate-100 px-5 py-2.5 text-xs font-bold text-slate-700 transition cursor-pointer ml-auto"
+              >
+                I Understand / Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================= MODAL: GOOGLE APPS SCRIPT DEPLOYMENT GUIDE ================= */}
+      {showScriptGuideModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="w-full max-w-3xl rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl space-y-4 max-h-[92vh] flex flex-col">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3 shrink-0">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-blue-100 text-blue-700">
+                  <Code size={20} />
+                </div>
+                <div>
+                  <h4 className="text-sm font-black text-slate-900">
+                    Google Apps Script Setup Guide ({HR_OFFICIAL_EMAIL})
+                  </h4>
+                  <p className="text-[11px] text-slate-500 font-medium">
+                    Deploy this script once to allow HRHub to send official emails with PDF attachments.
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowScriptGuideModal(false)}
+                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto custom-scrollbar space-y-4 pr-1 text-xs text-slate-700">
+              {/* Step by Step Instructions */}
+              <div className="rounded-2xl border border-blue-200 bg-blue-50/70 p-4 space-y-2">
+                <h5 className="font-extrabold text-blue-950 text-xs flex items-center gap-1.5">
+                  <span>📋 4-Step Setup Instructions:</span>
+                </h5>
+                <ol className="list-decimal list-inside space-y-1.5 text-[11.5px] leading-relaxed text-slate-800">
+                  <li>
+                    Pumunta sa <strong><a href="https://script.google.com" target="_blank" rel="noopener noreferrer" className="text-blue-600 underline font-bold">script.google.com</a></strong> gamit ang iyong HR Google account (<code>{HR_OFFICIAL_EMAIL}</code>).
+                  </li>
+                  <li>
+                    I-click ang <strong>"+ New Project"</strong> at i-paste ang code sa ibaba (burahin ang laman ng <code>Code.gs</code> at i-paste ang script).
+                  </li>
+                  <li>
+                    I-click ang <strong>"Deploy"</strong> (kanang taas) ➜ <strong>"New deployment"</strong> ➜ piliin ang gear icon ➜ <strong>"Web app"</strong>:
+                    <ul className="list-disc list-inside pl-4 pt-1 space-y-0.5 text-slate-700 text-[11px]">
+                      <li>Execute as: <strong>Me ({HR_OFFICIAL_EMAIL})</strong></li>
+                      <li>Who has access: <strong>Anyone</strong> (para makapag-send ang HRHub app)</li>
+                    </ul>
+                  </li>
+                  <li>
+                    I-click ang <strong>"Deploy"</strong>, i-authorize ang access, at kopyahin ang <strong>"Web app URL"</strong>. I-paste ito sa Webhook URL input ng HRHub!
+                  </li>
+                </ol>
+              </div>
+
+              {/* Script Code Block */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-xs text-slate-800">Apps Script Source Code (Code.gs):</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const codeText = `/**
+ * HRHUB ENTERPRISE MEMO & PDF EMAIL DISPATCHER
+ * Google Apps Script Webhook (Deploy as Web App)
+ * Target Sender: ${HR_OFFICIAL_EMAIL}
+ */
+function doPost(e) {
+  try {
+    if (!e || !e.postData || !e.postData.contents) {
+      return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "No payload received" })).setMimeType(ContentService.MimeType.JSON);
+    }
+    var payload = JSON.parse(e.postData.contents);
+    var dispatches = payload.dispatches || [payload];
+    var results = [];
+
+    for (var i = 0; i < dispatches.length; i++) {
+      var item = dispatches[i];
+      var recipients = item.recipients || [];
+      if (!Array.isArray(recipients)) recipients = [recipients];
+      var validRecipients = recipients.filter(function(em) { return em && em.indexOf("@") > 0; });
+      if (validRecipients.length === 0) continue;
+
+      var companyName = item.companyName || "Simpal Group";
+      var memoRef = item.memoRef || "MEMO-2026";
+      var subject = item.subject || ("[OFFICIAL MEMO] " + memoRef + " - " + companyName);
+      var htmlBody = item.htmlBody || "<p>Please find attached your official memorandum.</p>";
+      var plainBody = item.body || "Please find attached your official memorandum.";
+      var attachments = [];
+
+      if (item.pdfHtml) {
+        try {
+          var pdfBlob = Utilities.newBlob(item.pdfHtml, "text/html", memoRef + ".html")
+            .getAs("application/pdf")
+            .setName(memoRef + " - " + companyName + ".pdf");
+          attachments.push(pdfBlob);
+        } catch (err) {
+          Logger.log("PDF error: " + err);
+        }
+      }
+
+      for (var r = 0; r < validRecipients.length; r++) {
+        var recipientEmail = validRecipients[r].trim();
+        try {
+          GmailApp.sendEmail(recipientEmail, subject, plainBody, {
+            htmlBody: htmlBody,
+            attachments: attachments,
+            name: "HRHub Official Dispatch • " + companyName,
+            replyTo: item.senderEmail || "${HR_OFFICIAL_EMAIL}"
+          });
+        } catch (sendErr) {
+          Logger.log("Send error for " + recipientEmail + ": " + sendErr);
+        }
+      }
+      results.push({ company: companyName, memoRef: memoRef, count: validRecipients.length });
+    }
+    return ContentService.createTextOutput(JSON.stringify({ status: "success", results: results })).setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({ status: "error", error: err.toString() })).setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+function doGet(e) {
+  return ContentService.createTextOutput(JSON.stringify({ status: "online", service: "HRHub Dispatcher" })).setMimeType(ContentService.MimeType.JSON);
+}`;
+                      navigator.clipboard.writeText(codeText);
+                      setCopiedScriptNotice(true);
+                      setTimeout(() => setCopiedScriptNotice(false), 2500);
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs transition cursor-pointer shadow-xs"
+                  >
+                    {copiedScriptNotice ? <Check size={13} /> : <Copy size={13} />}
+                    <span>{copiedScriptNotice ? "Script Copied!" : "Copy Apps Script Code"}</span>
+                  </button>
+                </div>
+
+                <div className="max-h-60 overflow-y-auto rounded-2xl bg-slate-900 p-3.5 text-[11px] font-mono text-slate-200 space-y-1">
+                  <pre className="whitespace-pre-wrap">{`function doPost(e) {
+  var payload = JSON.parse(e.postData.contents);
+  var dispatches = payload.dispatches || [payload];
+  
+  // Loops through company-segregated packages
+  // Generates company-specific PDF attachment for each entity
+  // Sends email directly via GmailApp.sendEmail with PDF attached
+  ...
+}`}</pre>
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-2 border-t border-slate-100 flex items-center justify-end shrink-0">
+              <button
+                type="button"
+                onClick={() => setShowScriptGuideModal(false)}
+                className="px-5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs cursor-pointer"
+              >
+                Close Guide
               </button>
             </div>
           </div>
