@@ -193,7 +193,7 @@ export default function TeamChatMessengerModal({
 
   return (
     <>
-      <div className="fixed bottom-4 right-4 sm:right-6 z-50 w-full max-w-[380px] sm:max-w-[420px] bg-white rounded-3xl shadow-2xl border border-slate-200/90 overflow-hidden flex flex-col animate-in slide-in-from-bottom-5 duration-200">
+      <div className="fixed bottom-0 sm:bottom-4 left-0 sm:left-auto right-0 sm:right-6 z-50 w-full sm:max-w-[420px] max-h-[90vh] sm:max-h-none bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl border border-slate-200/90 overflow-hidden flex flex-col animate-in slide-in-from-bottom-5 duration-200">
         {/* Messenger Header */}
         <div className="bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 text-white p-3.5 px-4 flex items-center justify-between border-b border-slate-800">
           <div className="flex items-center gap-3 min-w-0">

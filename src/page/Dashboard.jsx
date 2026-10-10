@@ -5,7 +5,7 @@ import {
   Megaphone, Award, Calendar, LogOut,
   BriefcaseBusiness, FileText, Sparkles, BarChart3,
   Database, RefreshCw, CheckCircle2, AlertCircle, Clock,
-  Bot, Layers, Home, X, CheckCheck
+  Bot, Layers, Home, X, CheckCheck, Menu
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import ProfileModal from "../components/ProfileModal";
@@ -1134,20 +1134,30 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
 
   return (
     <div className={`min-h-screen ${pageTheme} text-slate-800 font-sans selection:bg-emerald-500 selection:text-white transition-colors duration-300`}>
-      <header className="bg-[#0d1b2a] text-white sticky top-0 z-40 shadow-md border-b border-slate-800 px-4 py-2">
-        <div className="max-w-[1280px] mx-auto flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3 flex-1 max-w-[720px]">
+      <header className="bg-[#0d1b2a] text-white sticky top-0 z-40 shadow-md border-b border-slate-800 px-3 sm:px-4 py-2">
+        <div className="max-w-[1280px] mx-auto flex items-center justify-between gap-2 sm:gap-4">
+          <div className="flex items-center gap-2 sm:gap-3 flex-1 max-w-[720px] min-w-0">
+            {/* Mobile Sidebar Hamburger Menu Toggle */}
+            <button
+              type="button"
+              onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+              className="p-1.5 text-slate-300 hover:text-white hover:bg-slate-800 rounded-xl md:hidden transition cursor-pointer shrink-0"
+              title="Toggle Navigation Menu"
+            >
+              <Menu size={20} />
+            </button>
+
             <div className="flex items-center gap-2 shrink-0">
-              <div className="w-8 h-8 rounded-lg bg-emerald-500 flex items-center justify-center text-slate-950 font-black text-lg">H</div>
+              <div className="w-8 h-8 rounded-lg bg-emerald-500 flex items-center justify-center text-slate-950 font-black text-lg shadow-xs">H</div>
               <span className="text-xl font-extrabold text-white tracking-tight hidden sm:inline">HR<span className="text-emerald-400">Hub</span></span>
             </div>
 
-            <div className="relative w-full">
+            <div className="relative w-full min-w-[100px]">
               <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
                 type="text"
-                placeholder="Search employees, memos, or departments..."
-                className="w-full pl-9 pr-4 py-2 bg-[#1f2d3d] border border-slate-700 rounded-full text-[11px] text-slate-200 placeholder-slate-400 focus:outline-none focus:border-emerald-500 transition"
+                placeholder="Search employees, memos..."
+                className="w-full pl-9 pr-3 py-1.5 sm:py-2 bg-[#1f2d3d] border border-slate-700 rounded-full text-[11px] text-slate-200 placeholder-slate-400 focus:outline-none focus:border-emerald-500 transition"
               />
             </div>
           </div>
@@ -1175,7 +1185,7 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
               </button>
 
               {messagesOpen && (
-                <div className="absolute right-0 mt-2 w-84 sm:w-92 bg-white border border-slate-200/90 rounded-3xl shadow-2xl p-4 text-slate-900 z-50 animate-in fade-in slide-in-from-top-2 duration-150 flex flex-col max-h-[500px]">
+                <div className="absolute right-0 mt-2 w-[calc(100vw-2rem)] sm:w-92 max-w-[360px] bg-white border border-slate-200/90 rounded-3xl shadow-2xl p-4 text-slate-900 z-50 animate-in fade-in slide-in-from-top-2 duration-150 flex flex-col max-h-[500px]">
                   {/* Dropdown Header */}
                   <div className="flex justify-between items-center pb-2.5 border-b border-slate-100">
                     <div className="flex items-center gap-2">
@@ -1338,7 +1348,7 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
               </button>
 
               {notificationsOpen && (
-                <div className="absolute right-0 mt-2 w-80 bg-white border border-slate-200 rounded-2xl shadow-2xl p-4 text-slate-900 z-50 animate-fade-in">
+                <div className="absolute right-0 mt-2 w-[calc(100vw-2rem)] sm:w-80 max-w-[340px] bg-white border border-slate-200 rounded-2xl shadow-2xl p-4 text-slate-900 z-50 animate-fade-in">
                   <div className="flex justify-between items-center mb-3 pb-2 border-b border-slate-100">
                     <h4 className="font-bold text-sm">Notifications</h4>
                     <span className="text-[10px] text-slate-500 cursor-pointer hover:underline">Mark all read</span>
@@ -1674,11 +1684,11 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
             </div>
 
             {/* WORKSPACE INTEGRATED TABS */}
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-2 overflow-x-auto custom-scrollbar pb-1 max-w-full shrink-0">
               <button
                 type="button"
                 onClick={() => setWorkspaceTab("home")}
-                className={`inline-flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-bold transition shadow-xs cursor-pointer ${
+                className={`inline-flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-bold transition shadow-xs cursor-pointer shrink-0 ${
                   workspaceTab === "home"
                     ? "bg-[#008559] text-white ring-2 ring-emerald-300"
                     : "bg-slate-100 text-slate-700 hover:bg-slate-200"
@@ -1691,7 +1701,7 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
               <button
                 type="button"
                 onClick={() => setWorkspaceTab("sops")}
-                className={`inline-flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-bold transition shadow-xs cursor-pointer ${
+                className={`inline-flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-bold transition shadow-xs cursor-pointer shrink-0 ${
                   workspaceTab === "sops"
                     ? "bg-slate-900 text-white ring-2 ring-emerald-400"
                     : "bg-slate-100 text-slate-700 hover:bg-slate-200"
@@ -1704,7 +1714,7 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
               <button
                 type="button"
                 onClick={() => setWorkspaceTab("memo")}
-                className={`inline-flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-bold transition shadow-xs cursor-pointer ${
+                className={`inline-flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-bold transition shadow-xs cursor-pointer shrink-0 ${
                   workspaceTab === "memo"
                     ? "bg-emerald-600 text-white ring-2 ring-emerald-300"
                     : "bg-slate-100 text-slate-700 hover:bg-slate-200"
@@ -1717,7 +1727,7 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
               <button
                 type="button"
                 onClick={() => setWorkspaceTab("gross")}
-                className={`inline-flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-bold transition shadow-xs cursor-pointer ${
+                className={`inline-flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-bold transition shadow-xs cursor-pointer shrink-0 ${
                   workspaceTab === "gross"
                     ? "bg-slate-900 text-emerald-400 ring-2 ring-emerald-400"
                     : "bg-slate-100 text-slate-700 hover:bg-slate-200"
@@ -1730,7 +1740,7 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
               <button
                 type="button"
                 onClick={() => setWorkspaceTab("agents")}
-                className={`inline-flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-bold transition shadow-xs cursor-pointer ${
+                className={`inline-flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-bold transition shadow-xs cursor-pointer shrink-0 ${
                   workspaceTab === "agents"
                     ? "bg-slate-900 text-white ring-2 ring-slate-400"
                     : "bg-slate-100 text-slate-700 hover:bg-slate-200"

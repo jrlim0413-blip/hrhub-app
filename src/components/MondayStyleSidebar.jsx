@@ -233,8 +233,20 @@ export default function MondayStyleSidebar({
   );
 
   return (
-    <aside className="sticky top-[53px] h-[calc(100vh-53px)] flex shrink-0 z-30 select-none font-['Figtree','Inter',sans-serif] self-start">
-      {/* ================= 1. PRIMARY LEFT ICON RAIL (Matching Screenshot: Icon + Label below) ================= */}
+    <>
+      {/* Mobile Backdrop Overlay when drawer is expanded on mobile screens */}
+      {!isCollapsed && (
+        <div
+          onClick={() => setIsCollapsed(true)}
+          className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-40 md:hidden transition-opacity"
+          title="Close Navigation Menu"
+        />
+      )}
+
+      <aside className={`fixed md:sticky top-[53px] left-0 h-[calc(100vh-53px)] flex shrink-0 z-50 md:z-30 select-none font-['Figtree','Inter',sans-serif] self-start transition-transform duration-300 ${
+        isCollapsed ? "max-md:-translate-x-full" : "translate-x-0"
+      }`}>
+        {/* ================= 1. PRIMARY LEFT ICON RAIL (Matching Screenshot: Icon + Label below) ================= */}
       <div className="w-[68px] h-full bg-[#f5f6f8] border-r border-slate-200/80 flex flex-col items-center justify-between py-3 text-slate-600 shrink-0 overflow-y-auto custom-scrollbar">
         <div className="flex flex-col items-center gap-1.5 w-full">
           {/* Top Collapse/Expand Toggle Button */}
@@ -447,5 +459,6 @@ export default function MondayStyleSidebar({
         </div>
       </div>
     </aside>
-  );
+  </>
+);
 }
