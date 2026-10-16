@@ -2,9 +2,11 @@ import { useEffect, useState } from "react";
 import {
   Activity, Archive, Award, CalendarDays, Check, CheckCircle2, CreditCard, Database, Download, Eye, FileDown, FileText,
   Fingerprint, Home, KeyRound, Loader2, Lock, Pencil, Phone, ShieldCheck, Sparkles, Trash2, Upload, UserRound, X,
-  FileCheck, Printer, ExternalLink, RefreshCw, Info, Plus, GripVertical, ArrowLeft, ArrowRight, ChevronDown, Layers
+  FileCheck, Printer, ExternalLink, RefreshCw, Info, Plus, GripVertical, ArrowLeft, ArrowRight, ChevronDown, Layers,
+  Maximize2, RotateCw
 } from "lucide-react";
 import AgentIdCardModal from "./AgentIdCardModal";
+import PageOrganizerModal from "./PageOrganizerModal";
 import {
   getAgentIdentifier,
   saveRequirementFile,
@@ -101,6 +103,7 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
   const [isAddCategoryOpen, setIsAddCategoryOpen] = useState(false);
   const [draggedPhotoId, setDraggedPhotoId] = useState(null);
   const [dragOverPhotoId, setDragOverPhotoId] = useState(null);
+  const [organizingSlotId, setOrganizingSlotId] = useState(null);
 
   const agentKey = getAgentIdentifier(agent, index);
 
@@ -306,6 +309,11 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
         type: "success",
         message: `${files.length} picture${files.length > 1 ? "s" : ""} added to ${slot.title}!`
       });
+
+      // Automatically open the large organizer modal for multi-photo slots so user can clearly inspect and arrange
+      if (slot.allowMultiple) {
+        setOrganizingSlotId(slot.id);
+      }
     } catch (err) {
       console.error(`Failed to upload to ${slot.title}:`, err);
       setRequirementNotice({
@@ -391,6 +399,26 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
     const otherItems = uploadedRequirements.filter((item) => item.categoryKey !== slotId);
     const fullUpdatedList = sortRequirementsBySlotSequence([...otherItems, ...updatedSlotItems]);
 
+    setUploadedRequirements(fullUpdatedList);
+    await saveRequirementsOrder(agentKey, fullUpdatedList);
+  };
+
+  const handleRotateItem = async (itemId, updatedItem) => {
+    try {
+      await updateRequirementRecord(agentKey, itemId, { dataUrl: updatedItem.dataUrl });
+      setUploadedRequirements((prev) =>
+        prev.map((it) => (it.id === itemId ? { ...it, dataUrl: updatedItem.dataUrl } : it))
+      );
+    } catch (err) {
+      console.error("Failed to update rotated image:", err);
+    }
+  };
+
+  const handleOrganizerReorder = async (reorderedSlotItems) => {
+    if (!reorderedSlotItems.length) return;
+    const slotId = reorderedSlotItems[0].categoryKey;
+    const otherItems = uploadedRequirements.filter((item) => item.categoryKey !== slotId);
+    const fullUpdatedList = sortRequirementsBySlotSequence([...otherItems, ...reorderedSlotItems]);
     setUploadedRequirements(fullUpdatedList);
     await saveRequirementsOrder(agentKey, fullUpdatedList);
   };
@@ -1167,8 +1195,17 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
                           {isUploaded && slot.allowMultiple ? (
                             /* Multi-picture reorderable gallery (Agency Agreement, Valid ID) */
                             <div className="space-y-2.5">
-                              <div className="flex items-center justify-between text-[10px] font-bold text-slate-400">
+                              <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] font-bold text-slate-400">
                                 <span>Drag cards or use arrows to reorder pages in compiled PDF:</span>
+                                <button
+                                  type="button"
+                                  onClick={() => setOrganizingSlotId(slot.id)}
+                                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-emerald-300 bg-emerald-50/70 hover:bg-emerald-100 text-emerald-800 text-[10.5px] font-extrabold shadow-2xs transition hover:border-emerald-500"
+                                  title="Open large full-screen organizer to inspect high-resolution documents and reorder pages"
+                                >
+                                  <Maximize2 size={12} className="text-emerald-700" />
+                                  <span>Large Page Organizer</span>
+                                </button>
                               </div>
 
                               <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
@@ -1282,20 +1319,31 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
                                 })}
                               </div>
 
-                              {/* Add More Pictures Button for this Multi-slot */}
-                              <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
-                                <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-dashed border-emerald-400 bg-emerald-50/50 hover:bg-emerald-100/60 text-emerald-800 text-xs font-bold transition cursor-pointer">
-                                  <input
-                                    type="file"
-                                    multiple
-                                    accept=".pdf,.jpg,.jpeg,.png,.webp"
-                                    className="hidden"
-                                    disabled={Boolean(uploadingSlotId)}
-                                    onChange={(e) => handleSlotUpload(e, slot)}
-                                  />
-                                  <Plus size={13} className="text-emerald-700" />
-                                  <span>{isUploading ? "Uploading..." : "Add More Pictures"}</span>
-                                </label>
+                              {/* Add More Pictures & Large Organizer Buttons */}
+                              <div className="pt-2 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2">
+                                <div className="flex items-center gap-2">
+                                  <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-dashed border-emerald-400 bg-emerald-50/50 hover:bg-emerald-100/60 text-emerald-800 text-xs font-bold transition cursor-pointer">
+                                    <input
+                                      type="file"
+                                      multiple
+                                      accept=".pdf,.jpg,.jpeg,.png,.webp"
+                                      className="hidden"
+                                      disabled={Boolean(uploadingSlotId)}
+                                      onChange={(e) => handleSlotUpload(e, slot)}
+                                    />
+                                    <Plus size={13} className="text-emerald-700" />
+                                    <span>{isUploading ? "Uploading..." : "Add More Pictures"}</span>
+                                  </label>
+                                  <button
+                                    type="button"
+                                    onClick={() => setOrganizingSlotId(slot.id)}
+                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold transition shadow-2xs hover:border-emerald-500 hover:text-emerald-800"
+                                    title="Open large full-screen visual organizer"
+                                  >
+                                    <Maximize2 size={13} className="text-emerald-600" />
+                                    <span>Large Organizer</span>
+                                  </button>
+                                </div>
                                 <span className="text-[10px] text-slate-400 font-medium">
                                   Multi-photo draggable slot
                                 </span>
@@ -1578,6 +1626,22 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
             </div>
           </div>
         </div>
+      )}
+
+      {/* Large Page Organizer Modal for Multi-Page Categories (Agency Agreement, Valid ID, etc.) */}
+      {organizingSlotId && (
+        <PageOrganizerModal
+          isOpen={Boolean(organizingSlotId)}
+          onClose={() => setOrganizingSlotId(null)}
+          slot={REGISTRATION_SLOTS.find((s) => s.id === organizingSlotId)}
+          items={findRequirementsForSlot(uploadedRequirements, organizingSlotId)}
+          agentName={name}
+          onReorder={handleOrganizerReorder}
+          onUploadMore={(e, slot) => handleSlotUpload(e, slot)}
+          onDelete={removeRequirementFile}
+          onRotateItem={handleRotateItem}
+          onPreviewPdf={handlePreviewAllPdf}
+        />
       )}
 
       {/* Agent ID Card Modal */}
