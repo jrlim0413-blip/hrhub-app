@@ -187,6 +187,57 @@ const THEME_OPTIONS = [
   { id: "blush", label: "Blush", color: "bg-pink-200", page: "bg-pink-50" }
 ];
 
+const WORKSPACE_TAB_DEFS = {
+  home: {
+    id: "home",
+    label: "Home Dashboard",
+    icon: Home,
+    activeClass: "bg-[#008559] text-white ring-2 ring-emerald-300",
+    activeIconClass: "text-white",
+    inactiveIconClass: "text-emerald-600"
+  },
+  sops: {
+    id: "sops",
+    label: "Operations Board",
+    icon: Layers,
+    activeClass: "bg-slate-900 text-white ring-2 ring-emerald-400",
+    activeIconClass: "text-emerald-400",
+    inactiveIconClass: "text-slate-600"
+  },
+  memo: {
+    id: "memo",
+    label: "Memo Generator",
+    icon: FileText,
+    activeClass: "bg-emerald-600 text-white ring-2 ring-emerald-300",
+    activeIconClass: "text-white",
+    inactiveIconClass: "text-emerald-600"
+  },
+  gross: {
+    id: "gross",
+    label: "Gross Report",
+    icon: BarChart3,
+    activeClass: "bg-slate-900 text-emerald-400 ring-2 ring-emerald-400",
+    activeIconClass: "text-emerald-400",
+    inactiveIconClass: "text-slate-600"
+  },
+  agents: {
+    id: "agents",
+    label: "Agents",
+    icon: Users,
+    activeClass: "bg-slate-900 text-white ring-2 ring-slate-400",
+    activeIconClass: "text-white",
+    inactiveIconClass: "text-slate-600"
+  },
+  supervisors_attendance: {
+    id: "supervisors_attendance",
+    label: "Supervisors Attendance",
+    icon: UserCheck,
+    activeClass: "bg-[#008559] text-white ring-2 ring-emerald-300",
+    activeIconClass: "text-white",
+    inactiveIconClass: "text-emerald-600"
+  }
+};
+
 export default function Dashboard({ onLogout, currentUser, onNavigate }) {
   const [posts, setPosts] = useState(() => {
     try {
@@ -270,13 +321,30 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
     : (profileEmail ? profileEmail.slice(0, 2).toUpperCase() : "HR");
   const displayRole = profileRole || currentUser?.role || "Team Member";
   const displayCompany = profileCompany || currentUser?.company || "Simpal Group of Companies";
+
+  // Dynamic Workspace Tabs State: default empty
+  const [openTabs, setOpenTabs] = useState(() => {
+    try {
+      const stored = localStorage.getItem("hrhub_workspace_open_tabs");
+      return stored ? JSON.parse(stored) : [];
+    } catch {
+      return [];
+    }
+  });
+
   const [workspaceTab, setWorkspaceTab] = useState(() => {
     try {
-      return localStorage.getItem("hrhub_workspace_tab") || "home";
+      const storedTabs = localStorage.getItem("hrhub_workspace_open_tabs");
+      const parsed = storedTabs ? JSON.parse(storedTabs) : [];
+      if (parsed.length > 0) {
+        const storedTab = localStorage.getItem("hrhub_workspace_tab");
+        return parsed.includes(storedTab) ? storedTab : parsed[parsed.length - 1];
+      }
+      return null;
     } catch {
-      return "home";
+      return null;
     }
-  }); // Default to 'home' so HR Home Dashboard displays first
+  });
 
   useEffect(() => {
     try {
@@ -288,11 +356,47 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
 
   useEffect(() => {
     try {
-      localStorage.setItem("hrhub_workspace_tab", workspaceTab);
+      localStorage.setItem("hrhub_workspace_open_tabs", JSON.stringify(openTabs));
+    } catch (e) {
+      console.error(e);
+    }
+  }, [openTabs]);
+
+  useEffect(() => {
+    try {
+      if (workspaceTab) {
+        localStorage.setItem("hrhub_workspace_tab", workspaceTab);
+      } else {
+        localStorage.removeItem("hrhub_workspace_tab");
+      }
     } catch (e) {
       console.error(e);
     }
   }, [workspaceTab]);
+
+  // When a tab is clicked in the sidebar:
+  // Appends to the end so it appears on the right side of the container,
+  // shifting any earlier tabs to the left.
+  const handleOpenWorkspaceTab = (tabId) => {
+    if (!tabId || !WORKSPACE_TAB_DEFS[tabId]) return;
+    setOpenTabs((prev) => {
+      const withoutTab = prev.filter((id) => id !== tabId);
+      return [...withoutTab, tabId];
+    });
+    setWorkspaceTab(tabId);
+  };
+
+  const handleCloseWorkspaceTab = (e, tabId) => {
+    if (e && e.stopPropagation) e.stopPropagation();
+    setOpenTabs((prev) => {
+      const next = prev.filter((id) => id !== tabId);
+      if (workspaceTab === tabId) {
+        const nextActive = next.length > 0 ? next[next.length - 1] : null;
+        setWorkspaceTab(nextActive);
+      }
+      return next;
+    });
+  };
   const [agentsPanelOpen, setAgentsPanelOpen] = useState(false);
   const [grossReportOpen, setGrossReportOpen] = useState(false);
   const [memoGeneratorOpen, setMemoGeneratorOpen] = useState(false);
@@ -1671,7 +1775,8 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
         <div className="flex items-start min-h-[calc(100vh-53px)]">
           <MondayStyleSidebar
             workspaceTab={workspaceTab}
-            setWorkspaceTab={setWorkspaceTab}
+            setWorkspaceTab={handleOpenWorkspaceTab}
+            openTabs={openTabs}
             onOpenAiBuddy={() => setAiDrawerOpen(true)}
             isCollapsed={isSidebarCollapsed}
             setIsCollapsed={setIsSidebarCollapsed}
@@ -1679,92 +1784,103 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
           <div className="flex-1 min-w-0 p-4 md:p-6 transition-all duration-300 overflow-x-hidden">
           {/* WORKSPACE CENTRAL OPERATIONS HUB */}
           <div className="mb-6 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div>
+            <div className="shrink-0">
               <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-emerald-600">Operations & Executive Hub</p>
               <h2 className="mt-0.5 text-2xl font-extrabold text-slate-900">Workspace</h2>
             </div>
 
-            {/* WORKSPACE INTEGRATED TABS */}
-            <div className="flex items-center gap-2 overflow-x-auto custom-scrollbar pb-1 max-w-full shrink-0">
-              <button
-                type="button"
-                onClick={() => setWorkspaceTab("home")}
-                className={`inline-flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-bold transition shadow-xs cursor-pointer shrink-0 ${
-                  workspaceTab === "home"
-                    ? "bg-[#008559] text-white ring-2 ring-emerald-300"
-                    : "bg-slate-100 text-slate-700 hover:bg-slate-200"
-                }`}
-              >
-                <Home size={14} className={workspaceTab === "home" ? "text-white" : "text-emerald-600"} />
-                <span>Home Dashboard</span>
-              </button>
+            {/* WORKSPACE INTEGRATED TABS (Right-aligned, new tabs enter on the right side and shift older tabs to the left) */}
+            <div className="flex items-center justify-end gap-2 overflow-x-auto custom-scrollbar pb-1 max-w-full flex-1">
+              {openTabs.length === 0 ? (
+                <span className="text-xs text-slate-400 italic font-medium hidden sm:inline">
+                  No active tabs. Select a module from the sidebar.
+                </span>
+              ) : (
+                openTabs.map((tabId) => {
+                  const tabDef = WORKSPACE_TAB_DEFS[tabId];
+                  if (!tabDef) return null;
+                  const Icon = tabDef.icon;
+                  const isActive = workspaceTab === tabId;
 
-              <button
-                type="button"
-                onClick={() => setWorkspaceTab("sops")}
-                className={`inline-flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-bold transition shadow-xs cursor-pointer shrink-0 ${
-                  workspaceTab === "sops"
-                    ? "bg-slate-900 text-white ring-2 ring-emerald-400"
-                    : "bg-slate-100 text-slate-700 hover:bg-slate-200"
-                }`}
-              >
-                <Layers size={14} className={workspaceTab === "sops" ? "text-emerald-400" : "text-slate-600"} />
-                <span>Operations Board</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setWorkspaceTab("memo")}
-                className={`inline-flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-bold transition shadow-xs cursor-pointer shrink-0 ${
-                  workspaceTab === "memo"
-                    ? "bg-emerald-600 text-white ring-2 ring-emerald-300"
-                    : "bg-slate-100 text-slate-700 hover:bg-slate-200"
-                }`}
-              >
-                <FileText size={14} className={workspaceTab === "memo" ? "text-white" : "text-emerald-600"} />
-                <span>Memo Generator</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setWorkspaceTab("gross")}
-                className={`inline-flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-bold transition shadow-xs cursor-pointer shrink-0 ${
-                  workspaceTab === "gross"
-                    ? "bg-slate-900 text-emerald-400 ring-2 ring-emerald-400"
-                    : "bg-slate-100 text-slate-700 hover:bg-slate-200"
-                }`}
-              >
-                <BarChart3 size={14} className={workspaceTab === "gross" ? "text-emerald-400" : "text-slate-600"} />
-                <span>Gross Report</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setWorkspaceTab("agents")}
-                className={`inline-flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-bold transition shadow-xs cursor-pointer shrink-0 ${
-                  workspaceTab === "agents"
-                    ? "bg-slate-900 text-white ring-2 ring-slate-400"
-                    : "bg-slate-100 text-slate-700 hover:bg-slate-200"
-                }`}
-              >
-                <Users size={14} />
-                <span>Agents</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setWorkspaceTab("supervisors_attendance")}
-                className={`inline-flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-bold transition shadow-xs cursor-pointer shrink-0 ${
-                  workspaceTab === "supervisors_attendance"
-                    ? "bg-[#008559] text-white ring-2 ring-emerald-300"
-                    : "bg-slate-100 text-slate-700 hover:bg-slate-200"
-                }`}
-              >
-                <UserCheck size={14} className={workspaceTab === "supervisors_attendance" ? "text-white" : "text-emerald-600"} />
-                <span>Supervisors Attendance</span>
-              </button>
+                  return (
+                    <div
+                      key={tabId}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => setWorkspaceTab(tabId)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") setWorkspaceTab(tabId);
+                      }}
+                      className={`group inline-flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-bold transition-all shadow-xs cursor-pointer shrink-0 animate-in fade-in slide-in-from-right-4 duration-200 ${
+                        isActive
+                          ? tabDef.activeClass
+                          : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                      }`}
+                    >
+                      <Icon
+                        size={14}
+                        className={isActive ? tabDef.activeIconClass : tabDef.inactiveIconClass}
+                      />
+                      <span>{tabDef.label}</span>
+                      <button
+                        type="button"
+                        onClick={(e) => handleCloseWorkspaceTab(e, tabId)}
+                        className={`p-0.5 rounded-md transition cursor-pointer ${
+                          isActive
+                            ? "hover:bg-white/20 text-white/80 hover:text-white"
+                            : "hover:bg-slate-300 text-slate-400 hover:text-slate-700"
+                        }`}
+                        title={`Close ${tabDef.label}`}
+                      >
+                        <X size={12} />
+                      </button>
+                    </div>
+                  );
+                })
+              )}
             </div>
           </div>
+
+          {/* EMPTY WORKSPACE STATE: When no tabs are open yet */}
+          {(!workspaceTab || openTabs.length === 0) && (
+            <div className="rounded-2xl border border-slate-200/90 bg-white/80 backdrop-blur-sm p-8 md:p-12 text-center shadow-xs">
+              <div className="mx-auto w-14 h-14 rounded-2xl bg-emerald-50 text-emerald-600 border border-emerald-100 flex items-center justify-center mb-3 shadow-2xs">
+                <BriefcaseBusiness size={28} />
+              </div>
+              <h3 className="text-xl font-extrabold text-slate-900 mb-1">
+                Workspace Ready
+              </h3>
+              <p className="text-xs text-slate-500 max-w-md mx-auto mb-6 leading-relaxed">
+                Choose any functional module from the sidebar, or click below to launch it directly into your workspace tabs container:
+              </p>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 max-w-3xl mx-auto text-left">
+                {Object.values(WORKSPACE_TAB_DEFS).map((tab) => {
+                  const Icon = tab.icon;
+                  return (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      onClick={() => handleOpenWorkspaceTab(tab.id)}
+                      className="p-3.5 rounded-xl border border-slate-200 bg-white hover:border-emerald-400 hover:bg-emerald-50/30 hover:shadow-xs transition text-left cursor-pointer group flex items-start gap-3"
+                    >
+                      <div className="p-2 rounded-lg bg-slate-50 border border-slate-200 group-hover:border-emerald-200 group-hover:bg-white text-slate-700 group-hover:text-emerald-700 transition">
+                        <Icon size={18} />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="font-bold text-xs text-slate-800 group-hover:text-emerald-800 transition truncate">
+                          {tab.label}
+                        </div>
+                        <div className="text-[10px] text-slate-400 mt-0.5">
+                          Click to open tab
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* TAB 0: HOME HR DASHBOARD & MEETING SCHEDULER */}
           {workspaceTab === "home" && (
@@ -1772,7 +1888,7 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
               currentUser={currentUser}
               profileName={profileName}
               onOpenAiBuddy={() => setAiDrawerOpen(true)}
-              setWorkspaceTab={setWorkspaceTab}
+              setWorkspaceTab={handleOpenWorkspaceTab}
               profiles={supabaseProfiles}
             />
           )}
@@ -1780,7 +1896,7 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
           {/* TAB 1: OFFICIAL MEMO GENERATOR */}
           {workspaceTab === "memo" && (
             <MemoGeneratorPanel
-              onClose={() => setWorkspaceTab("sops")}
+              onClose={() => handleCloseWorkspaceTab(null, "memo")}
               profiles={supabaseProfiles}
               currentUser={currentUser}
               initialDraft={aiGeneratedMemoDraft}
@@ -1794,7 +1910,7 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
 
           {/* TAB 2: AGENTS DIRECTORY */}
           {workspaceTab === "agents" && (
-            <AgentsPanel onClose={() => setWorkspaceTab("sops")} />
+            <AgentsPanel onClose={() => handleCloseWorkspaceTab(null, "agents")} />
           )}
 
           {/* TAB 3: GROSS REPORT */}
@@ -1841,7 +1957,7 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
 
           {/* TAB 5: SUPERVISORS ATTENDANCE */}
           {workspaceTab === "supervisors_attendance" && (
-            <SupervisorsAttendancePanel onClose={() => setWorkspaceTab("sops")} />
+            <SupervisorsAttendancePanel onClose={() => handleCloseWorkspaceTab(null, "supervisors_attendance")} />
           )}
         </div>
       </div>

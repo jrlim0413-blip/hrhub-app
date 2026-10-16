@@ -43,7 +43,7 @@ function doPost(e) {
       }
 
       // Filter valid email addresses
-      var validRecipients = recipients.filter(function(email) {
+      var validRecipients = recipients.filter(function (email) {
         return email && typeof email === "string" && email.indexOf("@") > 0;
       });
 
