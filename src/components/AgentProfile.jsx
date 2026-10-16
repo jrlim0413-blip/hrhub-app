@@ -1451,6 +1451,11 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
                                             src={currentCover.dataUrl}
                                             alt={currentCover.name}
                                             className="h-full w-full object-contain p-1.5 group-hover:scale-[1.03] transition duration-300"
+                                            onError={(e) => {
+                                              if (currentCover.storagePath) {
+                                                e.target.src = `https://jiljeujvzlxptztmuaqy.supabase.co/storage/v1/object/public/requirements/${currentCover.storagePath}`;
+                                              }
+                                            }}
                                           />
                                           {/* Smooth Hover Curtain with Quick Triggers */}
                                           <div className="absolute inset-0 bg-gradient-to-t from-slate-950/85 via-slate-950/30 to-transparent opacity-0 group-hover:opacity-100 transition duration-200 flex flex-col justify-end p-3">
@@ -1503,23 +1508,29 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
                                       )}
                                     </div>
 
-                                    {/* Multi-Picture Filmstrip Carousel */}
-                                    {slot.allowMultiple && (
+                                    {/* File Thumbnails Filmstrip Carousel */}
+                                    {slotItems.length > 0 && (
                                       <div className="space-y-1.5">
                                         <div className="flex items-center justify-between text-[10px] font-bold text-slate-500 px-0.5">
                                           <span className="flex items-center gap-1 text-slate-700">
                                             <Layers size={12} className="text-emerald-600" />
-                                            <span>All Pages ({slotItems.length}): Click thumbnail to switch Cover Photo</span>
+                                            <span>
+                                              {slotItems.length > 1
+                                                ? `Uploaded Files (${slotItems.length}): Click thumbnail to switch Cover Photo`
+                                                : "Uploaded File Thumbnail"}
+                                            </span>
                                           </span>
-                                          <button
-                                            type="button"
-                                            onClick={() => setOrganizingSlotId(slot.id)}
-                                            className="inline-flex items-center gap-1 text-emerald-700 hover:text-emerald-900 font-black hover:underline"
-                                            title="Open large full-screen organizer to arrange pages and zoom high-res"
-                                          >
-                                            <Maximize2 size={11} />
-                                            <span>Large Organizer</span>
-                                          </button>
+                                          {slotItems.length > 1 && (
+                                            <button
+                                              type="button"
+                                              onClick={() => setOrganizingSlotId(slot.id)}
+                                              className="inline-flex items-center gap-1 text-emerald-700 hover:text-emerald-900 font-black hover:underline"
+                                              title="Open large full-screen organizer to arrange pages and zoom high-res"
+                                            >
+                                              <Maximize2 size={11} />
+                                              <span>Large Organizer</span>
+                                            </button>
+                                          )}
                                         </div>
 
                                         {/* Scrollable Filmstrip */}
@@ -1528,7 +1539,9 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
                                             const isCurrentActive = photo.id === currentCover.id;
                                             const pageLabel = slot.id === "valid_id"
                                               ? (pIdx === 0 ? "Front" : pIdx === 1 ? "Back" : `#${pIdx + 1}`)
-                                              : `Page ${pIdx + 1}`;
+                                              : (slot.id === "agency_agreement"
+                                                  ? `Page ${pIdx + 1}`
+                                                  : (slotItems.length > 1 ? `Page ${pIdx + 1}` : "File"));
 
                                             return (
                                               <div
@@ -1872,6 +1885,11 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
                 src={previewModalImage.dataUrl}
                 alt={previewModalImage.name}
                 className="max-h-[80vh] w-auto object-contain rounded-lg shadow-lg"
+                onError={(e) => {
+                  if (previewModalImage.storagePath) {
+                    e.target.src = `https://jiljeujvzlxptztmuaqy.supabase.co/storage/v1/object/public/requirements/${previewModalImage.storagePath}`;
+                  }
+                }}
               />
             </div>
           </div>

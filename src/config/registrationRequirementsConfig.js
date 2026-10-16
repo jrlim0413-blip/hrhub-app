@@ -11,7 +11,7 @@ export const REGISTRATION_SLOTS = [
     subtitle: "Biodata, Resume, or Curriculum Vitae (CV)",
     cleanName: "Biodata",
     required: true,
-    allowMultiple: false,
+    allowMultiple: true,
     badgeColor: "purple"
   },
   {
@@ -21,7 +21,7 @@ export const REGISTRATION_SLOTS = [
     subtitle: "Barangay Clearance or Certificate of Residency",
     cleanName: "Barangay_Clearance",
     required: true,
-    allowMultiple: false,
+    allowMultiple: true,
     badgeColor: "emerald"
   },
   {

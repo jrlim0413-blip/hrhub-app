@@ -530,6 +530,51 @@ export async function getRequirementsByProfile(profileKey) {
             subOrder: subOrd
           };
         });
+
+        // Auto-heal any items that still don't have an assigned categoryKey
+        const unassigned = mapped.filter((m) => !m.categoryKey);
+        if (unassigned.length > 0) {
+          const sortedUnassigned = [...unassigned].sort((a, b) => {
+            const comp = compareFileNamesNaturally(a.name, b.name);
+            if (comp !== 0) return comp;
+            return new Date(a.createdAt || 0) - new Date(b.createdAt || 0);
+          });
+
+          const hasBiodata = mapped.some((m) => m.categoryKey === "biodata");
+          const hasBarangay = mapped.some((m) => m.categoryKey === "barangay_clearance");
+          const hasValidId = mapped.some((m) => m.categoryKey === "valid_id");
+
+          sortedUnassigned.forEach((item, idx) => {
+            let assignedSlot = null;
+            let cleanPrefix = "";
+
+            if (!hasBiodata && idx === 0) {
+              assignedSlot = "biodata";
+              cleanPrefix = "Biodata";
+            } else if (!hasBarangay && (idx === 1 || (!hasBiodata && idx === 1) || (hasBiodata && idx === 0))) {
+              assignedSlot = "barangay_clearance";
+              cleanPrefix = "Barangay_Clearance";
+            } else if (!hasValidId && idx === sortedUnassigned.length - 1) {
+              assignedSlot = "valid_id";
+              cleanPrefix = "Valid_ID";
+            } else {
+              assignedSlot = "agency_agreement";
+              cleanPrefix = "Agency_Agreement";
+            }
+
+            item.categoryKey = assignedSlot;
+            item.classifiedType = assignedSlot.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+            item.sortOrder = getSlotOrder(assignedSlot);
+
+            // Persist the slot prefix to Supabase so it remains permanent
+            const newFileName = item.name.toLowerCase().includes(cleanPrefix.toLowerCase())
+              ? item.name
+              : `${cleanPrefix}_${item.name}`;
+            item.name = newFileName;
+            supabase.from("agent_requirements").update({ file_name: newFileName }).eq("id", item.id).then(() => {});
+          });
+        }
+
         const ordered = sortRequirementsBySlotSequence(mapped);
         await syncLocalCacheWithRemote(normKey, ordered);
         updateLocalMeta(normKey, ordered);
