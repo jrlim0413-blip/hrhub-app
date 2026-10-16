@@ -2,8 +2,7 @@ import { useEffect, useState } from "react";
 import {
   Activity, Archive, Award, CalendarDays, Check, CheckCircle2, CreditCard, Database, Download, Eye, FileDown, FileText,
   Fingerprint, Home, KeyRound, Loader2, Lock, Pencil, Phone, ShieldCheck, Sparkles, Trash2, Upload, UserRound, X,
-  Scan, FileCheck, Printer, ExternalLink, RefreshCw, FileSearch, Tag, Info,
-  GripVertical, ArrowLeft, ArrowRight, ChevronDown, ListOrdered, SlidersHorizontal
+  FileCheck, Printer, ExternalLink, RefreshCw, Info
 } from "lucide-react";
 import AgentIdCardModal from "./AgentIdCardModal";
 import {
@@ -18,35 +17,17 @@ import {
   batchDownloadIndividualImages,
   generateRequirementsPdfDoc,
   generateSingleRequirementPdfDoc,
-  updateRequirementRecord,
-  saveRequirementsOrder
+  updateRequirementRecord
 } from "../lib/requirementsStorage";
 import {
-  classifyRequirementDocument,
-  DOCUMENT_CATEGORIES,
-  sortRequirementsByStandardOrder,
-  getCategoryPriority
-} from "../lib/documentOcrClassifier";
+  REGISTRATION_SLOTS,
+  findRequirementForSlot,
+  sortRequirementsBySlotSequence
+} from "../config/registrationRequirementsConfig";
 import {
   getAgentProfileOverride,
   saveAgentProfileOverride
 } from "../lib/agentProfileStorage";
-
-function getDocumentBadgeStyle(type) {
-  if (!type) return "bg-slate-100 text-slate-700 border-slate-200";
-  const lower = type.toLowerCase();
-  if (lower.includes("biodata") || lower.includes("resume") || lower.includes("cv")) return "bg-purple-100 text-purple-800 border-purple-300";
-  if (lower.includes("barangay") || lower.includes("brgy")) return "bg-emerald-100 text-emerald-800 border-emerald-300";
-  if (lower.includes("agreement") || lower.includes("contract") || lower.includes("agency")) return "bg-blue-100 text-blue-800 border-blue-300";
-  if (lower.includes("valid id") || lower.includes("national id") || lower.includes("driver") || lower.includes("passport") || lower.includes("umid") || lower.includes("sss") || lower.includes("philhealth") || lower.includes("voter") || lower.includes("id card") || lower.includes("identity")) return "bg-indigo-100 text-indigo-800 border-indigo-300";
-  if (lower.includes("police")) return "bg-teal-100 text-teal-800 border-teal-300";
-  if (lower.includes("nbi")) return "bg-cyan-100 text-cyan-800 border-cyan-300";
-  if (lower.includes("birth") || lower.includes("psa") || lower.includes("nso")) return "bg-amber-100 text-amber-800 border-amber-300";
-  if (lower.includes("medical") || lower.includes("fit to work")) return "bg-rose-100 text-rose-800 border-rose-300";
-  if (lower.includes("drug")) return "bg-orange-100 text-orange-800 border-orange-300";
-  if (lower.includes("photo") || lower.includes("2x2") || lower.includes("1x1")) return "bg-fuchsia-100 text-fuchsia-800 border-fuchsia-300";
-  return "bg-slate-100 text-slate-800 border-slate-200";
-}
 
 function valueOf(agent, keys, fallback = "Not provided") {
   for (const key of keys) {
@@ -98,7 +79,6 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
   const [requirementsOpen, setRequirementsOpen] = useState(false);
   const [uploadedRequirements, setUploadedRequirements] = useState([]);
   const [loadingRequirements, setLoadingRequirements] = useState(true);
-  const [uploadingRequirements, setUploadingRequirements] = useState(false);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
   const [downloadingBatch, setDownloadingBatch] = useState(false);
   const [previewModalImage, setPreviewModalImage] = useState(null);
@@ -112,11 +92,7 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
     totalPages: 1,
     title: ""
   });
-  const [scanningOcrIds, setScanningOcrIds] = useState([]);
-  const [isBatchScanningOcr, setIsBatchScanningOcr] = useState(false);
-  const [draggedIndex, setDraggedIndex] = useState(null);
-  const [dragOverIndex, setDragOverIndex] = useState(null);
-  const [editingCategoryId, setEditingCategoryId] = useState(null);
+  const [uploadingSlotId, setUploadingSlotId] = useState(null);
 
   const agentKey = getAgentIdentifier(agent, index);
 
@@ -264,267 +240,57 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
     }
   };
 
-  // --- DRAG AND DROP REORDERING HANDLERS ---
-  const handleDragStart = (e, index) => {
-    setDraggedIndex(index);
-    e.dataTransfer.effectAllowed = "move";
-    e.dataTransfer.setData("text/plain", String(index));
-  };
+  // --- INDIVIDUAL REQUIREMENT SLOT UPLOAD HANDLER ---
+  const handleSlotUpload = async (event, slot) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
 
-  const handleDragOver = (e, index) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = "move";
-    if (dragOverIndex !== index) {
-      setDragOverIndex(index);
-    }
-  };
-
-  const handleDragLeave = () => {
-    setDragOverIndex(null);
-  };
-
-  const handleDrop = async (e, targetIndex) => {
-    e.preventDefault();
-    setDragOverIndex(null);
-    if (draggedIndex === null || draggedIndex === targetIndex) {
-      setDraggedIndex(null);
-      return;
-    }
-
-    const reordered = [...uploadedRequirements];
-    const [removed] = reordered.splice(draggedIndex, 1);
-    reordered.splice(targetIndex, 0, removed);
-
-    const withOrder = reordered.map((item, idx) => ({
-      ...item,
-      sortOrder: idx + 1
-    }));
-
-    setUploadedRequirements(withOrder);
-    setDraggedIndex(null);
-    await saveRequirementsOrder(agentKey, withOrder);
-
-    setRequirementNotice({
-      type: "success",
-      message: `Document moved to Page ${targetIndex + 1} of ${withOrder.length}`
-    });
-    setTimeout(() => setRequirementNotice(null), 3000);
-  };
-
-  const handleMoveItem = async (currentIndex, direction) => {
-    const targetIndex = currentIndex + direction;
-    if (targetIndex < 0 || targetIndex >= uploadedRequirements.length) return;
-
-    const reordered = [...uploadedRequirements];
-    const [item] = reordered.splice(currentIndex, 1);
-    reordered.splice(targetIndex, 0, item);
-
-    const withOrder = reordered.map((rec, idx) => ({
-      ...rec,
-      sortOrder: idx + 1
-    }));
-
-    setUploadedRequirements(withOrder);
-    await saveRequirementsOrder(agentKey, withOrder);
-  };
-
-  const handleResetToStandardSequence = async () => {
-    // Strict priority: 1. Biodata -> 2. Barangay Clearance -> 3. Agency Agreement -> 4. Valid ID -> etc.
-    const sorted = [...uploadedRequirements].sort((a, b) => {
-      const pA = getCategoryPriority(a.classifiedType || a.name);
-      const pB = getCategoryPriority(b.classifiedType || b.name);
-      if (pA !== pB) return pA - pB;
-      return new Date(a.createdAt || 0) - new Date(b.createdAt || 0);
-    });
-
-    const withOrder = sorted.map((rec, idx) => ({
-      ...rec,
-      sortOrder: idx + 1
-    }));
-
-    setUploadedRequirements(withOrder);
-    await saveRequirementsOrder(agentKey, withOrder);
-
-    setRequirementNotice({
-      type: "success",
-      message: "Re-sorted documents: 1. Biodata → 2. Barangay Clearance → 3. Agency Agreement → 4. Valid ID"
-    });
-    setTimeout(() => setRequirementNotice(null), 4000);
-  };
-
-  const handleChangeCategory = async (file, categoryObj) => {
-    setEditingCategoryId(null);
-    const fileExt = file.name.split(".").pop() || "jpg";
-    const cleanAgentPrefix = name ? name.trim().replace(/[^a-zA-Z0-9_\-]/g, "_") : "";
-    const newName = cleanAgentPrefix
-      ? `${categoryObj.cleanName}_${cleanAgentPrefix}.${fileExt}`
-      : `${categoryObj.cleanName}.${fileExt}`;
-
-    try {
-      const updated = await updateRequirementRecord(agentKey, file.id, {
-        classifiedType: categoryObj.label,
-        name: newName
-      });
-
-      setUploadedRequirements((current) =>
-        current.map((item) => (item.id === file.id ? { ...item, ...updated, classifiedType: categoryObj.label, name: newName } : item))
-      );
-
-      setRequirementNotice({
-        type: "success",
-        message: `Category updated to "${categoryObj.label}"!`
-      });
-      setTimeout(() => setRequirementNotice(null), 3000);
-    } catch (err) {
-      console.error("Failed to change category:", err);
-    }
-  };
-
-  const handleRequirementUpload = async (event) => {
-    const files = Array.from(event.target.files || []);
-    if (!files.length) return;
-
-    setUploadingRequirements(true);
+    setUploadingSlotId(slot.id);
     setRequirementNotice({
       type: "info",
-      message: `Analyzing and uploading ${files.length} document${files.length > 1 ? "s" : ""} with AI OCR...`
+      message: `Uploading ${slot.title}...`
     });
 
     try {
-      const newRecords = [];
-      for (const file of files) {
-        let ocrResult = null;
-        try {
-          ocrResult = await classifyRequirementDocument(file, name);
-        } catch (ocrErr) {
-          console.warn("OCR upload classification note:", ocrErr);
-        }
+      const fileExt = file.name.split(".").pop() || "png";
+      const cleanAgentPrefix = name ? name.trim().replace(/[^a-zA-Z0-9_\-]/g, "_") : "Agent";
+      const preferredFileName = `${slot.cleanName}_${cleanAgentPrefix}.${fileExt}`;
 
-        const extraMeta = {
-          classifiedType: ocrResult?.docType || null,
-          ocrSnippet: ocrResult?.extractedSnippet || null,
-          fileName: ocrResult?.suggestedFileName || file.name
-        };
-
-        const savedRecord = await saveRequirementFile(agentKey, file, extraMeta);
-        newRecords.push(savedRecord);
+      // If this slot already had an existing uploaded requirement, replace it cleanly
+      const existingSlotReq = findRequirementForSlot(uploadedRequirements, slot.id);
+      if (existingSlotReq) {
+        await deleteRequirementFile(existingSlotReq.id, agentKey, existingSlotReq.storagePath);
       }
 
-      const allItems = [
-        ...newRecords,
-        ...uploadedRequirements.filter((c) => !newRecords.some((n) => n.id === c.id))
-      ];
+      const extraMeta = {
+        categoryKey: slot.id,
+        classifiedType: slot.title,
+        fileName: preferredFileName,
+        sortOrder: slot.order
+      };
 
-      // Auto-sort into standard priority order: 1. Biodata -> 2. Barangay -> 3. Agreement -> 4. Valid ID
-      const ordered = sortRequirementsByStandardOrder(allItems).map((item, idx) => ({
-        ...item,
-        sortOrder: idx + 1
-      }));
+      const savedRecord = await saveRequirementFile(agentKey, file, extraMeta);
 
-      setUploadedRequirements(ordered);
-      await saveRequirementsOrder(agentKey, ordered);
+      const filteredList = uploadedRequirements.filter(
+        (item) => item.id !== existingSlotReq?.id && item.categoryKey !== slot.id
+      );
+      const updatedList = sortRequirementsBySlotSequence([...filteredList, savedRecord]);
 
-      const classifiedCount = newRecords.filter((r) => r.classifiedType && r.classifiedType !== "Other Document").length;
+      setUploadedRequirements(updatedList);
       setRequirementNotice({
         type: "success",
-        message: `${files.length} document${files.length === 1 ? "" : "s"} uploaded, classified via OCR, and auto-sorted (${classifiedCount} classified)`
+        message: `${slot.title} successfully uploaded and saved!`
       });
     } catch (err) {
-      console.error("Error saving requirement:", err);
+      console.error(`Failed to upload ${slot.title}:`, err);
       setRequirementNotice({
         type: "error",
-        message: "Failed to save requirement to database: " + err.message
+        message: `Failed to upload ${slot.title}: ${err.message}`
       });
     } finally {
-      setUploadingRequirements(false);
+      setUploadingSlotId(null);
       event.target.value = "";
-      setTimeout(() => setRequirementNotice(null), 5000);
-    }
-  };
-
-  const handleClassifySingleRequirement = async (file) => {
-    if (scanningOcrIds.includes(file.id)) return;
-    setScanningOcrIds((prev) => [...prev, file.id]);
-    try {
-      const ocrResult = await classifyRequirementDocument(file, name);
-      const updated = await updateRequirementRecord(agentKey, file.id, {
-        classifiedType: ocrResult.docType,
-        ocrSnippet: ocrResult.extractedSnippet,
-        name: ocrResult.suggestedFileName || file.name
-      });
-
-      setUploadedRequirements((current) =>
-        current.map((item) => (item.id === file.id ? { ...item, ...updated } : item))
-      );
-
-      setRequirementNotice({
-        type: "success",
-        message: `Recognized as "${ocrResult.docType}" via AI OCR!`
-      });
       setTimeout(() => setRequirementNotice(null), 4000);
-    } catch (err) {
-      console.error("OCR single classify failed:", err);
-      setRequirementNotice({
-        type: "error",
-        message: "OCR classification failed: " + err.message
-      });
-    } finally {
-      setScanningOcrIds((prev) => prev.filter((id) => id !== file.id));
-    }
-  };
-
-  const handleBatchClassifyAll = async () => {
-    if (!uploadedRequirements.length || isBatchScanningOcr) return;
-    setIsBatchScanningOcr(true);
-    setRequirementNotice({
-      type: "info",
-      message: `Analyzing ${uploadedRequirements.length} documents using AI OCR...`
-    });
-
-    let successCount = 0;
-    try {
-      let updatedList = [...uploadedRequirements];
-      for (const item of uploadedRequirements) {
-        setScanningOcrIds((prev) => [...prev, item.id]);
-        try {
-          const ocrResult = await classifyRequirementDocument(item, name);
-          const updated = await updateRequirementRecord(agentKey, item.id, {
-            classifiedType: ocrResult.docType,
-            ocrSnippet: ocrResult.extractedSnippet,
-            name: ocrResult.suggestedFileName || item.name
-          });
-
-          updatedList = updatedList.map((rec) => (rec.id === item.id ? { ...rec, ...updated } : rec));
-          setUploadedRequirements(updatedList);
-          successCount++;
-        } catch (itemErr) {
-          console.warn(`OCR scan failed for item ${item.name}:`, itemErr);
-        } finally {
-          setScanningOcrIds((prev) => prev.filter((id) => id !== item.id));
-        }
-      }
-
-      // Auto-sort into standard priority order: 1. Biodata -> 2. Barangay -> 3. Agreement -> 4. Valid ID
-      const ordered = sortRequirementsByStandardOrder(updatedList).map((rec, idx) => ({
-        ...rec,
-        sortOrder: idx + 1
-      }));
-      setUploadedRequirements(ordered);
-      await saveRequirementsOrder(agentKey, ordered);
-
-      setRequirementNotice({
-        type: "success",
-        message: `Successfully classified ${successCount} document${successCount !== 1 ? "s" : ""} & sorted: Biodata → Barangay → Agreement → Valid ID!`
-      });
-      setTimeout(() => setRequirementNotice(null), 5000);
-    } catch (err) {
-      console.error("Batch OCR classification error:", err);
-      setRequirementNotice({
-        type: "error",
-        message: "Batch OCR scan encountered an error: " + err.message
-      });
-    } finally {
-      setIsBatchScanningOcr(false);
     }
   };
 
@@ -1043,95 +809,27 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
                   </div>
                 )}
 
-                {/* Upload Controls & Download Action Bar */}
+                {/* Requirements Action Bar */}
                 <div className="space-y-3">
-                  <div className="flex flex-wrap items-center justify-between gap-2.5">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-xs font-bold text-emerald-300 transition hover:bg-slate-800 shadow-sm cursor-pointer disabled:opacity-70">
-                        {uploadingRequirements ? (
-                          <>
-                            <Loader2 size={14} className="animate-spin text-emerald-400" />
-                            <span>AI OCR Scanning & Uploading...</span>
-                          </>
-                        ) : (
-                          <>
-                            <Upload size={14} />
-                            <span>Upload Requirements</span>
-                          </>
-                        )}
-                        <input
-                          type="file"
-                          multiple
-                          accept=".pdf,.jpg,.jpeg,.png,.webp"
-                          className="hidden"
-                          disabled={uploadingRequirements}
-                          onChange={handleRequirementUpload}
-                        />
-                      </label>
-
-                      {/* Batch OCR Auto-Classify Button */}
-                      {uploadedRequirements.length > 0 && (
-                        <button
-                          type="button"
-                          onClick={handleBatchClassifyAll}
-                          disabled={isBatchScanningOcr}
-                          className="inline-flex items-center gap-1.5 rounded-xl border border-indigo-200 bg-indigo-50/80 px-3.5 py-2.5 text-xs font-bold text-indigo-700 transition hover:bg-indigo-100 hover:border-indigo-300 disabled:opacity-60 disabled:cursor-wait"
-                          title="Scan all requirement documents with AI OCR to classify types and standardize names"
-                        >
-                          {isBatchScanningOcr ? (
-                            <>
-                              <Loader2 size={13} className="animate-spin text-indigo-600" />
-                              <span>Scanning All with OCR...</span>
-                            </>
-                          ) : (
-                            <>
-                              <Scan size={14} className="text-indigo-600" />
-                              <span>AI OCR Classify All</span>
-                            </>
-                          )}
-                        </button>
-                      )}
-
-                      {/* Auto-Sort by Standard Sequence Button */}
-                      {uploadedRequirements.length > 0 && (
-                        <button
-                          type="button"
-                          onClick={handleResetToStandardSequence}
-                          className="inline-flex items-center gap-1.5 rounded-xl border border-purple-200 bg-purple-50/80 px-3.5 py-2.5 text-xs font-bold text-purple-700 transition hover:bg-purple-100 hover:border-purple-300 shadow-xs"
-                          title="Sort in standard sequence: 1. Biodata -> 2. Barangay Clearance -> 3. Agency Agreement -> 4. Valid ID"
-                        >
-                          <ListOrdered size={14} className="text-purple-600" />
-                          <span>Auto-Sort Sequence</span>
-                        </button>
-                      )}
+                  {/* Sequence Guide Banner */}
+                  <div className="flex flex-wrap items-center justify-between gap-2 px-3.5 py-2.5 rounded-xl bg-slate-100/90 border border-slate-200/90 text-xs text-slate-700 shadow-2xs">
+                    <div className="flex items-center gap-1.5 font-extrabold text-slate-800">
+                      <span className="flex h-5 w-5 items-center justify-center rounded-md bg-emerald-600 text-[10px] text-white">#</span>
+                      <span className="text-[11px]">Strict Page Sequence:</span>
                     </div>
-
-                    <p className="text-[11px] text-slate-400">
-                      OCR auto-identifies Biodata, Barangay, Agreement, Valid ID & more
-                    </p>
+                    <div className="flex flex-wrap items-center gap-1.5 text-[10px] font-bold">
+                      <span className="px-2.5 py-1 rounded-md bg-purple-100 text-purple-900 border border-purple-200">1. Biodata</span>
+                      <span className="text-slate-400">→</span>
+                      <span className="px-2.5 py-1 rounded-md bg-emerald-100 text-emerald-900 border border-emerald-200">2. Barangay Clearance</span>
+                      <span className="text-slate-400">→</span>
+                      <span className="px-2.5 py-1 rounded-md bg-blue-100 text-blue-900 border border-blue-200">3. Agency Agreement</span>
+                      <span className="text-slate-400">→</span>
+                      <span className="px-2.5 py-1 rounded-md bg-indigo-100 text-indigo-900 border border-indigo-200">4. Valid ID</span>
+                      <span className="text-slate-400">→</span>
+                      <span className="px-2.5 py-1 rounded-md bg-slate-200 text-slate-700">5. Other Documents</span>
+                    </div>
+                    <span className="text-[10px] text-slate-500 font-medium">Individual slot uploads · Auto-compiled into PDF in this sequence</span>
                   </div>
-
-                  {/* Standard Sequence Guide Banner */}
-                  {uploadedRequirements.length > 0 && (
-                    <div className="flex flex-wrap items-center justify-between gap-2 px-3.5 py-2 rounded-xl bg-slate-100/90 border border-slate-200/90 text-xs text-slate-600 shadow-2xs">
-                      <div className="flex items-center gap-1.5 font-extrabold text-slate-800">
-                        <span className="flex h-5 w-5 items-center justify-center rounded-md bg-purple-600 text-[10px] text-white">#</span>
-                        <span className="text-[11px]">Priority Sequence:</span>
-                      </div>
-                      <div className="flex flex-wrap items-center gap-1 text-[10px] font-bold">
-                        <span className="px-2 py-0.5 rounded-md bg-purple-100 text-purple-900 border border-purple-200">1. Biodata</span>
-                        <span className="text-slate-400">→</span>
-                        <span className="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-900 border border-emerald-200">2. Barangay Clearance</span>
-                        <span className="text-slate-400">→</span>
-                        <span className="px-2 py-0.5 rounded-md bg-blue-100 text-blue-900 border border-blue-200">3. Agency Agreement</span>
-                        <span className="text-slate-400">→</span>
-                        <span className="px-2 py-0.5 rounded-md bg-indigo-100 text-indigo-900 border border-indigo-200">4. Valid ID</span>
-                        <span className="text-slate-400">→</span>
-                        <span className="px-2 py-0.5 rounded-md bg-slate-200 text-slate-700">5. Other Clearances</span>
-                      </div>
-                      <span className="text-[10px] font-medium text-slate-400 italic">Drag cards to arrange PDF page order</span>
-                    </div>
-                  )}
 
                   {/* Prominent Download Bar with Interactive PDF Preview and Batch Downloads */}
                   {uploadedRequirements.length > 0 && (
@@ -1141,9 +839,9 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
                           <FileDown size={18} />
                         </div>
                         <div>
-                          <h4 className="text-xs font-extrabold text-slate-900">Download Requirements</h4>
+                          <h4 className="text-xs font-extrabold text-slate-900">Registration Document Archive</h4>
                           <p className="text-[10px] font-medium text-slate-500">
-                            {uploadedRequirements.length} {uploadedRequirements.length === 1 ? "document" : "documents"} ready · Following page sequence
+                            {uploadedRequirements.length} {uploadedRequirements.length === 1 ? "document" : "documents"} in database · Compiled strictly in 1→2→3→4 sequence
                           </p>
                         </div>
                       </div>
@@ -1202,220 +900,180 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
                   )}
                 </div>
 
-                {/* Uploaded Gallery / List */}
+                {/* Individual Requirement Slots Grid */}
                 {loadingRequirements ? (
                   <div className="py-6 flex items-center justify-center gap-2 text-xs text-slate-400">
                     <Loader2 size={16} className="animate-spin text-emerald-600" />
                     <span>Loading requirements from database...</span>
                   </div>
-                ) : uploadedRequirements.length > 0 ? (
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between text-[10px] font-bold text-slate-400 uppercase tracking-wider px-1">
-                      <span>Uploaded Documents ({uploadedRequirements.length}) · Drag or Click Arrows to Reorder</span>
-                      <span className="text-emerald-600 flex items-center gap-1 font-semibold normal-case">
-                        <ShieldCheck size={12} /> Persisted in database
-                      </span>
-                    </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                    {REGISTRATION_SLOTS.map((slot) => {
+                      const req = findRequirementForSlot(uploadedRequirements, slot.id);
+                      const isUploaded = Boolean(req && req.dataUrl);
+                      const isUploading = uploadingSlotId === slot.id;
+                      const isImage = req?.type?.startsWith("image/") || req?.dataUrl?.startsWith("data:image/") || req?.dataUrl?.startsWith("http");
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                      {uploadedRequirements.map((file, idx) => {
-                        const isImage = file.type?.startsWith("image/") || file.dataUrl?.startsWith("data:image/");
-                        const isScanningThis = scanningOcrIds.includes(file.id);
-                        const isBeingDragged = draggedIndex === idx;
-                        const isDragOver = dragOverIndex === idx;
-
-                        return (
-                          <div
-                            key={file.id}
-                            draggable
-                            onDragStart={(e) => handleDragStart(e, idx)}
-                            onDragOver={(e) => handleDragOver(e, idx)}
-                            onDragLeave={handleDragLeave}
-                            onDrop={(e) => handleDrop(e, idx)}
-                            className={`group relative rounded-xl border p-2.5 transition duration-150 flex flex-col justify-between gap-2 ${
-                              isDragOver
-                                ? "border-indigo-500 ring-2 ring-indigo-400/50 bg-indigo-50/40 shadow-lg scale-[1.02]"
-                                : isBeingDragged
-                                ? "opacity-40 border-dashed border-slate-400 bg-slate-100"
-                                : "border-slate-200 bg-slate-50/80 hover:bg-white hover:border-slate-300 hover:shadow-sm"
-                            }`}
-                          >
-                            {/* Page Sequence Bar & Directional Move Controls */}
-                            <div className="flex items-center justify-between gap-1 pb-1.5 border-b border-slate-200/60 text-slate-600">
-                              <div
-                                className="flex items-center gap-1.5 cursor-grab active:cursor-grabbing"
-                                title="Drag card to move page order"
-                              >
-                                <GripVertical size={14} className="text-slate-400 group-hover:text-slate-700" />
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-slate-900 text-emerald-400 shadow-2xs">
-                                  Page {idx + 1}
-                                </span>
-                              </div>
-
-                              <div className="flex items-center gap-0.5">
-                                <button
-                                  type="button"
-                                  disabled={idx === 0}
-                                  onClick={() => handleMoveItem(idx, -1)}
-                                  className="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-200 disabled:opacity-20 disabled:hover:bg-transparent transition"
-                                  title="Move earlier (Page -1)"
-                                >
-                                  <ArrowLeft size={12} />
-                                </button>
-                                <button
-                                  type="button"
-                                  disabled={idx === uploadedRequirements.length - 1}
-                                  onClick={() => handleMoveItem(idx, 1)}
-                                  className="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-200 disabled:opacity-20 disabled:hover:bg-transparent transition"
-                                  title="Move later (Page +1)"
-                                >
-                                  <ArrowRight size={12} />
-                                </button>
+                      return (
+                        <div
+                          key={slot.id}
+                          className={`rounded-2xl border p-3.5 transition duration-150 flex flex-col justify-between gap-3 ${
+                            isUploaded
+                              ? "border-emerald-200 bg-white shadow-xs hover:border-emerald-300 hover:shadow-sm"
+                              : "border-slate-200 bg-slate-50/70 hover:bg-white hover:border-slate-300"
+                          }`}
+                        >
+                          {/* Top Slot Header */}
+                          <div className="flex items-start justify-between gap-2 pb-2 border-b border-slate-100">
+                            <div className="flex items-center gap-2">
+                              <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-slate-900 text-emerald-400 text-xs font-black shadow-xs">
+                                #{slot.order}
+                              </span>
+                              <div>
+                                <h4 className="text-xs font-extrabold text-slate-900 leading-tight">
+                                  {slot.title}
+                                </h4>
+                                <p className="text-[10px] text-slate-400 line-clamp-1" title={slot.subtitle}>
+                                  {slot.subtitle}
+                                </p>
                               </div>
                             </div>
 
-                            {/* Preview Area */}
-                            {isImage && file.dataUrl ? (
-                              <div
-                                onClick={() => setPreviewModalImage(file)}
-                                className="relative h-28 w-full rounded-lg overflow-hidden bg-slate-900/5 cursor-pointer border border-slate-200/80 group-hover:border-emerald-300 transition"
-                              >
-                                <img
-                                  src={file.dataUrl}
-                                  alt={file.name}
-                                  className="h-full w-full object-cover group-hover:scale-105 transition duration-200"
-                                />
-                                <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center text-white gap-1.5 text-xs font-bold">
-                                  <Eye size={14} /> View Full
-                                </div>
-                              </div>
+                            {/* Status Badge */}
+                            {isUploaded ? (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 px-2 py-0.5 text-[10px] font-extrabold shrink-0">
+                                <CheckCircle2 size={11} className="text-emerald-600" /> Uploaded
+                              </span>
+                            ) : slot.required ? (
+                              <span className="inline-flex items-center rounded-full bg-amber-100 text-amber-800 border border-amber-300 px-2 py-0.5 text-[10px] font-extrabold shrink-0">
+                                Required
+                              </span>
                             ) : (
-                              <div className="h-28 w-full rounded-lg bg-slate-100 border border-slate-200 flex flex-col items-center justify-center text-slate-500 gap-1.5">
-                                <FileText size={28} className="text-slate-400" />
-                                <span className="text-[10px] font-bold uppercase">{file.name.split('.').pop() || 'DOC'}</span>
-                              </div>
+                              <span className="inline-flex items-center rounded-full bg-slate-100 text-slate-500 border border-slate-200 px-2 py-0.5 text-[10px] font-bold shrink-0">
+                                Optional
+                              </span>
                             )}
+                          </div>
 
-                            {/* Document Category Badge with Edit Dropdown */}
-                            <div className="space-y-1">
-                              <div className="flex items-center justify-between gap-1">
-                                <div className="relative">
-                                  <button
-                                    type="button"
-                                    onClick={() => setEditingCategoryId(editingCategoryId === file.id ? null : file.id)}
-                                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-extrabold border transition ${getDocumentBadgeStyle(
-                                      file.classifiedType
-                                    )} hover:brightness-95`}
-                                    title="Click to change document category"
-                                  >
-                                    <Tag size={10} />
-                                    <span className="truncate max-w-[115px]">{file.classifiedType || "Unclassified"}</span>
-                                    <ChevronDown size={10} className="opacity-70" />
-                                  </button>
-
-                                  {/* Category Dropdown Picker */}
-                                  {editingCategoryId === file.id && (
-                                    <div
-                                      className="absolute left-0 top-full mt-1 w-48 rounded-xl bg-white shadow-xl border border-slate-200 p-1.5 z-40 max-h-56 overflow-y-auto"
-                                      onClick={(e) => e.stopPropagation()}
-                                    >
-                                      <p className="px-2 py-1 text-[9px] font-extrabold uppercase text-slate-400 tracking-wider">
-                                        Select Category
-                                      </p>
-                                      {DOCUMENT_CATEGORIES.map((cat) => (
-                                        <button
-                                          key={cat.id}
-                                          type="button"
-                                          onClick={() => handleChangeCategory(file, cat)}
-                                          className={`w-full text-left px-2 py-1 rounded-lg text-[10px] font-bold transition flex items-center justify-between ${
-                                            file.classifiedType === cat.label
-                                              ? "bg-slate-900 text-white"
-                                              : "text-slate-700 hover:bg-slate-100"
-                                          }`}
-                                        >
-                                          <span>{cat.label}</span>
-                                          {file.classifiedType === cat.label && <Check size={11} />}
-                                        </button>
-                                      ))}
-                                    </div>
-                                  )}
-                                </div>
-
-                                <button
-                                  type="button"
-                                  onClick={() => handleClassifySingleRequirement(file)}
-                                  disabled={isScanningThis}
-                                  className="inline-flex items-center gap-1 text-[10px] font-bold text-indigo-600 hover:text-indigo-700 bg-indigo-50/80 hover:bg-indigo-100 px-1.5 py-0.5 rounded transition disabled:opacity-50"
-                                  title="Run AI OCR scan on this document to recognize type and rename"
+                          {/* Card Center: Uploaded File Preview OR Upload Dropzone */}
+                          {isUploaded ? (
+                            <div className="space-y-2">
+                              {isImage && req.dataUrl ? (
+                                <div
+                                  onClick={() => setPreviewModalImage(req)}
+                                  className="relative h-28 w-full rounded-xl overflow-hidden bg-slate-900/5 cursor-pointer border border-slate-200/80 group hover:border-emerald-400 transition"
                                 >
-                                  {isScanningThis ? (
-                                    <Loader2 size={10} className="animate-spin text-indigo-600" />
-                                  ) : (
-                                    <Scan size={10} />
-                                  )}
-                                  <span>{file.classifiedType ? "Re-scan" : "AI OCR"}</span>
-                                </button>
-                              </div>
-                            </div>
-
-                            {/* Info & Actions */}
-                            <div className="space-y-0.5">
-                              <p className="text-xs font-bold text-slate-800 truncate" title={file.name}>
-                                {file.name}
-                              </p>
-                              <div className="flex items-center justify-between text-[10px] text-slate-400">
-                                <span>{formatFileSize(file.size)}</span>
-                                <span className="text-emerald-600 font-semibold flex items-center gap-0.5">
-                                  <Check size={11} /> Saved
-                                </span>
-                              </div>
-                            </div>
-
-                            <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-1">
-                              {file.dataUrl && (
-                                <div className="flex items-center gap-1">
-                                  <a
-                                    href={file.dataUrl}
-                                    download={file.name}
-                                    className="p-1 rounded text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 text-[11px] font-semibold flex items-center gap-1 transition"
-                                    title="Download Original File"
-                                  >
-                                    <Download size={13} />
-                                    <span>Download</span>
-                                  </a>
-                                  {isImage && (
-                                    <button
-                                      type="button"
-                                      onClick={() => handlePreviewSinglePdf(file)}
-                                      className="p-1 rounded text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 text-[11px] font-semibold flex items-center gap-1 transition"
-                                      title="Preview single requirement document compiled into branded PDF"
-                                    >
-                                      <Eye size={12} />
-                                      <span>PDF Preview</span>
-                                    </button>
-                                  )}
+                                  <img
+                                    src={req.dataUrl}
+                                    alt={req.name}
+                                    className="h-full w-full object-cover group-hover:scale-105 transition duration-200"
+                                  />
+                                  <div className="absolute inset-0 bg-slate-900/50 opacity-0 group-hover:opacity-100 transition flex items-center justify-center text-white gap-1.5 text-xs font-bold">
+                                    <Eye size={14} /> View Full
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="h-28 w-full rounded-xl bg-slate-100 border border-slate-200 flex flex-col items-center justify-center text-slate-500 gap-1.5">
+                                  <FileText size={28} className="text-slate-400" />
+                                  <span className="text-[10px] font-bold uppercase">{req.name.split('.').pop() || 'PDF/DOC'}</span>
                                 </div>
                               )}
+
+                              <div className="space-y-0.5 px-0.5">
+                                <p className="text-xs font-bold text-slate-800 truncate" title={req.name}>
+                                  {req.name}
+                                </p>
+                                <div className="flex items-center justify-between text-[10px] text-slate-400">
+                                  <span>{formatFileSize(req.size)}</span>
+                                  <span className="text-emerald-600 font-semibold flex items-center gap-0.5">
+                                    <Check size={11} /> Saved in Database
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          ) : (
+                            <label className="relative flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-300 bg-white/70 py-6 px-3 text-center cursor-pointer hover:border-emerald-500 hover:bg-emerald-50/30 transition group min-h-[140px]">
+                              <input
+                                type="file"
+                                accept=".pdf,.jpg,.jpeg,.png,.webp"
+                                className="hidden"
+                                disabled={Boolean(uploadingSlotId)}
+                                onChange={(e) => handleSlotUpload(e, slot)}
+                              />
+                              {isUploading ? (
+                                <div className="flex flex-col items-center gap-2">
+                                  <Loader2 size={24} className="animate-spin text-emerald-600" />
+                                  <span className="text-xs font-bold text-emerald-700">Uploading {slot.title}...</span>
+                                </div>
+                              ) : (
+                                <div className="flex flex-col items-center gap-1.5">
+                                  <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-100 text-slate-500 group-hover:bg-emerald-100 group-hover:text-emerald-700 transition">
+                                    <Upload size={16} />
+                                  </div>
+                                  <p className="text-xs font-extrabold text-slate-700 group-hover:text-emerald-800">
+                                    Upload {slot.title}
+                                  </p>
+                                  <p className="text-[10px] text-slate-400">
+                                    PDF, JPG, PNG or WEBP
+                                  </p>
+                                </div>
+                              )}
+                            </label>
+                          )}
+
+                          {/* Footer Action Buttons */}
+                          {isUploaded && (
+                            <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-1 text-[11px]">
+                              <div className="flex items-center gap-1">
+                                {isImage && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handlePreviewSinglePdf(req)}
+                                    className="px-2 py-1 rounded-lg text-slate-600 hover:text-emerald-700 hover:bg-emerald-50 font-semibold flex items-center gap-1 transition"
+                                    title="Preview document in branded PDF format before downloading"
+                                  >
+                                    <Eye size={12} />
+                                    <span>Preview PDF</span>
+                                  </button>
+                                )}
+                                <label
+                                  className="px-2 py-1 rounded-lg text-slate-600 hover:text-indigo-700 hover:bg-indigo-50 font-semibold flex items-center gap-1 transition cursor-pointer"
+                                  title="Replace file for this requirement slot"
+                                >
+                                  <input
+                                    type="file"
+                                    accept=".pdf,.jpg,.jpeg,.png,.webp"
+                                    className="hidden"
+                                    disabled={Boolean(uploadingSlotId)}
+                                    onChange={(e) => handleSlotUpload(e, slot)}
+                                  />
+                                  <RefreshCw size={12} className={isUploading ? "animate-spin text-indigo-600" : ""} />
+                                  <span>Replace</span>
+                                </label>
+                                <a
+                                  href={req.dataUrl}
+                                  download={req.name}
+                                  className="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition"
+                                  title="Download Original File"
+                                >
+                                  <Download size={13} />
+                                </a>
+                              </div>
+
                               <button
                                 type="button"
-                                onClick={() => removeRequirementFile(file.id, file.storagePath)}
-                                aria-label={`Delete ${file.name}`}
-                                className="p-1 rounded text-slate-400 hover:bg-rose-50 hover:text-rose-600 text-[11px] font-semibold flex items-center gap-1 transition ml-auto"
+                                onClick={() => removeRequirementFile(req.id, req.storagePath)}
+                                aria-label={`Delete ${req.name}`}
+                                className="p-1.5 rounded-lg text-slate-400 hover:bg-rose-50 hover:text-rose-600 font-semibold flex items-center gap-1 transition"
                                 title="Delete from database"
                               >
                                 <Trash2 size={13} />
-                                <span>Delete</span>
                               </button>
                             </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="rounded-xl border border-dashed border-slate-200 p-6 text-center text-xs text-slate-400 bg-slate-50/50">
-                    <p className="font-semibold text-slate-600">No registration requirements uploaded yet.</p>
-                    <p className="mt-1 text-[11px] text-slate-400">Upload clearances, valid IDs, certificates, or documents above. They will be auto-classified by OCR and saved to database.</p>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>

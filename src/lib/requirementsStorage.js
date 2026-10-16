@@ -5,7 +5,7 @@
 import { jsPDF } from "jspdf";
 import JSZip from "jszip";
 import { supabase } from "./supabase";
-import { sortRequirementsByStandardOrder } from "./documentOcrClassifier";
+import { sortRequirementsBySlotSequence } from "../config/registrationRequirementsConfig";
 
 const DB_NAME = "hrhub_requirements_db";
 const DB_VERSION = 1;
@@ -68,12 +68,13 @@ function getLocalMeta() {
 function updateLocalMeta(profileKey, items) {
   try {
     const meta = getLocalMeta();
-    meta[profileKey] = items.map(({ id, name, size, type, createdAt, classifiedType, ocrSnippet, sortOrder }) => ({
+    meta[profileKey] = items.map(({ id, name, size, type, createdAt, categoryKey, classifiedType, ocrSnippet, sortOrder }) => ({
       id,
       name,
       size,
       type,
       createdAt,
+      categoryKey: categoryKey || null,
       classifiedType: classifiedType || null,
       ocrSnippet: ocrSnippet || null,
       sortOrder: typeof sortOrder === "number" ? sortOrder : null
@@ -100,7 +101,7 @@ export function formatFileSize(bytes) {
  * and registers metadata in PostgreSQL 'agent_requirements' and local cache.
  * @param {string} profileKey - The unique key for the profile
  * @param {File} file - The uploaded file object
- * @param {Object} [extraMeta] - Optional OCR classification and custom name
+ * @param {Object} [extraMeta] - Optional slot/category metadata and custom name
  * @returns {Promise<Object>} The saved requirement record
  */
 export async function saveRequirementFile(profileKey, file, extraMeta = {}) {
@@ -160,6 +161,7 @@ export async function saveRequirementFile(profileKey, file, extraMeta = {}) {
     dataUrl: dataUrl,
     storagePath: uploadSuccess ? storagePath : null,
     createdAt: new Date().toISOString(),
+    categoryKey: extraMeta.categoryKey || null,
     classifiedType: extraMeta.classifiedType || null,
     ocrSnippet: extraMeta.ocrSnippet || null,
     sortOrder: typeof extraMeta.sortOrder === "number" ? extraMeta.sortOrder : null
@@ -257,6 +259,7 @@ export async function updateRequirementRecord(profileKey, recordId, updates = {}
   try {
     const sbUpdates = {};
     if (updates.name !== undefined) sbUpdates.file_name = updates.name;
+    if (updates.categoryKey !== undefined) sbUpdates.category_key = updates.categoryKey;
     if (updates.classifiedType !== undefined) sbUpdates.classified_type = updates.classifiedType;
     if (updates.ocrSnippet !== undefined) sbUpdates.ocr_snippet = updates.ocrSnippet;
     if (updates.sortOrder !== undefined) sbUpdates.sort_order = updates.sortOrder;
@@ -461,11 +464,12 @@ export async function getRequirementsByProfile(profileKey) {
           storagePath: d.storage_path || null,
           dataUrl: d.data_url || d.file_url,
           createdAt: d.created_at,
+          categoryKey: d.category_key || d.categoryKey || null,
           classifiedType: d.classified_type || d.classifiedType || null,
           ocrSnippet: d.ocr_snippet || d.ocrSnippet || null,
           sortOrder: typeof d.sort_order === "number" ? d.sort_order : (typeof d.sortOrder === "number" ? d.sortOrder : null)
         }));
-        const ordered = sortRequirementsByStandardOrder(mapped);
+        const ordered = sortRequirementsBySlotSequence(mapped);
         await syncLocalCacheWithRemote(normKey, ordered);
         updateLocalMeta(normKey, ordered);
         return ordered;
@@ -495,7 +499,7 @@ export async function getRequirementsByProfile(profileKey) {
     });
 
     if (records && records.length > 0) {
-      const ordered = sortRequirementsByStandardOrder(records);
+      const ordered = sortRequirementsBySlotSequence(records);
       updateLocalMeta(normKey, ordered);
       return ordered;
     }
@@ -508,7 +512,7 @@ export async function getRequirementsByProfile(profileKey) {
     const fbKey = `hrhub_req_blob_${normKey}`;
     const fbRecords = JSON.parse(localStorage.getItem(fbKey) || "[]");
     if (fbRecords.length > 0) {
-      return sortRequirementsByStandardOrder(fbRecords);
+      return sortRequirementsBySlotSequence(fbRecords);
     }
   } catch {
     // ignore
@@ -668,7 +672,8 @@ export async function generateRequirementsPdfDoc({
   barangayName = "",
   requirements = []
 }) {
-  const imageItems = requirements.filter(
+  const sortedRequirements = sortRequirementsBySlotSequence(requirements);
+  const imageItems = sortedRequirements.filter(
     (item) => item.dataUrl && (item.type?.startsWith("image/") || item.dataUrl.startsWith("data:image/") || item.dataUrl.startsWith("http"))
   );
 
