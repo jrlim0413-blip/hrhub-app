@@ -5,6 +5,7 @@
 import { jsPDF } from "jspdf";
 import JSZip from "jszip";
 import { supabase } from "./supabase";
+import { sortRequirementsByStandardOrder } from "./documentOcrClassifier";
 
 const DB_NAME = "hrhub_requirements_db";
 const DB_VERSION = 1;
@@ -67,14 +68,15 @@ function getLocalMeta() {
 function updateLocalMeta(profileKey, items) {
   try {
     const meta = getLocalMeta();
-    meta[profileKey] = items.map(({ id, name, size, type, createdAt, classifiedType, ocrSnippet }) => ({
+    meta[profileKey] = items.map(({ id, name, size, type, createdAt, classifiedType, ocrSnippet, sortOrder }) => ({
       id,
       name,
       size,
       type,
       createdAt,
       classifiedType: classifiedType || null,
-      ocrSnippet: ocrSnippet || null
+      ocrSnippet: ocrSnippet || null,
+      sortOrder: typeof sortOrder === "number" ? sortOrder : null
     }));
     localStorage.setItem(LOCAL_META_KEY, JSON.stringify(meta));
   } catch (err) {
@@ -159,7 +161,8 @@ export async function saveRequirementFile(profileKey, file, extraMeta = {}) {
     storagePath: uploadSuccess ? storagePath : null,
     createdAt: new Date().toISOString(),
     classifiedType: extraMeta.classifiedType || null,
-    ocrSnippet: extraMeta.ocrSnippet || null
+    ocrSnippet: extraMeta.ocrSnippet || null,
+    sortOrder: typeof extraMeta.sortOrder === "number" ? extraMeta.sortOrder : null
   };
 
   // 3. Persist to IndexedDB for instant offline preview & local fast retrieval
@@ -223,7 +226,7 @@ export async function saveRequirementFile(profileKey, file, extraMeta = {}) {
  * Updates an existing requirement record with new name, classification, or snippet
  * @param {string} profileKey - Agent profile key
  * @param {string} recordId - Requirement item ID
- * @param {Object} updates - Fields to update (e.g., { name, classifiedType, ocrSnippet })
+ * @param {Object} updates - Fields to update (e.g., { name, classifiedType, ocrSnippet, sortOrder })
  * @returns {Promise<Object>} Updated record
  */
 export async function updateRequirementRecord(profileKey, recordId, updates = {}) {
@@ -256,6 +259,7 @@ export async function updateRequirementRecord(profileKey, recordId, updates = {}
     if (updates.name !== undefined) sbUpdates.file_name = updates.name;
     if (updates.classifiedType !== undefined) sbUpdates.classified_type = updates.classifiedType;
     if (updates.ocrSnippet !== undefined) sbUpdates.ocr_snippet = updates.ocrSnippet;
+    if (updates.sortOrder !== undefined) sbUpdates.sort_order = updates.sortOrder;
 
     if (Object.keys(sbUpdates).length > 0) {
       const { error } = await supabase
@@ -263,7 +267,7 @@ export async function updateRequirementRecord(profileKey, recordId, updates = {}
         .update(sbUpdates)
         .eq("id", recordId);
 
-      if (error && (sbUpdates.classified_type || sbUpdates.ocr_snippet)) {
+      if (error && (sbUpdates.classified_type || sbUpdates.ocr_snippet || sbUpdates.sort_order)) {
         // Fallback without classified fields if column not in DB
         await supabase
           .from("agent_requirements")
@@ -295,6 +299,49 @@ export async function updateRequirementRecord(profileKey, recordId, updates = {}
   const currentList = await getRequirementsByProfile(normKey);
   updateLocalMeta(normKey, currentList);
   return currentList.find((i) => i.id === recordId) || null;
+}
+
+/**
+ * Saves the drag-and-drop ordered sequence of requirements for an agent
+ */
+export async function saveRequirementsOrder(profileKey, items = []) {
+  const normKey = String(profileKey).toLowerCase().trim();
+
+  // 1. Update IndexedDB
+  try {
+    const db = await openDB();
+    const tx = db.transaction(STORE_NAME, "readwrite");
+    const store = tx.objectStore(STORE_NAME);
+    items.forEach((item, idx) => {
+      const getReq = store.get(item.id);
+      getReq.onsuccess = () => {
+        if (getReq.result) {
+          store.put({ ...getReq.result, sortOrder: idx + 1 });
+        }
+      };
+    });
+  } catch (err) {
+    console.warn("IndexedDB save order notice:", err);
+  }
+
+  // 2. Fallback localStorage
+  try {
+    const fbKey = `hrhub_req_blob_${normKey}`;
+    const raw = localStorage.getItem(fbKey);
+    if (raw) {
+      const existing = JSON.parse(raw);
+      const updated = existing.map((rec) => {
+        const foundIdx = items.findIndex((it) => it.id === rec.id);
+        return foundIdx !== -1 ? { ...rec, sortOrder: foundIdx + 1 } : rec;
+      });
+      localStorage.setItem(fbKey, JSON.stringify(updated));
+    }
+  } catch {
+    // ignore
+  }
+
+  updateLocalMeta(normKey, items);
+  return items;
 }
 
 /**
@@ -415,11 +462,13 @@ export async function getRequirementsByProfile(profileKey) {
           dataUrl: d.data_url || d.file_url,
           createdAt: d.created_at,
           classifiedType: d.classified_type || d.classifiedType || null,
-          ocrSnippet: d.ocr_snippet || d.ocrSnippet || null
+          ocrSnippet: d.ocr_snippet || d.ocrSnippet || null,
+          sortOrder: typeof d.sort_order === "number" ? d.sort_order : (typeof d.sortOrder === "number" ? d.sortOrder : null)
         }));
-        await syncLocalCacheWithRemote(normKey, mapped);
-        updateLocalMeta(normKey, mapped);
-        return mapped;
+        const ordered = sortRequirementsByStandardOrder(mapped);
+        await syncLocalCacheWithRemote(normKey, ordered);
+        updateLocalMeta(normKey, ordered);
+        return ordered;
       } else {
         // Supabase confirmed 0 records exist (user deleted them in Supabase).
         // Immediately purge any stale local IndexedDB & localStorage cache!
@@ -446,8 +495,9 @@ export async function getRequirementsByProfile(profileKey) {
     });
 
     if (records && records.length > 0) {
-      updateLocalMeta(normKey, records);
-      return records.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+      const ordered = sortRequirementsByStandardOrder(records);
+      updateLocalMeta(normKey, ordered);
+      return ordered;
     }
   } catch (err) {
     console.warn("IndexedDB read note, checking fallback:", err);
@@ -458,7 +508,7 @@ export async function getRequirementsByProfile(profileKey) {
     const fbKey = `hrhub_req_blob_${normKey}`;
     const fbRecords = JSON.parse(localStorage.getItem(fbKey) || "[]");
     if (fbRecords.length > 0) {
-      return fbRecords.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+      return sortRequirementsByStandardOrder(fbRecords);
     }
   } catch {
     // ignore

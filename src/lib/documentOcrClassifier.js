@@ -4,36 +4,80 @@
 
 import { API_CONFIG } from "../config/apiConfig";
 
-// Standard HR Registration Document Types
-export const DOCUMENT_TYPES = [
-  { id: "barangay_clearance", label: "Barangay Clearance", color: "emerald", icon: "ShieldCheck" },
-  { id: "police_clearance", label: "Police Clearance", color: "emerald", icon: "Shield" },
-  { id: "nbi_clearance", label: "NBI Clearance", color: "emerald", icon: "FileCheck" },
-  { id: "psa_birth_certificate", label: "PSA / NSO Birth Certificate", color: "sky", icon: "Scroll" },
-  { id: "valid_id", label: "Valid Government ID", color: "blue", icon: "CreditCard" },
-  { id: "philhealth_id", label: "PhilHealth ID / MDR", color: "blue", icon: "CreditCard" },
-  { id: "sss_umid", label: "SSS / UMID ID", color: "blue", icon: "CreditCard" },
-  { id: "drivers_license", label: "Driver's License", color: "blue", icon: "CreditCard" },
-  { id: "voters_id", label: "Voter's ID / Certificate", color: "blue", icon: "CreditCard" },
-  { id: "postal_id", label: "Postal ID", color: "blue", icon: "CreditCard" },
-  { id: "passport", label: "Philippine Passport", color: "blue", icon: "CreditCard" },
-  { id: "tin_bir", label: "TIN / BIR ID", color: "blue", icon: "CreditCard" },
-  { id: "medical_certificate", label: "Medical Certificate / Fit to Work", color: "amber", icon: "Stethoscope" },
-  { id: "drug_test", label: "Drug Test Result", color: "amber", icon: "FlaskConical" },
-  { id: "resume_biodata", label: "Resume / Bio-Data", color: "purple", icon: "FileText" },
-  { id: "id_picture_2x2", label: "2x2 ID Photo", color: "teal", icon: "User" },
-  { id: "mayors_permit", label: "Mayor's / Work Permit", color: "slate", icon: "FileText" },
-  { id: "general_document", label: "Registration Document", color: "slate", icon: "File" }
+// Standard HR Registration Document Types in strict priority sequence:
+// 1. Biodata -> 2. Barangay Clearance -> 3. Agency Agreement -> 4. Valid ID -> etc.
+export const DOCUMENT_CATEGORIES = [
+  { id: "biodata", label: "Biodata", cleanName: "Biodata", priority: 1, color: "purple" },
+  { id: "barangay_clearance", label: "Barangay Clearance", cleanName: "Barangay_Clearance", priority: 2, color: "emerald" },
+  { id: "agency_agreement", label: "Agency Agreement", cleanName: "Agency_Agreement", priority: 3, color: "blue" },
+  { id: "valid_id", label: "Valid ID", cleanName: "Valid_ID", priority: 4, color: "indigo" },
+  { id: "police_clearance", label: "Police Clearance", cleanName: "Police_Clearance", priority: 5, color: "teal" },
+  { id: "nbi_clearance", label: "NBI Clearance", cleanName: "NBI_Clearance", priority: 6, color: "cyan" },
+  { id: "psa_birth_certificate", label: "PSA Birth Certificate", cleanName: "PSA_Birth_Certificate", priority: 7, color: "amber" },
+  { id: "medical_certificate", label: "Medical Certificate", cleanName: "Medical_Certificate", priority: 8, color: "rose" },
+  { id: "drug_test", label: "Drug Test Result", cleanName: "Drug_Test_Result", priority: 9, color: "orange" },
+  { id: "id_picture_2x2", label: "2x2 ID Photo", cleanName: "2x2_ID_Photo", priority: 10, color: "fuchsia" },
+  { id: "other_document", label: "Other Document", cleanName: "Document", priority: 99, color: "slate" }
 ];
 
+export const DOCUMENT_TYPES = DOCUMENT_CATEGORIES;
+
 /**
- * Extracts raw text from an image or canvas heuristic
+ * Returns numeric priority rank for document categories (1 = Biodata, 2 = Barangay Clearance, 3 = Agency Agreement, 4 = Valid ID, ...)
+ */
+export function getCategoryPriority(categoryOrName = "") {
+  if (!categoryOrName) return 99;
+  const lower = String(categoryOrName).toLowerCase();
+  if (lower.includes("biodata") || lower.includes("resume") || lower.includes("cv") || lower.includes("personal data")) return 1;
+  if (lower.includes("barangay") || lower.includes("brgy")) return 2;
+  if (lower.includes("agreement") || lower.includes("contract") || lower.includes("agency") || lower.includes("appointment") || lower.includes("moa")) return 3;
+  if (lower.includes("valid id") || lower.includes("philsys") || lower.includes("national id") || lower.includes("driver") || lower.includes("license") || lower.includes("umid") || lower.includes("sss") || lower.includes("philhealth") || lower.includes("voter") || lower.includes("passport") || lower.includes("postal") || lower.includes("prc") || lower.includes("tin") || lower.includes("id card") || lower.includes("identity")) return 4;
+  if (lower.includes("police") || lower.includes("pnp")) return 5;
+  if (lower.includes("nbi")) return 6;
+  if (lower.includes("birth") || lower.includes("psa") || lower.includes("nso")) return 7;
+  if (lower.includes("medical") || lower.includes("fit to work") || lower.includes("health")) return 8;
+  if (lower.includes("drug")) return 9;
+  if (lower.includes("photo") || lower.includes("2x2") || lower.includes("1x1")) return 10;
+  return 99;
+}
+
+/**
+ * Automatically sorts requirement documents into standard sequence:
+ * 1. Biodata -> 2. Barangay Clearance -> 3. Agency Agreement -> 4. Valid ID -> etc.
+ * Custom drag sortOrder is respected if set by user.
+ */
+export function sortRequirementsByStandardOrder(items = []) {
+  return [...items].sort((a, b) => {
+    // If user has dragged items into a custom sortOrder, respect that
+    const aOrder = typeof a.sortOrder === "number" ? a.sortOrder : null;
+    const bOrder = typeof b.sortOrder === "number" ? b.sortOrder : null;
+    if (aOrder !== null && bOrder !== null && aOrder !== bOrder) {
+      return aOrder - bOrder;
+    }
+    const pA = getCategoryPriority(a.classifiedType || a.name);
+    const pB = getCategoryPriority(b.classifiedType || b.name);
+    if (pA !== pB) return pA - pB;
+    return new Date(a.createdAt || 0) - new Date(b.createdAt || 0);
+  });
+}
+
+/**
+ * Extracts raw text from an image or filename heuristic
  */
 function localFilenameHeuristic(fileName = "") {
   const clean = String(fileName).toLowerCase().replace(/[-_.]/g, " ");
 
+  if (clean.includes("biodata") || clean.includes("resume") || clean.includes("cv") || clean.includes("personal data")) {
+    return { type: "Biodata", cleanName: "Biodata", confidence: 0.95 };
+  }
   if (clean.includes("barangay") || clean.includes("brgy") || clean.includes("clearance brgy")) {
-    return { type: "Barangay Clearance", cleanName: "Barangay_Clearance", confidence: 0.92 };
+    return { type: "Barangay Clearance", cleanName: "Barangay_Clearance", confidence: 0.95 };
+  }
+  if (clean.includes("agreement") || clean.includes("contract") || clean.includes("agency") || clean.includes("appointment") || clean.includes("moa")) {
+    return { type: "Agency Agreement", cleanName: "Agency_Agreement", confidence: 0.95 };
+  }
+  if (clean.includes("valid id") || clean.includes("national id") || clean.includes("philsys") || clean.includes("driver") || clean.includes("license") || clean.includes("umid") || clean.includes("sss") || clean.includes("philhealth") || clean.includes("passport") || clean.includes("voter") || clean.includes("postal") || clean.includes("prc") || clean.includes("tin") || clean.includes("id card") || clean.includes("identity")) {
+    return { type: "Valid ID", cleanName: "Valid_ID", confidence: 0.92 };
   }
   if (clean.includes("police") || clean.includes("pnp")) {
     return { type: "Police Clearance", cleanName: "Police_Clearance", confidence: 0.94 };
@@ -44,38 +88,17 @@ function localFilenameHeuristic(fileName = "") {
   if (clean.includes("birth") || clean.includes("psa") || clean.includes("nso") || clean.includes("live birth")) {
     return { type: "PSA Birth Certificate", cleanName: "PSA_Birth_Certificate", confidence: 0.93 };
   }
-  if (clean.includes("philhealth") || clean.includes("mdr")) {
-    return { type: "PhilHealth ID", cleanName: "PhilHealth_ID", confidence: 0.94 };
-  }
-  if (clean.includes("sss") || clean.includes("umid")) {
-    return { type: "SSS / UMID ID", cleanName: "SSS_UMID_ID", confidence: 0.94 };
-  }
-  if (clean.includes("driver") || clean.includes("lto") || clean.includes("license")) {
-    return { type: "Driver's License", cleanName: "Drivers_License", confidence: 0.93 };
-  }
-  if (clean.includes("voter") || clean.includes("comelec")) {
-    return { type: "Voter's Certificate", cleanName: "Voters_Certificate", confidence: 0.91 };
-  }
-  if (clean.includes("postal")) {
-    return { type: "Postal ID", cleanName: "Postal_ID", confidence: 0.92 };
-  }
-  if (clean.includes("passport")) {
-    return { type: "Philippine Passport", cleanName: "Passport", confidence: 0.95 };
-  }
   if (clean.includes("medical") || clean.includes("fit to work") || clean.includes("clinic") || clean.includes("health")) {
     return { type: "Medical Certificate", cleanName: "Medical_Certificate", confidence: 0.92 };
   }
   if (clean.includes("drug") || clean.includes("drug test")) {
     return { type: "Drug Test Result", cleanName: "Drug_Test_Result", confidence: 0.94 };
   }
-  if (clean.includes("resume") || clean.includes("biodata") || clean.includes("cv")) {
-    return { type: "Resume / Bio-Data", cleanName: "Resume_BioData", confidence: 0.90 };
+  if (clean.includes("2x2") || clean.includes("1x1") || clean.includes("id photo") || clean.includes("photo") || clean.includes("selfie")) {
+    return { type: "2x2 ID Photo", cleanName: "2x2_ID_Photo", confidence: 0.90 };
   }
-  if (clean.includes("2x2") || clean.includes("1x1") || clean.includes("id photo") || clean.includes("selfie")) {
-    return { type: "2x2 ID Photo", cleanName: "2x2_ID_Photo", confidence: 0.89 };
-  }
-  if (clean.includes("id") || clean.includes("card") || clean.includes("valid id")) {
-    return { type: "Valid Government ID", cleanName: "Government_Valid_ID", confidence: 0.85 };
+  if (clean.includes("id") || clean.includes("card")) {
+    return { type: "Valid ID", cleanName: "Valid_ID", confidence: 0.86 };
   }
 
   return null;
@@ -97,17 +120,29 @@ function parseDataUrl(dataUrl) {
 /**
  * Classifies an employment requirement document using Gemini Multimodal OCR + Local Heuristic Engine
  *
- * @param {Object} options
- * @param {string} options.dataUrl - Base64 data URL of the image
- * @param {string} options.fileName - Original file name
- * @param {string} options.agentName - Full name of the agent for personalized naming
+ * @param {Object|File} fileOrData - File object or options { dataUrl, fileName, agentName }
+ * @param {string} [optionalAgentName] - Agent's name if first param is File
  * @returns {Promise<Object>} classification result
  */
-export async function classifyRequirementDocument({
-  dataUrl,
-  fileName = "document.jpg",
-  agentName = ""
-}) {
+export async function classifyRequirementDocument(fileOrData, optionalAgentName = "") {
+  let dataUrl = "";
+  let fileName = "document.jpg";
+  let agentName = optionalAgentName;
+
+  if (fileOrData instanceof File || fileOrData instanceof Blob) {
+    fileName = fileOrData.name || "document.jpg";
+    dataUrl = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(new Error("Failed to read file"));
+      reader.readAsDataURL(fileOrData);
+    });
+  } else if (typeof fileOrData === "object" && fileOrData !== null) {
+    dataUrl = fileOrData.dataUrl || "";
+    fileName = fileOrData.name || fileOrData.fileName || "document.jpg";
+    agentName = fileOrData.agentName || optionalAgentName;
+  }
+
   const fileExt = fileName.split(".").pop() || "jpg";
   const cleanAgentPrefix = agentName ? agentName.trim().replace(/[^a-zA-Z0-9_\-]/g, "_") : "";
 
@@ -120,35 +155,29 @@ export async function classifyRequirementDocument({
 
     for (const gModel of candidateModels) {
       try {
-        const prompt = `You are an expert HR Document OCR and Classification AI for the Philippines (STL Gaming & Construction).
+        const prompt = `You are an expert HR Document OCR and Classification AI for the Philippines (STL Gaming, Agency & Human Resources).
 Analyze the attached employment requirement image. Perform optical character recognition (OCR) on all stamps, seals, agency headers, text, and logos.
 
-Classify the document strictly into ONE of the following standard HR requirement categories:
-- Barangay Clearance
-- Police Clearance
-- NBI Clearance
-- PSA Birth Certificate
-- PhilHealth ID
-- SSS / UMID ID
-- Driver's License
-- Voter's Certificate
-- Postal ID
-- Philippine Passport
-- TIN / BIR ID
-- Medical Certificate
-- Drug Test Result
-- Resume / Bio-Data
-- 2x2 ID Photo
-- Valid Government ID
-- Registration Document
+Classify the document strictly into ONE of the following standard HR requirement categories (in prioritized order):
+1. Biodata (Biodata, Resume, Curriculum Vitae, Personal Data Sheet)
+2. Barangay Clearance (Barangay Clearance, Certificate of Residency, Punong Barangay Certification)
+3. Agency Agreement (Agency Agreement, Agent Contract, Agency Appointment, MOA, Terms of Engagement)
+4. Valid ID (Philippine National ID, PhilSys, Driver's License, SSS/UMID, PhilHealth ID, Passport, Voter's ID, Postal ID, PRC)
+5. Police Clearance (PNP Police Clearance)
+6. NBI Clearance (National Bureau of Investigation Clearance)
+7. PSA Birth Certificate (PSA/NSO Certificate of Live Birth)
+8. Medical Certificate (Medical Certificate, Fit to Work, Clinic Certificate)
+9. Drug Test Result (Laboratory Drug Test Screening)
+10. 2x2 ID Photo (ID Picture, 2x2 Picture, 1x1 Picture)
+11. Other Document (Any other official document)
 
 Return ONLY a valid JSON object without markdown formatting:
 {
-  "classifiedType": "Document category from list above",
-  "cleanIdentifier": "Shorthand label (e.g., Barangay_Clearance, Police_Clearance, NBI_Clearance, etc.)",
+  "classifiedType": "Document category from list above (e.g. Biodata, Barangay Clearance, Agency Agreement, Valid ID, Police Clearance, NBI Clearance, PSA Birth Certificate, Medical Certificate, Drug Test Result, 2x2 ID Photo)",
+  "cleanIdentifier": "Shorthand label (e.g. Biodata, Barangay_Clearance, Agency_Agreement, Valid_ID, Police_Clearance, etc.)",
   "confidence": 0.95,
-  "ocrSnippet": "Exact text or agency name read from document header or seal",
-  "agencyIssuer": "Issuing agency or barangay if detected"
+  "ocrSnippet": "Exact text or agency header read from document header or seal",
+  "agencyIssuer": "Issuing agency, barangay, or clinic if detected"
 }`;
 
         const res = await fetch(
@@ -186,14 +215,17 @@ Return ONLY a valid JSON object without markdown formatting:
             const parsedJson = JSON.parse(cleanJsonText);
 
             if (parsedJson?.classifiedType) {
+              const cleanId = parsedJson.cleanIdentifier || parsedJson.classifiedType.replace(/\s+/g, "_");
               const suggestedBaseName = cleanAgentPrefix
-                ? `${parsedJson.cleanIdentifier || parsedJson.classifiedType.replace(/\s+/g, "_")}_${cleanAgentPrefix}.${fileExt}`
-                : `${parsedJson.cleanIdentifier || parsedJson.classifiedType.replace(/\s+/g, "_")}.${fileExt}`;
+                ? `${cleanId}_${cleanAgentPrefix}.${fileExt}`
+                : `${cleanId}.${fileExt}`;
 
               return {
+                docType: parsedJson.classifiedType,
                 classifiedType: parsedJson.classifiedType,
                 suggestedFileName: suggestedBaseName,
                 confidence: parsedJson.confidence || 0.95,
+                extractedSnippet: parsedJson.ocrSnippet || "Verified via Gemini Vision OCR",
                 ocrSnippet: parsedJson.ocrSnippet || "Verified via Gemini Vision OCR",
                 agencyIssuer: parsedJson.agencyIssuer || "",
                 engine: `AI Vision (${gModel})`
@@ -215,10 +247,12 @@ Return ONLY a valid JSON object without markdown formatting:
       : `${heuristic.cleanName}.${fileExt}`;
 
     return {
+      docType: heuristic.type,
       classifiedType: heuristic.type,
       suggestedFileName: suggestedBaseName,
       confidence: heuristic.confidence,
-      ocrSnippet: `Document pattern matched: ${heuristic.type}`,
+      extractedSnippet: `Document pattern recognized: ${heuristic.type}`,
+      ocrSnippet: `Document pattern recognized: ${heuristic.type}`,
       agencyIssuer: "",
       engine: "Pattern Engine"
     };
@@ -226,13 +260,15 @@ Return ONLY a valid JSON object without markdown formatting:
 
   // 3. Default fallback if unidentifiable
   const cleanDocName = cleanAgentPrefix
-    ? `Registration_Requirement_${cleanAgentPrefix}.${fileExt}`
-    : `Registration_Requirement.${fileExt}`;
+    ? `Document_${cleanAgentPrefix}.${fileExt}`
+    : `Document.${fileExt}`;
 
   return {
-    classifiedType: "Registration Document",
+    docType: "Other Document",
+    classifiedType: "Other Document",
     suggestedFileName: cleanDocName,
     confidence: 0.70,
+    extractedSnippet: "General requirement document",
     ocrSnippet: "General requirement document",
     agencyIssuer: "",
     engine: "Standard Heuristic"

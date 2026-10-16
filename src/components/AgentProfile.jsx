@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import {
   Activity, Archive, Award, CalendarDays, Check, CheckCircle2, CreditCard, Database, Download, Eye, FileDown, FileText,
   Fingerprint, Home, KeyRound, Loader2, Lock, Pencil, Phone, ShieldCheck, Sparkles, Trash2, Upload, UserRound, X,
-  Scan, FileCheck, Printer, ExternalLink, RefreshCw, FileSearch, Tag, Info
+  Scan, FileCheck, Printer, ExternalLink, RefreshCw, FileSearch, Tag, Info,
+  GripVertical, ArrowLeft, ArrowRight, ChevronDown, ListOrdered, SlidersHorizontal
 } from "lucide-react";
 import AgentIdCardModal from "./AgentIdCardModal";
 import {
@@ -17,11 +18,14 @@ import {
   batchDownloadIndividualImages,
   generateRequirementsPdfDoc,
   generateSingleRequirementPdfDoc,
-  updateRequirementRecord
+  updateRequirementRecord,
+  saveRequirementsOrder
 } from "../lib/requirementsStorage";
 import {
   classifyRequirementDocument,
-  DOCUMENT_TYPES
+  DOCUMENT_CATEGORIES,
+  sortRequirementsByStandardOrder,
+  getCategoryPriority
 } from "../lib/documentOcrClassifier";
 import {
   getAgentProfileOverride,
@@ -31,17 +35,16 @@ import {
 function getDocumentBadgeStyle(type) {
   if (!type) return "bg-slate-100 text-slate-700 border-slate-200";
   const lower = type.toLowerCase();
-  if (lower.includes("barangay")) return "bg-emerald-50 text-emerald-700 border-emerald-200";
-  if (lower.includes("police")) return "bg-blue-50 text-blue-700 border-blue-200";
-  if (lower.includes("nbi")) return "bg-indigo-50 text-indigo-700 border-indigo-200";
-  if (lower.includes("birth") || lower.includes("psa")) return "bg-amber-50 text-amber-700 border-amber-200";
-  if (lower.includes("philhealth")) return "bg-teal-50 text-teal-700 border-teal-200";
-  if (lower.includes("sss") || lower.includes("umid")) return "bg-cyan-50 text-cyan-700 border-cyan-200";
-  if (lower.includes("driver")) return "bg-purple-50 text-purple-700 border-purple-200";
-  if (lower.includes("voter")) return "bg-violet-50 text-violet-700 border-violet-200";
-  if (lower.includes("medical") || lower.includes("drug")) return "bg-rose-50 text-rose-700 border-rose-200";
-  if (lower.includes("resume") || lower.includes("cv")) return "bg-sky-50 text-sky-700 border-sky-200";
-  if (lower.includes("photo") || lower.includes("2x2")) return "bg-fuchsia-50 text-fuchsia-700 border-fuchsia-200";
+  if (lower.includes("biodata") || lower.includes("resume") || lower.includes("cv")) return "bg-purple-100 text-purple-800 border-purple-300";
+  if (lower.includes("barangay") || lower.includes("brgy")) return "bg-emerald-100 text-emerald-800 border-emerald-300";
+  if (lower.includes("agreement") || lower.includes("contract") || lower.includes("agency")) return "bg-blue-100 text-blue-800 border-blue-300";
+  if (lower.includes("valid id") || lower.includes("national id") || lower.includes("driver") || lower.includes("passport") || lower.includes("umid") || lower.includes("sss") || lower.includes("philhealth") || lower.includes("voter") || lower.includes("id card") || lower.includes("identity")) return "bg-indigo-100 text-indigo-800 border-indigo-300";
+  if (lower.includes("police")) return "bg-teal-100 text-teal-800 border-teal-300";
+  if (lower.includes("nbi")) return "bg-cyan-100 text-cyan-800 border-cyan-300";
+  if (lower.includes("birth") || lower.includes("psa") || lower.includes("nso")) return "bg-amber-100 text-amber-800 border-amber-300";
+  if (lower.includes("medical") || lower.includes("fit to work")) return "bg-rose-100 text-rose-800 border-rose-300";
+  if (lower.includes("drug")) return "bg-orange-100 text-orange-800 border-orange-300";
+  if (lower.includes("photo") || lower.includes("2x2") || lower.includes("1x1")) return "bg-fuchsia-100 text-fuchsia-800 border-fuchsia-300";
   return "bg-slate-100 text-slate-800 border-slate-200";
 }
 
@@ -111,6 +114,9 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
   });
   const [scanningOcrIds, setScanningOcrIds] = useState([]);
   const [isBatchScanningOcr, setIsBatchScanningOcr] = useState(false);
+  const [draggedIndex, setDraggedIndex] = useState(null);
+  const [dragOverIndex, setDragOverIndex] = useState(null);
+  const [editingCategoryId, setEditingCategoryId] = useState(null);
 
   const agentKey = getAgentIdentifier(agent, index);
 
@@ -258,6 +264,122 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
     }
   };
 
+  // --- DRAG AND DROP REORDERING HANDLERS ---
+  const handleDragStart = (e, index) => {
+    setDraggedIndex(index);
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", String(index));
+  };
+
+  const handleDragOver = (e, index) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    if (dragOverIndex !== index) {
+      setDragOverIndex(index);
+    }
+  };
+
+  const handleDragLeave = () => {
+    setDragOverIndex(null);
+  };
+
+  const handleDrop = async (e, targetIndex) => {
+    e.preventDefault();
+    setDragOverIndex(null);
+    if (draggedIndex === null || draggedIndex === targetIndex) {
+      setDraggedIndex(null);
+      return;
+    }
+
+    const reordered = [...uploadedRequirements];
+    const [removed] = reordered.splice(draggedIndex, 1);
+    reordered.splice(targetIndex, 0, removed);
+
+    const withOrder = reordered.map((item, idx) => ({
+      ...item,
+      sortOrder: idx + 1
+    }));
+
+    setUploadedRequirements(withOrder);
+    setDraggedIndex(null);
+    await saveRequirementsOrder(agentKey, withOrder);
+
+    setRequirementNotice({
+      type: "success",
+      message: `Document moved to Page ${targetIndex + 1} of ${withOrder.length}`
+    });
+    setTimeout(() => setRequirementNotice(null), 3000);
+  };
+
+  const handleMoveItem = async (currentIndex, direction) => {
+    const targetIndex = currentIndex + direction;
+    if (targetIndex < 0 || targetIndex >= uploadedRequirements.length) return;
+
+    const reordered = [...uploadedRequirements];
+    const [item] = reordered.splice(currentIndex, 1);
+    reordered.splice(targetIndex, 0, item);
+
+    const withOrder = reordered.map((rec, idx) => ({
+      ...rec,
+      sortOrder: idx + 1
+    }));
+
+    setUploadedRequirements(withOrder);
+    await saveRequirementsOrder(agentKey, withOrder);
+  };
+
+  const handleResetToStandardSequence = async () => {
+    // Strict priority: 1. Biodata -> 2. Barangay Clearance -> 3. Agency Agreement -> 4. Valid ID -> etc.
+    const sorted = [...uploadedRequirements].sort((a, b) => {
+      const pA = getCategoryPriority(a.classifiedType || a.name);
+      const pB = getCategoryPriority(b.classifiedType || b.name);
+      if (pA !== pB) return pA - pB;
+      return new Date(a.createdAt || 0) - new Date(b.createdAt || 0);
+    });
+
+    const withOrder = sorted.map((rec, idx) => ({
+      ...rec,
+      sortOrder: idx + 1
+    }));
+
+    setUploadedRequirements(withOrder);
+    await saveRequirementsOrder(agentKey, withOrder);
+
+    setRequirementNotice({
+      type: "success",
+      message: "Re-sorted documents: 1. Biodata → 2. Barangay Clearance → 3. Agency Agreement → 4. Valid ID"
+    });
+    setTimeout(() => setRequirementNotice(null), 4000);
+  };
+
+  const handleChangeCategory = async (file, categoryObj) => {
+    setEditingCategoryId(null);
+    const fileExt = file.name.split(".").pop() || "jpg";
+    const cleanAgentPrefix = name ? name.trim().replace(/[^a-zA-Z0-9_\-]/g, "_") : "";
+    const newName = cleanAgentPrefix
+      ? `${categoryObj.cleanName}_${cleanAgentPrefix}.${fileExt}`
+      : `${categoryObj.cleanName}.${fileExt}`;
+
+    try {
+      const updated = await updateRequirementRecord(agentKey, file.id, {
+        classifiedType: categoryObj.label,
+        name: newName
+      });
+
+      setUploadedRequirements((current) =>
+        current.map((item) => (item.id === file.id ? { ...item, ...updated, classifiedType: categoryObj.label, name: newName } : item))
+      );
+
+      setRequirementNotice({
+        type: "success",
+        message: `Category updated to "${categoryObj.label}"!`
+      });
+      setTimeout(() => setRequirementNotice(null), 3000);
+    } catch (err) {
+      console.error("Failed to change category:", err);
+    }
+  };
+
   const handleRequirementUpload = async (event) => {
     const files = Array.from(event.target.files || []);
     if (!files.length) return;
@@ -288,15 +410,24 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
         newRecords.push(savedRecord);
       }
 
-      setUploadedRequirements((current) => [
+      const allItems = [
         ...newRecords,
-        ...current.filter((c) => !newRecords.some((n) => n.id === c.id))
-      ]);
+        ...uploadedRequirements.filter((c) => !newRecords.some((n) => n.id === c.id))
+      ];
+
+      // Auto-sort into standard priority order: 1. Biodata -> 2. Barangay -> 3. Agreement -> 4. Valid ID
+      const ordered = sortRequirementsByStandardOrder(allItems).map((item, idx) => ({
+        ...item,
+        sortOrder: idx + 1
+      }));
+
+      setUploadedRequirements(ordered);
+      await saveRequirementsOrder(agentKey, ordered);
 
       const classifiedCount = newRecords.filter((r) => r.classifiedType && r.classifiedType !== "Other Document").length;
       setRequirementNotice({
         type: "success",
-        message: `${files.length} document${files.length === 1 ? "" : "s"} uploaded and verified via AI OCR (${classifiedCount} classified)`
+        message: `${files.length} document${files.length === 1 ? "" : "s"} uploaded, classified via OCR, and auto-sorted (${classifiedCount} classified)`
       });
     } catch (err) {
       console.error("Error saving requirement:", err);
@@ -352,6 +483,7 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
 
     let successCount = 0;
     try {
+      let updatedList = [...uploadedRequirements];
       for (const item of uploadedRequirements) {
         setScanningOcrIds((prev) => [...prev, item.id]);
         try {
@@ -362,9 +494,8 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
             name: ocrResult.suggestedFileName || item.name
           });
 
-          setUploadedRequirements((current) =>
-            current.map((rec) => (rec.id === item.id ? { ...rec, ...updated } : rec))
-          );
+          updatedList = updatedList.map((rec) => (rec.id === item.id ? { ...rec, ...updated } : rec));
+          setUploadedRequirements(updatedList);
           successCount++;
         } catch (itemErr) {
           console.warn(`OCR scan failed for item ${item.name}:`, itemErr);
@@ -373,9 +504,17 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
         }
       }
 
+      // Auto-sort into standard priority order: 1. Biodata -> 2. Barangay -> 3. Agreement -> 4. Valid ID
+      const ordered = sortRequirementsByStandardOrder(updatedList).map((rec, idx) => ({
+        ...rec,
+        sortOrder: idx + 1
+      }));
+      setUploadedRequirements(ordered);
+      await saveRequirementsOrder(agentKey, ordered);
+
       setRequirementNotice({
         type: "success",
-        message: `Successfully classified ${successCount} document${successCount !== 1 ? "s" : ""} via AI OCR!`
+        message: `Successfully classified ${successCount} document${successCount !== 1 ? "s" : ""} & sorted: Biodata → Barangay → Agreement → Valid ID!`
       });
       setTimeout(() => setRequirementNotice(null), 5000);
     } catch (err) {
@@ -952,12 +1091,47 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
                           )}
                         </button>
                       )}
+
+                      {/* Auto-Sort by Standard Sequence Button */}
+                      {uploadedRequirements.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={handleResetToStandardSequence}
+                          className="inline-flex items-center gap-1.5 rounded-xl border border-purple-200 bg-purple-50/80 px-3.5 py-2.5 text-xs font-bold text-purple-700 transition hover:bg-purple-100 hover:border-purple-300 shadow-xs"
+                          title="Sort in standard sequence: 1. Biodata -> 2. Barangay Clearance -> 3. Agency Agreement -> 4. Valid ID"
+                        >
+                          <ListOrdered size={14} className="text-purple-600" />
+                          <span>Auto-Sort Sequence</span>
+                        </button>
+                      )}
                     </div>
 
                     <p className="text-[11px] text-slate-400">
-                      OCR auto-identifies clearances, IDs, birth certs & resumes
+                      OCR auto-identifies Biodata, Barangay, Agreement, Valid ID & more
                     </p>
                   </div>
+
+                  {/* Standard Sequence Guide Banner */}
+                  {uploadedRequirements.length > 0 && (
+                    <div className="flex flex-wrap items-center justify-between gap-2 px-3.5 py-2 rounded-xl bg-slate-100/90 border border-slate-200/90 text-xs text-slate-600 shadow-2xs">
+                      <div className="flex items-center gap-1.5 font-extrabold text-slate-800">
+                        <span className="flex h-5 w-5 items-center justify-center rounded-md bg-purple-600 text-[10px] text-white">#</span>
+                        <span className="text-[11px]">Priority Sequence:</span>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-1 text-[10px] font-bold">
+                        <span className="px-2 py-0.5 rounded-md bg-purple-100 text-purple-900 border border-purple-200">1. Biodata</span>
+                        <span className="text-slate-400">→</span>
+                        <span className="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-900 border border-emerald-200">2. Barangay Clearance</span>
+                        <span className="text-slate-400">→</span>
+                        <span className="px-2 py-0.5 rounded-md bg-blue-100 text-blue-900 border border-blue-200">3. Agency Agreement</span>
+                        <span className="text-slate-400">→</span>
+                        <span className="px-2 py-0.5 rounded-md bg-indigo-100 text-indigo-900 border border-indigo-200">4. Valid ID</span>
+                        <span className="text-slate-400">→</span>
+                        <span className="px-2 py-0.5 rounded-md bg-slate-200 text-slate-700">5. Other Clearances</span>
+                      </div>
+                      <span className="text-[10px] font-medium text-slate-400 italic">Drag cards to arrange PDF page order</span>
+                    </div>
+                  )}
 
                   {/* Prominent Download Bar with Interactive PDF Preview and Batch Downloads */}
                   {uploadedRequirements.length > 0 && (
@@ -969,7 +1143,7 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
                         <div>
                           <h4 className="text-xs font-extrabold text-slate-900">Download Requirements</h4>
                           <p className="text-[10px] font-medium text-slate-500">
-                            {uploadedRequirements.length} {uploadedRequirements.length === 1 ? "document" : "documents"} ready · Preview before download
+                            {uploadedRequirements.length} {uploadedRequirements.length === 1 ? "document" : "documents"} ready · Following page sequence
                           </p>
                         </div>
                       </div>
@@ -1037,21 +1211,69 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
                 ) : uploadedRequirements.length > 0 ? (
                   <div className="space-y-2">
                     <div className="flex items-center justify-between text-[10px] font-bold text-slate-400 uppercase tracking-wider px-1">
-                      <span>Uploaded Documents ({uploadedRequirements.length})</span>
+                      <span>Uploaded Documents ({uploadedRequirements.length}) · Drag or Click Arrows to Reorder</span>
                       <span className="text-emerald-600 flex items-center gap-1 font-semibold normal-case">
                         <ShieldCheck size={12} /> Persisted in database
                       </span>
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                      {uploadedRequirements.map((file) => {
+                      {uploadedRequirements.map((file, idx) => {
                         const isImage = file.type?.startsWith("image/") || file.dataUrl?.startsWith("data:image/");
                         const isScanningThis = scanningOcrIds.includes(file.id);
+                        const isBeingDragged = draggedIndex === idx;
+                        const isDragOver = dragOverIndex === idx;
+
                         return (
                           <div
                             key={file.id}
-                            className="group relative rounded-xl border border-slate-200 bg-slate-50/60 p-2.5 transition hover:bg-white hover:border-slate-300 hover:shadow-sm flex flex-col justify-between gap-2"
+                            draggable
+                            onDragStart={(e) => handleDragStart(e, idx)}
+                            onDragOver={(e) => handleDragOver(e, idx)}
+                            onDragLeave={handleDragLeave}
+                            onDrop={(e) => handleDrop(e, idx)}
+                            className={`group relative rounded-xl border p-2.5 transition duration-150 flex flex-col justify-between gap-2 ${
+                              isDragOver
+                                ? "border-indigo-500 ring-2 ring-indigo-400/50 bg-indigo-50/40 shadow-lg scale-[1.02]"
+                                : isBeingDragged
+                                ? "opacity-40 border-dashed border-slate-400 bg-slate-100"
+                                : "border-slate-200 bg-slate-50/80 hover:bg-white hover:border-slate-300 hover:shadow-sm"
+                            }`}
                           >
+                            {/* Page Sequence Bar & Directional Move Controls */}
+                            <div className="flex items-center justify-between gap-1 pb-1.5 border-b border-slate-200/60 text-slate-600">
+                              <div
+                                className="flex items-center gap-1.5 cursor-grab active:cursor-grabbing"
+                                title="Drag card to move page order"
+                              >
+                                <GripVertical size={14} className="text-slate-400 group-hover:text-slate-700" />
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-slate-900 text-emerald-400 shadow-2xs">
+                                  Page {idx + 1}
+                                </span>
+                              </div>
+
+                              <div className="flex items-center gap-0.5">
+                                <button
+                                  type="button"
+                                  disabled={idx === 0}
+                                  onClick={() => handleMoveItem(idx, -1)}
+                                  className="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-200 disabled:opacity-20 disabled:hover:bg-transparent transition"
+                                  title="Move earlier (Page -1)"
+                                >
+                                  <ArrowLeft size={12} />
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={idx === uploadedRequirements.length - 1}
+                                  onClick={() => handleMoveItem(idx, 1)}
+                                  className="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-200 disabled:opacity-20 disabled:hover:bg-transparent transition"
+                                  title="Move later (Page +1)"
+                                >
+                                  <ArrowRight size={12} />
+                                </button>
+                              </div>
+                            </div>
+
                             {/* Preview Area */}
                             {isImage && file.dataUrl ? (
                               <div
@@ -1074,36 +1296,70 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
                               </div>
                             )}
 
-                            {/* Classification Badge & On-Demand OCR Scan */}
-                            <div className="flex items-center justify-between gap-1 pt-0.5">
-                              <span
-                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-extrabold border ${getDocumentBadgeStyle(
-                                  file.classifiedType
-                                )}`}
-                                title={file.ocrSnippet ? `Extracted Snippet: ${file.ocrSnippet}` : file.classifiedType || "Unclassified document"}
-                              >
-                                <Tag size={10} />
-                                <span className="truncate max-w-[125px]">{file.classifiedType || "Unclassified"}</span>
-                              </span>
+                            {/* Document Category Badge with Edit Dropdown */}
+                            <div className="space-y-1">
+                              <div className="flex items-center justify-between gap-1">
+                                <div className="relative">
+                                  <button
+                                    type="button"
+                                    onClick={() => setEditingCategoryId(editingCategoryId === file.id ? null : file.id)}
+                                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-extrabold border transition ${getDocumentBadgeStyle(
+                                      file.classifiedType
+                                    )} hover:brightness-95`}
+                                    title="Click to change document category"
+                                  >
+                                    <Tag size={10} />
+                                    <span className="truncate max-w-[115px]">{file.classifiedType || "Unclassified"}</span>
+                                    <ChevronDown size={10} className="opacity-70" />
+                                  </button>
 
-                              <button
-                                type="button"
-                                onClick={() => handleClassifySingleRequirement(file)}
-                                disabled={isScanningThis}
-                                className="inline-flex items-center gap-1 text-[10px] font-bold text-indigo-600 hover:text-indigo-700 bg-indigo-50/80 hover:bg-indigo-100 px-1.5 py-0.5 rounded transition disabled:opacity-50"
-                                title="Run AI OCR scan on this document to recognize type and rename"
-                              >
-                                {isScanningThis ? (
-                                  <Loader2 size={10} className="animate-spin text-indigo-600" />
-                                ) : (
-                                  <Scan size={10} />
-                                )}
-                                <span>{file.classifiedType ? "Re-scan" : "AI OCR"}</span>
-                              </button>
+                                  {/* Category Dropdown Picker */}
+                                  {editingCategoryId === file.id && (
+                                    <div
+                                      className="absolute left-0 top-full mt-1 w-48 rounded-xl bg-white shadow-xl border border-slate-200 p-1.5 z-40 max-h-56 overflow-y-auto"
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      <p className="px-2 py-1 text-[9px] font-extrabold uppercase text-slate-400 tracking-wider">
+                                        Select Category
+                                      </p>
+                                      {DOCUMENT_CATEGORIES.map((cat) => (
+                                        <button
+                                          key={cat.id}
+                                          type="button"
+                                          onClick={() => handleChangeCategory(file, cat)}
+                                          className={`w-full text-left px-2 py-1 rounded-lg text-[10px] font-bold transition flex items-center justify-between ${
+                                            file.classifiedType === cat.label
+                                              ? "bg-slate-900 text-white"
+                                              : "text-slate-700 hover:bg-slate-100"
+                                          }`}
+                                        >
+                                          <span>{cat.label}</span>
+                                          {file.classifiedType === cat.label && <Check size={11} />}
+                                        </button>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleClassifySingleRequirement(file)}
+                                  disabled={isScanningThis}
+                                  className="inline-flex items-center gap-1 text-[10px] font-bold text-indigo-600 hover:text-indigo-700 bg-indigo-50/80 hover:bg-indigo-100 px-1.5 py-0.5 rounded transition disabled:opacity-50"
+                                  title="Run AI OCR scan on this document to recognize type and rename"
+                                >
+                                  {isScanningThis ? (
+                                    <Loader2 size={10} className="animate-spin text-indigo-600" />
+                                  ) : (
+                                    <Scan size={10} />
+                                  )}
+                                  <span>{file.classifiedType ? "Re-scan" : "AI OCR"}</span>
+                                </button>
+                              </div>
                             </div>
 
                             {/* Info & Actions */}
-                            <div className="space-y-1">
+                            <div className="space-y-0.5">
                               <p className="text-xs font-bold text-slate-800 truncate" title={file.name}>
                                 {file.name}
                               </p>
