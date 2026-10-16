@@ -133,7 +133,7 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
               fullName: profileOverride.fullName || prev.fullName,
               birthday: profileOverride.birthday || prev.birthday,
               homeAddress: profileOverride.homeAddress || prev.homeAddress,
-              contactNumber: profileOverride.contactNumber || prev.contactNumber,
+              contactNumber: rawValueOf(agent, ["contactNumber", "contact_number", "phone", "phone_number", "phoneNumber"]),
               emergencyName: profileOverride.emergencyName || prev.emergencyName,
               emergencyContactNumber: profileOverride.emergencyContactNumber || prev.emergencyContactNumber,
               boothNumber: profileOverride.boothNumber || prev.boothNumber,
@@ -171,7 +171,8 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
   const role = valueOf(agent, ["role", "position", "title"], "SALES REPRESENTATIVE");
   const birthday = form.birthday || savedOverride?.birthday || valueOf(agent, ["birthday", "birthdate", "birth_date", "date_of_birth", "dateOfBirth"]);
   const homeAddress = form.homeAddress || savedOverride?.homeAddress || valueOf(agent, ["home_address", "homeAddress", "address", "location"]);
-  const contactNumber = form.contactNumber || savedOverride?.contactNumber || valueOf(agent, ["contactNumber", "contact_number", "phone", "phone_number", "phoneNumber"]);
+  // Contact Number strictly adheres to the Source API and cannot be overwritten
+  const contactNumber = valueOf(agent, ["contactNumber", "contact_number", "phone", "phone_number", "phoneNumber"]);
   const emergencyName = form.emergencyName || savedOverride?.emergencyName || valueOf(agent, ["emergency_contact_name", "emergencyContactName", "emergency_name", "emergencyName", "contact_person"]);
   const emergencyContactNumber = form.emergencyContactNumber || savedOverride?.emergencyContactNumber || valueOf(agent, ["emergency_contact_number", "emergencyContactNumber", "emergency_phone", "emergencyPhone"]);
   const registrationDate = valueOf(agent, ["date_of_registration", "dateOfRegistration", "registration_date", "registrationDate", "created_at"]);
@@ -202,7 +203,7 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
         fullName: form.fullName,
         birthday: form.birthday,
         address: form.homeAddress,
-        contactNumber: form.contactNumber,
+        contactNumber: rawValueOf(agent, ["contactNumber", "contact_number", "phone", "phone_number", "phoneNumber"]),
         emergency_contact_name: form.emergencyName,
         emergency_contact_number: form.emergencyContactNumber,
         booth_number: form.boothNumber,
@@ -867,9 +868,22 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
                     </div>
                   </div>
                   <div className="pt-4">
-                    <div className={fieldCardClass(isEditing ? (form.contactNumber || "Not provided") : contactNumber)}>
-                      <p className={`flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider ${fieldLabelClass(contactNumber)}`}><Phone size={13} /> Contact No.</p>
-                      {isEditing ? <input value={form.contactNumber} onChange={(event) => updateField("contactNumber", event.target.value)} className="mt-1.5 w-full rounded-lg border border-slate-200 px-2.5 py-2 text-sm font-semibold text-slate-700 outline-none focus:border-emerald-500" /> : <p className="mt-1.5 text-sm font-semibold text-slate-700">{contactNumber}</p>}
+                    <div className={fieldCardClass(contactNumber)}>
+                      <div className="flex items-center justify-between">
+                        <p className={`flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider ${fieldLabelClass(contactNumber)}`}><Phone size={13} /> Contact No.</p>
+                        {isEditing && (
+                          <span className="flex items-center gap-1 text-[9.5px] font-extrabold text-slate-500 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-full">
+                            <Lock size={10} className="text-slate-500" />
+                            Source API Only
+                          </span>
+                        )}
+                      </div>
+                      <p className="mt-1.5 text-sm font-semibold text-slate-700">{contactNumber}</p>
+                      {isEditing && (
+                        <p className="mt-1 text-[10px] font-medium text-slate-400">
+                          Strictly synced with Source API · Read-only
+                        </p>
+                      )}
                     </div>
                   </div>
                 </div>
