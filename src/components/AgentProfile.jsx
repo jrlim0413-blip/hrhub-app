@@ -105,6 +105,7 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
   const [draggedPhotoId, setDraggedPhotoId] = useState(null);
   const [dragOverPhotoId, setDragOverPhotoId] = useState(null);
   const [organizingSlotId, setOrganizingSlotId] = useState(null);
+  const [activeCoverSlotPhoto, setActiveCoverSlotPhoto] = useState({});
 
   const agentKey = getAgentIdentifier(agent, index);
 
@@ -310,10 +311,12 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
         const pageNum = baseSubOrder + i + 1;
-        // Keep user's exact file name (e.g., "1.jpg", "2.jpg", "agreement_1.png")
-        const preferredFileName = file.name || (slot.allowMultiple
-          ? `${slot.cleanName}_${pageNum}_${cleanAgentPrefix}`
-          : `${slot.cleanName}_${cleanAgentPrefix}`);
+        const rawBase = file.name || "document";
+        const cleanSlotPrefix = slot.cleanName;
+        const prefixNeeded = !rawBase.toLowerCase().includes(slot.cleanName.toLowerCase());
+        const preferredFileName = prefixNeeded
+          ? (slot.allowMultiple ? `${cleanSlotPrefix}_Page_${pageNum}_${rawBase}` : `${cleanSlotPrefix}_${rawBase}`)
+          : rawBase;
 
         const extraMeta = {
           categoryKey: slot.id,
@@ -356,6 +359,56 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
       setUploadingSlotId(null);
       event.target.value = "";
       setTimeout(() => setRequirementNotice(null), 4000);
+    }
+  };
+
+  // --- RECOVERY HELPER FOR LEGACY UNASSIGNED DATABASE DOCUMENTS ---
+  const handleBulkAssignSlot = async (itemsToAssign, targetSlotId) => {
+    try {
+      const slotDef = REGISTRATION_SLOTS.find((s) => s.id === targetSlotId) || { id: targetSlotId, title: targetSlotId, order: 3 };
+      const existingInSlot = findRequirementsForSlot(uploadedRequirements, targetSlotId);
+      const startSubOrder = existingInSlot.length;
+
+      for (let i = 0; i < itemsToAssign.length; i++) {
+        const item = itemsToAssign[i];
+        await updateRequirementRecord(agentKey, item.id, {
+          categoryKey: targetSlotId,
+          classifiedType: slotDef.title,
+          sortOrder: slotDef.order,
+          subOrder: startSubOrder + i + 1
+        });
+      }
+
+      const refreshed = await getRequirementsByProfile(agentKey);
+      setUploadedRequirements(refreshed);
+      setRequirementNotice({
+        type: "success",
+        message: `Successfully linked ${itemsToAssign.length} documents to ${slotDef.title}!`
+      });
+      setTimeout(() => setRequirementNotice(null), 4000);
+    } catch (err) {
+      console.error("Bulk assign failed:", err);
+      setRequirementNotice({
+        type: "error",
+        message: `Bulk assignment failed: ${err.message}`
+      });
+    }
+  };
+
+  const handlePurgeUnassigned = async (itemsToPurge) => {
+    try {
+      for (const item of itemsToPurge) {
+        await deleteRequirementFile(item.id, agentKey, item.storagePath);
+      }
+      const refreshed = await getRequirementsByProfile(agentKey);
+      setUploadedRequirements(refreshed);
+      setRequirementNotice({
+        type: "info",
+        message: `Removed ${itemsToPurge.length} unassigned documents.`
+      });
+      setTimeout(() => setRequirementNotice(null), 3000);
+    } catch (err) {
+      console.error("Purge unassigned failed:", err);
     }
   };
 
@@ -612,6 +665,10 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
     ...REGISTRATION_SLOTS.filter((s) => s.required),
     ...activeOptionalSlots
   ];
+
+  const unassignedRequirements = uploadedRequirements.filter((req) => {
+    return !REGISTRATION_SLOTS.some((slot) => findRequirementsForSlot([req], slot.id).length > 0);
+  });
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 px-3 py-5 backdrop-blur-md sm:px-6">
@@ -1231,6 +1288,51 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
                   </div>
                 </div>
 
+                {/* Unassigned Database Documents Recovery Banner */}
+                {unassignedRequirements.length > 0 && (
+                  <div className="rounded-2xl border border-amber-300 bg-amber-50/90 p-3.5 flex flex-wrap items-center justify-between gap-3 text-xs shadow-xs animate-in fade-in duration-200">
+                    <div className="flex items-center gap-2.5">
+                      <div className="h-9 w-9 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-sm">
+                        <Database size={17} />
+                      </div>
+                      <div>
+                        <h5 className="font-extrabold text-amber-950 text-xs">
+                          {unassignedRequirements.length} Legacy Upload{unassignedRequirements.length > 1 ? "s" : ""} Found in Database
+                        </h5>
+                        <p className="text-[10.5px] text-amber-800">
+                          These files exist in your database. Link them to a slot to activate their Cover Photos:
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => handleBulkAssignSlot(unassignedRequirements, "agency_agreement")}
+                        className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs shadow-xs transition"
+                        title="Link all files to Agency Agreement (#3)"
+                      >
+                        Assign to Agency Agreement (#3)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleBulkAssignSlot(unassignedRequirements, "valid_id")}
+                        className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs shadow-xs transition"
+                        title="Link all files to Valid ID (#4)"
+                      >
+                        Assign to Valid ID (#4)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handlePurgeUnassigned(unassignedRequirements)}
+                        className="px-2.5 py-1.5 rounded-xl border border-rose-300 bg-white hover:bg-rose-50 text-rose-700 font-bold text-xs transition"
+                        title="Permanently remove these unassigned files"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 {/* Individual Requirement Slots Grid */}
                 {loadingRequirements ? (
                   <div className="py-6 flex items-center justify-center gap-2 text-xs text-slate-400">
@@ -1248,9 +1350,9 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
                       return (
                         <div
                           key={slot.id}
-                          className={`rounded-2xl border p-4 transition duration-150 flex flex-col justify-between gap-3 ${
+                          className={`rounded-2xl border p-4 transition duration-200 flex flex-col justify-between gap-3 ${
                             isUploaded
-                              ? "border-emerald-200 bg-white shadow-xs hover:border-emerald-300 hover:shadow-sm"
+                              ? "border-emerald-300/80 bg-white shadow-xs hover:border-emerald-400 hover:shadow-md ring-1 ring-emerald-500/10"
                               : "border-slate-200 bg-slate-50/70 hover:bg-white hover:border-slate-300"
                           }`}
                         >
@@ -1280,8 +1382,8 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
                             {/* Status Badge & Optional Remove */}
                             <div className="flex items-center gap-1.5 shrink-0">
                               {isUploaded ? (
-                                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 px-2 py-0.5 text-[10px] font-extrabold">
-                                  <CheckCircle2 size={11} className="text-emerald-600" /> Uploaded
+                                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 px-2 py-0.5 text-[10px] font-extrabold shadow-2xs">
+                                  <CheckCircle2 size={11} className="text-emerald-600" /> Active in Database
                                 </span>
                               ) : slot.required ? (
                                 <span className="inline-flex items-center rounded-full bg-amber-100 text-amber-800 border border-amber-300 px-2 py-0.5 text-[10px] font-extrabold">
@@ -1307,249 +1409,260 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
                             </div>
                           </div>
 
-                          {/* Card Content: Multi-Photo Gallery OR Single Photo OR Upload Dropzone */}
-                          {isUploaded && slot.allowMultiple ? (
-                            /* Multi-picture reorderable gallery (Agency Agreement, Valid ID) */
-                            <div className="space-y-2.5">
-                              <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] font-bold text-slate-400">
-                                <span>Drag cards or use arrows to reorder pages in compiled PDF:</span>
-                                <button
-                                  type="button"
-                                  onClick={() => setOrganizingSlotId(slot.id)}
-                                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-emerald-300 bg-emerald-50/70 hover:bg-emerald-100 text-emerald-800 text-[10.5px] font-extrabold shadow-2xs transition hover:border-emerald-500"
-                                  title="Open large full-screen organizer to inspect high-resolution documents and reorder pages"
-                                >
-                                  <Maximize2 size={12} className="text-emerald-700" />
-                                  <span>Large Page Organizer</span>
-                                </button>
-                              </div>
+                          {/* Card Content: Prominent Cover Photo Proof OR Empty Dropzone */}
+                          {isUploaded ? (
+                            <div className="space-y-3">
+                              {(() => {
+                                const activePhotoId = activeCoverSlotPhoto[slot.id];
+                                const currentCover = slotItems.find((p) => p.id === activePhotoId) || slotItems[0];
+                                const currentCoverIdx = slotItems.findIndex((p) => p.id === currentCover.id);
+                                const isImage = currentCover?.type?.startsWith("image/") || currentCover?.dataUrl?.startsWith("data:image/") || currentCover?.dataUrl?.startsWith("http");
 
-                              <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
-                                {slotItems.map((photo, pIdx) => {
-                                  const isImage = photo.type?.startsWith("image/") || photo.dataUrl?.startsWith("data:image/") || photo.dataUrl?.startsWith("http");
-                                  const isDragged = draggedPhotoId === photo.id;
-                                  const isDragOver = dragOverPhotoId === photo.id;
+                                return (
+                                  <div className="space-y-2.5">
+                                    {/* Prominent Hero Cover Photo Card */}
+                                    <div className="relative group rounded-2xl overflow-hidden border border-slate-200/90 bg-gradient-to-b from-slate-900/[0.03] to-slate-900/[0.08] shadow-xs hover:shadow-md transition duration-200">
+                                      {/* Top Left Verified Beacon Badge */}
+                                      <div className="absolute top-2.5 left-2.5 z-10 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-950/85 text-emerald-400 text-[10px] font-black backdrop-blur-md border border-emerald-500/30 shadow-xs">
+                                        <span className="relative flex h-2 w-2">
+                                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                                          <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+                                        </span>
+                                        <span>Verified in Database</span>
+                                      </div>
 
-                                  return (
-                                    <div
-                                      key={photo.id}
-                                      draggable
-                                      onDragStart={(e) => handlePhotoDragStart(e, photo.id)}
-                                      onDragOver={(e) => handlePhotoDragOver(e, photo.id)}
-                                      onDrop={(e) => handlePhotoDrop(e, photo.id, slot.id)}
-                                      className={`relative flex items-center justify-between gap-2.5 rounded-xl border p-2 transition ${
-                                        isDragOver
-                                          ? "border-indigo-500 bg-indigo-50/50 shadow-sm scale-[1.01]"
-                                          : isDragged
-                                          ? "opacity-40 border-dashed border-slate-400 bg-slate-100"
-                                          : "border-slate-200/90 bg-slate-50/60 hover:bg-white hover:border-slate-300"
-                                      }`}
-                                    >
-                                      {/* Left: Drag Handle & Page Badge */}
-                                      <div className="flex items-center gap-1.5 shrink-0">
-                                        <div
-                                          className="cursor-grab active:cursor-grabbing p-1 text-slate-400 hover:text-slate-700"
-                                          title="Drag to change page sequence"
-                                        >
-                                          <GripVertical size={13} />
-                                        </div>
-                                        <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-black bg-slate-900 text-emerald-400 shadow-2xs">
-                                          {slot.id === "valid_id"
-                                            ? (pIdx === 0 ? "Front" : pIdx === 1 ? "Back" : `#${pIdx + 1}`)
-                                            : `Page ${pIdx + 1}`}
+                                      {/* Top Right Cover Tag */}
+                                      <div className="absolute top-2.5 right-2.5 z-10 flex items-center gap-1 px-2.5 py-1 rounded-full bg-slate-950/85 text-white text-[10px] font-black backdrop-blur-md border border-white/20 shadow-xs">
+                                        <Sparkles size={11} className="text-amber-400" />
+                                        <span>
+                                          {slot.allowMultiple
+                                            ? `Cover: Page ${currentCoverIdx + 1} of ${slotItems.length}`
+                                            : "Cover Photo Proof"}
                                         </span>
                                       </div>
 
-                                      {/* Thumbnail */}
-                                      {isImage && photo.dataUrl ? (
+                                      {/* Hero Cover Image Preview */}
+                                      {isImage && currentCover.dataUrl ? (
                                         <div
-                                          onClick={() => setPreviewModalImage(photo)}
-                                          className="relative h-11 w-14 rounded-lg overflow-hidden bg-slate-900/5 cursor-pointer border border-slate-200 shrink-0 group hover:border-emerald-400"
+                                          onClick={() => setPreviewModalImage(currentCover)}
+                                          className="relative h-44 sm:h-52 w-full overflow-hidden cursor-pointer flex items-center justify-center bg-slate-950/5 group"
                                         >
                                           <img
-                                            src={photo.dataUrl}
-                                            alt={photo.name}
-                                            className="h-full w-full object-cover group-hover:scale-110 transition duration-150"
+                                            src={currentCover.dataUrl}
+                                            alt={currentCover.name}
+                                            className="h-full w-full object-contain p-1.5 group-hover:scale-[1.03] transition duration-300"
                                           />
-                                          <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center text-white">
-                                            <Eye size={12} />
+                                          {/* Smooth Hover Curtain with Quick Triggers */}
+                                          <div className="absolute inset-0 bg-gradient-to-t from-slate-950/85 via-slate-950/30 to-transparent opacity-0 group-hover:opacity-100 transition duration-200 flex flex-col justify-end p-3">
+                                            <div className="flex items-center justify-between text-white">
+                                              <div className="min-w-0 pr-2">
+                                                <p className="text-xs font-black truncate">{currentCover.name}</p>
+                                                <p className="text-[10px] text-slate-300">
+                                                  {formatFileSize(currentCover.size)} · Saved in Database
+                                                </p>
+                                              </div>
+                                              <div className="flex items-center gap-1.5 shrink-0">
+                                                <button
+                                                  type="button"
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setPreviewModalImage(currentCover);
+                                                  }}
+                                                  className="px-2.5 py-1 rounded-lg bg-white/20 hover:bg-white text-white hover:text-slate-900 text-[11px] font-bold backdrop-blur-sm transition flex items-center gap-1"
+                                                >
+                                                  <Eye size={12} />
+                                                  <span>Full View</span>
+                                                </button>
+                                                <button
+                                                  type="button"
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handlePreviewSinglePdf(currentCover);
+                                                  }}
+                                                  className="px-2.5 py-1 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-white text-[11px] font-bold shadow-xs transition flex items-center gap-1"
+                                                >
+                                                  <FileDown size={12} />
+                                                  <span>PDF</span>
+                                                </button>
+                                              </div>
+                                            </div>
                                           </div>
                                         </div>
                                       ) : (
-                                        <div className="h-11 w-14 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-400 shrink-0">
-                                          <FileText size={18} />
+                                        <div className="h-44 sm:h-52 w-full flex flex-col items-center justify-center bg-slate-100 text-slate-600 gap-2 p-4">
+                                          <div className="h-14 w-14 rounded-2xl bg-white border border-slate-300 shadow-sm flex items-center justify-center text-emerald-600">
+                                            <FileText size={32} />
+                                          </div>
+                                          <p className="text-xs font-black text-slate-800 text-center truncate max-w-xs">
+                                            {currentCover.name}
+                                          </p>
+                                          <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 border border-emerald-200">
+                                            Document Verified in Database
+                                          </span>
                                         </div>
                                       )}
+                                    </div>
 
-                                      {/* Title & Size */}
-                                      <div className="min-w-0 flex-1">
-                                        <p className="text-xs font-bold text-slate-800 truncate" title={photo.name}>
-                                          {photo.name}
-                                        </p>
-                                        <p className="text-[10px] text-slate-400">
-                                          {formatFileSize(photo.size)}
-                                        </p>
-                                      </div>
-
-                                      {/* Move Controls & Actions */}
-                                      <div className="flex items-center gap-0.5 shrink-0">
-                                        <button
-                                          type="button"
-                                          disabled={pIdx === 0}
-                                          onClick={() => handleMovePhoto(slot.id, pIdx, -1)}
-                                          className="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-200 disabled:opacity-20 transition"
-                                          title="Move earlier"
-                                        >
-                                          <ArrowLeft size={12} />
-                                        </button>
-                                        <button
-                                          type="button"
-                                          disabled={pIdx === slotItems.length - 1}
-                                          onClick={() => handleMovePhoto(slot.id, pIdx, 1)}
-                                          className="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-200 disabled:opacity-20 transition"
-                                          title="Move later"
-                                        >
-                                          <ArrowRight size={12} />
-                                        </button>
-                                        {isImage && (
+                                    {/* Multi-Picture Filmstrip Carousel */}
+                                    {slot.allowMultiple && (
+                                      <div className="space-y-1.5">
+                                        <div className="flex items-center justify-between text-[10px] font-bold text-slate-500 px-0.5">
+                                          <span className="flex items-center gap-1 text-slate-700">
+                                            <Layers size={12} className="text-emerald-600" />
+                                            <span>All Pages ({slotItems.length}): Click thumbnail to switch Cover Photo</span>
+                                          </span>
                                           <button
                                             type="button"
-                                            onClick={() => handlePreviewSinglePdf(photo)}
-                                            className="p-1 rounded text-slate-400 hover:text-emerald-700 hover:bg-emerald-50 transition"
-                                            title="Preview single PDF"
+                                            onClick={() => setOrganizingSlotId(slot.id)}
+                                            className="inline-flex items-center gap-1 text-emerald-700 hover:text-emerald-900 font-black hover:underline"
+                                            title="Open large full-screen organizer to arrange pages and zoom high-res"
                                           >
-                                            <Eye size={12} />
+                                            <Maximize2 size={11} />
+                                            <span>Large Organizer</span>
                                           </button>
-                                        )}
+                                        </div>
+
+                                        {/* Scrollable Filmstrip */}
+                                        <div className="flex items-center gap-2 overflow-x-auto pb-1.5 pt-0.5 px-0.5 scrollbar-thin">
+                                          {slotItems.map((photo, pIdx) => {
+                                            const isCurrentActive = photo.id === currentCover.id;
+                                            const pageLabel = slot.id === "valid_id"
+                                              ? (pIdx === 0 ? "Front" : pIdx === 1 ? "Back" : `#${pIdx + 1}`)
+                                              : `Page ${pIdx + 1}`;
+
+                                            return (
+                                              <div
+                                                key={photo.id}
+                                                onClick={() => setActiveCoverSlotPhoto((prev) => ({ ...prev, [slot.id]: photo.id }))}
+                                                className={`relative group shrink-0 h-16 w-14 rounded-xl overflow-hidden cursor-pointer border-2 transition duration-150 ${
+                                                  isCurrentActive
+                                                    ? "border-emerald-500 ring-2 ring-emerald-500/30 scale-105 shadow-md"
+                                                    : "border-slate-200 hover:border-slate-400 opacity-75 hover:opacity-100"
+                                                }`}
+                                                title={`Click to set ${pageLabel} as active Cover Photo`}
+                                              >
+                                                {photo.dataUrl ? (
+                                                  <img src={photo.dataUrl} alt={photo.name} className="h-full w-full object-cover" />
+                                                ) : (
+                                                  <div className="h-full w-full bg-slate-100 flex items-center justify-center">
+                                                    <FileText size={16} className="text-slate-400" />
+                                                  </div>
+                                                )}
+                                                <div className="absolute bottom-0 inset-x-0 bg-slate-950/85 text-center py-0.5 text-[8.5px] font-black text-emerald-400">
+                                                  {pageLabel}
+                                                </div>
+                                              </div>
+                                            );
+                                          })}
+
+                                          {/* Add More Tile */}
+                                          <label className="shrink-0 h-16 w-14 rounded-xl border-2 border-dashed border-emerald-300 bg-emerald-50/50 hover:bg-emerald-100/70 hover:border-emerald-500 flex flex-col items-center justify-center text-emerald-700 cursor-pointer transition gap-0.5">
+                                            <input
+                                              type="file"
+                                              multiple
+                                              accept=".pdf,.jpg,.jpeg,.png,.webp"
+                                              className="hidden"
+                                              disabled={Boolean(uploadingSlotId)}
+                                              onChange={(e) => handleSlotUpload(e, slot)}
+                                            />
+                                            <Plus size={15} />
+                                            <span className="text-[8.5px] font-black">Add</span>
+                                          </label>
+                                        </div>
+                                      </div>
+                                    )}
+
+                                    {/* Action Bar */}
+                                    <div className="pt-2 border-t border-slate-100 flex flex-wrap items-center justify-between gap-1.5 text-xs">
+                                      <div className="flex flex-wrap items-center gap-1">
                                         <button
                                           type="button"
-                                          onClick={() => removeRequirementFile(photo.id, photo.storagePath)}
-                                          className="p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition"
-                                          title="Delete photo"
+                                          onClick={() => handlePreviewSinglePdf(currentCover)}
+                                          className="px-2.5 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-emerald-50 hover:border-emerald-300 text-slate-700 hover:text-emerald-800 font-bold flex items-center gap-1.5 transition text-[11px] shadow-2xs"
+                                          title="Preview branded PDF"
                                         >
-                                          <Trash2 size={12} />
+                                          <Eye size={12} className="text-emerald-600" />
+                                          <span>Preview PDF</span>
                                         </button>
+
+                                        {slot.allowMultiple ? (
+                                          <>
+                                            <button
+                                              type="button"
+                                              onClick={() => setOrganizingSlotId(slot.id)}
+                                              className="px-2.5 py-1.5 rounded-xl border border-emerald-300 bg-emerald-50/80 hover:bg-emerald-100 text-emerald-900 font-extrabold flex items-center gap-1.5 transition text-[11px] shadow-2xs"
+                                              title="Open large full-screen organizer to arrange pages and zoom high-res"
+                                            >
+                                              <Maximize2 size={12} className="text-emerald-700" />
+                                              <span>Large Organizer</span>
+                                            </button>
+                                            <label
+                                              className="px-2.5 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-bold flex items-center gap-1.5 transition text-[11px] shadow-2xs cursor-pointer"
+                                              title="Add more pictures to this category"
+                                            >
+                                              <input
+                                                type="file"
+                                                multiple
+                                                accept=".pdf,.jpg,.jpeg,.png,.webp"
+                                                className="hidden"
+                                                disabled={Boolean(uploadingSlotId)}
+                                                onChange={(e) => handleSlotUpload(e, slot)}
+                                              />
+                                              <Plus size={12} className="text-emerald-600" />
+                                              <span>Add Pages</span>
+                                            </label>
+                                          </>
+                                        ) : (
+                                          <label
+                                            className="px-2.5 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-indigo-50 hover:border-indigo-300 text-slate-700 hover:text-indigo-800 font-bold flex items-center gap-1.5 transition text-[11px] shadow-2xs cursor-pointer"
+                                            title="Replace file for this requirement slot"
+                                          >
+                                            <input
+                                              type="file"
+                                              accept=".pdf,.jpg,.jpeg,.png,.webp"
+                                              className="hidden"
+                                              disabled={Boolean(uploadingSlotId)}
+                                              onChange={(e) => handleSlotUpload(e, slot)}
+                                            />
+                                            <RefreshCw size={12} className={isUploading ? "animate-spin text-indigo-600" : "text-indigo-500"} />
+                                            <span>Replace</span>
+                                          </label>
+                                        )}
+
+                                        <a
+                                          href={currentCover.dataUrl}
+                                          download={currentCover.name}
+                                          className="p-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-500 hover:text-slate-800 transition"
+                                          title="Download original file"
+                                        >
+                                          <Download size={13} />
+                                        </a>
                                       </div>
+
+                                      {/* Delete button */}
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          if (slot.allowMultiple && slotItems.length > 1) {
+                                            removeRequirementFile(currentCover.id, currentCover.storagePath);
+                                          } else {
+                                            slotItems.forEach((it) => removeRequirementFile(it.id, it.storagePath));
+                                          }
+                                        }}
+                                        aria-label={`Delete ${slot.title}`}
+                                        className="p-1.5 rounded-xl border border-transparent hover:border-rose-200 hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition"
+                                        title={slot.allowMultiple && slotItems.length > 1 ? `Delete active page (${currentCover.name})` : `Delete ${slot.title} from database`}
+                                      >
+                                        <Trash2 size={13} />
+                                      </button>
                                     </div>
-                                  );
-                                })}
-                              </div>
-
-                              {/* Add More Pictures & Large Organizer Buttons */}
-                              <div className="pt-2 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2">
-                                <div className="flex items-center gap-2">
-                                  <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-dashed border-emerald-400 bg-emerald-50/50 hover:bg-emerald-100/60 text-emerald-800 text-xs font-bold transition cursor-pointer">
-                                    <input
-                                      type="file"
-                                      multiple
-                                      accept=".pdf,.jpg,.jpeg,.png,.webp"
-                                      className="hidden"
-                                      disabled={Boolean(uploadingSlotId)}
-                                      onChange={(e) => handleSlotUpload(e, slot)}
-                                    />
-                                    <Plus size={13} className="text-emerald-700" />
-                                    <span>{isUploading ? "Uploading..." : "Add More Pictures"}</span>
-                                  </label>
-                                  <button
-                                    type="button"
-                                    onClick={() => setOrganizingSlotId(slot.id)}
-                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold transition shadow-2xs hover:border-emerald-500 hover:text-emerald-800"
-                                    title="Open large full-screen visual organizer"
-                                  >
-                                    <Maximize2 size={13} className="text-emerald-600" />
-                                    <span>Large Organizer</span>
-                                  </button>
-                                </div>
-                                <span className="text-[10px] text-slate-400 font-medium">
-                                  Multi-photo draggable slot
-                                </span>
-                              </div>
-                            </div>
-                          ) : isUploaded && !slot.allowMultiple ? (
-                            /* Single-document slot (Biodata, Barangay Clearance, etc.) */
-                            <div className="space-y-2">
-                              {slotItems[0]?.type?.startsWith("image/") || slotItems[0]?.dataUrl?.startsWith("data:image/") || slotItems[0]?.dataUrl?.startsWith("http") ? (
-                                <div
-                                  onClick={() => setPreviewModalImage(slotItems[0])}
-                                  className="relative h-28 w-full rounded-xl overflow-hidden bg-slate-900/5 cursor-pointer border border-slate-200/80 group hover:border-emerald-400 transition"
-                                >
-                                  <img
-                                    src={slotItems[0].dataUrl}
-                                    alt={slotItems[0].name}
-                                    className="h-full w-full object-cover group-hover:scale-105 transition duration-200"
-                                  />
-                                  <div className="absolute inset-0 bg-slate-900/50 opacity-0 group-hover:opacity-100 transition flex items-center justify-center text-white gap-1.5 text-xs font-bold">
-                                    <Eye size={14} /> View Full
                                   </div>
-                                </div>
-                              ) : (
-                                <div className="h-28 w-full rounded-xl bg-slate-100 border border-slate-200 flex flex-col items-center justify-center text-slate-500 gap-1.5">
-                                  <FileText size={28} className="text-slate-400" />
-                                  <span className="text-[10px] font-bold uppercase">{slotItems[0].name.split('.').pop() || 'PDF/DOC'}</span>
-                                </div>
-                              )}
-
-                              <div className="space-y-0.5 px-0.5">
-                                <p className="text-xs font-bold text-slate-800 truncate" title={slotItems[0].name}>
-                                  {slotItems[0].name}
-                                </p>
-                                <div className="flex items-center justify-between text-[10px] text-slate-400">
-                                  <span>{formatFileSize(slotItems[0].size)}</span>
-                                  <span className="text-emerald-600 font-semibold flex items-center gap-0.5">
-                                    <Check size={11} /> Saved in Database
-                                  </span>
-                                </div>
-                              </div>
-
-                              <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-1 text-[11px]">
-                                <div className="flex items-center gap-1">
-                                  <button
-                                    type="button"
-                                    onClick={() => handlePreviewSinglePdf(slotItems[0])}
-                                    className="px-2 py-1 rounded-lg text-slate-600 hover:text-emerald-700 hover:bg-emerald-50 font-semibold flex items-center gap-1 transition"
-                                    title="Preview document in branded PDF format before downloading"
-                                  >
-                                    <Eye size={12} />
-                                    <span>Preview PDF</span>
-                                  </button>
-                                  <label
-                                    className="px-2 py-1 rounded-lg text-slate-600 hover:text-indigo-700 hover:bg-indigo-50 font-semibold flex items-center gap-1 transition cursor-pointer"
-                                    title="Replace file for this requirement slot"
-                                  >
-                                    <input
-                                      type="file"
-                                      accept=".pdf,.jpg,.jpeg,.png,.webp"
-                                      className="hidden"
-                                      disabled={Boolean(uploadingSlotId)}
-                                      onChange={(e) => handleSlotUpload(e, slot)}
-                                    />
-                                    <RefreshCw size={12} className={isUploading ? "animate-spin text-indigo-600" : ""} />
-                                    <span>Replace</span>
-                                  </label>
-                                  <a
-                                    href={slotItems[0].dataUrl}
-                                    download={slotItems[0].name}
-                                    className="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition"
-                                    title="Download Original File"
-                                  >
-                                    <Download size={13} />
-                                  </a>
-                                </div>
-
-                                <button
-                                  type="button"
-                                  onClick={() => removeRequirementFile(slotItems[0].id, slotItems[0].storagePath)}
-                                  aria-label={`Delete ${slotItems[0].name}`}
-                                  className="p-1.5 rounded-lg text-slate-400 hover:bg-rose-50 hover:text-rose-600 font-semibold flex items-center gap-1 transition"
-                                  title="Delete from database"
-                                >
-                                  <Trash2 size={13} />
-                                </button>
-                              </div>
+                                );
+                              })()}
                             </div>
                           ) : (
-                            /* Empty Slot Dropzone */
-                            <label className="relative flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-300 bg-white/70 py-6 px-3 text-center cursor-pointer hover:border-emerald-500 hover:bg-emerald-50/30 transition group min-h-[140px]">
+                            /* Empty Slot Upload Dropzone */
+                            <label className="relative flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-300 bg-white/70 py-7 px-3 text-center cursor-pointer hover:border-emerald-500 hover:bg-emerald-50/30 transition group min-h-[160px]">
                               <input
                                 type="file"
                                 multiple={slot.allowMultiple}
@@ -1560,20 +1673,22 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
                               />
                               {isUploading ? (
                                 <div className="flex flex-col items-center gap-2">
-                                  <Loader2 size={24} className="animate-spin text-emerald-600" />
+                                  <Loader2 size={26} className="animate-spin text-emerald-600" />
                                   <span className="text-xs font-bold text-emerald-700">Uploading {slot.title}...</span>
                                 </div>
                               ) : (
-                                <div className="flex flex-col items-center gap-1.5">
-                                  <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-100 text-slate-500 group-hover:bg-emerald-100 group-hover:text-emerald-700 transition">
-                                    <Upload size={16} />
+                                <div className="flex flex-col items-center gap-2">
+                                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-100 text-slate-500 group-hover:bg-emerald-100 group-hover:text-emerald-700 group-hover:scale-110 transition duration-200 shadow-2xs">
+                                    <Upload size={18} />
                                   </div>
-                                  <p className="text-xs font-extrabold text-slate-700 group-hover:text-emerald-800">
-                                    Upload {slot.title}
-                                  </p>
-                                  <p className="text-[10px] text-slate-400">
-                                    {slot.allowMultiple ? "Select one or multiple pictures" : "PDF, JPG, PNG or WEBP"}
-                                  </p>
+                                  <div>
+                                    <p className="text-xs font-black text-slate-800 group-hover:text-emerald-800">
+                                      Upload {slot.title}
+                                    </p>
+                                    <p className="text-[10px] text-slate-400 mt-0.5">
+                                      {slot.allowMultiple ? "Select one or multiple pictures" : "PDF, JPG, PNG or WEBP"}
+                                    </p>
+                                  </div>
                                 </div>
                               )}
                             </label>

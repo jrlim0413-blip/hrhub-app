@@ -101,10 +101,20 @@ export const OPTIONAL_SLOTS = REGISTRATION_SLOTS.filter((s) => !s.required);
 
 /**
  * Returns numeric priority rank for a given category id or name
+ * Strict sequence:
+ * 1. Biodata
+ * 2. Barangay Clearance
+ * 3. Agency Agreement
+ * 4. Valid ID
+ * 5. Police Clearance
+ * 6. NBI Clearance
+ * 7. PSA Birth Certificate
+ * 8. 2x2 ID Photo
+ * 9. Other Document
  */
 export function getSlotOrder(categoryKeyOrName = "") {
   if (!categoryKeyOrName) return 99;
-  const lower = String(categoryKeyOrName).toLowerCase();
+  const lower = String(categoryKeyOrName).toLowerCase().trim();
   if (lower === "biodata" || lower.includes("biodata") || lower.includes("resume") || lower.includes("cv")) return 1;
   if (lower === "barangay_clearance" || lower.includes("barangay") || lower.includes("brgy")) return 2;
   if (lower === "agency_agreement" || lower.includes("agency") || lower.includes("agreement") || lower.includes("contract")) return 3;
@@ -114,6 +124,77 @@ export function getSlotOrder(categoryKeyOrName = "") {
   if (lower === "psa_birth_certificate" || lower.includes("birth") || lower.includes("psa") || lower.includes("nso")) return 7;
   if (lower === "id_picture_2x2" || lower.includes("2x2") || lower.includes("photo")) return 8;
   if (lower === "other_document" || lower.includes("other")) return 9;
+  return 99;
+}
+
+/**
+ * Robustly inspects any requirement record (including its categoryKey, parsed ocrSnippet,
+ * classifiedType, storagePath, filename, or explicit sortOrder) and determines its master slot rank:
+ * 1 = Biodata
+ * 2 = Barangay Clearance
+ * 3 = Agency Agreement
+ * 4 = Valid ID
+ * 5+ = Custom/Optional
+ */
+export function getItemSlotRank(item) {
+  if (!item) return 99;
+
+  // 1. Explicit categoryKey property
+  if (item.categoryKey) {
+    const direct = getSlotOrder(item.categoryKey);
+    if (direct < 99) return direct;
+  }
+
+  // 2. Parsed ocrSnippet metadata if JSON string
+  if (item.ocrSnippet) {
+    try {
+      const parsed = typeof item.ocrSnippet === "string" && item.ocrSnippet.trim().startsWith("{")
+        ? JSON.parse(item.ocrSnippet)
+        : item.ocrSnippet;
+      if (parsed?.categoryKey) {
+        const ocrDirect = getSlotOrder(parsed.categoryKey);
+        if (ocrDirect < 99) return ocrDirect;
+      }
+      if (parsed?.classifiedType) {
+        const ocrClass = getSlotOrder(parsed.classifiedType);
+        if (ocrClass < 99) return ocrClass;
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  // 3. Classified type
+  if (item.classifiedType) {
+    const classOrder = getSlotOrder(item.classifiedType);
+    if (classOrder < 99) return classOrder;
+  }
+
+  // 4. storagePath clues (e.g. ".../Agency_Agreement_1_...")
+  if (item.storagePath) {
+    const sp = item.storagePath.toLowerCase();
+    if (sp.includes("biodata") || sp.includes("resume") || sp.includes("cv")) return 1;
+    if (sp.includes("barangay") || sp.includes("brgy")) return 2;
+    if (sp.includes("agency") || sp.includes("agreement") || sp.includes("contract")) return 3;
+    if (sp.includes("valid_id") || sp.includes("valid id") || sp.includes("id_card")) return 4;
+    if (sp.includes("police")) return 5;
+    if (sp.includes("nbi")) return 6;
+    if (sp.includes("birth") || sp.includes("psa") || sp.includes("nso")) return 7;
+    if (sp.includes("2x2") || sp.includes("photo")) return 8;
+  }
+
+  // 5. Filename match
+  const rawName = String(item.name || item.fileName || "").toLowerCase();
+  if (rawName) {
+    const nameOrder = getSlotOrder(rawName);
+    if (nameOrder < 99) return nameOrder;
+  }
+
+  // 6. Explicit sortOrder if between 1 and 9
+  if (typeof item.sortOrder === "number" && item.sortOrder >= 1 && item.sortOrder <= 9) {
+    return item.sortOrder;
+  }
+
   return 99;
 }
 
@@ -161,13 +242,22 @@ export function compareFileNamesNaturally(nameA = "", nameB = "") {
 }
 
 /**
- * Finds all requirement records matching a specific slot, ordered by their subOrder/sortOrder/filename/createdAt
+ * Finds all requirement records matching a specific slot, ordered by their subOrder/filename numbers/createdAt
  */
 export function findRequirementsForSlot(requirements = [], slotId = "") {
   if (!requirements || !requirements.length) return [];
+  const targetRank = getSlotOrder(slotId);
+
   const matches = requirements.filter((r) => {
+    // 1. Direct categoryKey match
     if (r.categoryKey === slotId) return true;
-    const text = `${r.classifiedType || ""} ${r.name || ""}`.toLowerCase();
+
+    // 2. Direct rank match
+    const rank = getItemSlotRank(r);
+    if (rank === targetRank) return true;
+
+    // 3. Fallback slot text check
+    const text = `${r.classifiedType || ""} ${r.name || ""} ${r.fileName || ""}`.toLowerCase();
     if (slotId === "biodata" && (text.includes("biodata") || text.includes("resume") || text.includes("cv"))) return true;
     if (slotId === "barangay_clearance" && (text.includes("barangay") || text.includes("brgy"))) return true;
     if (slotId === "agency_agreement" && (text.includes("agreement") || text.includes("contract") || text.includes("agency"))) return true;
@@ -177,12 +267,13 @@ export function findRequirementsForSlot(requirements = [], slotId = "") {
     if (slotId === "psa_birth_certificate" && (text.includes("birth") || text.includes("psa") || text.includes("nso"))) return true;
     if (slotId === "id_picture_2x2" && (text.includes("2x2") || text.includes("photo"))) return true;
     if (slotId === "other_document" && text.includes("other")) return true;
+
     return false;
   });
 
   return matches.sort((a, b) => {
-    const subA = typeof a.subOrder === "number" ? a.subOrder : (typeof a.sortOrder === "number" ? a.sortOrder : null);
-    const subB = typeof b.subOrder === "number" ? b.subOrder : (typeof b.sortOrder === "number" ? b.sortOrder : null);
+    const subA = typeof a.subOrder === "number" ? a.subOrder : null;
+    const subB = typeof b.subOrder === "number" ? b.subOrder : null;
     if (subA !== null && subB !== null && subA !== subB) return subA - subB;
 
     // Secondary sort: natural file name number (1, 2, 3...)
@@ -203,20 +294,29 @@ export function findRequirementForSlot(requirements = [], slotId = "") {
 
 /**
  * Sorts requirements according to the strict slot sequence:
- * 1. Biodata -> 2. Barangay Clearance -> 3. Agency Agreement -> 4. Valid ID -> etc.
- * And within each slot, by subOrder/sortOrder/natural filename numbers
+ * 1. Biodata (ALWAYS 1st, regardless of filename numbers)
+ * 2. Barangay Clearance (ALWAYS 2nd, regardless of filename numbers)
+ * 3. Agency Agreement (ALWAYS 3rd; multi-page, sorted internally by 1, 2, 3...)
+ * 4. Valid ID (ALWAYS 4th / LAST of standard required documents; Front/Back or 1, 2...)
+ * 5. Custom / Optional Categories (5th+)
  */
 export function sortRequirementsBySlotSequence(items = []) {
   return [...items].sort((a, b) => {
-    const orderA = getSlotOrder(a.categoryKey || a.classifiedType || a.name);
-    const orderB = getSlotOrder(b.categoryKey || b.classifiedType || b.name);
-    if (orderA !== orderB) return orderA - orderB;
+    // 1. MASTER SLOT SEQUENCE IS ABSOLUTE
+    const rankA = getItemSlotRank(a);
+    const rankB = getItemSlotRank(b);
+    if (rankA !== rankB) {
+      return rankA - rankB;
+    }
 
-    const subA = typeof a.subOrder === "number" ? a.subOrder : (typeof a.sortOrder === "number" ? a.sortOrder : null);
-    const subB = typeof b.subOrder === "number" ? b.subOrder : (typeof b.sortOrder === "number" ? b.sortOrder : null);
-    if (subA !== null && subB !== null && subA !== subB) return subA - subB;
+    // 2. WITHIN THE SAME SLOT (e.g. Agency Agreement pages 1, 2, 3... or Valid ID Front/Back):
+    const subA = typeof a.subOrder === "number" ? a.subOrder : null;
+    const subB = typeof b.subOrder === "number" ? b.subOrder : null;
+    if (subA !== null && subB !== null && subA !== subB) {
+      return subA - subB;
+    }
 
-    // Secondary sort: natural file name number (1, 2, 3...)
+    // 3. Natural file name numeric comparison (1.jpg < 2.jpg < 3.jpg, "Front" < "Back")
     const fileComp = compareFileNamesNaturally(a.name || a.fileName, b.name || b.fileName);
     if (fileComp !== 0) return fileComp;
 

@@ -193,6 +193,14 @@ export async function saveRequirementFile(profileKey, file, extraMeta = {}) {
 
   // 4. Sync metadata to Supabase 'agent_requirements' table
   try {
+    const metaPayload = JSON.stringify({
+      categoryKey: record.categoryKey || null,
+      classifiedType: record.classifiedType || null,
+      subOrder: record.subOrder ?? null,
+      sortOrder: record.sortOrder ?? null,
+      name: record.name
+    });
+
     const basePayload = {
       id: record.id,
       agent_key: normKey,
@@ -204,16 +212,27 @@ export async function saveRequirementFile(profileKey, file, extraMeta = {}) {
       created_at: record.createdAt
     };
 
-    // Try syncing with classified fields
+    // Attempt rich upsert with all slot-routing columns
     const { error: fullErr } = await supabase.from("agent_requirements").upsert({
       ...basePayload,
+      category_key: record.categoryKey,
+      sub_order: record.subOrder,
+      sort_order: record.sortOrder,
       classified_type: record.classifiedType,
-      ocr_snippet: record.ocrSnippet
+      ocr_snippet: metaPayload
     });
 
     if (fullErr) {
-      // If error due to missing columns, retry with basePayload
-      await supabase.from("agent_requirements").upsert(basePayload);
+      // Fallback in case table schema lacks custom columns category_key / sub_order
+      const { error: fallbackErr } = await supabase.from("agent_requirements").upsert({
+        ...basePayload,
+        classified_type: record.classifiedType,
+        ocr_snippet: metaPayload
+      });
+
+      if (fallbackErr) {
+        await supabase.from("agent_requirements").upsert(basePayload);
+      }
     }
   } catch (sbErr) {
     console.warn("Supabase requirements sync note:", sbErr);
@@ -457,21 +476,40 @@ export async function getRequirementsByProfile(profileKey) {
 
     if (!error) {
       if (data && data.length > 0) {
-        const mapped = data.map((d) => ({
-          id: d.id,
-          profileKey: d.agent_key,
-          name: d.file_name,
-          size: Number(d.file_size) || 0,
-          type: d.file_type || "image/png",
-          storagePath: d.storage_path || null,
-          dataUrl: d.data_url || d.file_url,
-          createdAt: d.created_at,
-          categoryKey: d.category_key || d.categoryKey || null,
-          classifiedType: d.classified_type || d.classifiedType || null,
-          ocrSnippet: d.ocr_snippet || d.ocrSnippet || null,
-          sortOrder: typeof d.sort_order === "number" ? d.sort_order : (typeof d.sortOrder === "number" ? d.sortOrder : null),
-          subOrder: typeof d.sub_order === "number" ? d.sub_order : (typeof d.subOrder === "number" ? d.subOrder : null)
-        }));
+        const mapped = data.map((d) => {
+          let parsedMeta = {};
+          if (d.ocr_snippet && typeof d.ocr_snippet === "string") {
+            const trimmed = d.ocr_snippet.trim();
+            if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+              try {
+                parsedMeta = JSON.parse(trimmed);
+              } catch {
+                parsedMeta = {};
+              }
+            }
+          }
+
+          const catKey = d.category_key || parsedMeta.categoryKey || null;
+          const classType = d.classified_type || parsedMeta.classifiedType || null;
+          const sOrder = typeof d.sort_order === "number" ? d.sort_order : (typeof parsedMeta.sortOrder === "number" ? parsedMeta.sortOrder : null);
+          const subOrd = typeof d.sub_order === "number" ? d.sub_order : (typeof parsedMeta.subOrder === "number" ? parsedMeta.subOrder : null);
+
+          return {
+            id: d.id,
+            profileKey: d.agent_key,
+            name: d.file_name,
+            size: Number(d.file_size) || 0,
+            type: d.file_type || "image/png",
+            storagePath: d.storage_path || null,
+            dataUrl: d.data_url || d.file_url,
+            createdAt: d.created_at,
+            categoryKey: catKey,
+            classifiedType: classType,
+            ocrSnippet: d.ocr_snippet || null,
+            sortOrder: sOrder,
+            subOrder: subOrd
+          };
+        });
         const ordered = sortRequirementsBySlotSequence(mapped);
         await syncLocalCacheWithRemote(normKey, ordered);
         updateLocalMeta(normKey, ordered);
@@ -873,7 +911,8 @@ export async function downloadRequirementsAsZip({
   agentName = "Agent",
   requirements = []
 }) {
-  const imageItems = requirements.filter(
+  const sortedRequirements = sortRequirementsBySlotSequence(requirements);
+  const imageItems = sortedRequirements.filter(
     (item) => item.dataUrl && (item.type?.startsWith("image/") || item.dataUrl.startsWith("data:image/") || item.dataUrl.startsWith("http"))
   );
 
@@ -934,7 +973,8 @@ export async function batchDownloadIndividualImages({
   agentName = "Agent",
   requirements = []
 }) {
-  const imageItems = requirements.filter(
+  const sortedRequirements = sortRequirementsBySlotSequence(requirements);
+  const imageItems = sortedRequirements.filter(
     (item) => item.dataUrl && (item.type?.startsWith("image/") || item.dataUrl.startsWith("data:image/") || item.dataUrl.startsWith("http"))
   );
 
