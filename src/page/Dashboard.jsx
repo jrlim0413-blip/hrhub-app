@@ -5,7 +5,7 @@ import {
   Megaphone, Award, Calendar, LogOut,
   BriefcaseBusiness, FileText, Sparkles, BarChart3,
   Database, RefreshCw, CheckCircle2, AlertCircle, Clock,
-  Bot, Layers, Home, X, CheckCheck, Menu
+  Bot, Layers, Home, X, CheckCheck, Menu, UserCheck
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import ProfileModal from "../components/ProfileModal";
@@ -15,6 +15,7 @@ import GrossReportPanel from "../components/GrossReportPanel";
 import EmployeeDirectoryPanel from "../components/EmployeeDirectoryPanel";
 import WeatherWidget from "../components/WeatherWidget";
 import MemoGeneratorPanel from "../components/MemoGeneratorPanel";
+import SupervisorsAttendancePanel from "../components/SupervisorsAttendancePanel";
 import AiAssistantDrawer from "../components/AiAssistantDrawer";
 import AiAgentAvatar from "../components/AiAgentAvatar";
 import AiAssistantGirlWidget from "../components/AiAssistantGirlWidget";
@@ -1749,6 +1750,19 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
                 <Users size={14} />
                 <span>Agents</span>
               </button>
+
+              <button
+                type="button"
+                onClick={() => setWorkspaceTab("supervisors_attendance")}
+                className={`inline-flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-bold transition shadow-xs cursor-pointer shrink-0 ${
+                  workspaceTab === "supervisors_attendance"
+                    ? "bg-[#008559] text-white ring-2 ring-emerald-300"
+                    : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                }`}
+              >
+                <UserCheck size={14} className={workspaceTab === "supervisors_attendance" ? "text-white" : "text-emerald-600"} />
+                <span>Supervisors Attendance</span>
+              </button>
             </div>
           </div>
 
@@ -1823,6 +1837,11 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
                 ))}
               </div>
             </>
+          )}
+
+          {/* TAB 5: SUPERVISORS ATTENDANCE */}
+          {workspaceTab === "supervisors_attendance" && (
+            <SupervisorsAttendancePanel onClose={() => setWorkspaceTab("sops")} />
           )}
         </div>
       </div>

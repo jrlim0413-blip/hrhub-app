@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import {
   Activity, Archive, Award, CalendarDays, Check, CheckCircle2, CreditCard, Database, Download, Eye, FileDown, FileText,
-  Fingerprint, Home, KeyRound, Loader2, Lock, Pencil, Phone, ShieldCheck, Sparkles, Trash2, Upload, UserRound, X
+  Fingerprint, Home, KeyRound, Loader2, Lock, Pencil, Phone, ShieldCheck, Sparkles, Trash2, Upload, UserRound, X,
+  Scan, FileCheck, Printer, ExternalLink, RefreshCw, FileSearch, Tag, Info
 } from "lucide-react";
 import AgentIdCardModal from "./AgentIdCardModal";
 import {
@@ -13,12 +14,36 @@ import {
   downloadRequirementsAsPdf,
   downloadSingleRequirementAsPdf,
   downloadRequirementsAsZip,
-  batchDownloadIndividualImages
+  batchDownloadIndividualImages,
+  generateRequirementsPdfDoc,
+  generateSingleRequirementPdfDoc,
+  updateRequirementRecord
 } from "../lib/requirementsStorage";
+import {
+  classifyRequirementDocument,
+  DOCUMENT_TYPES
+} from "../lib/documentOcrClassifier";
 import {
   getAgentProfileOverride,
   saveAgentProfileOverride
 } from "../lib/agentProfileStorage";
+
+function getDocumentBadgeStyle(type) {
+  if (!type) return "bg-slate-100 text-slate-700 border-slate-200";
+  const lower = type.toLowerCase();
+  if (lower.includes("barangay")) return "bg-emerald-50 text-emerald-700 border-emerald-200";
+  if (lower.includes("police")) return "bg-blue-50 text-blue-700 border-blue-200";
+  if (lower.includes("nbi")) return "bg-indigo-50 text-indigo-700 border-indigo-200";
+  if (lower.includes("birth") || lower.includes("psa")) return "bg-amber-50 text-amber-700 border-amber-200";
+  if (lower.includes("philhealth")) return "bg-teal-50 text-teal-700 border-teal-200";
+  if (lower.includes("sss") || lower.includes("umid")) return "bg-cyan-50 text-cyan-700 border-cyan-200";
+  if (lower.includes("driver")) return "bg-purple-50 text-purple-700 border-purple-200";
+  if (lower.includes("voter")) return "bg-violet-50 text-violet-700 border-violet-200";
+  if (lower.includes("medical") || lower.includes("drug")) return "bg-rose-50 text-rose-700 border-rose-200";
+  if (lower.includes("resume") || lower.includes("cv")) return "bg-sky-50 text-sky-700 border-sky-200";
+  if (lower.includes("photo") || lower.includes("2x2")) return "bg-fuchsia-50 text-fuchsia-700 border-fuchsia-200";
+  return "bg-slate-100 text-slate-800 border-slate-200";
+}
 
 function valueOf(agent, keys, fallback = "Not provided") {
   for (const key of keys) {
@@ -76,6 +101,16 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
   const [previewModalImage, setPreviewModalImage] = useState(null);
   const [requirementNotice, setRequirementNotice] = useState(null);
   const [showIdCardModal, setShowIdCardModal] = useState(false);
+  const [pdfPreviewState, setPdfPreviewState] = useState({
+    isOpen: false,
+    doc: null,
+    blobUrl: null,
+    fileName: "",
+    totalPages: 1,
+    title: ""
+  });
+  const [scanningOcrIds, setScanningOcrIds] = useState([]);
+  const [isBatchScanningOcr, setIsBatchScanningOcr] = useState(false);
 
   const agentKey = getAgentIdentifier(agent, index);
 
@@ -194,17 +229,62 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
     }
   };
 
+  const closePdfPreview = () => {
+    if (pdfPreviewState.blobUrl) {
+      try {
+        URL.revokeObjectURL(pdfPreviewState.blobUrl);
+      } catch {
+        // ignore
+      }
+    }
+    setPdfPreviewState({
+      isOpen: false,
+      doc: null,
+      blobUrl: null,
+      fileName: "",
+      totalPages: 1,
+      title: ""
+    });
+  };
+
+  const handleDownloadFromPreview = () => {
+    if (pdfPreviewState.doc && pdfPreviewState.fileName) {
+      pdfPreviewState.doc.save(pdfPreviewState.fileName);
+      setRequirementNotice({
+        type: "success",
+        message: `PDF successfully downloaded: ${pdfPreviewState.fileName}`
+      });
+      setTimeout(() => setRequirementNotice(null), 5000);
+    }
+  };
+
   const handleRequirementUpload = async (event) => {
     const files = Array.from(event.target.files || []);
     if (!files.length) return;
 
     setUploadingRequirements(true);
-    setRequirementNotice(null);
+    setRequirementNotice({
+      type: "info",
+      message: `Analyzing and uploading ${files.length} document${files.length > 1 ? "s" : ""} with AI OCR...`
+    });
 
     try {
       const newRecords = [];
       for (const file of files) {
-        const savedRecord = await saveRequirementFile(agentKey, file);
+        let ocrResult = null;
+        try {
+          ocrResult = await classifyRequirementDocument(file, name);
+        } catch (ocrErr) {
+          console.warn("OCR upload classification note:", ocrErr);
+        }
+
+        const extraMeta = {
+          classifiedType: ocrResult?.docType || null,
+          ocrSnippet: ocrResult?.extractedSnippet || null,
+          fileName: ocrResult?.suggestedFileName || file.name
+        };
+
+        const savedRecord = await saveRequirementFile(agentKey, file, extraMeta);
         newRecords.push(savedRecord);
       }
 
@@ -213,9 +293,10 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
         ...current.filter((c) => !newRecords.some((n) => n.id === c.id))
       ]);
 
+      const classifiedCount = newRecords.filter((r) => r.classifiedType && r.classifiedType !== "Other Document").length;
       setRequirementNotice({
         type: "success",
-        message: `${files.length} requirement ${files.length === 1 ? "file" : "files"} permanently saved to database!`
+        message: `${files.length} document${files.length === 1 ? "" : "s"} uploaded and verified via AI OCR (${classifiedCount} classified)`
       });
     } catch (err) {
       console.error("Error saving requirement:", err);
@@ -227,6 +308,84 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
       setUploadingRequirements(false);
       event.target.value = "";
       setTimeout(() => setRequirementNotice(null), 5000);
+    }
+  };
+
+  const handleClassifySingleRequirement = async (file) => {
+    if (scanningOcrIds.includes(file.id)) return;
+    setScanningOcrIds((prev) => [...prev, file.id]);
+    try {
+      const ocrResult = await classifyRequirementDocument(file, name);
+      const updated = await updateRequirementRecord(agentKey, file.id, {
+        classifiedType: ocrResult.docType,
+        ocrSnippet: ocrResult.extractedSnippet,
+        name: ocrResult.suggestedFileName || file.name
+      });
+
+      setUploadedRequirements((current) =>
+        current.map((item) => (item.id === file.id ? { ...item, ...updated } : item))
+      );
+
+      setRequirementNotice({
+        type: "success",
+        message: `Recognized as "${ocrResult.docType}" via AI OCR!`
+      });
+      setTimeout(() => setRequirementNotice(null), 4000);
+    } catch (err) {
+      console.error("OCR single classify failed:", err);
+      setRequirementNotice({
+        type: "error",
+        message: "OCR classification failed: " + err.message
+      });
+    } finally {
+      setScanningOcrIds((prev) => prev.filter((id) => id !== file.id));
+    }
+  };
+
+  const handleBatchClassifyAll = async () => {
+    if (!uploadedRequirements.length || isBatchScanningOcr) return;
+    setIsBatchScanningOcr(true);
+    setRequirementNotice({
+      type: "info",
+      message: `Analyzing ${uploadedRequirements.length} documents using AI OCR...`
+    });
+
+    let successCount = 0;
+    try {
+      for (const item of uploadedRequirements) {
+        setScanningOcrIds((prev) => [...prev, item.id]);
+        try {
+          const ocrResult = await classifyRequirementDocument(item, name);
+          const updated = await updateRequirementRecord(agentKey, item.id, {
+            classifiedType: ocrResult.docType,
+            ocrSnippet: ocrResult.extractedSnippet,
+            name: ocrResult.suggestedFileName || item.name
+          });
+
+          setUploadedRequirements((current) =>
+            current.map((rec) => (rec.id === item.id ? { ...rec, ...updated } : rec))
+          );
+          successCount++;
+        } catch (itemErr) {
+          console.warn(`OCR scan failed for item ${item.name}:`, itemErr);
+        } finally {
+          setScanningOcrIds((prev) => prev.filter((id) => id !== item.id));
+        }
+      }
+
+      setRequirementNotice({
+        type: "success",
+        message: `Successfully classified ${successCount} document${successCount !== 1 ? "s" : ""} via AI OCR!`
+      });
+      setTimeout(() => setRequirementNotice(null), 5000);
+    } catch (err) {
+      console.error("Batch OCR classification error:", err);
+      setRequirementNotice({
+        type: "error",
+        message: "Batch OCR scan encountered an error: " + err.message
+      });
+    } finally {
+      setIsBatchScanningOcr(false);
     }
   };
 
@@ -244,48 +403,63 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
     }
   };
 
-  const handleDownloadAllPdf = async () => {
+  const handlePreviewAllPdf = async () => {
     if (!uploadedRequirements.length) return;
     setDownloadingPdf(true);
     try {
-      const fileName = await downloadRequirementsAsPdf({
+      const { doc, blobUrl, fileName, totalPages } = await generateRequirementsPdfDoc({
         agentName: name,
         agentId: idNumber,
         supervisorName,
         barangayName,
         requirements: uploadedRequirements
       });
-      setRequirementNotice({
-        type: "success",
-        message: `PDF generated and downloaded: ${fileName}`
+      setPdfPreviewState({
+        isOpen: true,
+        doc,
+        blobUrl,
+        fileName,
+        totalPages,
+        title: `${name} — Registration Requirements`
       });
-      setTimeout(() => setRequirementNotice(null), 5000);
     } catch (err) {
-      console.error("PDF generation failed:", err);
+      console.error("PDF preview generation failed:", err);
       setRequirementNotice({
         type: "error",
         message: `PDF compilation failed: ${err.message}`
       });
+      setTimeout(() => setRequirementNotice(null), 5000);
     } finally {
       setDownloadingPdf(false);
     }
   };
 
-  const handleDownloadSinglePdf = async (file) => {
+  const handlePreviewSinglePdf = async (file) => {
+    setDownloadingPdf(true);
     try {
-      const fileName = await downloadSingleRequirementAsPdf({
+      const { doc, blobUrl, fileName, totalPages } = await generateSingleRequirementPdfDoc({
         requirement: file,
         agentName: name,
         agentId: idNumber,
         supervisorName
       });
-      setRequirementNotice({
-        type: "success",
-        message: `PDF downloaded: ${fileName}`
+      setPdfPreviewState({
+        isOpen: true,
+        doc,
+        blobUrl,
+        fileName,
+        totalPages,
+        title: `${file.name} — PDF Preview`
       });
-      setTimeout(() => setRequirementNotice(null), 3000);
     } catch (err) {
-      console.error("Single PDF failed:", err);
+      console.error("Single PDF preview failed:", err);
+      setRequirementNotice({
+        type: "error",
+        message: `PDF preview failed: ${err.message}`
+      });
+      setTimeout(() => setRequirementNotice(null), 4000);
+    } finally {
+      setDownloadingPdf(false);
     }
   };
 
@@ -732,35 +906,60 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
 
                 {/* Upload Controls & Download Action Bar */}
                 <div className="space-y-3">
-                  <div className="flex flex-wrap items-center gap-3">
-                    <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-xs font-bold text-emerald-300 transition hover:bg-slate-800 shadow-sm cursor-pointer disabled:opacity-70">
-                      {uploadingRequirements ? (
-                        <>
-                          <Loader2 size={14} className="animate-spin text-emerald-400" />
-                          <span>Saving to database...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Upload size={14} />
-                          <span>Upload requirements</span>
-                        </>
+                  <div className="flex flex-wrap items-center justify-between gap-2.5">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-xs font-bold text-emerald-300 transition hover:bg-slate-800 shadow-sm cursor-pointer disabled:opacity-70">
+                        {uploadingRequirements ? (
+                          <>
+                            <Loader2 size={14} className="animate-spin text-emerald-400" />
+                            <span>AI OCR Scanning & Uploading...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Upload size={14} />
+                            <span>Upload Requirements</span>
+                          </>
+                        )}
+                        <input
+                          type="file"
+                          multiple
+                          accept=".pdf,.jpg,.jpeg,.png,.webp"
+                          className="hidden"
+                          disabled={uploadingRequirements}
+                          onChange={handleRequirementUpload}
+                        />
+                      </label>
+
+                      {/* Batch OCR Auto-Classify Button */}
+                      {uploadedRequirements.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={handleBatchClassifyAll}
+                          disabled={isBatchScanningOcr}
+                          className="inline-flex items-center gap-1.5 rounded-xl border border-indigo-200 bg-indigo-50/80 px-3.5 py-2.5 text-xs font-bold text-indigo-700 transition hover:bg-indigo-100 hover:border-indigo-300 disabled:opacity-60 disabled:cursor-wait"
+                          title="Scan all requirement documents with AI OCR to classify types and standardize names"
+                        >
+                          {isBatchScanningOcr ? (
+                            <>
+                              <Loader2 size={13} className="animate-spin text-indigo-600" />
+                              <span>Scanning All with OCR...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Scan size={14} className="text-indigo-600" />
+                              <span>AI OCR Classify All</span>
+                            </>
+                          )}
+                        </button>
                       )}
-                      <input
-                        type="file"
-                        multiple
-                        accept=".pdf,.jpg,.jpeg,.png,.webp"
-                        className="hidden"
-                        disabled={uploadingRequirements}
-                        onChange={handleRequirementUpload}
-                      />
-                    </label>
+                    </div>
 
                     <p className="text-[11px] text-slate-400">
-                      Accepted: PNG, JPG, JPEG, WEBP, PDF (Stored in database)
+                      OCR auto-identifies clearances, IDs, birth certs & resumes
                     </p>
                   </div>
 
-                  {/* Prominent Download Bar with Automatic PDF and Batch Image Downloads */}
+                  {/* Prominent Download Bar with Interactive PDF Preview and Batch Downloads */}
                   {uploadedRequirements.length > 0 && (
                     <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-emerald-200/90 bg-gradient-to-r from-emerald-50/90 via-teal-50/40 to-slate-50 p-3.5 shadow-sm">
                       <div className="flex items-center gap-2.5">
@@ -770,29 +969,29 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
                         <div>
                           <h4 className="text-xs font-extrabold text-slate-900">Download Requirements</h4>
                           <p className="text-[10px] font-medium text-slate-500">
-                            {uploadedRequirements.length} {uploadedRequirements.length === 1 ? "document" : "documents"} ready for automatic export
+                            {uploadedRequirements.length} {uploadedRequirements.length === 1 ? "document" : "documents"} ready · Preview before download
                           </p>
                         </div>
                       </div>
 
                       <div className="flex flex-wrap items-center gap-2">
-                        {/* Automatic PDF Download Button */}
+                        {/* Interactive PDF Preview and Download Button */}
                         <button
                           type="button"
-                          onClick={handleDownloadAllPdf}
+                          onClick={handlePreviewAllPdf}
                           disabled={downloadingPdf}
                           className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 px-4 py-2 text-xs font-extrabold text-white shadow-sm shadow-emerald-600/20 transition hover:from-emerald-500 hover:to-teal-500 hover:shadow disabled:cursor-wait disabled:opacity-60"
-                          title="Automatically compile all images into a branded PDF file and download"
+                          title="Preview full compiled PDF with interactive page controls before downloading"
                         >
                           {downloadingPdf ? (
                             <>
                               <Loader2 size={14} className="animate-spin text-white" />
-                              <span>Generating PDF...</span>
+                              <span>Preparing Preview...</span>
                             </>
                           ) : (
                             <>
-                              <FileText size={14} />
-                              <span>Download as PDF</span>
+                              <Eye size={14} />
+                              <span>Preview & Download PDF</span>
                             </>
                           )}
                         </button>
@@ -847,6 +1046,7 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
                       {uploadedRequirements.map((file) => {
                         const isImage = file.type?.startsWith("image/") || file.dataUrl?.startsWith("data:image/");
+                        const isScanningThis = scanningOcrIds.includes(file.id);
                         return (
                           <div
                             key={file.id}
@@ -873,6 +1073,34 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
                                 <span className="text-[10px] font-bold uppercase">{file.name.split('.').pop() || 'DOC'}</span>
                               </div>
                             )}
+
+                            {/* Classification Badge & On-Demand OCR Scan */}
+                            <div className="flex items-center justify-between gap-1 pt-0.5">
+                              <span
+                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-extrabold border ${getDocumentBadgeStyle(
+                                  file.classifiedType
+                                )}`}
+                                title={file.ocrSnippet ? `Extracted Snippet: ${file.ocrSnippet}` : file.classifiedType || "Unclassified document"}
+                              >
+                                <Tag size={10} />
+                                <span className="truncate max-w-[125px]">{file.classifiedType || "Unclassified"}</span>
+                              </span>
+
+                              <button
+                                type="button"
+                                onClick={() => handleClassifySingleRequirement(file)}
+                                disabled={isScanningThis}
+                                className="inline-flex items-center gap-1 text-[10px] font-bold text-indigo-600 hover:text-indigo-700 bg-indigo-50/80 hover:bg-indigo-100 px-1.5 py-0.5 rounded transition disabled:opacity-50"
+                                title="Run AI OCR scan on this document to recognize type and rename"
+                              >
+                                {isScanningThis ? (
+                                  <Loader2 size={10} className="animate-spin text-indigo-600" />
+                                ) : (
+                                  <Scan size={10} />
+                                )}
+                                <span>{file.classifiedType ? "Re-scan" : "AI OCR"}</span>
+                              </button>
+                            </div>
 
                             {/* Info & Actions */}
                             <div className="space-y-1">
@@ -902,12 +1130,12 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
                                   {isImage && (
                                     <button
                                       type="button"
-                                      onClick={() => handleDownloadSinglePdf(file)}
+                                      onClick={() => handlePreviewSinglePdf(file)}
                                       className="p-1 rounded text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 text-[11px] font-semibold flex items-center gap-1 transition"
-                                      title="Export this image as PDF"
+                                      title="Preview single requirement document compiled into branded PDF"
                                     >
-                                      <FileText size={12} />
-                                      <span>PDF</span>
+                                      <Eye size={12} />
+                                      <span>PDF Preview</span>
                                     </button>
                                   )}
                                 </div>
@@ -931,7 +1159,7 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
                 ) : (
                   <div className="rounded-xl border border-dashed border-slate-200 p-6 text-center text-xs text-slate-400 bg-slate-50/50">
                     <p className="font-semibold text-slate-600">No registration requirements uploaded yet.</p>
-                    <p className="mt-1 text-[11px] text-slate-400">Upload ID photos, certificates, or documents above. They will be saved to this profile's database record.</p>
+                    <p className="mt-1 text-[11px] text-slate-400">Upload clearances, valid IDs, certificates, or documents above. They will be auto-classified by OCR and saved to database.</p>
                   </div>
                 )}
               </div>
@@ -939,6 +1167,109 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
           </div>
         )}
       </div>
+
+      {/* Interactive Full-Screen PDF Preview Modal */}
+      {pdfPreviewState.isOpen && (
+        <div
+          className="fixed inset-0 z-[75] flex items-center justify-center bg-slate-950/85 p-3 sm:p-5 backdrop-blur-md"
+          onClick={closePdfPreview}
+        >
+          <div
+            className="relative max-h-[95vh] max-w-5xl w-full bg-slate-900 rounded-2xl overflow-hidden shadow-2xl border border-slate-700 flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Top Header */}
+            <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3.5 bg-slate-950 border-b border-slate-800 text-white">
+              <div className="min-w-0 flex items-center gap-3">
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-600 text-white shadow-sm shadow-emerald-600/30">
+                  <FileText size={18} />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-sm font-extrabold truncate text-white">{pdfPreviewState.title || "PDF Preview"}</h3>
+                    <span className="text-[10px] font-extrabold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded-full">
+                      {pdfPreviewState.totalPages} {pdfPreviewState.totalPages === 1 ? "Page" : "Pages"}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-400 truncate">
+                    File: {pdfPreviewState.fileName} · Verified Archival Document
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                {/* Open in new tab button */}
+                {pdfPreviewState.blobUrl && (
+                  <a
+                    href={pdfPreviewState.blobUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white text-xs font-bold flex items-center gap-1.5 transition"
+                    title="Open PDF in a new browser tab"
+                  >
+                    <ExternalLink size={14} />
+                    <span className="hidden sm:inline">New Tab</span>
+                  </a>
+                )}
+
+                {/* Prominent Download Button inside Preview */}
+                <button
+                  type="button"
+                  onClick={handleDownloadFromPreview}
+                  className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-extrabold flex items-center gap-2 transition shadow-md shadow-emerald-900/40"
+                  title="Download this compiled PDF document"
+                >
+                  <FileDown size={15} />
+                  <span>Download PDF</span>
+                </button>
+
+                {/* Close Modal Button */}
+                <button
+                  type="button"
+                  onClick={closePdfPreview}
+                  className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition"
+                  title="Close preview"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+            </div>
+
+            {/* Embedded PDF Viewer */}
+            <div className="p-3 bg-slate-950/70 flex-1 min-h-[500px] max-h-[calc(90vh-120px)] flex flex-col items-center justify-center">
+              {pdfPreviewState.blobUrl ? (
+                <iframe
+                  src={pdfPreviewState.blobUrl}
+                  title="Requirements PDF Preview"
+                  className="w-full h-full min-h-[520px] rounded-xl border border-slate-700 bg-slate-800 shadow-inner"
+                />
+              ) : (
+                <div className="flex flex-col items-center justify-center gap-2 text-slate-400 py-20">
+                  <Loader2 size={24} className="animate-spin text-emerald-500" />
+                  <p className="text-xs font-bold">Rendering PDF preview...</p>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-2.5 bg-slate-950 border-t border-slate-800 text-xs text-slate-400">
+              <div className="flex items-center gap-1.5 text-[11px]">
+                <ShieldCheck size={14} className="text-emerald-400" />
+                <span>Branded HRHub archival format with auto-scaled document layouts and OCR tags</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleDownloadFromPreview}
+                  className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-400 hover:text-emerald-300 transition"
+                >
+                  <FileDown size={13} /> Save Copy ({pdfPreviewState.fileName})
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Full-Screen Image Preview Modal */}
       {previewModalImage && (
@@ -958,11 +1289,11 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
               <div className="flex items-center gap-2 shrink-0">
                 <button
                   type="button"
-                  onClick={() => handleDownloadSinglePdf(previewModalImage)}
+                  onClick={() => handlePreviewSinglePdf(previewModalImage)}
                   className="p-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center gap-1.5 transition shadow-sm"
-                  title="Download this document as PDF"
+                  title="Preview document in branded PDF format before downloading"
                 >
-                  <FileText size={14} /> Download PDF
+                  <Eye size={14} /> Preview PDF
                 </button>
                 <a
                   href={previewModalImage.dataUrl}

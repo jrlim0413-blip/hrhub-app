@@ -61,15 +61,20 @@ function getLocalMeta() {
 /**
  * Updates local metadata cache
  */
+/**
+ * Updates local metadata cache
+ */
 function updateLocalMeta(profileKey, items) {
   try {
     const meta = getLocalMeta();
-    meta[profileKey] = items.map(({ id, name, size, type, createdAt }) => ({
+    meta[profileKey] = items.map(({ id, name, size, type, createdAt, classifiedType, ocrSnippet }) => ({
       id,
       name,
       size,
       type,
-      createdAt
+      createdAt,
+      classifiedType: classifiedType || null,
+      ocrSnippet: ocrSnippet || null
     }));
     localStorage.setItem(LOCAL_META_KEY, JSON.stringify(meta));
   } catch (err) {
@@ -93,15 +98,17 @@ export function formatFileSize(bytes) {
  * and registers metadata in PostgreSQL 'agent_requirements' and local cache.
  * @param {string} profileKey - The unique key for the profile
  * @param {File} file - The uploaded file object
+ * @param {Object} [extraMeta] - Optional OCR classification and custom name
  * @returns {Promise<Object>} The saved requirement record
  */
-export async function saveRequirementFile(profileKey, file) {
+export async function saveRequirementFile(profileKey, file, extraMeta = {}) {
   const normKey = String(profileKey).toLowerCase().trim();
   const fileExt = file.name.split(".").pop() || "png";
-  const cleanBaseName = file.name
-    .substring(0, file.name.lastIndexOf("."))
+  const preferredName = extraMeta.fileName || file.name;
+  const cleanBaseName = preferredName
+    .substring(0, preferredName.lastIndexOf(".") !== -1 ? preferredName.lastIndexOf(".") : preferredName.length)
     .replace(/[^a-zA-Z0-9_\-]/g, "_")
-    .slice(0, 40) || "document";
+    .slice(0, 50) || "document";
   const recordId = `req_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
   const storagePath = `${normKey}/${Date.now()}_${cleanBaseName}.${fileExt}`;
 
@@ -145,12 +152,14 @@ export async function saveRequirementFile(profileKey, file) {
   const record = {
     id: recordId,
     profileKey: normKey,
-    name: file.name,
+    name: preferredName,
     size: file.size,
     type: file.type || "image/png",
     dataUrl: dataUrl,
     storagePath: uploadSuccess ? storagePath : null,
-    createdAt: new Date().toISOString()
+    createdAt: new Date().toISOString(),
+    classifiedType: extraMeta.classifiedType || null,
+    ocrSnippet: extraMeta.ocrSnippet || null
   };
 
   // 3. Persist to IndexedDB for instant offline preview & local fast retrieval
@@ -177,17 +186,28 @@ export async function saveRequirementFile(profileKey, file) {
 
   // 4. Sync metadata to Supabase 'agent_requirements' table
   try {
-    const { error } = await supabase.from("agent_requirements").upsert({
+    const basePayload = {
       id: record.id,
       agent_key: normKey,
       file_name: record.name,
       file_size: record.size,
       file_type: record.type,
       storage_path: record.storagePath,
-      data_url: record.dataUrl, // Stores the clean Supabase Storage CDN URL (or base64 fallback)
+      data_url: record.dataUrl,
       created_at: record.createdAt
+    };
+
+    // Try syncing with classified fields
+    const { error: fullErr } = await supabase.from("agent_requirements").upsert({
+      ...basePayload,
+      classified_type: record.classifiedType,
+      ocr_snippet: record.ocrSnippet
     });
-    if (error) console.warn("Supabase agent_requirements sync note:", error.message);
+
+    if (fullErr) {
+      // If error due to missing columns, retry with basePayload
+      await supabase.from("agent_requirements").upsert(basePayload);
+    }
   } catch (sbErr) {
     console.warn("Supabase requirements sync note:", sbErr);
   }
@@ -197,6 +217,84 @@ export async function saveRequirementFile(profileKey, file) {
   updateLocalMeta(normKey, currentList);
 
   return record;
+}
+
+/**
+ * Updates an existing requirement record with new name, classification, or snippet
+ * @param {string} profileKey - Agent profile key
+ * @param {string} recordId - Requirement item ID
+ * @param {Object} updates - Fields to update (e.g., { name, classifiedType, ocrSnippet })
+ * @returns {Promise<Object>} Updated record
+ */
+export async function updateRequirementRecord(profileKey, recordId, updates = {}) {
+  const normKey = String(profileKey).toLowerCase().trim();
+
+  // 1. Update in IndexedDB
+  try {
+    const db = await openDB();
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, "readwrite");
+      const store = tx.objectStore(STORE_NAME);
+      const getReq = store.get(recordId);
+      getReq.onsuccess = () => {
+        const existing = getReq.result;
+        if (existing) {
+          const updated = { ...existing, ...updates };
+          store.put(updated);
+        }
+        resolve(true);
+      };
+      getReq.onerror = () => reject(getReq.error);
+    });
+  } catch (err) {
+    console.warn("IndexedDB update notice:", err);
+  }
+
+  // 2. Update in Supabase
+  try {
+    const sbUpdates = {};
+    if (updates.name !== undefined) sbUpdates.file_name = updates.name;
+    if (updates.classifiedType !== undefined) sbUpdates.classified_type = updates.classifiedType;
+    if (updates.ocrSnippet !== undefined) sbUpdates.ocr_snippet = updates.ocrSnippet;
+
+    if (Object.keys(sbUpdates).length > 0) {
+      const { error } = await supabase
+        .from("agent_requirements")
+        .update(sbUpdates)
+        .eq("id", recordId);
+
+      if (error && (sbUpdates.classified_type || sbUpdates.ocr_snippet)) {
+        // Fallback without classified fields if column not in DB
+        await supabase
+          .from("agent_requirements")
+          .update({ file_name: updates.name })
+          .eq("id", recordId);
+      }
+    }
+  } catch (sbErr) {
+    console.warn("Supabase update notice:", sbErr);
+  }
+
+  // 3. Fallback localStorage update if any
+  try {
+    const fbKey = `hrhub_req_blob_${normKey}`;
+    const raw = localStorage.getItem(fbKey);
+    if (raw) {
+      const items = JSON.parse(raw);
+      const idx = items.findIndex((i) => i.id === recordId);
+      if (idx !== -1) {
+        items[idx] = { ...items[idx], ...updates };
+        localStorage.setItem(fbKey, JSON.stringify(items));
+      }
+    }
+  } catch {
+    // ignore
+  }
+
+  // 4. Refresh local cache
+  const currentList = await getRequirementsByProfile(normKey);
+  updateLocalMeta(normKey, currentList);
+  return currentList.find((i) => i.id === recordId) || null;
 }
 
 /**
@@ -315,7 +413,9 @@ export async function getRequirementsByProfile(profileKey) {
           type: d.file_type || "image/png",
           storagePath: d.storage_path || null,
           dataUrl: d.data_url || d.file_url,
-          createdAt: d.created_at
+          createdAt: d.created_at,
+          classifiedType: d.classified_type || d.classifiedType || null,
+          ocrSnippet: d.ocr_snippet || d.ocrSnippet || null
         }));
         await syncLocalCacheWithRemote(normKey, mapped);
         updateLocalMeta(normKey, mapped);
@@ -508,10 +608,10 @@ function getImageDimensions(dataUrl) {
 }
 
 /**
- * Automatically compiles all requirement images for an agent into a PDF
- * with official header, branding, metadata, and auto-downloads the file.
+ * Automatically compiles requirement images for an agent into a PDF document object,
+ * providing the jsPDF instance, blob, blobUrl for interactive preview, and download metadata.
  */
-export async function downloadRequirementsAsPdf({
+export async function generateRequirementsPdfDoc({
   agentName = "Agent",
   agentId = "",
   supervisorName = "",
@@ -519,7 +619,7 @@ export async function downloadRequirementsAsPdf({
   requirements = []
 }) {
   const imageItems = requirements.filter(
-    (item) => item.dataUrl && (item.type?.startsWith("image/") || item.dataUrl.startsWith("data:image/"))
+    (item) => item.dataUrl && (item.type?.startsWith("image/") || item.dataUrl.startsWith("data:image/") || item.dataUrl.startsWith("http"))
   );
 
   if (!imageItems || imageItems.length === 0) {
@@ -593,7 +693,9 @@ export async function downloadRequirementsAsPdf({
     doc.setFont("helvetica", "bold");
     doc.setFontSize(8);
     doc.setTextColor(15, 23, 42);
-    const docTitle = `Item ${idx + 1} of ${totalPages}: ${item.name || `Requirement_${idx + 1}`}`;
+
+    const typePrefix = item.classifiedType ? `[${item.classifiedType}] ` : "";
+    const docTitle = `Item ${idx + 1} of ${totalPages}: ${typePrefix}${item.name || `Requirement_${idx + 1}`}`;
     doc.text(docTitle, margin + 3, 37);
 
     doc.setFont("helvetica", "normal");
@@ -644,9 +746,47 @@ export async function downloadRequirementsAsPdf({
     doc.text(`Page ${idx + 1} of ${totalPages}`, pageWidth - margin, pageHeight - 6, { align: "right" });
   }
 
-  const downloadFileName = `${cleanName.replaceAll(" ", "_")}_Registration_Requirements.pdf`;
-  doc.save(downloadFileName);
-  return downloadFileName;
+  const fileName = `${cleanName.replaceAll(" ", "_")}_Registration_Requirements.pdf`;
+  const blob = doc.output("blob");
+  const blobUrl = URL.createObjectURL(blob);
+
+  return {
+    doc,
+    blob,
+    blobUrl,
+    fileName,
+    totalPages
+  };
+}
+
+/**
+ * Automatically compiles all requirement images for an agent into a PDF
+ * and directly downloads the file to disk.
+ */
+export async function downloadRequirementsAsPdf(params) {
+  const { doc, fileName } = await generateRequirementsPdfDoc(params);
+  doc.save(fileName);
+  return fileName;
+}
+
+/**
+ * Generates a previewable PDF doc object for a single requirement item
+ */
+export async function generateSingleRequirementPdfDoc({
+  requirement,
+  agentName = "Agent",
+  agentId = "",
+  supervisorName = ""
+}) {
+  if (!requirement?.dataUrl) {
+    throw new Error("Invalid requirement document.");
+  }
+  return generateRequirementsPdfDoc({
+    agentName,
+    agentId,
+    supervisorName,
+    requirements: [requirement]
+  });
 }
 
 /**
@@ -658,15 +798,14 @@ export async function downloadSingleRequirementAsPdf({
   agentId = "",
   supervisorName = ""
 }) {
-  if (!requirement?.dataUrl) {
-    throw new Error("Invalid requirement document.");
-  }
-  return downloadRequirementsAsPdf({
+  const { doc, fileName } = await generateSingleRequirementPdfDoc({
+    requirement,
     agentName,
     agentId,
-    supervisorName,
-    requirements: [requirement]
+    supervisorName
   });
+  doc.save(fileName);
+  return fileName;
 }
 
 /**

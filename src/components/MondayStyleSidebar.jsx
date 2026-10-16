@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   ChevronLeft, ChevronRight, Layers, FileText, BarChart3,
   Bot, CloudSun, Sparkles, Search, Plus, Star, ShieldCheck,
   Building2, Calculator, Clock, HardHat, Dices, Award, Zap, TrendingUp,
   Receipt, FileCheck, Sliders, Activity, MailCheck, Wrench, Home,
-  Compass, PhoneCall, Mail, DollarSign, CircleDollarSign, Workflow, LayoutDashboard
+  Compass, PhoneCall, Mail, DollarSign, CircleDollarSign, Workflow, LayoutDashboard,
+  UserCheck
 } from "lucide-react";
 
 export default function MondayStyleSidebar({
@@ -17,8 +18,21 @@ export default function MondayStyleSidebar({
   // Selected active icon category on the primary rail ('home' | 'operations' | 'finance' | 'hr' | 'analytics' | 'tools')
   const [selectedCategory, setSelectedCategory] = useState("home");
   const [searchTerm, setSearchTerm] = useState("");
-  const [favorites, setFavorites] = useState(["simcon_equipment", "payroll_calc"]);
+  const [favorites, setFavorites] = useState(["supervisors_attendance", "payroll_calc"]);
   const [activeItemId, setActiveItemId] = useState("home_overview");
+
+  // Sync activeItemId and category with workspaceTab
+  useEffect(() => {
+    if (workspaceTab === "supervisors_attendance") {
+      setSelectedCategory("operations");
+      setActiveItemId("supervisors_attendance");
+    } else if (workspaceTab === "home") {
+      setActiveItemId("home_overview");
+    } else if (workspaceTab === "sops") {
+      setSelectedCategory("operations");
+      setActiveItemId("weather_map");
+    }
+  }, [workspaceTab]);
 
   // Primary left rail categories (Icon + Text label below icon matching screenshot)
   const railCategories = [
@@ -82,6 +96,12 @@ export default function MondayStyleSidebar({
     operations: {
       title: "Field & Operations",
       items: [
+        {
+          id: "supervisors_attendance",
+          label: "Supervisors Attendance",
+          icon: UserCheck,
+          tag: "Attendance"
+        },
         {
           id: "weather_map",
           label: "Field Hazard Weather Radar",
@@ -378,6 +398,12 @@ export default function MondayStyleSidebar({
                   setActiveItemId(item.id);
                   if (item.id === "ai_sidekick_action") {
                     onOpenAiBuddy();
+                  } else if (item.id === "supervisors_attendance" && setWorkspaceTab) {
+                    setWorkspaceTab("supervisors_attendance");
+                  } else if (item.id === "weather_map" && setWorkspaceTab) {
+                    setWorkspaceTab("sops");
+                  } else if ((item.id === "gaming_draws" || item.id === "shortage_tracker") && setWorkspaceTab) {
+                    setWorkspaceTab("gross");
                   } else if (selectedCategory === "home" && setWorkspaceTab) {
                     setWorkspaceTab("home");
                   }
@@ -387,6 +413,12 @@ export default function MondayStyleSidebar({
                     setActiveItemId(item.id);
                     if (item.id === "ai_sidekick_action") {
                       onOpenAiBuddy();
+                    } else if (item.id === "supervisors_attendance" && setWorkspaceTab) {
+                      setWorkspaceTab("supervisors_attendance");
+                    } else if (item.id === "weather_map" && setWorkspaceTab) {
+                      setWorkspaceTab("sops");
+                    } else if ((item.id === "gaming_draws" || item.id === "shortage_tracker") && setWorkspaceTab) {
+                      setWorkspaceTab("gross");
                     } else if (selectedCategory === "home" && setWorkspaceTab) {
                       setWorkspaceTab("home");
                     }
