@@ -11,6 +11,7 @@ export const REGISTRATION_SLOTS = [
     subtitle: "Biodata, Resume, or Curriculum Vitae (CV)",
     cleanName: "Biodata",
     required: true,
+    allowMultiple: false,
     badgeColor: "purple"
   },
   {
@@ -20,24 +21,27 @@ export const REGISTRATION_SLOTS = [
     subtitle: "Barangay Clearance or Certificate of Residency",
     cleanName: "Barangay_Clearance",
     required: true,
+    allowMultiple: false,
     badgeColor: "emerald"
   },
   {
     id: "agency_agreement",
     order: 3,
     title: "Agency Agreement",
-    subtitle: "Agency Agreement, Contract, or Appointment Form",
+    subtitle: "Agency Agreement, Contract, or Appointment Form (Multi-page)",
     cleanName: "Agency_Agreement",
     required: true,
+    allowMultiple: true,
     badgeColor: "blue"
   },
   {
     id: "valid_id",
     order: 4,
     title: "Valid ID",
-    subtitle: "Government Valid ID (National ID, Driver's License, SSS, Passport)",
+    subtitle: "Government Valid ID (Front & Back / Multiple IDs)",
     cleanName: "Valid_ID",
     required: true,
+    allowMultiple: true,
     badgeColor: "indigo"
   },
   {
@@ -47,6 +51,7 @@ export const REGISTRATION_SLOTS = [
     subtitle: "PNP Police Clearance Certificate",
     cleanName: "Police_Clearance",
     required: false,
+    allowMultiple: false,
     badgeColor: "teal"
   },
   {
@@ -56,6 +61,7 @@ export const REGISTRATION_SLOTS = [
     subtitle: "National Bureau of Investigation Clearance",
     cleanName: "NBI_Clearance",
     required: false,
+    allowMultiple: false,
     badgeColor: "cyan"
   },
   {
@@ -65,6 +71,7 @@ export const REGISTRATION_SLOTS = [
     subtitle: "PSA / NSO Certificate of Live Birth",
     cleanName: "PSA_Birth_Certificate",
     required: false,
+    allowMultiple: false,
     badgeColor: "amber"
   },
   {
@@ -74,18 +81,23 @@ export const REGISTRATION_SLOTS = [
     subtitle: "Recent formal 2x2 ID picture with white background",
     cleanName: "2x2_ID_Photo",
     required: false,
+    allowMultiple: false,
     badgeColor: "fuchsia"
   },
   {
     id: "other_document",
     order: 9,
     title: "Other Document",
-    subtitle: "Medical certificate, drug test, or other certifications",
+    subtitle: "Medical certificate, certifications, or additional files",
     cleanName: "Other_Document",
     required: false,
+    allowMultiple: true,
     badgeColor: "slate"
   }
 ];
+
+export const REQUIRED_SLOT_IDS = ["biodata", "barangay_clearance", "agency_agreement", "valid_id"];
+export const OPTIONAL_SLOTS = REGISTRATION_SLOTS.filter((s) => !s.required);
 
 /**
  * Returns numeric priority rank for a given category id or name
@@ -106,19 +118,12 @@ export function getSlotOrder(categoryKeyOrName = "") {
 }
 
 /**
- * Finds the requirement record matching a specific slot
+ * Finds all requirement records matching a specific slot, ordered by their subOrder/sortOrder/createdAt
  */
-export function findRequirementForSlot(requirements = [], slotId = "") {
-  if (!requirements || !requirements.length) return null;
-  // 1. Exact categoryKey match
-  const byKey = requirements.find((r) => r.categoryKey === slotId);
-  if (byKey) return byKey;
-
-  // 2. Fallback matching by classifiedType or filename
-  const slot = REGISTRATION_SLOTS.find((s) => s.id === slotId);
-  if (!slot) return null;
-
-  return requirements.find((r) => {
+export function findRequirementsForSlot(requirements = [], slotId = "") {
+  if (!requirements || !requirements.length) return [];
+  const matches = requirements.filter((r) => {
+    if (r.categoryKey === slotId) return true;
     const text = `${r.classifiedType || ""} ${r.name || ""}`.toLowerCase();
     if (slotId === "biodata" && (text.includes("biodata") || text.includes("resume") || text.includes("cv"))) return true;
     if (slotId === "barangay_clearance" && (text.includes("barangay") || text.includes("brgy"))) return true;
@@ -130,18 +135,39 @@ export function findRequirementForSlot(requirements = [], slotId = "") {
     if (slotId === "id_picture_2x2" && (text.includes("2x2") || text.includes("photo"))) return true;
     if (slotId === "other_document" && text.includes("other")) return true;
     return false;
-  }) || null;
+  });
+
+  return matches.sort((a, b) => {
+    const subA = typeof a.subOrder === "number" ? a.subOrder : (typeof a.sortOrder === "number" ? a.sortOrder : 999);
+    const subB = typeof b.subOrder === "number" ? b.subOrder : (typeof b.sortOrder === "number" ? b.sortOrder : 999);
+    if (subA !== subB) return subA - subB;
+    return new Date(a.createdAt || 0) - new Date(b.createdAt || 0);
+  });
+}
+
+/**
+ * Finds the primary requirement record matching a specific slot
+ */
+export function findRequirementForSlot(requirements = [], slotId = "") {
+  const all = findRequirementsForSlot(requirements, slotId);
+  return all.length > 0 ? all[0] : null;
 }
 
 /**
  * Sorts requirements according to the strict slot sequence:
  * 1. Biodata -> 2. Barangay Clearance -> 3. Agency Agreement -> 4. Valid ID -> etc.
+ * And within each slot, by subOrder/sortOrder
  */
 export function sortRequirementsBySlotSequence(items = []) {
   return [...items].sort((a, b) => {
     const orderA = getSlotOrder(a.categoryKey || a.classifiedType || a.name);
     const orderB = getSlotOrder(b.categoryKey || b.classifiedType || b.name);
     if (orderA !== orderB) return orderA - orderB;
+
+    const subA = typeof a.subOrder === "number" ? a.subOrder : (typeof a.sortOrder === "number" ? a.sortOrder : 999);
+    const subB = typeof b.subOrder === "number" ? b.subOrder : (typeof b.sortOrder === "number" ? b.sortOrder : 999);
+    if (subA !== subB) return subA - subB;
+
     return new Date(a.createdAt || 0) - new Date(b.createdAt || 0);
   });
 }

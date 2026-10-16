@@ -68,7 +68,7 @@ function getLocalMeta() {
 function updateLocalMeta(profileKey, items) {
   try {
     const meta = getLocalMeta();
-    meta[profileKey] = items.map(({ id, name, size, type, createdAt, categoryKey, classifiedType, ocrSnippet, sortOrder }) => ({
+    meta[profileKey] = items.map(({ id, name, size, type, createdAt, categoryKey, classifiedType, ocrSnippet, sortOrder, subOrder }) => ({
       id,
       name,
       size,
@@ -77,7 +77,8 @@ function updateLocalMeta(profileKey, items) {
       categoryKey: categoryKey || null,
       classifiedType: classifiedType || null,
       ocrSnippet: ocrSnippet || null,
-      sortOrder: typeof sortOrder === "number" ? sortOrder : null
+      sortOrder: typeof sortOrder === "number" ? sortOrder : null,
+      subOrder: typeof subOrder === "number" ? subOrder : null
     }));
     localStorage.setItem(LOCAL_META_KEY, JSON.stringify(meta));
   } catch (err) {
@@ -164,7 +165,8 @@ export async function saveRequirementFile(profileKey, file, extraMeta = {}) {
     categoryKey: extraMeta.categoryKey || null,
     classifiedType: extraMeta.classifiedType || null,
     ocrSnippet: extraMeta.ocrSnippet || null,
-    sortOrder: typeof extraMeta.sortOrder === "number" ? extraMeta.sortOrder : null
+    sortOrder: typeof extraMeta.sortOrder === "number" ? extraMeta.sortOrder : null,
+    subOrder: typeof extraMeta.subOrder === "number" ? extraMeta.subOrder : null
   };
 
   // 3. Persist to IndexedDB for instant offline preview & local fast retrieval
@@ -467,7 +469,8 @@ export async function getRequirementsByProfile(profileKey) {
           categoryKey: d.category_key || d.categoryKey || null,
           classifiedType: d.classified_type || d.classifiedType || null,
           ocrSnippet: d.ocr_snippet || d.ocrSnippet || null,
-          sortOrder: typeof d.sort_order === "number" ? d.sort_order : (typeof d.sortOrder === "number" ? d.sortOrder : null)
+          sortOrder: typeof d.sort_order === "number" ? d.sort_order : (typeof d.sortOrder === "number" ? d.sortOrder : null),
+          subOrder: typeof d.sub_order === "number" ? d.sub_order : (typeof d.subOrder === "number" ? d.subOrder : null)
         }));
         const ordered = sortRequirementsBySlotSequence(mapped);
         await syncLocalCacheWithRemote(normKey, ordered);

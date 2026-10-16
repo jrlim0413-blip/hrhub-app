@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import {
   Activity, Archive, Award, CalendarDays, Check, CheckCircle2, CreditCard, Database, Download, Eye, FileDown, FileText,
   Fingerprint, Home, KeyRound, Loader2, Lock, Pencil, Phone, ShieldCheck, Sparkles, Trash2, Upload, UserRound, X,
-  FileCheck, Printer, ExternalLink, RefreshCw, Info
+  FileCheck, Printer, ExternalLink, RefreshCw, Info, Plus, GripVertical, ArrowLeft, ArrowRight, ChevronDown, Layers
 } from "lucide-react";
 import AgentIdCardModal from "./AgentIdCardModal";
 import {
@@ -17,10 +17,14 @@ import {
   batchDownloadIndividualImages,
   generateRequirementsPdfDoc,
   generateSingleRequirementPdfDoc,
-  updateRequirementRecord
+  updateRequirementRecord,
+  saveRequirementsOrder
 } from "../lib/requirementsStorage";
 import {
   REGISTRATION_SLOTS,
+  REQUIRED_SLOT_IDS,
+  OPTIONAL_SLOTS,
+  findRequirementsForSlot,
   findRequirementForSlot,
   sortRequirementsBySlotSequence
 } from "../config/registrationRequirementsConfig";
@@ -93,6 +97,10 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
     title: ""
   });
   const [uploadingSlotId, setUploadingSlotId] = useState(null);
+  const [visibleOptionalSlotIds, setVisibleOptionalSlotIds] = useState([]);
+  const [isAddCategoryOpen, setIsAddCategoryOpen] = useState(false);
+  const [draggedPhotoId, setDraggedPhotoId] = useState(null);
+  const [dragOverPhotoId, setDragOverPhotoId] = useState(null);
 
   const agentKey = getAgentIdentifier(agent, index);
 
@@ -242,56 +250,167 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
 
   // --- INDIVIDUAL REQUIREMENT SLOT UPLOAD HANDLER ---
   const handleSlotUpload = async (event, slot) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
+    const files = Array.from(event.target.files || []);
+    if (!files.length) return;
 
     setUploadingSlotId(slot.id);
     setRequirementNotice({
       type: "info",
-      message: `Uploading ${slot.title}...`
+      message: `Uploading ${files.length} document${files.length > 1 ? "s" : ""} to ${slot.title}...`
     });
 
     try {
-      const fileExt = file.name.split(".").pop() || "png";
       const cleanAgentPrefix = name ? name.trim().replace(/[^a-zA-Z0-9_\-]/g, "_") : "Agent";
-      const preferredFileName = `${slot.cleanName}_${cleanAgentPrefix}.${fileExt}`;
+      const existingSlotItems = findRequirementsForSlot(uploadedRequirements, slot.id);
 
-      // If this slot already had an existing uploaded requirement, replace it cleanly
-      const existingSlotReq = findRequirementForSlot(uploadedRequirements, slot.id);
-      if (existingSlotReq) {
-        await deleteRequirementFile(existingSlotReq.id, agentKey, existingSlotReq.storagePath);
+      // If slot does NOT allow multiple files (single-file slots like Biodata, Barangay Clearance), purge previous records
+      if (!slot.allowMultiple && existingSlotItems.length > 0) {
+        for (const oldItem of existingSlotItems) {
+          await deleteRequirementFile(oldItem.id, agentKey, oldItem.storagePath);
+        }
       }
 
-      const extraMeta = {
-        categoryKey: slot.id,
-        classifiedType: slot.title,
-        fileName: preferredFileName,
-        sortOrder: slot.order
-      };
+      const newRecords = [];
+      const baseSubOrder = slot.allowMultiple ? existingSlotItems.length : 0;
 
-      const savedRecord = await saveRequirementFile(agentKey, file, extraMeta);
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const fileExt = file.name.split(".").pop() || "png";
+        const pageNum = baseSubOrder + i + 1;
+        const preferredFileName = slot.allowMultiple
+          ? `${slot.cleanName}_${pageNum}_${cleanAgentPrefix}.${fileExt}`
+          : `${slot.cleanName}_${cleanAgentPrefix}.${fileExt}`;
 
-      const filteredList = uploadedRequirements.filter(
-        (item) => item.id !== existingSlotReq?.id && item.categoryKey !== slot.id
-      );
-      const updatedList = sortRequirementsBySlotSequence([...filteredList, savedRecord]);
+        const extraMeta = {
+          categoryKey: slot.id,
+          classifiedType: slot.title,
+          fileName: preferredFileName,
+          sortOrder: slot.order,
+          subOrder: pageNum
+        };
 
+        const savedRecord = await saveRequirementFile(agentKey, file, extraMeta);
+        newRecords.push(savedRecord);
+      }
+
+      const otherItems = uploadedRequirements.filter((item) => {
+        if (!slot.allowMultiple && item.categoryKey === slot.id) return false;
+        return !newRecords.some((n) => n.id === item.id);
+      });
+
+      const updatedList = sortRequirementsBySlotSequence([...otherItems, ...newRecords]);
       setUploadedRequirements(updatedList);
+      await saveRequirementsOrder(agentKey, updatedList);
+
       setRequirementNotice({
         type: "success",
-        message: `${slot.title} successfully uploaded and saved!`
+        message: `${files.length} picture${files.length > 1 ? "s" : ""} added to ${slot.title}!`
       });
     } catch (err) {
-      console.error(`Failed to upload ${slot.title}:`, err);
+      console.error(`Failed to upload to ${slot.title}:`, err);
       setRequirementNotice({
         type: "error",
-        message: `Failed to upload ${slot.title}: ${err.message}`
+        message: `Failed to upload to ${slot.title}: ${err.message}`
       });
     } finally {
       setUploadingSlotId(null);
       event.target.value = "";
       setTimeout(() => setRequirementNotice(null), 4000);
     }
+  };
+
+  // --- REORDER PHOTOS WITHIN MULTI-PAGE SLOTS (AGENCY AGREEMENT, VALID ID) ---
+  const handlePhotoDragStart = (e, photoId) => {
+    setDraggedPhotoId(photoId);
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", photoId);
+  };
+
+  const handlePhotoDragOver = (e, photoId) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    if (dragOverPhotoId !== photoId) {
+      setDragOverPhotoId(photoId);
+    }
+  };
+
+  const handlePhotoDrop = async (e, targetPhotoId, slotId) => {
+    e.preventDefault();
+    setDragOverPhotoId(null);
+    if (!draggedPhotoId || draggedPhotoId === targetPhotoId) {
+      setDraggedPhotoId(null);
+      return;
+    }
+
+    const slotItems = findRequirementsForSlot(uploadedRequirements, slotId);
+    const dragIdx = slotItems.findIndex((it) => it.id === draggedPhotoId);
+    const targetIdx = slotItems.findIndex((it) => it.id === targetPhotoId);
+
+    if (dragIdx === -1 || targetIdx === -1) {
+      setDraggedPhotoId(null);
+      return;
+    }
+
+    const reordered = [...slotItems];
+    const [moved] = reordered.splice(dragIdx, 1);
+    reordered.splice(targetIdx, 0, moved);
+
+    const updatedSlotItems = reordered.map((item, idx) => ({
+      ...item,
+      subOrder: idx + 1
+    }));
+
+    const otherItems = uploadedRequirements.filter((item) => item.categoryKey !== slotId);
+    const fullUpdatedList = sortRequirementsBySlotSequence([...otherItems, ...updatedSlotItems]);
+
+    setUploadedRequirements(fullUpdatedList);
+    setDraggedPhotoId(null);
+    await saveRequirementsOrder(agentKey, fullUpdatedList);
+
+    setRequirementNotice({
+      type: "success",
+      message: `Reordered pictures in ${slotId === "agency_agreement" ? "Agency Agreement" : "Valid ID"}: Page ${targetIdx + 1}`
+    });
+    setTimeout(() => setRequirementNotice(null), 3000);
+  };
+
+  const handleMovePhoto = async (slotId, currentIndex, direction) => {
+    const slotItems = findRequirementsForSlot(uploadedRequirements, slotId);
+    const targetIndex = currentIndex + direction;
+    if (targetIndex < 0 || targetIndex >= slotItems.length) return;
+
+    const reordered = [...slotItems];
+    const [moved] = reordered.splice(currentIndex, 1);
+    reordered.splice(targetIndex, 0, moved);
+
+    const updatedSlotItems = reordered.map((item, idx) => ({
+      ...item,
+      subOrder: idx + 1
+    }));
+
+    const otherItems = uploadedRequirements.filter((item) => item.categoryKey !== slotId);
+    const fullUpdatedList = sortRequirementsBySlotSequence([...otherItems, ...updatedSlotItems]);
+
+    setUploadedRequirements(fullUpdatedList);
+    await saveRequirementsOrder(agentKey, fullUpdatedList);
+  };
+
+  const handleAddOptionalCategory = (slotId) => {
+    if (!visibleOptionalSlotIds.includes(slotId)) {
+      setVisibleOptionalSlotIds((prev) => [...prev, slotId]);
+    }
+    setIsAddCategoryOpen(false);
+    const slotObj = REGISTRATION_SLOTS.find((s) => s.id === slotId);
+    setRequirementNotice({
+      type: "success",
+      message: `Added "${slotObj?.title || slotId}" category!`
+    });
+    setTimeout(() => setRequirementNotice(null), 3000);
+  };
+
+  const handleRemoveOptionalCategory = (slotId) => {
+    setVisibleOptionalSlotIds((prev) => prev.filter((id) => id !== slotId));
+    setIsAddCategoryOpen(false);
   };
 
   const removeRequirementFile = async (reqId, storagePath = null) => {
@@ -417,6 +536,22 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
   };
 
   const status = getAgentStatus(agent);
+
+  // Determine displayed slots: Required slots always visible; optional slots only if added or has uploaded files
+  const activeOptionalSlots = OPTIONAL_SLOTS.filter(
+    (slot) =>
+      visibleOptionalSlotIds.includes(slot.id) ||
+      findRequirementsForSlot(uploadedRequirements, slot.id).length > 0
+  );
+
+  const availableOptionalSlots = OPTIONAL_SLOTS.filter(
+    (slot) => !activeOptionalSlots.some((s) => s.id === slot.id)
+  );
+
+  const displayedSlots = [
+    ...REGISTRATION_SLOTS.filter((s) => s.required),
+    ...activeOptionalSlots
+  ];
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 px-3 py-5 backdrop-blur-md sm:px-6">
@@ -826,7 +961,7 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
                       <span className="text-slate-400">→</span>
                       <span className="px-2.5 py-1 rounded-md bg-indigo-100 text-indigo-900 border border-indigo-200">4. Valid ID</span>
                       <span className="text-slate-400">→</span>
-                      <span className="px-2.5 py-1 rounded-md bg-slate-200 text-slate-700">5. Other Documents</span>
+                      <span className="px-2.5 py-1 rounded-md bg-slate-200 text-slate-700">5. Custom Categories</span>
                     </div>
                     <span className="text-[10px] text-slate-500 font-medium">Individual slot uploads · Auto-compiled into PDF in this sequence</span>
                   </div>
@@ -898,6 +1033,58 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
                       </div>
                     </div>
                   )}
+
+                  {/* Header Sub-bar: Category Count + Add Another Category Button */}
+                  <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                    <div className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                      <span>Document Categories ({displayedSlots.length})</span>
+                      <span className="text-[10px] font-normal text-slate-400">· 4 Standard Required + Custom Optional</span>
+                    </div>
+
+                    {/* Add Another Category Dropdown */}
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => setIsAddCategoryOpen(!isAddCategoryOpen)}
+                        disabled={availableOptionalSlots.length === 0}
+                        className="inline-flex items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-800 shadow-2xs transition hover:border-emerald-500 hover:text-emerald-700 hover:bg-emerald-50/50 disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="Add another document category slot"
+                      >
+                        <Plus size={14} className="text-emerald-600" />
+                        <span>Add Another Category</span>
+                        <ChevronDown size={12} className={`text-slate-400 transition-transform ${isAddCategoryOpen ? "rotate-180" : ""}`} />
+                      </button>
+
+                      {isAddCategoryOpen && availableOptionalSlots.length > 0 && (
+                        <div
+                          className="absolute right-0 top-full mt-1.5 w-64 rounded-2xl bg-white p-1.5 shadow-xl border border-slate-200 z-50 animate-in fade-in zoom-in-95 duration-100"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <p className="px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
+                            Available Categories
+                          </p>
+                          <div className="space-y-0.5">
+                            {availableOptionalSlots.map((optSlot) => (
+                              <button
+                                key={optSlot.id}
+                                type="button"
+                                onClick={() => handleAddOptionalCategory(optSlot.id)}
+                                className="w-full text-left px-3 py-2 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-100 hover:text-slate-900 transition flex items-center justify-between group"
+                              >
+                                <div>
+                                  <span className="block font-bold">{optSlot.title}</span>
+                                  <span className="block text-[9.5px] font-normal text-slate-400 line-clamp-1">
+                                    {optSlot.subtitle}
+                                  </span>
+                                </div>
+                                <Plus size={13} className="text-slate-400 group-hover:text-emerald-600 shrink-0 ml-1.5" />
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
 
                 {/* Individual Requirement Slots Grid */}
@@ -907,65 +1094,224 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
                     <span>Loading requirements from database...</span>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
-                    {REGISTRATION_SLOTS.map((slot) => {
-                      const req = findRequirementForSlot(uploadedRequirements, slot.id);
-                      const isUploaded = Boolean(req && req.dataUrl);
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {displayedSlots.map((slot) => {
+                      const slotItems = findRequirementsForSlot(uploadedRequirements, slot.id);
+                      const isUploaded = slotItems.length > 0;
                       const isUploading = uploadingSlotId === slot.id;
-                      const isImage = req?.type?.startsWith("image/") || req?.dataUrl?.startsWith("data:image/") || req?.dataUrl?.startsWith("http");
+                      const isOptional = !slot.required;
 
                       return (
                         <div
                           key={slot.id}
-                          className={`rounded-2xl border p-3.5 transition duration-150 flex flex-col justify-between gap-3 ${
+                          className={`rounded-2xl border p-4 transition duration-150 flex flex-col justify-between gap-3 ${
                             isUploaded
                               ? "border-emerald-200 bg-white shadow-xs hover:border-emerald-300 hover:shadow-sm"
                               : "border-slate-200 bg-slate-50/70 hover:bg-white hover:border-slate-300"
                           }`}
                         >
                           {/* Top Slot Header */}
-                          <div className="flex items-start justify-between gap-2 pb-2 border-b border-slate-100">
+                          <div className="flex items-start justify-between gap-2 pb-2.5 border-b border-slate-100">
                             <div className="flex items-center gap-2">
                               <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-slate-900 text-emerald-400 text-xs font-black shadow-xs">
                                 #{slot.order}
                               </span>
                               <div>
-                                <h4 className="text-xs font-extrabold text-slate-900 leading-tight">
-                                  {slot.title}
-                                </h4>
+                                <div className="flex items-center gap-1.5">
+                                  <h4 className="text-xs font-extrabold text-slate-900 leading-tight">
+                                    {slot.title}
+                                  </h4>
+                                  {slot.allowMultiple && isUploaded && (
+                                    <span className="text-[10px] font-extrabold text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.2 rounded-md">
+                                      {slotItems.length} {slotItems.length === 1 ? "Picture" : "Pictures"}
+                                    </span>
+                                  )}
+                                </div>
                                 <p className="text-[10px] text-slate-400 line-clamp-1" title={slot.subtitle}>
                                   {slot.subtitle}
                                 </p>
                               </div>
                             </div>
 
-                            {/* Status Badge */}
-                            {isUploaded ? (
-                              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 px-2 py-0.5 text-[10px] font-extrabold shrink-0">
-                                <CheckCircle2 size={11} className="text-emerald-600" /> Uploaded
-                              </span>
-                            ) : slot.required ? (
-                              <span className="inline-flex items-center rounded-full bg-amber-100 text-amber-800 border border-amber-300 px-2 py-0.5 text-[10px] font-extrabold shrink-0">
-                                Required
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center rounded-full bg-slate-100 text-slate-500 border border-slate-200 px-2 py-0.5 text-[10px] font-bold shrink-0">
-                                Optional
-                              </span>
-                            )}
+                            {/* Status Badge & Optional Remove */}
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              {isUploaded ? (
+                                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 px-2 py-0.5 text-[10px] font-extrabold">
+                                  <CheckCircle2 size={11} className="text-emerald-600" /> Uploaded
+                                </span>
+                              ) : slot.required ? (
+                                <span className="inline-flex items-center rounded-full bg-amber-100 text-amber-800 border border-amber-300 px-2 py-0.5 text-[10px] font-extrabold">
+                                  Required
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center rounded-full bg-slate-100 text-slate-500 border border-slate-200 px-2 py-0.5 text-[10px] font-bold">
+                                  Optional
+                                </span>
+                              )}
+
+                              {/* Dismiss button for empty optional slot */}
+                              {isOptional && !isUploaded && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveOptionalCategory(slot.id)}
+                                  className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition"
+                                  title="Remove this optional category"
+                                >
+                                  <X size={13} />
+                                </button>
+                              )}
+                            </div>
                           </div>
 
-                          {/* Card Center: Uploaded File Preview OR Upload Dropzone */}
-                          {isUploaded ? (
+                          {/* Card Content: Multi-Photo Gallery OR Single Photo OR Upload Dropzone */}
+                          {isUploaded && slot.allowMultiple ? (
+                            /* Multi-picture reorderable gallery (Agency Agreement, Valid ID) */
+                            <div className="space-y-2.5">
+                              <div className="flex items-center justify-between text-[10px] font-bold text-slate-400">
+                                <span>Drag cards or use arrows to reorder pages in compiled PDF:</span>
+                              </div>
+
+                              <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                                {slotItems.map((photo, pIdx) => {
+                                  const isImage = photo.type?.startsWith("image/") || photo.dataUrl?.startsWith("data:image/") || photo.dataUrl?.startsWith("http");
+                                  const isDragged = draggedPhotoId === photo.id;
+                                  const isDragOver = dragOverPhotoId === photo.id;
+
+                                  return (
+                                    <div
+                                      key={photo.id}
+                                      draggable
+                                      onDragStart={(e) => handlePhotoDragStart(e, photo.id)}
+                                      onDragOver={(e) => handlePhotoDragOver(e, photo.id)}
+                                      onDrop={(e) => handlePhotoDrop(e, photo.id, slot.id)}
+                                      className={`relative flex items-center justify-between gap-2.5 rounded-xl border p-2 transition ${
+                                        isDragOver
+                                          ? "border-indigo-500 bg-indigo-50/50 shadow-sm scale-[1.01]"
+                                          : isDragged
+                                          ? "opacity-40 border-dashed border-slate-400 bg-slate-100"
+                                          : "border-slate-200/90 bg-slate-50/60 hover:bg-white hover:border-slate-300"
+                                      }`}
+                                    >
+                                      {/* Left: Drag Handle & Page Badge */}
+                                      <div className="flex items-center gap-1.5 shrink-0">
+                                        <div
+                                          className="cursor-grab active:cursor-grabbing p-1 text-slate-400 hover:text-slate-700"
+                                          title="Drag to change page sequence"
+                                        >
+                                          <GripVertical size={13} />
+                                        </div>
+                                        <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-black bg-slate-900 text-emerald-400 shadow-2xs">
+                                          {slot.id === "valid_id"
+                                            ? (pIdx === 0 ? "Front" : pIdx === 1 ? "Back" : `#${pIdx + 1}`)
+                                            : `Page ${pIdx + 1}`}
+                                        </span>
+                                      </div>
+
+                                      {/* Thumbnail */}
+                                      {isImage && photo.dataUrl ? (
+                                        <div
+                                          onClick={() => setPreviewModalImage(photo)}
+                                          className="relative h-11 w-14 rounded-lg overflow-hidden bg-slate-900/5 cursor-pointer border border-slate-200 shrink-0 group hover:border-emerald-400"
+                                        >
+                                          <img
+                                            src={photo.dataUrl}
+                                            alt={photo.name}
+                                            className="h-full w-full object-cover group-hover:scale-110 transition duration-150"
+                                          />
+                                          <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center text-white">
+                                            <Eye size={12} />
+                                          </div>
+                                        </div>
+                                      ) : (
+                                        <div className="h-11 w-14 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-400 shrink-0">
+                                          <FileText size={18} />
+                                        </div>
+                                      )}
+
+                                      {/* Title & Size */}
+                                      <div className="min-w-0 flex-1">
+                                        <p className="text-xs font-bold text-slate-800 truncate" title={photo.name}>
+                                          {photo.name}
+                                        </p>
+                                        <p className="text-[10px] text-slate-400">
+                                          {formatFileSize(photo.size)}
+                                        </p>
+                                      </div>
+
+                                      {/* Move Controls & Actions */}
+                                      <div className="flex items-center gap-0.5 shrink-0">
+                                        <button
+                                          type="button"
+                                          disabled={pIdx === 0}
+                                          onClick={() => handleMovePhoto(slot.id, pIdx, -1)}
+                                          className="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-200 disabled:opacity-20 transition"
+                                          title="Move earlier"
+                                        >
+                                          <ArrowLeft size={12} />
+                                        </button>
+                                        <button
+                                          type="button"
+                                          disabled={pIdx === slotItems.length - 1}
+                                          onClick={() => handleMovePhoto(slot.id, pIdx, 1)}
+                                          className="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-200 disabled:opacity-20 transition"
+                                          title="Move later"
+                                        >
+                                          <ArrowRight size={12} />
+                                        </button>
+                                        {isImage && (
+                                          <button
+                                            type="button"
+                                            onClick={() => handlePreviewSinglePdf(photo)}
+                                            className="p-1 rounded text-slate-400 hover:text-emerald-700 hover:bg-emerald-50 transition"
+                                            title="Preview single PDF"
+                                          >
+                                            <Eye size={12} />
+                                          </button>
+                                        )}
+                                        <button
+                                          type="button"
+                                          onClick={() => removeRequirementFile(photo.id, photo.storagePath)}
+                                          className="p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition"
+                                          title="Delete photo"
+                                        >
+                                          <Trash2 size={12} />
+                                        </button>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+
+                              {/* Add More Pictures Button for this Multi-slot */}
+                              <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
+                                <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-dashed border-emerald-400 bg-emerald-50/50 hover:bg-emerald-100/60 text-emerald-800 text-xs font-bold transition cursor-pointer">
+                                  <input
+                                    type="file"
+                                    multiple
+                                    accept=".pdf,.jpg,.jpeg,.png,.webp"
+                                    className="hidden"
+                                    disabled={Boolean(uploadingSlotId)}
+                                    onChange={(e) => handleSlotUpload(e, slot)}
+                                  />
+                                  <Plus size={13} className="text-emerald-700" />
+                                  <span>{isUploading ? "Uploading..." : "Add More Pictures"}</span>
+                                </label>
+                                <span className="text-[10px] text-slate-400 font-medium">
+                                  Multi-photo draggable slot
+                                </span>
+                              </div>
+                            </div>
+                          ) : isUploaded && !slot.allowMultiple ? (
+                            /* Single-document slot (Biodata, Barangay Clearance, etc.) */
                             <div className="space-y-2">
-                              {isImage && req.dataUrl ? (
+                              {slotItems[0]?.type?.startsWith("image/") || slotItems[0]?.dataUrl?.startsWith("data:image/") || slotItems[0]?.dataUrl?.startsWith("http") ? (
                                 <div
-                                  onClick={() => setPreviewModalImage(req)}
+                                  onClick={() => setPreviewModalImage(slotItems[0])}
                                   className="relative h-28 w-full rounded-xl overflow-hidden bg-slate-900/5 cursor-pointer border border-slate-200/80 group hover:border-emerald-400 transition"
                                 >
                                   <img
-                                    src={req.dataUrl}
-                                    alt={req.name}
+                                    src={slotItems[0].dataUrl}
+                                    alt={slotItems[0].name}
                                     className="h-full w-full object-cover group-hover:scale-105 transition duration-200"
                                   />
                                   <div className="absolute inset-0 bg-slate-900/50 opacity-0 group-hover:opacity-100 transition flex items-center justify-center text-white gap-1.5 text-xs font-bold">
@@ -975,26 +1321,74 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
                               ) : (
                                 <div className="h-28 w-full rounded-xl bg-slate-100 border border-slate-200 flex flex-col items-center justify-center text-slate-500 gap-1.5">
                                   <FileText size={28} className="text-slate-400" />
-                                  <span className="text-[10px] font-bold uppercase">{req.name.split('.').pop() || 'PDF/DOC'}</span>
+                                  <span className="text-[10px] font-bold uppercase">{slotItems[0].name.split('.').pop() || 'PDF/DOC'}</span>
                                 </div>
                               )}
 
                               <div className="space-y-0.5 px-0.5">
-                                <p className="text-xs font-bold text-slate-800 truncate" title={req.name}>
-                                  {req.name}
+                                <p className="text-xs font-bold text-slate-800 truncate" title={slotItems[0].name}>
+                                  {slotItems[0].name}
                                 </p>
                                 <div className="flex items-center justify-between text-[10px] text-slate-400">
-                                  <span>{formatFileSize(req.size)}</span>
+                                  <span>{formatFileSize(slotItems[0].size)}</span>
                                   <span className="text-emerald-600 font-semibold flex items-center gap-0.5">
                                     <Check size={11} /> Saved in Database
                                   </span>
                                 </div>
                               </div>
+
+                              <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-1 text-[11px]">
+                                <div className="flex items-center gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => handlePreviewSinglePdf(slotItems[0])}
+                                    className="px-2 py-1 rounded-lg text-slate-600 hover:text-emerald-700 hover:bg-emerald-50 font-semibold flex items-center gap-1 transition"
+                                    title="Preview document in branded PDF format before downloading"
+                                  >
+                                    <Eye size={12} />
+                                    <span>Preview PDF</span>
+                                  </button>
+                                  <label
+                                    className="px-2 py-1 rounded-lg text-slate-600 hover:text-indigo-700 hover:bg-indigo-50 font-semibold flex items-center gap-1 transition cursor-pointer"
+                                    title="Replace file for this requirement slot"
+                                  >
+                                    <input
+                                      type="file"
+                                      accept=".pdf,.jpg,.jpeg,.png,.webp"
+                                      className="hidden"
+                                      disabled={Boolean(uploadingSlotId)}
+                                      onChange={(e) => handleSlotUpload(e, slot)}
+                                    />
+                                    <RefreshCw size={12} className={isUploading ? "animate-spin text-indigo-600" : ""} />
+                                    <span>Replace</span>
+                                  </label>
+                                  <a
+                                    href={slotItems[0].dataUrl}
+                                    download={slotItems[0].name}
+                                    className="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition"
+                                    title="Download Original File"
+                                  >
+                                    <Download size={13} />
+                                  </a>
+                                </div>
+
+                                <button
+                                  type="button"
+                                  onClick={() => removeRequirementFile(slotItems[0].id, slotItems[0].storagePath)}
+                                  aria-label={`Delete ${slotItems[0].name}`}
+                                  className="p-1.5 rounded-lg text-slate-400 hover:bg-rose-50 hover:text-rose-600 font-semibold flex items-center gap-1 transition"
+                                  title="Delete from database"
+                                >
+                                  <Trash2 size={13} />
+                                </button>
+                              </div>
                             </div>
                           ) : (
+                            /* Empty Slot Dropzone */
                             <label className="relative flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-300 bg-white/70 py-6 px-3 text-center cursor-pointer hover:border-emerald-500 hover:bg-emerald-50/30 transition group min-h-[140px]">
                               <input
                                 type="file"
+                                multiple={slot.allowMultiple}
                                 accept=".pdf,.jpg,.jpeg,.png,.webp"
                                 className="hidden"
                                 disabled={Boolean(uploadingSlotId)}
@@ -1014,62 +1408,11 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
                                     Upload {slot.title}
                                   </p>
                                   <p className="text-[10px] text-slate-400">
-                                    PDF, JPG, PNG or WEBP
+                                    {slot.allowMultiple ? "Select one or multiple pictures" : "PDF, JPG, PNG or WEBP"}
                                   </p>
                                 </div>
                               )}
                             </label>
-                          )}
-
-                          {/* Footer Action Buttons */}
-                          {isUploaded && (
-                            <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-1 text-[11px]">
-                              <div className="flex items-center gap-1">
-                                {isImage && (
-                                  <button
-                                    type="button"
-                                    onClick={() => handlePreviewSinglePdf(req)}
-                                    className="px-2 py-1 rounded-lg text-slate-600 hover:text-emerald-700 hover:bg-emerald-50 font-semibold flex items-center gap-1 transition"
-                                    title="Preview document in branded PDF format before downloading"
-                                  >
-                                    <Eye size={12} />
-                                    <span>Preview PDF</span>
-                                  </button>
-                                )}
-                                <label
-                                  className="px-2 py-1 rounded-lg text-slate-600 hover:text-indigo-700 hover:bg-indigo-50 font-semibold flex items-center gap-1 transition cursor-pointer"
-                                  title="Replace file for this requirement slot"
-                                >
-                                  <input
-                                    type="file"
-                                    accept=".pdf,.jpg,.jpeg,.png,.webp"
-                                    className="hidden"
-                                    disabled={Boolean(uploadingSlotId)}
-                                    onChange={(e) => handleSlotUpload(e, slot)}
-                                  />
-                                  <RefreshCw size={12} className={isUploading ? "animate-spin text-indigo-600" : ""} />
-                                  <span>Replace</span>
-                                </label>
-                                <a
-                                  href={req.dataUrl}
-                                  download={req.name}
-                                  className="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition"
-                                  title="Download Original File"
-                                >
-                                  <Download size={13} />
-                                </a>
-                              </div>
-
-                              <button
-                                type="button"
-                                onClick={() => removeRequirementFile(req.id, req.storagePath)}
-                                aria-label={`Delete ${req.name}`}
-                                className="p-1.5 rounded-lg text-slate-400 hover:bg-rose-50 hover:text-rose-600 font-semibold flex items-center gap-1 transition"
-                                title="Delete from database"
-                              >
-                                <Trash2 size={13} />
-                              </button>
-                            </div>
                           )}
                         </div>
                       );
