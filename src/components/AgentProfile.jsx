@@ -1533,30 +1533,49 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
                                             return (
                                               <div
                                                 key={photo.id}
-                                                onClick={() => setActiveCoverSlotPhoto((prev) => ({ ...prev, [slot.id]: photo.id }))}
-                                                className={`relative group shrink-0 h-16 w-14 rounded-xl overflow-hidden cursor-pointer border-2 transition duration-150 ${
+                                                onClick={() => {
+                                                  setActiveCoverSlotPhoto((prev) => ({ ...prev, [slot.id]: photo.id }));
+                                                  setPreviewModalImage(photo);
+                                                }}
+                                                className={`relative group shrink-0 h-20 w-16 rounded-xl overflow-hidden cursor-pointer border-2 transition duration-200 select-none ${
                                                   isCurrentActive
-                                                    ? "border-emerald-500 ring-2 ring-emerald-500/30 scale-105 shadow-md"
-                                                    : "border-slate-200 hover:border-slate-400 opacity-75 hover:opacity-100"
+                                                    ? "border-emerald-500 ring-2 ring-emerald-500/40 scale-105 shadow-md"
+                                                    : "border-slate-200 hover:border-emerald-400 opacity-80 hover:opacity-100 hover:scale-102"
                                                 }`}
-                                                title={`Click to set ${pageLabel} as active Cover Photo`}
+                                                title={`Click to view ${pageLabel} (${photo.name})`}
                                               >
                                                 {photo.dataUrl ? (
-                                                  <img src={photo.dataUrl} alt={photo.name} className="h-full w-full object-cover" />
+                                                  <img
+                                                    src={photo.dataUrl}
+                                                    alt={photo.name}
+                                                    className="h-full w-full object-cover group-hover:scale-110 transition duration-300"
+                                                    onError={(e) => {
+                                                      if (photo.storagePath) {
+                                                        e.target.src = `https://jiljeujvzlxptztmuaqy.supabase.co/storage/v1/object/public/requirements/${photo.storagePath}`;
+                                                      }
+                                                    }}
+                                                  />
                                                 ) : (
                                                   <div className="h-full w-full bg-slate-100 flex items-center justify-center">
-                                                    <FileText size={16} className="text-slate-400" />
+                                                    <FileText size={18} className="text-slate-400" />
                                                   </div>
                                                 )}
-                                                <div className="absolute bottom-0 inset-x-0 bg-slate-950/85 text-center py-0.5 text-[8.5px] font-black text-emerald-400">
+
+                                                {/* Page Tag */}
+                                                <div className="absolute bottom-0 inset-x-0 bg-slate-950/85 text-center py-0.5 text-[8.5px] font-black text-emerald-400 z-10">
                                                   {pageLabel}
+                                                </div>
+
+                                                {/* Hover Eye indicator */}
+                                                <div className="absolute inset-0 bg-slate-950/45 opacity-0 group-hover:opacity-100 transition-opacity duration-150 flex items-center justify-center text-white pointer-events-none">
+                                                  <Eye size={16} className="drop-shadow-md text-emerald-300" />
                                                 </div>
                                               </div>
                                             );
                                           })}
 
                                           {/* Add More Tile */}
-                                          <label className="shrink-0 h-16 w-14 rounded-xl border-2 border-dashed border-emerald-300 bg-emerald-50/50 hover:bg-emerald-100/70 hover:border-emerald-500 flex flex-col items-center justify-center text-emerald-700 cursor-pointer transition gap-0.5">
+                                          <label className="shrink-0 h-20 w-16 rounded-xl border-2 border-dashed border-emerald-300 bg-emerald-50/50 hover:bg-emerald-100/70 hover:border-emerald-500 flex flex-col items-center justify-center text-emerald-700 cursor-pointer transition gap-0.5">
                                             <input
                                               type="file"
                                               multiple
@@ -1565,8 +1584,8 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
                                               disabled={Boolean(uploadingSlotId)}
                                               onChange={(e) => handleSlotUpload(e, slot)}
                                             />
-                                            <Plus size={15} />
-                                            <span className="text-[8.5px] font-black">Add</span>
+                                            <Plus size={16} />
+                                            <span className="text-[9px] font-black">Add</span>
                                           </label>
                                         </div>
                                       </div>

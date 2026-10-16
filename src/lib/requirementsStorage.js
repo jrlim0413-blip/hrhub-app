@@ -5,7 +5,7 @@
 import { jsPDF } from "jspdf";
 import JSZip from "jszip";
 import { supabase } from "./supabase";
-import { sortRequirementsBySlotSequence } from "../config/registrationRequirementsConfig";
+import { sortRequirementsBySlotSequence, getItemSlotRank } from "../config/registrationRequirementsConfig";
 
 const DB_NAME = "hrhub_requirements_db";
 const DB_VERSION = 1;
@@ -489,10 +489,30 @@ export async function getRequirementsByProfile(profileKey) {
             }
           }
 
-          const catKey = d.category_key || parsedMeta.categoryKey || null;
-          const classType = d.classified_type || parsedMeta.classifiedType || null;
-          const sOrder = typeof d.sort_order === "number" ? d.sort_order : (typeof parsedMeta.sortOrder === "number" ? parsedMeta.sortOrder : null);
-          const subOrd = typeof d.sub_order === "number" ? d.sub_order : (typeof parsedMeta.subOrder === "number" ? parsedMeta.subOrder : null);
+          let catKey = d.category_key || parsedMeta.categoryKey || null;
+          let classType = d.classified_type || parsedMeta.classifiedType || null;
+          let sOrder = typeof d.sort_order === "number" ? d.sort_order : (typeof parsedMeta.sortOrder === "number" ? parsedMeta.sortOrder : null);
+          let subOrd = typeof d.sub_order === "number" ? d.sub_order : (typeof parsedMeta.subOrder === "number" ? parsedMeta.subOrder : null);
+
+          // Auto-heal slot key if not explicitly in table column
+          if (!catKey) {
+            const rank = getItemSlotRank({ ...d, name: d.file_name, storagePath: d.storage_path });
+            if (rank === 1) { catKey = "biodata"; classType = classType || "Biodata"; sOrder = sOrder ?? 1; }
+            else if (rank === 2) { catKey = "barangay_clearance"; classType = classType || "Barangay Clearance"; sOrder = sOrder ?? 2; }
+            else if (rank === 3) { catKey = "agency_agreement"; classType = classType || "Agency Agreement"; sOrder = sOrder ?? 3; }
+            else if (rank === 4) { catKey = "valid_id"; classType = classType || "Valid ID"; sOrder = sOrder ?? 4; }
+            else if (rank === 5) { catKey = "police_clearance"; classType = classType || "Police Clearance"; sOrder = sOrder ?? 5; }
+            else if (rank === 6) { catKey = "nbi_clearance"; classType = classType || "NBI Clearance"; sOrder = sOrder ?? 6; }
+            else if (rank === 7) { catKey = "psa_birth_certificate"; classType = classType || "PSA Birth Certificate"; sOrder = sOrder ?? 7; }
+            else if (rank === 8) { catKey = "id_picture_2x2"; classType = classType || "2x2 ID Photo"; sOrder = sOrder ?? 8; }
+            else if (rank === 9) { catKey = "other_document"; classType = classType || "Other Document"; sOrder = sOrder ?? 9; }
+          }
+
+          // Ensure robust public dataUrl resolution
+          const fallbackUrl = d.storage_path
+            ? `https://jiljeujvzlxptztmuaqy.supabase.co/storage/v1/object/public/requirements/${d.storage_path}`
+            : null;
+          const resolvedDataUrl = d.data_url || d.file_url || fallbackUrl;
 
           return {
             id: d.id,
@@ -501,7 +521,7 @@ export async function getRequirementsByProfile(profileKey) {
             size: Number(d.file_size) || 0,
             type: d.file_type || "image/png",
             storagePath: d.storage_path || null,
-            dataUrl: d.data_url || d.file_url,
+            dataUrl: resolvedDataUrl,
             createdAt: d.created_at,
             categoryKey: catKey,
             classifiedType: classType,
