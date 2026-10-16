@@ -118,7 +118,50 @@ export function getSlotOrder(categoryKeyOrName = "") {
 }
 
 /**
- * Finds all requirement records matching a specific slot, ordered by their subOrder/sortOrder/createdAt
+ * Extracts the primary number from a filename (e.g. "1.jpg" -> 1, "page_2.png" -> 2, "10.webp" -> 10)
+ */
+export function extractFileNumber(fileName = "") {
+  if (!fileName) return null;
+  const clean = String(fileName).replace(/\.[^/.]+$/, ""); // strip extension
+  const matches = clean.match(/\d+/g);
+  if (matches && matches.length > 0) {
+    const lastNum = matches[matches.length - 1];
+    return parseInt(lastNum, 10);
+  }
+  return null;
+}
+
+/**
+ * Natural sort comparator for filenames containing numbers (1, 2, 3, 4, 5, 6, 7, 8, 9, 10...)
+ * Handles "1.jpg", "2.jpg", "page 1", "front", "back", etc.
+ */
+export function compareFileNamesNaturally(nameA = "", nameB = "") {
+  const strA = String(nameA || "").trim();
+  const strB = String(nameB || "").trim();
+
+  // Special handling for valid ID front and back
+  const lowerA = strA.toLowerCase();
+  const lowerB = strB.toLowerCase();
+  if (lowerA.includes("front") && lowerB.includes("back")) return -1;
+  if (lowerA.includes("back") && lowerB.includes("front")) return 1;
+
+  const numA = extractFileNumber(strA);
+  const numB = extractFileNumber(strB);
+
+  // If both have numbers, sort purely by numeric value (1 < 2 < 10)
+  if (numA !== null && numB !== null && numA !== numB) {
+    return numA - numB;
+  }
+
+  // Fallback to standard natural alphanumeric locale compare
+  return strA.localeCompare(strB, undefined, {
+    numeric: true,
+    sensitivity: "base"
+  });
+}
+
+/**
+ * Finds all requirement records matching a specific slot, ordered by their subOrder/sortOrder/filename/createdAt
  */
 export function findRequirementsForSlot(requirements = [], slotId = "") {
   if (!requirements || !requirements.length) return [];
@@ -138,9 +181,14 @@ export function findRequirementsForSlot(requirements = [], slotId = "") {
   });
 
   return matches.sort((a, b) => {
-    const subA = typeof a.subOrder === "number" ? a.subOrder : (typeof a.sortOrder === "number" ? a.sortOrder : 999);
-    const subB = typeof b.subOrder === "number" ? b.subOrder : (typeof b.sortOrder === "number" ? b.sortOrder : 999);
-    if (subA !== subB) return subA - subB;
+    const subA = typeof a.subOrder === "number" ? a.subOrder : (typeof a.sortOrder === "number" ? a.sortOrder : null);
+    const subB = typeof b.subOrder === "number" ? b.subOrder : (typeof b.sortOrder === "number" ? b.sortOrder : null);
+    if (subA !== null && subB !== null && subA !== subB) return subA - subB;
+
+    // Secondary sort: natural file name number (1, 2, 3...)
+    const fileComp = compareFileNamesNaturally(a.name || a.fileName, b.name || b.fileName);
+    if (fileComp !== 0) return fileComp;
+
     return new Date(a.createdAt || 0) - new Date(b.createdAt || 0);
   });
 }
@@ -156,7 +204,7 @@ export function findRequirementForSlot(requirements = [], slotId = "") {
 /**
  * Sorts requirements according to the strict slot sequence:
  * 1. Biodata -> 2. Barangay Clearance -> 3. Agency Agreement -> 4. Valid ID -> etc.
- * And within each slot, by subOrder/sortOrder
+ * And within each slot, by subOrder/sortOrder/natural filename numbers
  */
 export function sortRequirementsBySlotSequence(items = []) {
   return [...items].sort((a, b) => {
@@ -164,9 +212,13 @@ export function sortRequirementsBySlotSequence(items = []) {
     const orderB = getSlotOrder(b.categoryKey || b.classifiedType || b.name);
     if (orderA !== orderB) return orderA - orderB;
 
-    const subA = typeof a.subOrder === "number" ? a.subOrder : (typeof a.sortOrder === "number" ? a.sortOrder : 999);
-    const subB = typeof b.subOrder === "number" ? b.subOrder : (typeof b.sortOrder === "number" ? b.sortOrder : 999);
-    if (subA !== subB) return subA - subB;
+    const subA = typeof a.subOrder === "number" ? a.subOrder : (typeof a.sortOrder === "number" ? a.sortOrder : null);
+    const subB = typeof b.subOrder === "number" ? b.subOrder : (typeof b.sortOrder === "number" ? b.sortOrder : null);
+    if (subA !== null && subB !== null && subA !== subB) return subA - subB;
+
+    // Secondary sort: natural file name number (1, 2, 3...)
+    const fileComp = compareFileNamesNaturally(a.name || a.fileName, b.name || b.fileName);
+    if (fileComp !== 0) return fileComp;
 
     return new Date(a.createdAt || 0) - new Date(b.createdAt || 0);
   });

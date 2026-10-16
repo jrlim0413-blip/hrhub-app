@@ -28,7 +28,8 @@ import {
   OPTIONAL_SLOTS,
   findRequirementsForSlot,
   findRequirementForSlot,
-  sortRequirementsBySlotSequence
+  sortRequirementsBySlotSequence,
+  compareFileNamesNaturally
 } from "../config/registrationRequirementsConfig";
 import {
   getAgentProfileOverride,
@@ -253,8 +254,13 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
 
   // --- INDIVIDUAL REQUIREMENT SLOT UPLOAD HANDLER ---
   const handleSlotUpload = async (event, slot) => {
-    const files = Array.from(event.target.files || []);
-    if (!files.length) return;
+    const rawFiles = Array.from(event.target.files || []);
+    if (!rawFiles.length) return;
+
+    // 1. Sort selected files naturally by filename number (1, 2, 3, 4, 5, 6, 7, 8...)
+    const files = [...rawFiles].sort((a, b) =>
+      compareFileNamesNaturally(a.name, b.name)
+    );
 
     setUploadingSlotId(slot.id);
     setRequirementNotice({
@@ -278,16 +284,17 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
 
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
-        const fileExt = file.name.split(".").pop() || "png";
         const pageNum = baseSubOrder + i + 1;
-        const preferredFileName = slot.allowMultiple
-          ? `${slot.cleanName}_${pageNum}_${cleanAgentPrefix}.${fileExt}`
-          : `${slot.cleanName}_${cleanAgentPrefix}.${fileExt}`;
+        // Keep user's exact file name (e.g., "1.jpg", "2.jpg", "agreement_1.png")
+        const preferredFileName = file.name || (slot.allowMultiple
+          ? `${slot.cleanName}_${pageNum}_${cleanAgentPrefix}`
+          : `${slot.cleanName}_${cleanAgentPrefix}`);
 
         const extraMeta = {
           categoryKey: slot.id,
           classifiedType: slot.title,
           fileName: preferredFileName,
+          originalName: file.name,
           sortOrder: slot.order,
           subOrder: pageNum
         };

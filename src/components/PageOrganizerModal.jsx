@@ -17,9 +17,11 @@ import {
   Layers,
   Move,
   Download,
-  Loader2
+  Loader2,
+  ArrowUpDown
 } from "lucide-react";
 import { formatFileSize } from "../lib/requirementsStorage";
+import { compareFileNamesNaturally } from "../config/registrationRequirementsConfig";
 
 /**
  * Rotates a base64 or loaded image by 90 degrees clockwise using HTML5 Canvas.
@@ -175,6 +177,21 @@ export default function PageOrganizerModal({
     showNotice(`Moved to Page ${targetIndex + 1}`);
   };
 
+  const handleSortByFileName = () => {
+    const sorted = [...items].sort((a, b) =>
+      compareFileNamesNaturally(a.name || a.fileName, b.name || b.fileName)
+    );
+    const updated = sorted.map((item, idx) => ({
+      ...item,
+      subOrder: idx + 1
+    }));
+    onReorder(updated);
+    if (updated.length > 0) {
+      setSelectedId(updated[0].id);
+    }
+    showNotice("Pages reordered by file name numbers (1, 2, 3...)");
+  };
+
   const handleRotate = async (item) => {
     if (!item?.dataUrl || rotatingId) return;
     setRotatingId(item.id);
@@ -225,7 +242,7 @@ export default function PageOrganizerModal({
                 </span>
               </div>
               <p className="text-xs text-slate-400">
-                Drag cards to reorder sequence · Click card to inspect high-resolution details
+                Sorted by file name numbers (1, 2, 3...) · Drag cards or use buttons to rearrange
               </p>
             </div>
           </div>
@@ -243,6 +260,18 @@ export default function PageOrganizerModal({
                 if (onUploadMore) onUploadMore(e, slot);
               }}
             />
+
+            {/* Quick Sort by File Name Number Button */}
+            <button
+              type="button"
+              onClick={handleSortByFileName}
+              disabled={items.length <= 1}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-800/80 hover:bg-slate-700 px-3 py-2 text-xs font-bold text-slate-200 hover:text-white disabled:opacity-40 transition shadow-sm"
+              title="Automatically arrange pages in order by filename numbers (1, 2, 3, 4...)"
+            >
+              <ArrowUpDown size={14} className="text-emerald-400" />
+              <span>Sort by File Name (1, 2, 3...)</span>
+            </button>
 
             <button
               type="button"
