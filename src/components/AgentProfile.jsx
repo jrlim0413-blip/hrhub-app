@@ -138,7 +138,7 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
               emergencyContactNumber: profileOverride.emergencyContactNumber || prev.emergencyContactNumber,
               boothNumber: profileOverride.boothNumber || prev.boothNumber,
               boothLocation: profileOverride.boothLocation || prev.boothLocation,
-              idNumber: rawValueOf(agent, ["agent_id", "agentId", "id"])
+              idNumber: profileOverride.idNumber || rawValueOf(agent, ["agent_id", "agentId", "id"]) || prev.idNumber
             }));
           }
         }
@@ -164,9 +164,9 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
     emergencyContactNumber: rawValueOf(agent, ["emergency_contact_number", "emergencyContactNumber", "emergency_phone", "emergencyPhone"]),
     boothNumber: "",
     boothLocation: "",
-    idNumber: ""
+    idNumber: rawValueOf(agent, ["agent_id", "agentId", "id"]) || ""
   });
-  // Source API fields: Strictly immutable and derived directly from the source API
+  // Database fields: Strictly immutable and derived directly from the database record
   const apiFullName = valueOf(agent, ["name", "full_name", "fullName", "username", "email"], "");
   const name = apiFullName || `Agent ${index + 1}`;
   const initials = name.split(" ").map((part) => part[0]).join("").slice(0, 2).toUpperCase();
@@ -188,8 +188,8 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
   const boothNumber = form.boothNumber || savedOverride?.boothNumber || valueOf(agent, ["booth_number", "boothNumber"]);
   const boothLocation = form.boothLocation || savedOverride?.boothLocation || valueOf(agent, ["booth_location", "boothLocation"]);
 
-  // ID Number strictly adheres to the Source API and cannot be overwritten
-  const idNumber = valueOf(agent, ["agent_id", "agentId", "id"], "Not provided");
+  // ID Number is editable and custom-assignable by HR
+  const idNumber = form.idNumber || savedOverride?.idNumber || valueOf(agent, ["agent_id", "agentId", "id"], "Not provided");
 
   const fieldCardClass = (value) => value === "Not provided"
     ? "border-l-2 border-amber-400 bg-amber-50/60 pl-3"
@@ -211,7 +211,7 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
         ...savedOverride,
         fullName: rawValueOf(agent, ["name", "full_name", "fullName", "username", "email"]),
         contactNumber: rawValueOf(agent, ["contactNumber", "contact_number", "phone", "phone_number", "phoneNumber"]),
-        idNumber: rawValueOf(agent, ["agent_id", "agentId", "id"]),
+        idNumber: form.idNumber,
         birthday: isApiBirthday ? rawApiBirthday : form.birthday,
         homeAddress: isApiHomeAddress ? rawApiHomeAddress : form.homeAddress,
         emergencyName: form.emergencyName,
@@ -232,7 +232,7 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
         emergency_contact_number: form.emergencyContactNumber,
         booth_number: form.boothNumber,
         booth_location: form.boothLocation,
-        agent_id: rawValueOf(agent, ["agent_id", "agentId", "id"])
+        agent_id: form.idNumber
       });
       setIsEditing(false);
       setSaved(true);
@@ -882,14 +882,14 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
                         {isEditing && (
                           <span className="flex items-center gap-1 text-[9.5px] font-extrabold text-slate-500 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-full">
                             <Lock size={10} className="text-slate-500" />
-                            Source API Only
+                            Database Only
                           </span>
                         )}
                       </div>
                       <p className="mt-1.5 text-sm font-semibold text-slate-700">{name}</p>
                       {isEditing && (
                         <p className="mt-1 text-[10px] font-medium text-slate-400">
-                          Strictly synced with Source API · Read-only
+                          Strictly synced with Database · Read-only
                         </p>
                       )}
                     </div>
@@ -903,7 +903,7 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
                         {isEditing && isApiBirthday && (
                           <span className="flex items-center gap-1 text-[9.5px] font-extrabold text-slate-500 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-full">
                             <Lock size={10} className="text-slate-500" />
-                            Source API Only
+                            Database Only
                           </span>
                         )}
                       </div>
@@ -919,7 +919,7 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
                       )}
                       {isEditing && isApiBirthday && (
                         <p className="mt-1 text-[10px] font-medium text-slate-400">
-                          Strictly synced with Source API · Read-only
+                          Strictly synced with Database · Read-only
                         </p>
                       )}
                     </div>
@@ -933,7 +933,7 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
                         {isEditing && isApiHomeAddress && (
                           <span className="flex items-center gap-1 text-[9.5px] font-extrabold text-slate-500 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-full">
                             <Lock size={10} className="text-slate-500" />
-                            Source API Only
+                            Database Only
                           </span>
                         )}
                       </div>
@@ -948,7 +948,7 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
                       )}
                       {isEditing && isApiHomeAddress && (
                         <p className="mt-1 text-[10px] font-medium text-slate-400">
-                          Strictly synced with Source API · Read-only
+                          Strictly synced with Database · Read-only
                         </p>
                       )}
                     </div>
@@ -960,14 +960,14 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
                         {isEditing && (
                           <span className="flex items-center gap-1 text-[9.5px] font-extrabold text-slate-500 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-full">
                             <Lock size={10} className="text-slate-500" />
-                            Source API Only
+                            Database Only
                           </span>
                         )}
                       </div>
                       <p className="mt-1.5 text-sm font-semibold text-slate-700">{contactNumber}</p>
                       {isEditing && (
                         <p className="mt-1 text-[10px] font-medium text-slate-400">
-                          Strictly synced with Source API · Read-only
+                          Strictly synced with Database · Read-only
                         </p>
                       )}
                     </div>
@@ -1021,22 +1021,23 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
               </div>
 
               <div className={`border-b border-slate-200 pb-6 sm:pl-6 ${fieldCardClass(idNumber)}`}>
-                <div className="flex items-center justify-between">
-                  <h3 className={`text-xs font-extrabold uppercase tracking-wider ${fieldLabelClass(idNumber)}`}>ID Number</h3>
-                  {isEditing && (
-                    <span className="flex items-center gap-1 text-[9.5px] font-extrabold text-slate-500 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-full">
-                      <Lock size={10} className="text-slate-500" />
-                      Source API Only
-                    </span>
-                  )}
-                </div>
-                <p className="mt-4 text-2xl font-extrabold tracking-wide text-slate-700">{idNumber}</p>
-                <p className="mt-2 text-[10px] font-semibold text-slate-400">Agent identification number strictly synced from the source API.</p>
+                <h3 className={`text-xs font-extrabold uppercase tracking-wider ${fieldLabelClass(idNumber)}`}>ID Number</h3>
+                {isEditing ? (
+                  <input
+                    value={form.idNumber}
+                    onChange={(event) => updateField("idNumber", event.target.value)}
+                    placeholder="Add ID number"
+                    className="mt-4 w-full border-b border-slate-300 bg-transparent py-1 text-2xl font-extrabold tracking-wide text-slate-700 outline-none placeholder:text-slate-400 focus:border-emerald-500"
+                  />
+                ) : (
+                  <p className="mt-4 text-2xl font-extrabold tracking-wide text-slate-700">{idNumber}</p>
+                )}
+                <p className="mt-2 text-[10px] font-semibold text-slate-400">Agent identification number.</p>
               </div>
             </div>
 
             <div className="mt-5 flex flex-wrap gap-2 border-t border-slate-200 pt-5 text-[10px] font-semibold text-slate-500">
-              <span className="flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 shadow-sm"><CalendarDays size={13} className="text-emerald-600" /> Profile synced from API</span>
+              <span className="flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 shadow-sm"><CalendarDays size={13} className="text-emerald-600" /> Profile synced from Database</span>
               <span className="flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 shadow-sm"><Award size={13} className="text-emerald-600" /> Agent record</span>
               <span className="flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 shadow-sm"><UserRound size={13} className="text-emerald-600" /> HR workspace</span>
             </div>
