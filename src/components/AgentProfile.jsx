@@ -130,15 +130,15 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
             setSavedOverride(profileOverride);
             setForm((prev) => ({
               ...prev,
-              fullName: profileOverride.fullName || prev.fullName,
-              birthday: profileOverride.birthday || prev.birthday,
-              homeAddress: profileOverride.homeAddress || prev.homeAddress,
+              fullName: rawValueOf(agent, ["name", "full_name", "fullName", "username", "email"]),
+              birthday: rawValueOf(agent, ["birthday", "birthdate", "birth_date", "date_of_birth", "dateOfBirth"]) || profileOverride.birthday || prev.birthday,
+              homeAddress: rawValueOf(agent, ["home_address", "homeAddress", "address", "location"]) || profileOverride.homeAddress || prev.homeAddress,
               contactNumber: rawValueOf(agent, ["contactNumber", "contact_number", "phone", "phone_number", "phoneNumber"]),
               emergencyName: profileOverride.emergencyName || prev.emergencyName,
               emergencyContactNumber: profileOverride.emergencyContactNumber || prev.emergencyContactNumber,
               boothNumber: profileOverride.boothNumber || prev.boothNumber,
               boothLocation: profileOverride.boothLocation || prev.boothLocation,
-              idNumber: profileOverride.idNumber || prev.idNumber
+              idNumber: rawValueOf(agent, ["agent_id", "agentId", "id"])
             }));
           }
         }
@@ -166,11 +166,20 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
     boothLocation: "",
     idNumber: ""
   });
-  const name = form.fullName || savedOverride?.fullName || valueOf(agent, ["name", "full_name", "fullName", "username", "email"], `Agent ${index + 1}`);
+  // Source API fields: Strictly immutable and derived directly from the source API
+  const apiFullName = valueOf(agent, ["name", "full_name", "fullName", "username", "email"], "");
+  const name = apiFullName || `Agent ${index + 1}`;
   const initials = name.split(" ").map((part) => part[0]).join("").slice(0, 2).toUpperCase();
   const role = valueOf(agent, ["role", "position", "title"], "SALES REPRESENTATIVE");
-  const birthday = form.birthday || savedOverride?.birthday || valueOf(agent, ["birthday", "birthdate", "birth_date", "date_of_birth", "dateOfBirth"]);
-  const homeAddress = form.homeAddress || savedOverride?.homeAddress || valueOf(agent, ["home_address", "homeAddress", "address", "location"]);
+
+  const rawApiBirthday = rawValueOf(agent, ["birthday", "birthdate", "birth_date", "date_of_birth", "dateOfBirth"]);
+  const isApiBirthday = Boolean(rawApiBirthday && String(rawApiBirthday).trim() !== "");
+  const birthday = isApiBirthday ? rawApiBirthday : (form.birthday || savedOverride?.birthday || "Not provided");
+
+  const rawApiHomeAddress = rawValueOf(agent, ["home_address", "homeAddress", "address", "location"]);
+  const isApiHomeAddress = Boolean(rawApiHomeAddress && String(rawApiHomeAddress).trim() !== "");
+  const homeAddress = isApiHomeAddress ? rawApiHomeAddress : (form.homeAddress || savedOverride?.homeAddress || "Not provided");
+
   // Contact Number strictly adheres to the Source API and cannot be overwritten
   const contactNumber = valueOf(agent, ["contactNumber", "contact_number", "phone", "phone_number", "phoneNumber"]);
   const emergencyName = form.emergencyName || savedOverride?.emergencyName || valueOf(agent, ["emergency_contact_name", "emergencyContactName", "emergency_name", "emergencyName", "contact_person"]);
@@ -178,7 +187,9 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
   const registrationDate = valueOf(agent, ["date_of_registration", "dateOfRegistration", "registration_date", "registrationDate", "created_at"]);
   const boothNumber = form.boothNumber || savedOverride?.boothNumber || valueOf(agent, ["booth_number", "boothNumber"]);
   const boothLocation = form.boothLocation || savedOverride?.boothLocation || valueOf(agent, ["booth_location", "boothLocation"]);
-  const idNumber = form.idNumber || savedOverride?.idNumber || valueOf(agent, ["agent_id", "agentId"]);
+
+  // ID Number strictly adheres to the Source API and cannot be overwritten
+  const idNumber = valueOf(agent, ["agent_id", "agentId", "id"], "Not provided");
 
   const fieldCardClass = (value) => value === "Not provided"
     ? "border-l-2 border-amber-400 bg-amber-50/60 pl-3"
@@ -196,19 +207,32 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
   const handleSave = async () => {
     setSavingProfile(true);
     try {
-      await saveAgentProfileOverride(agentKey, form);
-      setSavedOverride({ ...form });
+      const cleanOverride = {
+        ...savedOverride,
+        fullName: rawValueOf(agent, ["name", "full_name", "fullName", "username", "email"]),
+        contactNumber: rawValueOf(agent, ["contactNumber", "contact_number", "phone", "phone_number", "phoneNumber"]),
+        idNumber: rawValueOf(agent, ["agent_id", "agentId", "id"]),
+        birthday: isApiBirthday ? rawApiBirthday : form.birthday,
+        homeAddress: isApiHomeAddress ? rawApiHomeAddress : form.homeAddress,
+        emergencyName: form.emergencyName,
+        emergencyContactNumber: form.emergencyContactNumber,
+        boothNumber: form.boothNumber,
+        boothLocation: form.boothLocation
+      };
+
+      await saveAgentProfileOverride(agentKey, cleanOverride);
+      setSavedOverride(cleanOverride);
       onSave?.({
         ...agent,
-        fullName: form.fullName,
-        birthday: form.birthday,
-        address: form.homeAddress,
+        fullName: rawValueOf(agent, ["name", "full_name", "fullName", "username", "email"]),
+        birthday: isApiBirthday ? rawApiBirthday : form.birthday,
+        address: isApiHomeAddress ? rawApiHomeAddress : form.homeAddress,
         contactNumber: rawValueOf(agent, ["contactNumber", "contact_number", "phone", "phone_number", "phoneNumber"]),
         emergency_contact_name: form.emergencyName,
         emergency_contact_number: form.emergencyContactNumber,
         booth_number: form.boothNumber,
         booth_location: form.boothLocation,
-        agent_id: form.idNumber
+        agent_id: rawValueOf(agent, ["agent_id", "agentId", "id"])
       });
       setIsEditing(false);
       setSaved(true);
@@ -851,20 +875,82 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
                 <div className="mt-4 divide-y divide-slate-200">
                   <div className="border-b border-slate-200 pb-4">
                     <div className="pl-3">
-                      <p className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-slate-400"><UserRound size={13} /> Fullname</p>
-                      {isEditing ? <input value={form.fullName} onChange={(event) => updateField("fullName", event.target.value)} className="mt-1.5 w-full rounded-lg border border-slate-200 px-2.5 py-2 text-sm font-semibold text-slate-700 outline-none focus:border-emerald-500" /> : <p className="mt-1.5 text-sm font-semibold text-slate-700">{name}</p>}
+                      <div className="flex items-center justify-between">
+                        <p className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                          <UserRound size={13} /> Fullname
+                        </p>
+                        {isEditing && (
+                          <span className="flex items-center gap-1 text-[9.5px] font-extrabold text-slate-500 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-full">
+                            <Lock size={10} className="text-slate-500" />
+                            Source API Only
+                          </span>
+                        )}
+                      </div>
+                      <p className="mt-1.5 text-sm font-semibold text-slate-700">{name}</p>
+                      {isEditing && (
+                        <p className="mt-1 text-[10px] font-medium text-slate-400">
+                          Strictly synced with Source API · Read-only
+                        </p>
+                      )}
                     </div>
                   </div>
                   <div className="border-b border-slate-200 py-4">
-                    <div className={fieldCardClass(isEditing ? (form.birthday || "Not provided") : birthday)}>
-                      <p className={`flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider ${fieldLabelClass(birthday)}`}><CalendarDays size={13} /> Birthday</p>
-                      {isEditing ? <input type="date" value={form.birthday} onChange={(event) => updateField("birthday", event.target.value)} className="mt-1.5 w-full rounded-lg border border-slate-200 px-2.5 py-2 text-sm font-semibold text-slate-700 outline-none focus:border-emerald-500" /> : <p className="mt-1.5 text-sm font-semibold text-slate-700">{formatValue(birthday)}</p>}
+                    <div className={fieldCardClass(isEditing ? (isApiBirthday ? birthday : (form.birthday || "Not provided")) : birthday)}>
+                      <div className="flex items-center justify-between">
+                        <p className={`flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider ${fieldLabelClass(birthday)}`}>
+                          <CalendarDays size={13} /> Birthday
+                        </p>
+                        {isEditing && isApiBirthday && (
+                          <span className="flex items-center gap-1 text-[9.5px] font-extrabold text-slate-500 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-full">
+                            <Lock size={10} className="text-slate-500" />
+                            Source API Only
+                          </span>
+                        )}
+                      </div>
+                      {isEditing && !isApiBirthday ? (
+                        <input
+                          type="date"
+                          value={form.birthday}
+                          onChange={(event) => updateField("birthday", event.target.value)}
+                          className="mt-1.5 w-full rounded-lg border border-slate-200 px-2.5 py-2 text-sm font-semibold text-slate-700 outline-none focus:border-emerald-500"
+                        />
+                      ) : (
+                        <p className="mt-1.5 text-sm font-semibold text-slate-700">{formatValue(birthday)}</p>
+                      )}
+                      {isEditing && isApiBirthday && (
+                        <p className="mt-1 text-[10px] font-medium text-slate-400">
+                          Strictly synced with Source API · Read-only
+                        </p>
+                      )}
                     </div>
                   </div>
                   <div className="border-b border-slate-200 py-4">
-                    <div className={fieldCardClass(isEditing ? (form.homeAddress || "Not provided") : homeAddress)}>
-                      <p className={`flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider ${fieldLabelClass(homeAddress)}`}><Home size={13} /> Home Address</p>
-                      {isEditing ? <input value={form.homeAddress} onChange={(event) => updateField("homeAddress", event.target.value)} className="mt-1.5 w-full rounded-lg border border-slate-200 px-2.5 py-2 text-sm font-semibold text-slate-700 outline-none focus:border-emerald-500" /> : <p className="mt-1.5 text-sm font-semibold text-slate-700">{homeAddress}</p>}
+                    <div className={fieldCardClass(isEditing ? (isApiHomeAddress ? homeAddress : (form.homeAddress || "Not provided")) : homeAddress)}>
+                      <div className="flex items-center justify-between">
+                        <p className={`flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider ${fieldLabelClass(homeAddress)}`}>
+                          <Home size={13} /> Home Address
+                        </p>
+                        {isEditing && isApiHomeAddress && (
+                          <span className="flex items-center gap-1 text-[9.5px] font-extrabold text-slate-500 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-full">
+                            <Lock size={10} className="text-slate-500" />
+                            Source API Only
+                          </span>
+                        )}
+                      </div>
+                      {isEditing && !isApiHomeAddress ? (
+                        <input
+                          value={form.homeAddress}
+                          onChange={(event) => updateField("homeAddress", event.target.value)}
+                          className="mt-1.5 w-full rounded-lg border border-slate-200 px-2.5 py-2 text-sm font-semibold text-slate-700 outline-none focus:border-emerald-500"
+                        />
+                      ) : (
+                        <p className="mt-1.5 text-sm font-semibold text-slate-700">{homeAddress}</p>
+                      )}
+                      {isEditing && isApiHomeAddress && (
+                        <p className="mt-1 text-[10px] font-medium text-slate-400">
+                          Strictly synced with Source API · Read-only
+                        </p>
+                      )}
                     </div>
                   </div>
                   <div className="pt-4">
@@ -935,9 +1021,17 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
               </div>
 
               <div className={`border-b border-slate-200 pb-6 sm:pl-6 ${fieldCardClass(idNumber)}`}>
-                <h3 className={`text-xs font-extrabold uppercase tracking-wider ${fieldLabelClass(idNumber)}`}>ID Number</h3>
-                {isEditing ? <input value={form.idNumber} onChange={(event) => updateField("idNumber", event.target.value)} placeholder="Add ID number" className="mt-4 w-full border-b border-slate-300 bg-transparent py-1 text-2xl font-extrabold tracking-wide text-slate-700 outline-none placeholder:text-slate-400 focus:border-emerald-500" /> : <p className="mt-4 text-2xl font-extrabold tracking-wide text-slate-700">{idNumber}</p>}
-                <p className="mt-2 text-[10px] font-semibold text-slate-400">Agent identification number from the source API.</p>
+                <div className="flex items-center justify-between">
+                  <h3 className={`text-xs font-extrabold uppercase tracking-wider ${fieldLabelClass(idNumber)}`}>ID Number</h3>
+                  {isEditing && (
+                    <span className="flex items-center gap-1 text-[9.5px] font-extrabold text-slate-500 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-full">
+                      <Lock size={10} className="text-slate-500" />
+                      Source API Only
+                    </span>
+                  )}
+                </div>
+                <p className="mt-4 text-2xl font-extrabold tracking-wide text-slate-700">{idNumber}</p>
+                <p className="mt-2 text-[10px] font-semibold text-slate-400">Agent identification number strictly synced from the source API.</p>
               </div>
             </div>
 
