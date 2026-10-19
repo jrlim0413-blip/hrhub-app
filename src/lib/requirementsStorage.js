@@ -801,7 +801,7 @@ export async function generateRequirementsPdfDoc({
   const usableBottom = pageHeight - 14;
   const usableHeight = usableBottom - usableTop; // 245mm
 
-  const cleanName = agentName.replace(/[^a-zA-Z0-9_\- ]/g, "").trim() || "Agent";
+  const cleanName = String(agentName || "Agent").replace(/[^a-zA-Z0-9_\- ]/g, "").trim() || "Agent";
   const formattedDate = new Intl.DateTimeFormat("en-US", {
     month: "short",
     day: "numeric",
@@ -985,7 +985,7 @@ export async function downloadRequirementsAsZip({
     throw new Error("No requirement images found to download.");
   }
 
-  const cleanName = agentName.replace(/[^a-zA-Z0-9_\- ]/g, "").trim().replaceAll(" ", "_") || "Agent";
+  const cleanName = String(agentName || "Agent").replace(/[^a-zA-Z0-9_\- ]/g, "").trim().replaceAll(" ", "_") || "Agent";
   const zip = new JSZip();
   const folder = zip.folder(`${cleanName}_Requirements`);
 
@@ -1047,7 +1047,7 @@ export async function batchDownloadIndividualImages({
     throw new Error("No requirement images found to download.");
   }
 
-  const cleanName = agentName.replace(/[^a-zA-Z0-9_\- ]/g, "").trim().replaceAll(" ", "_") || "Agent";
+  const cleanName = String(agentName || "Agent").replace(/[^a-zA-Z0-9_\- ]/g, "").trim().replaceAll(" ", "_") || "Agent";
 
   for (let i = 0; i < imageItems.length; i++) {
     const item = imageItems[i];

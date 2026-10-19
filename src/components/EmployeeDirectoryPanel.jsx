@@ -164,18 +164,7 @@ export default function EmployeeDirectoryPanel({
         console.warn("Supabase update by email notice:", emailErr.message || emailErr);
       }
 
-      if (!updatedRows || updatedRows.length === 0) {
-        const { error: upsertErr } = await supabase
-          .from("profiles")
-          .upsert({
-            email: targetEmail,
-            is_approved: newApprovedState,
-            name: profile.name,
-            company: profile.company,
-            role: profile.role
-          }, { onConflict: "email" });
-        if (upsertErr) console.warn("Supabase upsert notice:", upsertErr.message || upsertErr);
-      }
+
     } catch (err) {
       console.warn("Approval toggle db sync error:", err);
     }
@@ -251,23 +240,16 @@ export default function EmployeeDirectoryPanel({
         onUpdateProfile(null, newRecord);
       }
 
-      // 3. Try database upsert in background
+      // 3. Sync database approval in background if profile already registered in Supabase
       try {
-        const { error: insertError } = await supabase
+        await supabase
           .from("profiles")
-          .upsert({
-            email: trimmedEmail,
-            name: newRecord.name,
-            company: newRecord.company,
-            role: newRecord.role,
+          .update({
             is_approved: Boolean(newEmployee.isApproved)
-          }, { onConflict: "email" });
-
-        if (insertError) {
-          console.warn("Direct db upsert note:", insertError.message || insertError);
-        }
+          })
+          .ilike("email", trimmedEmail);
       } catch (insertError) {
-        console.warn("Direct db insert note:", insertError);
+        console.warn("Direct db sync note:", insertError);
       }
 
       setNotice({

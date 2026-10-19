@@ -124,12 +124,12 @@ export default function AgentIdCardModal({
   const [defaultSavedToast, setDefaultSavedToast] = useState("");
 
   // Clean agent name without arrows (« or »)
-  const cleanInitialName = (initialData.fullName || agent?.fullName || agent?.full_name || agent?.name || "")
+  const cleanInitialName = String(initialData?.fullName || agent?.fullName || agent?.full_name || agent?.name || "")
     .replace(/[«»]/g, "")
     .trim();
 
   // Clean ID number without arrows
-  const cleanInitialId = (initialData.idNumber || agent?.agent_id || agent?.agentId || "")
+  const cleanInitialId = String(initialData?.idNumber ?? agent?.agent_id ?? agent?.agentId ?? "")
     .replace(/[«»]/g, "")
     .trim();
 
@@ -137,21 +137,21 @@ export default function AgentIdCardModal({
   const [fields, setFields] = useState({
     agentName: cleanInitialName,
     idNumber: cleanInitialId,
-    roleTitle: (initialData.role || agent?.role || agent?.position || templateDefaults.roleTitle || "SALES REPRESENTATIVE").replace(/[«»]/g, ""),
-    companyName: templateDefaults.companyName || "LUCKY BETPLAY CORPORATION",
-    companySubtitle1: templateDefaults.companySubtitle1 || "PCSO STL Authorized Agent Corporation",
-    companySubtitle2: templateDefaults.companySubtitle2 || "Mandaue City",
-    officeAddressLine1: templateDefaults.officeAddressLine1 || "PCSO STL Authorized Agent Corporation",
-    officeAddressLine2: templateDefaults.officeAddressLine2 || "Ground Floor, PCSO Building, Sergio Osmeña Street,",
-    officeAddressLine3: templateDefaults.officeAddressLine3 || "North Reclamation Area (NRA), Carreta, Cebu City",
-    areaOfOperation: templateDefaults.areaOfOperation || "MANDAUE CITY, CEBU",
-    emergencyName: (initialData.emergencyName || agent?.emergency_contact_name || agent?.emergencyName || "").replace(/[«»]/g, ""),
-    emergencyContact: (initialData.emergencyContactNumber || agent?.emergency_contact_number || agent?.emergencyPhone || "").replace(/[«»]/g, ""),
-    certifiedByName: templateDefaults.certifiedByName || "CHARMIE JEAN M. SIMPAL",
-    certifiedByTitle: templateDefaults.certifiedByTitle || "OPERATIONS MANAGER",
-    confirmedByName: templateDefaults.confirmedByName || "Atty. Madel Hyacinth H. Herrera-Ramos",
-    confirmedByTitle: templateDefaults.confirmedByTitle || "OIC-Branch Manager",
-    pcsoBranchName: templateDefaults.pcsoBranchName || "PCSO CEBU BRANCH",
+    roleTitle: String(initialData?.role || agent?.role || agent?.position || templateDefaults.roleTitle || "SALES REPRESENTATIVE").replace(/[«»]/g, ""),
+    companyName: String(templateDefaults.companyName || "LUCKY BETPLAY CORPORATION"),
+    companySubtitle1: String(templateDefaults.companySubtitle1 || "PCSO STL Authorized Agent Corporation"),
+    companySubtitle2: String(templateDefaults.companySubtitle2 || "Mandaue City"),
+    officeAddressLine1: String(templateDefaults.officeAddressLine1 || "PCSO STL Authorized Agent Corporation"),
+    officeAddressLine2: String(templateDefaults.officeAddressLine2 || "Ground Floor, PCSO Building, Sergio Osmeña Street,"),
+    officeAddressLine3: String(templateDefaults.officeAddressLine3 || "North Reclamation Area (NRA), Carreta, Cebu City"),
+    areaOfOperation: String(templateDefaults.areaOfOperation || "MANDAUE CITY, CEBU"),
+    emergencyName: String(initialData?.emergencyName || agent?.emergency_contact_name || agent?.emergencyName || "").replace(/[«»]/g, ""),
+    emergencyContact: String(initialData?.emergencyContactNumber || agent?.emergency_contact_number || agent?.emergencyPhone || "").replace(/[«»]/g, ""),
+    certifiedByName: String(templateDefaults.certifiedByName || "CHARMIE JEAN M. SIMPAL"),
+    certifiedByTitle: String(templateDefaults.certifiedByTitle || "OPERATIONS MANAGER"),
+    confirmedByName: String(templateDefaults.confirmedByName || "Atty. Madel Hyacinth H. Herrera-Ramos"),
+    confirmedByTitle: String(templateDefaults.confirmedByTitle || "OIC-Branch Manager"),
+    pcsoBranchName: String(templateDefaults.pcsoBranchName || "PCSO CEBU BRANCH"),
     showSignatureGraphic: templateDefaults.showSignatureGraphic ?? true,
     showConfirmedSignatureGraphic: templateDefaults.showConfirmedSignatureGraphic ?? true
   });
@@ -280,16 +280,16 @@ export default function AgentIdCardModal({
 
   // Quick action: Auto-fill fields with current agent data
   const handleFillAgentData = () => {
-    const rawName = (initialData.fullName || agent?.fullName || agent?.full_name || agent?.name || "").replace(/[«»]/g, "").trim();
-    const rawId = (initialData.idNumber || agent?.agent_id || agent?.agentId || "").replace(/[«»]/g, "").trim();
-    const rawEmerName = (initialData.emergencyName || agent?.emergency_contact_name || agent?.emergencyName || "").replace(/[«»]/g, "").trim();
-    const rawEmerPhone = (initialData.emergencyContactNumber || agent?.emergency_contact_number || agent?.emergencyPhone || "").replace(/[«»]/g, "").trim();
+    const rawName = String(initialData?.fullName || agent?.fullName || agent?.full_name || agent?.name || "").replace(/[«»]/g, "").trim();
+    const rawId = String(initialData?.idNumber ?? agent?.agent_id ?? agent?.agentId ?? "").replace(/[«»]/g, "").trim();
+    const rawEmerName = String(initialData?.emergencyName || agent?.emergency_contact_name || agent?.emergencyName || "").replace(/[«»]/g, "").trim();
+    const rawEmerPhone = String(initialData?.emergencyContactNumber || agent?.emergency_contact_number || agent?.emergencyPhone || "").replace(/[«»]/g, "").trim();
 
     setFields((prev) => ({
       ...prev,
       agentName: rawName || "AGENT NAME",
       idNumber: rawId || "001",
-      roleTitle: (initialData.role || agent?.role || agent?.position || templateDefaults.roleTitle || "SALES REPRESENTATIVE").replace(/[«»]/g, ""),
+      roleTitle: String(initialData?.role || agent?.role || agent?.position || templateDefaults.roleTitle || "SALES REPRESENTATIVE").replace(/[«»]/g, ""),
       emergencyName: rawEmerName,
       emergencyContact: rawEmerPhone
     }));
@@ -853,7 +853,7 @@ export default function AgentIdCardModal({
       ctx.textAlign = "left";
       ctx.fillText("ID NO.:", 80, 110);
 
-      const idVal = fields.idNumber ? fields.idNumber : "";
+      const idVal = fields.idNumber ? String(fields.idNumber) : "";
       const idLineStart = 220;
       const idLineWidth = 450; // 1.5 inches * 300 DPI = 450px
       const idLineEnd = idLineStart + idLineWidth;
@@ -1043,7 +1043,7 @@ export default function AgentIdCardModal({
       setIsExporting(true);
       const canvas = await renderCardToCanvas(side);
       const link = document.createElement("a");
-      const agentClean = (fields.agentName || "Agent").replace(/[^a-zA-Z0-9]/g, "_");
+      const agentClean = String(fields.agentName || "Agent").replace(/[^a-zA-Z0-9]/g, "_");
       link.download = `${agentClean}_ID_${side.toUpperCase()}_4x5_300DPI_1200x1500.png`;
       link.href = canvas.toDataURL("image/png");
       link.click();
@@ -1094,7 +1094,7 @@ export default function AgentIdCardModal({
       pdf.rect(startX, startY, cardW, cardH);
       pdf.rect(startX + cardW + gap, startY, cardW, cardH);
 
-      const agentClean = (fields.agentName || "Agent").replace(/[^a-zA-Z0-9]/g, "_");
+      const agentClean = String(fields.agentName || "Agent").replace(/[^a-zA-Z0-9]/g, "_");
       pdf.save(`${agentClean}_ID_A4_Portrait_Top_1Page.pdf`);
     } catch (err) {
       console.error("Failed to export PDF:", err);

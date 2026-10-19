@@ -139,7 +139,7 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
               emergencyContactNumber: profileOverride.emergencyContactNumber || prev.emergencyContactNumber,
               boothNumber: profileOverride.boothNumber || prev.boothNumber,
               boothLocation: profileOverride.boothLocation || prev.boothLocation,
-              idNumber: profileOverride.idNumber || rawValueOf(agent, ["agent_id", "agentId", "id"]) || prev.idNumber
+              idNumber: String(profileOverride.idNumber || rawValueOf(agent, ["agent_id", "agentId", "id"]) || prev.idNumber || "")
             }));
           }
         }
@@ -165,7 +165,7 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
     emergencyContactNumber: rawValueOf(agent, ["emergency_contact_number", "emergencyContactNumber", "emergency_phone", "emergencyPhone"]),
     boothNumber: "",
     boothLocation: "",
-    idNumber: rawValueOf(agent, ["agent_id", "agentId", "id"]) || ""
+    idNumber: String(rawValueOf(agent, ["agent_id", "agentId", "id"]) || "")
   });
   // Database fields: Strictly immutable and derived directly from the database record
   const apiFullName = valueOf(agent, ["name", "full_name", "fullName", "username", "email"], "");
@@ -295,7 +295,7 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
     });
 
     try {
-      const cleanAgentPrefix = name ? name.trim().replace(/[^a-zA-Z0-9_\-]/g, "_") : "Agent";
+      const cleanAgentPrefix = name ? String(name).trim().replace(/[^a-zA-Z0-9_\-]/g, "_") : "Agent";
       const existingSlotItems = findRequirementsForSlot(uploadedRequirements, slot.id);
 
       // If slot does NOT allow multiple files (single-file slots like Biodata, Barangay Clearance), purge previous records
@@ -1918,11 +1918,11 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
           agent={agent}
           agentKey={agentKey}
           initialData={{
-            fullName: form.fullName || savedOverride?.fullName || name,
-            idNumber: form.idNumber || savedOverride?.idNumber || idNumber,
-            role: role,
-            emergencyName: form.emergencyName || savedOverride?.emergencyName || emergencyName,
-            emergencyContactNumber: form.emergencyContactNumber || savedOverride?.emergencyContactNumber || emergencyContactNumber
+            fullName: String(form.fullName || savedOverride?.fullName || name || ""),
+            idNumber: String(form.idNumber || savedOverride?.idNumber || idNumber || ""),
+            role: String(role || ""),
+            emergencyName: String(form.emergencyName || savedOverride?.emergencyName || emergencyName || ""),
+            emergencyContactNumber: String(form.emergencyContactNumber || savedOverride?.emergencyContactNumber || emergencyContactNumber || "")
           }}
           uploadedRequirements={uploadedRequirements}
           onClose={() => setShowIdCardModal(false)}

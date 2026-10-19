@@ -114,20 +114,25 @@ const App = () => {
       console.error(e);
     }
 
-    // Ensure HR Administrator account is registered in Supabase database
+    // Ensure HR Administrator account is registered in local storage and database
     const initSuperAdminAccount = async () => {
       try {
         if (!verifyActivatedPassword("admin@hrhub.com", "admin123")) {
           saveActivatedPassword("admin@hrhub.com", "admin123");
         }
 
-        await supabase.from("profiles").upsert({
-          email: "admin@hrhub.com",
-          name: "H R M D",
-          company: "Simpal Group of Companies",
-          role: "HR Administrator",
-          is_approved: true
-        }, { onConflict: "email" });
+        const { data: existingProf } = await supabase
+          .from("profiles")
+          .select("id, is_approved")
+          .ilike("email", "admin@hrhub.com")
+          .maybeSingle();
+
+        if (existingProf?.id && !existingProf.is_approved) {
+          await supabase
+            .from("profiles")
+            .update({ is_approved: true })
+            .eq("id", existingProf.id);
+        }
       } catch (err) {
         console.warn("HR admin sync notice:", err);
       }
