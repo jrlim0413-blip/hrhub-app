@@ -976,13 +976,11 @@ CLASSIFICATION: ${memoCategory}
 ${memoContent}
 
 -----------------------------------------------------
-${signatoryLabel || "ISSUED BY:"}
-${signatoryName}
+${signatoryLabel?.trim() ? `${signatoryLabel.trim()}\n` : ""}${signatoryName}
 ${signatoryTitle}
 ${getSignatoryAffiliation(distributionCompany)}
 
-${signatoryLayout === "dual" ? `${approverLabel || "NOTED & APPROVED BY:"}
-${approverName}
+${signatoryLayout === "dual" ? `${approverLabel?.trim() ? `${approverLabel.trim()}\n` : ""}${approverName}
 ${approverTitle}
 ${distributionCompany.legalName || distributionCompany.name}
  ` : ""}=====================================================`;
@@ -1022,13 +1020,11 @@ MEMORANDUM DIRECTIVES:
 ${memoContent}
 
 --------------------------------------------------
-${signatoryLabel || "ISSUED BY:"}
-${signatoryName}
+${signatoryLabel?.trim() ? `${signatoryLabel.trim()}\n` : ""}${signatoryName}
 ${signatoryTitle}
 ${getSignatoryAffiliation(comp)}
 
-${signatoryLayout === "dual" ? `${approverLabel || "NOTED & APPROVED BY:"}
-${approverName}
+${signatoryLayout === "dual" ? `${approverLabel?.trim() ? `${approverLabel.trim()}\n` : ""}${approverName}
 ${approverTitle}
 ${compLegal}
 ` : ""}
@@ -1193,7 +1189,7 @@ ${memoContent.replace(/\n/g, "<br>")}
       <table style="width: 100%; border-collapse: collapse;">
         <tr>
           <td style="width: 50%; vertical-align: top; padding-right: 18px;">
-            <p style="margin: 0; color: #64748b; font-size: 9.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.8px;">${signatoryLabel || "ISSUED BY:"}</p>
+            ${signatoryLabel?.trim() ? `<p style="margin: 0 0 4px 0; color: #64748b; font-size: 9.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.8px;">${signatoryLabel.trim()}</p>` : ""}
             <div style="height: 52px; display: flex; align-items: flex-end; margin-bottom: 4px;">
               ${signatorySignature ? `<img src="${signatorySignature}" style="max-height: 50px; max-width: 170px; display: block;" alt="Signatory Signature">` : '<div style="height: 38px;"></div>'}
             </div>
@@ -1203,7 +1199,7 @@ ${memoContent.replace(/\n/g, "<br>")}
           </td>
           ${signatoryLayout === "dual" ? `
           <td style="width: 50%; vertical-align: top; padding-left: 18px;">
-            <p style="margin: 0; color: #64748b; font-size: 9.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.8px;">${approverLabel || "NOTED &amp; APPROVED BY:"}</p>
+            ${approverLabel?.trim() ? `<p style="margin: 0 0 4px 0; color: #64748b; font-size: 9.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.8px;">${approverLabel.trim()}</p>` : ""}
             <div style="height: 52px; display: flex; align-items: flex-end; margin-bottom: 4px;">
               ${approverSignature ? `<img src="${approverSignature}" style="max-height: 50px; max-width: 170px; display: block;" alt="Approver Signature">` : '<div style="height: 38px;"></div>'}
             </div>
@@ -1399,7 +1395,7 @@ ${memoContent}
             <table style="width: 100%; border-collapse: collapse; font-size: 9.5pt; page-break-inside: avoid; break-inside: avoid; margin-bottom: ${metrics.footerMarginTop};">
               <tr>
                 <td style="width: 50%; vertical-align: top; padding-right: 18px;">
-                  <p style="margin: 0; color: #64748b; font-size: 8pt; font-weight: 900; text-transform: uppercase; letter-spacing: 0.8px;">${signatoryLabel || "ISSUED BY:"}</p>
+                  ${signatoryLabel?.trim() ? `<p style="margin: 0 0 3px 0; color: #64748b; font-size: 8pt; font-weight: 900; text-transform: uppercase; letter-spacing: 0.8px;">${signatoryLabel.trim()}</p>` : ""}
                   <div style="height: ${metrics.sigHeight}; display: flex; align-items: flex-end; margin-bottom: 2px;">
                     ${signatorySignature ? `<img src="${signatorySignature}" style="max-height: ${metrics.sigHeight}; max-width: 170px; display: block;" alt="Signatory Signature">` : '<div style="height: 30px;"></div>'}
                   </div>
@@ -1409,7 +1405,7 @@ ${memoContent}
                 </td>
                 ${signatoryLayout === "dual" ? `
                 <td style="width: 50%; vertical-align: top; padding-left: 18px;">
-                  <p style="margin: 0; color: #64748b; font-size: 8pt; font-weight: 900; text-transform: uppercase; letter-spacing: 0.8px;">${approverLabel || "NOTED &amp; APPROVED BY:"}</p>
+                  ${approverLabel?.trim() ? `<p style="margin: 0 0 3px 0; color: #64748b; font-size: 8pt; font-weight: 900; text-transform: uppercase; letter-spacing: 0.8px;">${approverLabel.trim()}</p>` : ""}
                   <div style="height: ${metrics.sigHeight}; display: flex; align-items: flex-end; margin-bottom: 2px;">
                     ${approverSignature ? `<img src="${approverSignature}" style="max-height: ${metrics.sigHeight}; max-width: 170px; display: block;" alt="Approver Signature">` : '<div style="height: 30px;"></div>'}
                   </div>
@@ -2398,9 +2394,11 @@ Write numbered directives or formal paragraphs.
                     Signature Line Preview:
                   </span>
                   <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-left">
-                    <p className="text-[10px] font-black uppercase text-slate-500 tracking-wider">
-                      {signatoryLabel || "ISSUED BY:"}
-                    </p>
+                    {signatoryLabel?.trim() ? (
+                      <p className="text-[10px] font-black uppercase text-slate-500 tracking-wider">
+                        {signatoryLabel.trim()}
+                      </p>
+                    ) : null}
                     <div className="h-14 flex items-end mb-1">
                       {signatorySignature ? (
                         <img
@@ -2527,9 +2525,11 @@ Write numbered directives or formal paragraphs.
                       Signature Line Preview:
                     </span>
                     <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-left">
-                      <p className="text-[10px] font-black uppercase text-slate-500 tracking-wider">
-                        {approverLabel || "NOTED & APPROVED BY:"}
-                      </p>
+                      {approverLabel?.trim() ? (
+                        <p className="text-[10px] font-black uppercase text-slate-500 tracking-wider">
+                          {approverLabel.trim()}
+                        </p>
+                      ) : null}
                       <div className="h-14 flex items-end mb-1">
                         {approverSignature ? (
                           <img
@@ -3098,9 +3098,11 @@ Write numbered directives or formal paragraphs.
                               <div className="grid grid-cols-2 gap-8 items-start">
                                 {/* Left: Issued By */}
                                 <div className="space-y-0.5 text-left">
-                                  <p className="text-[10.5px] font-black uppercase text-slate-700 tracking-wider">
-                                    {signatoryLabel || "ISSUED BY:"}
-                                  </p>
+                                  {signatoryLabel?.trim() ? (
+                                    <p className="text-[10.5px] font-black uppercase text-slate-700 tracking-wider">
+                                      {signatoryLabel.trim()}
+                                    </p>
+                                  ) : null}
                                   <div className="h-16 flex items-end mb-1">
                                     {signatorySignature ? (
                                       <img
@@ -3127,9 +3129,11 @@ Write numbered directives or formal paragraphs.
 
                                 {/* Right: Noted & Approved By */}
                                 <div className="space-y-0.5 text-left">
-                                  <p className="text-[10.5px] font-black uppercase text-slate-700 tracking-wider">
-                                    {approverLabel || "NOTED & APPROVED BY:"}
-                                  </p>
+                                  {approverLabel?.trim() ? (
+                                    <p className="text-[10.5px] font-black uppercase text-slate-700 tracking-wider">
+                                      {approverLabel.trim()}
+                                    </p>
+                                  ) : null}
                                   <div className="h-16 flex items-end mb-1">
                                     {approverSignature ? (
                                       <img
@@ -3157,9 +3161,11 @@ Write numbered directives or formal paragraphs.
                             ) : (
                               <div className="flex items-start justify-start">
                                 <div className="space-y-0.5 text-left max-w-[320px]">
-                                  <p className="text-[10.5px] font-black uppercase text-slate-700 tracking-wider">
-                                    {signatoryLabel || "ISSUED BY:"}
-                                  </p>
+                                  {signatoryLabel?.trim() ? (
+                                    <p className="text-[10.5px] font-black uppercase text-slate-700 tracking-wider">
+                                      {signatoryLabel.trim()}
+                                    </p>
+                                  ) : null}
                                   <div className="h-16 flex items-end mb-1">
                                     {signatorySignature ? (
                                       <img

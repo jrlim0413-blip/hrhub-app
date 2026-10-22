@@ -926,13 +926,11 @@ SUBJECT: ${subject.trim().toUpperCase()}
 
 ${directivesContent.trim()}
 
-${signatoryLabel.trim().toUpperCase() || "ISSUED BY:"}
-${signatoryName.trim().toUpperCase()}
+${signatoryLabel?.trim() ? `${signatoryLabel.trim().toUpperCase()}\n` : ""}${signatoryName.trim().toUpperCase()}
 ${signatoryTitle.trim()}
 ${currentCompany.defaultSignatoryCompany || currentCompany.name}
 
-${approverLabel.trim().toUpperCase() || "NOTED & APPROVED BY:"}
-${approverName.trim().toUpperCase()}
+${approverLabel?.trim() ? `${approverLabel.trim().toUpperCase()}\n` : ""}${approverName.trim().toUpperCase()}
 ${approverTitle.trim()}
 ${currentCompany.name}`;
 
@@ -1756,9 +1754,13 @@ ${currentCompany.name}`;
                 {/* Signatory Block */}
                 <div className="mt-8 pt-4 grid grid-cols-2 gap-6 text-[11px]">
                   <div>
-                    <span className="text-[9px] uppercase font-bold text-slate-400 block mb-6">
-                      {signatoryLabel || "ISSUED BY:"}
-                    </span>
+                    {signatoryLabel?.trim() ? (
+                      <span className="text-[9px] uppercase font-bold text-slate-400 block mb-6">
+                        {signatoryLabel.trim()}
+                      </span>
+                    ) : (
+                      <div className="h-4 mb-6" />
+                    )}
                     <strong className="block text-slate-900 uppercase font-black tracking-wide">
                       {signatoryName}
                     </strong>
@@ -1769,9 +1771,13 @@ ${currentCompany.name}`;
                   </div>
 
                   <div>
-                    <span className="text-[9px] uppercase font-bold text-slate-400 block mb-6">
-                      {approverLabel || "NOTED & APPROVED BY:"}
-                    </span>
+                    {approverLabel?.trim() ? (
+                      <span className="text-[9px] uppercase font-bold text-slate-400 block mb-6">
+                        {approverLabel.trim()}
+                      </span>
+                    ) : (
+                      <div className="h-4 mb-6" />
+                    )}
                     <strong className="block text-slate-900 uppercase font-black tracking-wide">
                       {approverName}
                     </strong>
