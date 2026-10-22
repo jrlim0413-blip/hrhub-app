@@ -10,7 +10,7 @@ import {
   Upload, Image, CheckSquare, Square, XCircle, Code, ShieldCheck, Key,
   Camera, Download, Bold, Italic, Underline, Strikethrough, Highlighter,
   List, ListOrdered, Shapes, Minus, Palette, Heading, Type, Eraser,
-  ALargeSmall, CaseUpper, Database, Settings, FileJson
+  ALargeSmall, CaseUpper
 } from "lucide-react";
 import { processSignatureToTransparentPng } from "../lib/signatureImageProcessor";
 import { mergeProfilesWithStored, getStoredEmployees } from "../lib/employeeStorage";
@@ -18,12 +18,7 @@ import {
   getUserAccountKey,
   getUserSettings,
   getLocalUserSettings,
-  saveUserSettings,
-  resetUserSettings,
-  getDefaultUserSettings,
-  exportSettingsAsJson,
-  importSettingsFromJson,
-  USER_SETTINGS_TABLE
+  saveUserSettings
 } from "../lib/userSettingsStorage";
 import {
   getSavedMemosFromDb,
@@ -502,6 +497,7 @@ export default function MemoGeneratorPanel({
 }) {
   const userAccountKey = useMemo(() => getUserAccountKey(currentUser), [currentUser]);
   const initialUserSettings = useMemo(() => getLocalUserSettings(currentUser), [currentUser]);
+  const isSettingsInitialized = useRef(false);
 
   // Stepper State: 1 = Header & Addressing, 2 = Body Directives, 3 = Signatories, 4 = Final Memo & Multi-Company
   const [currentStep, setCurrentStep] = useState(1);
@@ -828,95 +824,48 @@ export default function MemoGeneratorPanel({
   const [fadedWatermarkMap, setFadedWatermarkMap] = useState({});
   const [groupEmblemDataUrl, setGroupEmblemDataUrl] = useState("");
 
-  // User Account Settings (Dedicated 'user_settings' table in Supabase & JSON storage)
-  const [accountSettingsModalOpen, setAccountSettingsModalOpen] = useState(false);
-  const [accountSettingsSyncStatus, setAccountSettingsSyncStatus] = useState(null);
-  const [isSavingAccountSettings, setIsSavingAccountSettings] = useState(false);
-  const [showJsonRawViewer, setShowJsonRawViewer] = useState(false);
-  const [copiedSettingsJsonNotice, setCopiedSettingsJsonNotice] = useState(false);
-
-  // Build the complete JSON payload of current user configuration
-  const getCurrentSettingsPayload = () => ({
-    version: 1,
-    accountKey: userAccountKey,
-    directives: {
-      fontFamily: directivesFontFamily,
-      fontSize: directivesFontSize
-    },
-    signatory: {
-      name: signatoryName,
-      title: signatoryTitle,
-      label: signatoryLabel,
-      signature: signatorySignature,
-      size: signatorySize,
-      offsetX: signatoryOffsetX,
-      offsetY: signatoryOffsetY
-    },
-    approver: {
-      name: approverName,
-      title: approverTitle,
-      label: approverLabel,
-      signature: approverSignature,
-      size: approverSize,
-      offsetX: approverOffsetX,
-      offsetY: approverOffsetY
-    },
-    signatoryLayout,
-    letterheadDefaults: savedLetterheadDefaults,
-    headerDefaults: {
-      defaultTo: memoTo,
-      defaultFrom: memoFrom,
-      defaultSubject: memoSubject
-    },
-    watermark: {
-      size: watermarkSize,
-      opacity: watermarkOpacity,
-      showDiagonalStamp,
-      diagonalStampText
-    },
-    includedCompanyIds,
-    emailWebhookUrl: customWebhookUrl,
-    updatedAt: new Date().toISOString()
-  });
-
   // Automatically load account default settings from Supabase ('user_settings' table) on mount
   useEffect(() => {
     let isMounted = true;
     (async () => {
       try {
-        const { settings, source } = await getUserSettings(currentUser);
-        if (!isMounted || !settings) return;
+        const { settings } = await getUserSettings(currentUser);
+        if (!isMounted || !settings) {
+          isSettingsInitialized.current = true;
+          return;
+        }
 
         if (settings.letterheadDefaults && Object.keys(settings.letterheadDefaults).length > 0) {
-          setSavedLetterheadDefaults((prev) => ({ ...prev, ...settings.letterheadDefaults }));
-          setLetterheadOverrides((prev) => ({ ...prev, ...settings.letterheadDefaults }));
+          const filtered = filterValidLetterheadFields(settings.letterheadDefaults);
+          setSavedLetterheadDefaults(filtered);
+          setLetterheadOverrides(filtered);
         }
 
         if (settings.directives?.fontFamily) {
           setDirectivesFontFamily(settings.directives.fontFamily);
         }
         if (settings.directives?.fontSize) {
-          setDirectivesFontSize(settings.directives.fontSize);
+          setDirectivesFontSize(Number(settings.directives.fontSize));
         }
 
         if (settings.signatory) {
           if (settings.signatory.name) setSignatoryName(settings.signatory.name);
           if (settings.signatory.title) setSignatoryTitle(settings.signatory.title);
           if (settings.signatory.label) setSignatoryLabel(settings.signatory.label);
-          if (settings.signatory.signature) setSignatorySignature(settings.signatory.signature);
-          if (settings.signatory.size) setSignatorySize(settings.signatory.size);
-          if (settings.signatory.offsetX !== undefined) setSignatoryOffsetX(settings.signatory.offsetX);
-          if (settings.signatory.offsetY !== undefined) setSignatoryOffsetY(settings.signatory.offsetY);
+          if (settings.signatory.signature !== undefined) setSignatorySignature(settings.signatory.signature);
+          if (settings.signatory.size) setSignatorySize(Number(settings.signatory.size));
+          if (settings.signatory.offsetX !== undefined) setSignatoryOffsetX(Number(settings.signatory.offsetX));
+          if (settings.signatory.offsetY !== undefined) setSignatoryOffsetY(Number(settings.signatory.offsetY));
         }
 
         if (settings.approver) {
           if (settings.approver.name) setApproverName(settings.approver.name);
           if (settings.approver.title) setApproverTitle(settings.approver.title);
           if (settings.approver.label) setApproverLabel(settings.approver.label);
-          if (settings.approver.signature) setApproverSignature(settings.approver.signature);
-          if (settings.approver.size) setApproverSize(settings.approver.size);
-          if (settings.approver.offsetX !== undefined) setApproverOffsetX(settings.approver.offsetX);
-          if (settings.approver.offsetY !== undefined) setApproverOffsetY(settings.approver.offsetY);
+          if (settings.approver.signature !== undefined) setApproverSignature(settings.approver.signature);
+          if (settings.approver.size) setApproverSize(Number(settings.approver.size));
+          if (settings.approver.offsetX !== undefined) setApproverOffsetX(Number(settings.approver.offsetX));
+          if (settings.approver.offsetY !== undefined) setApproverOffsetY(Number(settings.approver.offsetY));
         }
 
         if (settings.signatoryLayout) {
@@ -924,9 +873,9 @@ export default function MemoGeneratorPanel({
         }
 
         if (settings.watermark) {
-          if (settings.watermark.size) setWatermarkSize(settings.watermark.size);
-          if (settings.watermark.opacity !== undefined) setWatermarkOpacity(settings.watermark.opacity);
-          if (settings.watermark.showDiagonalStamp !== undefined) setShowDiagonalStamp(settings.watermark.showDiagonalStamp);
+          if (settings.watermark.size) setWatermarkSize(Number(settings.watermark.size));
+          if (settings.watermark.opacity !== undefined) setWatermarkOpacity(Number(settings.watermark.opacity));
+          if (settings.watermark.showDiagonalStamp !== undefined) setShowDiagonalStamp(Boolean(settings.watermark.showDiagonalStamp));
           if (settings.watermark.diagonalStampText) setDiagonalStampText(settings.watermark.diagonalStampText);
         }
 
@@ -937,144 +886,95 @@ export default function MemoGeneratorPanel({
         if (settings.emailWebhookUrl) {
           setCustomWebhookUrl(settings.emailWebhookUrl);
         }
-
-        setAccountSettingsSyncStatus({
-          type: "success",
-          source,
-          message: source === "supabase"
-            ? `Synced from Supabase '${USER_SETTINGS_TABLE}'`
-            : "Loaded from local account cache"
-        });
       } catch (err) {
         console.warn("Account defaults auto-load notice:", err);
+      } finally {
+        if (isMounted) {
+          isSettingsInitialized.current = true;
+        }
       }
     })();
 
     return () => { isMounted = false; };
   }, [currentUser]);
 
-  // Handler: Save current setup as user account defaults in Supabase & local cache
-  const handleSaveCurrentAsAccountDefaults = async () => {
-    setIsSavingAccountSettings(true);
-    try {
-      const payload = getCurrentSettingsPayload();
-      const result = await saveUserSettings(currentUser, payload);
+  // Seamless Background Auto-Save: Automatically and seamlessly persists any changed defaults per account in Supabase
+  useEffect(() => {
+    if (!isSettingsInitialized.current) return;
 
-      setAccountSettingsSyncStatus({
-        type: "success",
-        source: result.syncedToSupabase ? "supabase" : "local",
-        message: result.syncedToSupabase
-          ? `Saved to Supabase '${USER_SETTINGS_TABLE}' table!`
-          : "Saved locally (Supabase table pending or offline)"
+    const timer = setTimeout(() => {
+      saveUserSettings(currentUser, {
+        directives: {
+          fontFamily: directivesFontFamily,
+          fontSize: directivesFontSize
+        },
+        signatory: {
+          name: signatoryName,
+          title: signatoryTitle,
+          label: signatoryLabel,
+          signature: signatorySignature,
+          size: signatorySize,
+          offsetX: signatoryOffsetX,
+          offsetY: signatoryOffsetY
+        },
+        approver: {
+          name: approverName,
+          title: approverTitle,
+          label: approverLabel,
+          signature: approverSignature,
+          size: approverSize,
+          offsetX: approverOffsetX,
+          offsetY: approverOffsetY
+        },
+        signatoryLayout,
+        letterheadDefaults: savedLetterheadDefaults,
+        headerDefaults: {
+          defaultTo: memoTo,
+          defaultFrom: memoFrom,
+          defaultSubject: memoSubject
+        },
+        watermark: {
+          size: watermarkSize,
+          opacity: watermarkOpacity,
+          showDiagonalStamp,
+          diagonalStampText
+        },
+        includedCompanyIds,
+        emailWebhookUrl: customWebhookUrl
       });
+    }, 600);
 
-      setImageCopyToast({
-        type: result.syncedToSupabase ? "success" : "download",
-        message: result.syncedToSupabase
-          ? `✓ Account default settings saved to Supabase for ${userAccountKey}!`
-          : `✓ Settings saved locally for ${userAccountKey}. (Run SQL migration in Supabase to sync).`
-      });
-      setTimeout(() => setImageCopyToast(null), 5000);
-    } catch (err) {
-      console.error("Save account defaults error:", err);
-      setImageCopyToast({
-        type: "error",
-        message: `✕ Could not save defaults: ${err?.message || "Unknown error"}`
-      });
-      setTimeout(() => setImageCopyToast(null), 5000);
-    } finally {
-      setIsSavingAccountSettings(false);
-    }
-  };
-
-  // Handler: Re-load account defaults
-  const handleReloadAccountDefaults = async () => {
-    setIsSavingAccountSettings(true);
-    try {
-      const { settings, source } = await getUserSettings(currentUser);
-      if (settings) {
-        if (settings.directives?.fontFamily) setDirectivesFontFamily(settings.directives.fontFamily);
-        if (settings.directives?.fontSize) setDirectivesFontSize(settings.directives.fontSize);
-        if (settings.signatory?.signature) setSignatorySignature(settings.signatory.signature);
-        if (settings.approver?.signature) setApproverSignature(settings.approver.signature);
-        if (settings.signatoryLayout) setSignatoryLayout(settings.signatoryLayout);
-        if (settings.watermark?.size) setWatermarkSize(settings.watermark.size);
-      }
-      setImageCopyToast({
-        type: "success",
-        message: `✓ Reloaded default settings for ${userAccountKey} (${source})!`
-      });
-      setTimeout(() => setImageCopyToast(null), 4000);
-    } finally {
-      setIsSavingAccountSettings(false);
-    }
-  };
-
-  // Handler: Reset account defaults
-  const handleResetAccountDefaults = async () => {
-    if (!window.confirm(`Reset all default memo settings for account '${userAccountKey}' back to factory defaults?`)) {
-      return;
-    }
-    setIsSavingAccountSettings(true);
-    try {
-      await resetUserSettings(currentUser);
-      setImageCopyToast({
-        type: "success",
-        message: `✓ Account defaults reset for ${userAccountKey}.`
-      });
-      setTimeout(() => setImageCopyToast(null), 4000);
-    } finally {
-      setIsSavingAccountSettings(false);
-    }
-  };
-
-  // Handler: Export settings JSON
-  const handleExportSettingsJson = () => {
-    const jsonStr = JSON.stringify(getCurrentSettingsPayload(), null, 2);
-    const blob = new Blob([jsonStr], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.download = `hrhub_settings_${userAccountKey}.json`;
-    link.href = url;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    setTimeout(() => URL.revokeObjectURL(url), 2000);
-  };
-
-  // Handler: Import settings JSON
-  const handleImportSettingsJson = (event) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-      try {
-        const text = e.target.result;
-        const res = await importSettingsFromJson(currentUser, text);
-        if (res.success) {
-          setImageCopyToast({
-            type: "success",
-            message: `✓ Imported settings JSON for ${userAccountKey}!`
-          });
-        } else {
-          setImageCopyToast({
-            type: "error",
-            message: `✕ Import error: ${res.error}`
-          });
-        }
-        setTimeout(() => setImageCopyToast(null), 5000);
-      } catch (err) {
-        setImageCopyToast({
-          type: "error",
-          message: `✕ Invalid JSON file: ${err.message}`
-        });
-        setTimeout(() => setImageCopyToast(null), 5000);
-      }
-    };
-    reader.readAsText(file);
-    event.target.value = "";
-  };
+    return () => clearTimeout(timer);
+  }, [
+    currentUser,
+    directivesFontFamily,
+    directivesFontSize,
+    signatoryName,
+    signatoryTitle,
+    signatoryLabel,
+    signatorySignature,
+    signatorySize,
+    signatoryOffsetX,
+    signatoryOffsetY,
+    approverName,
+    approverTitle,
+    approverLabel,
+    approverSignature,
+    approverSize,
+    approverOffsetX,
+    approverOffsetY,
+    signatoryLayout,
+    savedLetterheadDefaults,
+    memoTo,
+    memoFrom,
+    memoSubject,
+    watermarkSize,
+    watermarkOpacity,
+    showDiagonalStamp,
+    diagonalStampText,
+    includedCompanyIds,
+    customWebhookUrl
+  ]);
 
   // Pre-process and cache company logo images and group emblem into self-contained base64 Data URLs
   useEffect(() => {
@@ -2880,22 +2780,6 @@ ${renderMemoDirectivesHtml(memoContent)}
               <span>Saved Records ({savedMemos.length})</span>
             </button>
 
-            {/* Dedicated Account Default Settings (JSON / Supabase) */}
-            <button
-              type="button"
-              onClick={() => {
-                setShowJsonRawViewer(false);
-                setAccountSettingsModalOpen(true);
-              }}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-400/40 bg-emerald-500/15 px-3 py-2 text-xs font-bold text-emerald-200 hover:bg-emerald-500/30 hover:text-white transition cursor-pointer shadow-xs"
-              title={`Manage Dedicated Default Settings (JSON Table) for Account: ${userAccountKey}`}
-            >
-              <Database size={14} className="text-emerald-400" />
-              <span className="hidden sm:inline">Account Defaults</span>
-              <span className="text-[10px] bg-emerald-950/60 text-emerald-300 px-1.5 py-0.5 rounded border border-emerald-500/30 font-mono font-bold">
-                JSON
-              </span>
-            </button>
 
             {onOpenAiBuddy && (
               <button
@@ -5539,293 +5423,6 @@ function doGet(e) {
                 className="rounded-xl border border-slate-200 px-4 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-50 cursor-pointer"
               >
                 Close Archive
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ================= MODAL: DEDICATED USER ACCOUNT DEFAULTS (JSON / SUPABASE) ================= */}
-      {accountSettingsModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 p-4 backdrop-blur-sm animate-in fade-in duration-150">
-          <div className="w-full max-w-3xl rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl space-y-5 max-h-[90vh] flex flex-col">
-            {/* Modal Header */}
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3 shrink-0">
-              <div className="flex items-center gap-3">
-                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-md shadow-emerald-500/20">
-                  <Database size={22} />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h4 className="text-base font-black text-slate-900">
-                      User Account Default Settings
-                    </h4>
-                    <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
-                      JSON Table: {USER_SETTINGS_TABLE}
-                    </span>
-                  </div>
-                  <p className="text-xs text-slate-500 font-medium mt-0.5">
-                    Save and load all default memorandum changes per user account into Supabase database.
-                  </p>
-                </div>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => setAccountSettingsModalOpen(false)}
-                className="rounded-xl p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition cursor-pointer"
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            {/* Account Info & Status Card */}
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
-              <div className="space-y-0.5">
-                <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                  Target Account:
-                </div>
-                <div className="text-sm font-black text-slate-900 flex items-center gap-2">
-                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
-                  <span className="font-mono">{userAccountKey}</span>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <span className={`text-[11px] font-bold px-3 py-1.5 rounded-xl border flex items-center gap-1.5 ${
-                  accountSettingsSyncStatus?.source === "supabase"
-                    ? "bg-emerald-50 text-emerald-800 border-emerald-200"
-                    : "bg-amber-50 text-amber-800 border-amber-200"
-                }`}>
-                  <Database size={13} className={accountSettingsSyncStatus?.source === "supabase" ? "text-emerald-600" : "text-amber-600"} />
-                  <span>{accountSettingsSyncStatus?.message || "Ready to sync"}</span>
-                </span>
-              </div>
-            </div>
-
-            {/* Actions & Controls */}
-            <div className="flex-1 overflow-y-auto space-y-4 pr-1">
-              {/* Primary Action: Save Current Setup as Account Defaults */}
-              <div className="rounded-2xl border-2 border-emerald-500/60 bg-gradient-to-r from-emerald-50/50 via-white to-emerald-50/20 p-4 space-y-3">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <h5 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
-                      <Save size={14} className="text-emerald-600" />
-                      Save Current Workspace As Account Defaults
-                    </h5>
-                    <p className="text-[11.5px] text-slate-600 mt-0.5">
-                      Saves your current font style, font size, e-signatures, signatory titles, layout, letterhead customizations, and watermark as your account's permanent default settings in the database.
-                    </p>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={handleSaveCurrentAsAccountDefaults}
-                    disabled={isSavingAccountSettings}
-                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs shadow-md shadow-emerald-600/25 transition cursor-pointer shrink-0 disabled:opacity-50"
-                  >
-                    {isSavingAccountSettings ? (
-                      <>
-                        <RefreshCw size={14} className="animate-spin" />
-                        <span>Saving...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Save size={14} />
-                        <span>Save Defaults (JSON)</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 text-[11px] font-medium text-slate-700">
-                  <div className="bg-white/80 border border-slate-200 rounded-lg p-2">
-                    <span className="text-[10px] text-slate-400 block font-bold uppercase">Font Style</span>
-                    <span className="font-bold text-slate-900 truncate block">{directivesFontFamily.split(",")[0]}</span>
-                  </div>
-                  <div className="bg-white/80 border border-slate-200 rounded-lg p-2">
-                    <span className="text-[10px] text-slate-400 block font-bold uppercase">Font Size</span>
-                    <span className="font-bold text-slate-900">{directivesFontSize}px</span>
-                  </div>
-                  <div className="bg-white/80 border border-slate-200 rounded-lg p-2">
-                    <span className="text-[10px] text-slate-400 block font-bold uppercase">Signatory Layout</span>
-                    <span className="font-bold text-slate-900 uppercase">{signatoryLayout}</span>
-                  </div>
-                  <div className="bg-white/80 border border-slate-200 rounded-lg p-2">
-                    <span className="text-[10px] text-slate-400 block font-bold uppercase">Letterhead Edits</span>
-                    <span className="font-bold text-slate-900">{Object.keys(savedLetterheadDefaults).length} Companies</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Secondary Actions: Reload, Export, Import, Reset */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {/* Reload from DB */}
-                <div className="rounded-2xl border border-slate-200 bg-white p-3.5 space-y-2 flex flex-col justify-between">
-                  <div>
-                    <h5 className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
-                      <RefreshCw size={13} className="text-slate-500" />
-                      Reload Saved Defaults
-                    </h5>
-                    <p className="text-[11px] text-slate-500 mt-0.5">
-                      Re-apply your database defaults onto this memo canvas.
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleReloadAccountDefaults}
-                    disabled={isSavingAccountSettings}
-                    className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs transition cursor-pointer"
-                  >
-                    <RefreshCw size={13} />
-                    <span>Apply My Saved Defaults</span>
-                  </button>
-                </div>
-
-                {/* Reset to Factory Defaults */}
-                <div className="rounded-2xl border border-slate-200 bg-white p-3.5 space-y-2 flex flex-col justify-between">
-                  <div>
-                    <h5 className="text-xs font-bold text-rose-800 flex items-center gap-1.5">
-                      <RotateCcw size={13} className="text-rose-500" />
-                      Reset Factory Defaults
-                    </h5>
-                    <p className="text-[11px] text-slate-500 mt-0.5">
-                      Reset defaults for this account back to system baseline.
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleResetAccountDefaults}
-                    disabled={isSavingAccountSettings}
-                    className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold text-xs transition cursor-pointer"
-                  >
-                    <RotateCcw size={13} />
-                    <span>Reset Account to Default</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* JSON Backup (Download / Upload File) */}
-              <div className="rounded-2xl border border-slate-200 bg-white p-3.5 space-y-3">
-                <div className="flex items-center justify-between flex-wrap gap-2">
-                  <div>
-                    <h5 className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
-                      <FileJson size={14} className="text-indigo-600" />
-                      JSON Configuration Backup &amp; Portability
-                    </h5>
-                    <p className="text-[11px] text-slate-500">
-                      Download or restore your settings as a JSON file.
-                    </p>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={handleExportSettingsJson}
-                      className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold text-xs transition cursor-pointer"
-                      title="Download JSON settings file"
-                    >
-                      <Download size={13} />
-                      <span>Download JSON</span>
-                    </button>
-
-                    <label className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold text-xs transition cursor-pointer">
-                      <Upload size={13} />
-                      <span>Import JSON</span>
-                      <input
-                        type="file"
-                        accept=".json,application/json"
-                        onChange={handleImportSettingsJson}
-                        className="hidden"
-                      />
-                    </label>
-                  </div>
-                </div>
-
-                {/* Foldable Raw JSON Inspector */}
-                <div className="border-t border-slate-100 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => setShowJsonRawViewer(!showJsonRawViewer)}
-                    className="text-[11px] font-bold text-indigo-700 hover:text-indigo-900 flex items-center gap-1 cursor-pointer"
-                  >
-                    <span>{showJsonRawViewer ? "Hide Live JSON Payload" : "View Live JSON Document Payload"}</span>
-                  </button>
-
-                  {showJsonRawViewer && (
-                    <div className="mt-2 relative">
-                      <div className="flex items-center justify-between bg-slate-950 text-slate-300 px-3 py-1.5 rounded-t-xl text-[10.5px] font-mono border-b border-slate-800">
-                        <span>Table: {USER_SETTINGS_TABLE} | user_id: {userAccountKey}</span>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            navigator.clipboard.writeText(JSON.stringify(getCurrentSettingsPayload(), null, 2));
-                            setCopiedSettingsJsonNotice(true);
-                            setTimeout(() => setCopiedSettingsJsonNotice(false), 2000);
-                          }}
-                          className="hover:text-white flex items-center gap-1 text-[10px] font-sans"
-                        >
-                          {copiedSettingsJsonNotice ? <Check size={11} /> : <Copy size={11} />}
-                          <span>{copiedSettingsJsonNotice ? "Copied!" : "Copy JSON"}</span>
-                        </button>
-                      </div>
-                      <pre className="max-h-52 overflow-y-auto bg-slate-900 text-emerald-400 p-3 rounded-b-xl text-[10.5px] font-mono leading-relaxed whitespace-pre-wrap">
-                        {JSON.stringify(getCurrentSettingsPayload(), null, 2)}
-                      </pre>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* SQL Migration Assistant (Help for database admin) */}
-              <div className="rounded-2xl border border-emerald-100 bg-emerald-50/40 p-3.5 space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-black text-emerald-900 uppercase tracking-wider flex items-center gap-1.5">
-                    <Database size={13} className="text-emerald-700" />
-                    Supabase Table Setup (Run Once in SQL Editor)
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const sql = `-- Create Dedicated User Settings Table in Supabase
-CREATE TABLE IF NOT EXISTS public.user_settings (
-    user_id TEXT PRIMARY KEY,
-    settings JSONB NOT NULL DEFAULT '{}'::jsonb,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-ALTER TABLE public.user_settings ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Allow select on user_settings" ON public.user_settings FOR SELECT USING (true);
-CREATE POLICY "Allow all on user_settings" ON public.user_settings FOR ALL USING (true) WITH CHECK (true);`;
-                      navigator.clipboard.writeText(sql);
-                      setImageCopyToast({
-                        type: "success",
-                        message: "✓ SQL Script copied to clipboard! Paste in Supabase SQL Editor."
-                      });
-                      setTimeout(() => setImageCopyToast(null), 4000);
-                    }}
-                    className="text-[10.5px] font-bold text-emerald-800 hover:text-emerald-950 bg-emerald-100 hover:bg-emerald-200 border border-emerald-300 px-2.5 py-1 rounded-lg transition cursor-pointer"
-                  >
-                    Copy SQL Script
-                  </button>
-                </div>
-                <p className="text-[11px] text-emerald-950 font-medium">
-                  File saved at <code className="font-mono bg-white px-1.5 py-0.5 rounded border border-emerald-200 text-emerald-900 font-bold">supabase/schema_user_settings.sql</code>. If not yet created, run it in your Supabase Dashboard to enable multi-device cloud synchronization.
-                </p>
-              </div>
-            </div>
-
-            {/* Modal Footer */}
-            <div className="pt-3 border-t border-slate-100 flex items-center justify-between shrink-0">
-              <span className="text-[11px] text-slate-400 font-mono">
-                Changes auto-save locally &amp; sync to Supabase when table is present
-              </span>
-              <button
-                type="button"
-                onClick={() => setAccountSettingsModalOpen(false)}
-                className="px-5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs transition cursor-pointer shadow-sm"
-              >
-                Close Settings
               </button>
             </div>
           </div>
