@@ -497,6 +497,54 @@ export default function MemoGeneratorPanel({
     }
   });
 
+  // Signature Position Offsets (Horizontal & Vertical alignment)
+  const [signatoryOffsetX, setSignatoryOffsetX] = useState(() => {
+    try {
+      const val = localStorage.getItem("hrhub_memo_signatory_offset_x");
+      return val !== null ? Number(val) : 48;
+    } catch {
+      return 48;
+    }
+  });
+  const [signatoryOffsetY, setSignatoryOffsetY] = useState(() => {
+    try {
+      const val = localStorage.getItem("hrhub_memo_signatory_offset_y");
+      return val !== null ? Number(val) : -3;
+    } catch {
+      return -3;
+    }
+  });
+  const [approverOffsetX, setApproverOffsetX] = useState(() => {
+    try {
+      const val = localStorage.getItem("hrhub_memo_approver_offset_x");
+      return val !== null ? Number(val) : 48;
+    } catch {
+      return 48;
+    }
+  });
+  const [approverOffsetY, setApproverOffsetY] = useState(() => {
+    try {
+      const val = localStorage.getItem("hrhub_memo_approver_offset_y");
+      return val !== null ? Number(val) : -3;
+    } catch {
+      return -3;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("hrhub_memo_signatory_offset_x", signatoryOffsetX);
+      localStorage.setItem("hrhub_memo_signatory_offset_y", signatoryOffsetY);
+    } catch {}
+  }, [signatoryOffsetX, signatoryOffsetY]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("hrhub_memo_approver_offset_x", approverOffsetX);
+      localStorage.setItem("hrhub_memo_approver_offset_y", approverOffsetY);
+    } catch {}
+  }, [approverOffsetX, approverOffsetY]);
+
   // Step 4: Preview, Zoom & Watermark States
   const [previewZoom, setPreviewZoom] = useState(100); // 90, 100, 110
   const [watermarkOpacity, setWatermarkOpacity] = useState(6); // 4% to 25% (default 6% for clean look)
@@ -1191,7 +1239,7 @@ ${memoContent.replace(/\n/g, "<br>")}
           <td style="width: 50%; vertical-align: top; padding-right: 18px;">
             ${signatoryLabel?.trim() ? `<p style="margin: 0 0 4px 0; color: #64748b; font-size: 9.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.8px;">${signatoryLabel.trim()}</p>` : ""}
             <div style="height: 52px; display: flex; align-items: flex-end;">
-              ${signatorySignature ? `<img src="${signatorySignature}" style="max-height: 50px; max-width: 170px; display: block; margin-bottom: -8px; position: relative; z-index: 2;" alt="Signatory Signature">` : '<div style="height: 38px; margin-bottom: 2px;"></div>'}
+              ${signatorySignature ? `<img src="${signatorySignature}" style="max-height: 50px; max-width: 170px; display: block; margin-left: ${signatoryOffsetX}px; margin-bottom: ${signatoryOffsetY}px; position: relative; z-index: 2;" alt="Signatory Signature">` : '<div style="height: 38px; margin-bottom: 2px;"></div>'}
             </div>
             <p style="margin: 0; font-weight: 900; color: #0f172a; font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.2px; position: relative; z-index: 1;">${signatoryName}</p>
             <p style="margin: 2px 0 0 0; color: #475569; font-size: 11px; font-weight: 600;">${signatoryTitle}</p>
@@ -1201,7 +1249,7 @@ ${memoContent.replace(/\n/g, "<br>")}
           <td style="width: 50%; vertical-align: top; padding-left: 18px;">
             ${approverLabel?.trim() ? `<p style="margin: 0 0 4px 0; color: #64748b; font-size: 9.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.8px;">${approverLabel.trim()}</p>` : ""}
             <div style="height: 52px; display: flex; align-items: flex-end;">
-              ${approverSignature ? `<img src="${approverSignature}" style="max-height: 50px; max-width: 170px; display: block; margin-bottom: -8px; position: relative; z-index: 2;" alt="Approver Signature">` : '<div style="height: 38px; margin-bottom: 2px;"></div>'}
+              ${approverSignature ? `<img src="${approverSignature}" style="max-height: 50px; max-width: 170px; display: block; margin-left: ${approverOffsetX}px; margin-bottom: ${approverOffsetY}px; position: relative; z-index: 2;" alt="Approver Signature">` : '<div style="height: 38px; margin-bottom: 2px;"></div>'}
             </div>
             <p style="margin: 0; font-weight: 900; color: #0f172a; font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.2px; position: relative; z-index: 1;">${approverName}</p>
             <p style="margin: 2px 0 0 0; color: #475569; font-size: 11px; font-weight: 600;">${approverTitle}</p>
@@ -1397,7 +1445,7 @@ ${memoContent}
                 <td style="width: 50%; vertical-align: top; padding-right: 18px;">
                   ${signatoryLabel?.trim() ? `<p style="margin: 0 0 3px 0; color: #64748b; font-size: 8pt; font-weight: 900; text-transform: uppercase; letter-spacing: 0.8px;">${signatoryLabel.trim()}</p>` : ""}
                   <div style="height: ${metrics.sigHeight}; display: flex; align-items: flex-end;">
-                    ${signatorySignature ? `<img src="${signatorySignature}" style="max-height: ${metrics.sigHeight}; max-width: 170px; display: block; margin-bottom: -10px; position: relative; z-index: 2;" alt="Signatory Signature">` : '<div style="height: 30px; margin-bottom: 2px;"></div>'}
+                    ${signatorySignature ? `<img src="${signatorySignature}" style="max-height: ${metrics.sigHeight}; max-width: 170px; display: block; margin-left: ${signatoryOffsetX}px; margin-bottom: ${signatoryOffsetY}px; position: relative; z-index: 2;" alt="Signatory Signature">` : '<div style="height: 30px; margin-bottom: 2px;"></div>'}
                   </div>
                   <p style="margin: 0; font-weight: 900; color: #0f172a; font-size: 10.5pt; text-transform: uppercase; letter-spacing: 0.2px; position: relative; z-index: 1;">${signatoryName}</p>
                   <p style="margin: 1px 0 0 0; color: #475569; font-size: 9pt; font-weight: 600;">${signatoryTitle}</p>
@@ -1407,7 +1455,7 @@ ${memoContent}
                 <td style="width: 50%; vertical-align: top; padding-left: 18px;">
                   ${approverLabel?.trim() ? `<p style="margin: 0 0 3px 0; color: #64748b; font-size: 8pt; font-weight: 900; text-transform: uppercase; letter-spacing: 0.8px;">${approverLabel.trim()}</p>` : ""}
                   <div style="height: ${metrics.sigHeight}; display: flex; align-items: flex-end;">
-                    ${approverSignature ? `<img src="${approverSignature}" style="max-height: ${metrics.sigHeight}; max-width: 170px; display: block; margin-bottom: -10px; position: relative; z-index: 2;" alt="Approver Signature">` : '<div style="height: 30px; margin-bottom: 2px;"></div>'}
+                    ${approverSignature ? `<img src="${approverSignature}" style="max-height: ${metrics.sigHeight}; max-width: 170px; display: block; margin-left: ${approverOffsetX}px; margin-bottom: ${approverOffsetY}px; position: relative; z-index: 2;" alt="Approver Signature">` : '<div style="height: 30px; margin-bottom: 2px;"></div>'}
                   </div>
                   <p style="margin: 0; font-weight: 900; color: #0f172a; font-size: 10.5pt; text-transform: uppercase; letter-spacing: 0.2px; position: relative; z-index: 1;">${approverName}</p>
                   <p style="margin: 1px 0 0 0; color: #475569; font-size: 9pt; font-weight: 600;">${approverTitle}</p>
@@ -2386,6 +2434,55 @@ Write numbered directives or formal paragraphs.
                       </button>
                     )}
                   </div>
+
+                  {signatorySignature && (
+                    <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 space-y-2 text-xs">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-bold text-slate-600 uppercase tracking-wide">
+                          Signature Alignment & Overlap
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => { setSignatoryOffsetX(48); setSignatoryOffsetY(-3); }}
+                          className="text-[10px] text-emerald-600 hover:text-emerald-700 font-semibold cursor-pointer"
+                        >
+                          Reset Default
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <div className="flex justify-between text-[10px] text-slate-500 font-medium mb-1">
+                            <span>Left ↔ Right</span>
+                            <span className="font-mono font-bold text-slate-700">{signatoryOffsetX}px</span>
+                          </div>
+                          <input
+                            type="range"
+                            min="0"
+                            max="140"
+                            step="2"
+                            value={signatoryOffsetX}
+                            onChange={(e) => setSignatoryOffsetX(Number(e.target.value))}
+                            className="w-full accent-emerald-600 h-1.5 bg-slate-200 rounded-lg cursor-pointer"
+                          />
+                        </div>
+                        <div>
+                          <div className="flex justify-between text-[10px] text-slate-500 font-medium mb-1">
+                            <span>Up ↕ Down</span>
+                            <span className="font-mono font-bold text-slate-700">{signatoryOffsetY}px</span>
+                          </div>
+                          <input
+                            type="range"
+                            min="-14"
+                            max="6"
+                            step="1"
+                            value={signatoryOffsetY}
+                            onChange={(e) => setSignatoryOffsetY(Number(e.target.value))}
+                            className="w-full accent-emerald-600 h-1.5 bg-slate-200 rounded-lg cursor-pointer"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Signature Line Preview */}
@@ -2404,7 +2501,11 @@ Write numbered directives or formal paragraphs.
                         <img
                           src={signatorySignature}
                           alt="Signatory E-Signature"
-                          className="max-h-14 max-w-[190px] object-contain object-bottom pointer-events-none select-none -mb-2.5 relative z-10"
+                          style={{
+                            marginLeft: `${signatoryOffsetX}px`,
+                            marginBottom: `${signatoryOffsetY}px`
+                          }}
+                          className="max-h-14 max-w-[190px] object-contain object-bottom pointer-events-none select-none relative z-10"
                         />
                       ) : (
                         <div className="h-8 text-[11px] text-slate-400 italic flex items-center mb-1">
@@ -2519,6 +2620,55 @@ Write numbered directives or formal paragraphs.
                     </div>
                   </div>
 
+                  {approverSignature && (
+                    <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 space-y-2 text-xs">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-bold text-slate-600 uppercase tracking-wide">
+                          Signature Alignment &amp; Overlap
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => { setApproverOffsetX(48); setApproverOffsetY(-3); }}
+                          className="text-[10px] text-emerald-600 hover:text-emerald-700 font-semibold cursor-pointer"
+                        >
+                          Reset Default
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <div className="flex justify-between text-[10px] text-slate-500 font-medium mb-1">
+                            <span>Left ↔ Right</span>
+                            <span className="font-mono font-bold text-slate-700">{approverOffsetX}px</span>
+                          </div>
+                          <input
+                            type="range"
+                            min="0"
+                            max="140"
+                            step="2"
+                            value={approverOffsetX}
+                            onChange={(e) => setApproverOffsetX(Number(e.target.value))}
+                            className="w-full accent-emerald-600 h-1.5 bg-slate-200 rounded-lg cursor-pointer"
+                          />
+                        </div>
+                        <div>
+                          <div className="flex justify-between text-[10px] text-slate-500 font-medium mb-1">
+                            <span>Up ↕ Down</span>
+                            <span className="font-mono font-bold text-slate-700">{approverOffsetY}px</span>
+                          </div>
+                          <input
+                            type="range"
+                            min="-14"
+                            max="6"
+                            step="1"
+                            value={approverOffsetY}
+                            onChange={(e) => setApproverOffsetY(Number(e.target.value))}
+                            className="w-full accent-emerald-600 h-1.5 bg-slate-200 rounded-lg cursor-pointer"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Signature Line Preview */}
                   <div className="pt-2 border-t border-slate-100 space-y-1">
                     <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
@@ -2535,7 +2685,11 @@ Write numbered directives or formal paragraphs.
                           <img
                             src={approverSignature}
                             alt="Approver E-Signature"
-                            className="max-h-14 max-w-[190px] object-contain object-bottom pointer-events-none select-none -mb-2.5 relative z-10"
+                            style={{
+                              marginLeft: `${approverOffsetX}px`,
+                              marginBottom: `${approverOffsetY}px`
+                            }}
+                            className="max-h-14 max-w-[190px] object-contain object-bottom pointer-events-none select-none relative z-10"
                           />
                         ) : (
                           <div className="h-8 text-[11px] text-slate-400 italic flex items-center mb-1">
@@ -3108,7 +3262,11 @@ Write numbered directives or formal paragraphs.
                                       <img
                                         src={signatorySignature}
                                         alt="Signatory E-Signature"
-                                        className="max-h-16 max-w-[210px] object-contain object-bottom pointer-events-none select-none -mb-3 relative z-10"
+                                        style={{
+                                          marginLeft: `${signatoryOffsetX}px`,
+                                          marginBottom: `${signatoryOffsetY}px`
+                                        }}
+                                        className="max-h-16 max-w-[210px] object-contain object-bottom pointer-events-none select-none relative z-10"
                                       />
                                     ) : (
                                       <div className="h-10 text-[11px] text-slate-400 italic flex items-center mb-1">
@@ -3139,7 +3297,11 @@ Write numbered directives or formal paragraphs.
                                       <img
                                         src={approverSignature}
                                         alt="Approver E-Signature"
-                                        className="max-h-16 max-w-[210px] object-contain object-bottom pointer-events-none select-none -mb-3 relative z-10"
+                                        style={{
+                                          marginLeft: `${approverOffsetX}px`,
+                                          marginBottom: `${approverOffsetY}px`
+                                        }}
+                                        className="max-h-16 max-w-[210px] object-contain object-bottom pointer-events-none select-none relative z-10"
                                       />
                                     ) : (
                                       <div className="h-10 text-[11px] text-slate-400 italic flex items-center mb-1">
@@ -3171,7 +3333,11 @@ Write numbered directives or formal paragraphs.
                                       <img
                                         src={signatorySignature}
                                         alt="Signatory E-Signature"
-                                        className="max-h-16 max-w-[210px] object-contain object-bottom pointer-events-none select-none -mb-3 relative z-10"
+                                        style={{
+                                          marginLeft: `${signatoryOffsetX}px`,
+                                          marginBottom: `${signatoryOffsetY}px`
+                                        }}
+                                        className="max-h-16 max-w-[210px] object-contain object-bottom pointer-events-none select-none relative z-10"
                                       />
                                     ) : (
                                       <div className="h-10 text-[11px] text-slate-400 italic flex items-center mb-1">
