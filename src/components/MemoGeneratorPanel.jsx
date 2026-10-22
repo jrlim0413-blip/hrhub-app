@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import html2canvas from "html2canvas";
 import {
   FileText, Building2, Send, Printer, Copy, Check, Sparkles,
@@ -7,7 +7,8 @@ import {
   RotateCcw, ArrowRight, ArrowLeft, ExternalLink, Zap,
   Maximize2, ZoomIn, ZoomOut, Save, Archive, Trash2, Clock, Plus,
   Upload, Image, CheckSquare, Square, XCircle, Code, ShieldCheck, Key,
-  Camera, Download
+  Camera, Download, Bold, Italic, Underline, Strikethrough, Highlighter,
+  List, ListOrdered, Shapes, Minus, Palette, Heading, Type, Eraser
 } from "lucide-react";
 import { processSignatureToTransparentPng } from "../lib/signatureImageProcessor";
 import { mergeProfilesWithStored, getStoredEmployees } from "../lib/employeeStorage";
@@ -418,6 +419,46 @@ export function cleanDirectivesBody(rawContent) {
   return body || rawContent;
 }
 
+/**
+ * Remove HTML tags from text for plain text representations (clipboard, plaintext email, word count)
+ */
+export function stripHtml(content) {
+  if (!content) return "";
+  return content.replace(/<[^>]*>/g, "");
+}
+
+/**
+ * Convert integer to Roman Numeral string (e.g. 1 -> I, 4 -> IV)
+ */
+export function toRoman(num) {
+  const map = { M: 1000, CM: 900, D: 500, CD: 400, C: 100, XC: 90, L: 50, XL: 40, X: 10, IX: 9, V: 5, IV: 4, I: 1 };
+  let roman = "";
+  for (let key in map) {
+    while (num >= map[key]) {
+      roman += key;
+      num -= map[key];
+    }
+  }
+  return roman || "I";
+}
+
+/**
+ * Render memorandum directives with rich HTML formatting and Markdown shortcuts support
+ */
+export function renderMemoDirectivesHtml(content) {
+  if (!content) return "";
+  let html = content;
+  // Markdown bold **text** -> <b>$1</b>
+  html = html.replace(/\*\*(.*?)\*\*/g, "<b>$1</b>");
+  // Markdown italic *text* (excluding text inside tags)
+  html = html.replace(/(?<![<a-zA-Z0-9])\*([^*\n]+)\*(?![a-zA-Z0-9>])/g, "<i>$1</i>");
+  // Markdown highlight ==text== -> <mark ...>$1</mark>
+  html = html.replace(/==(.*?)==/g, '<mark style="background-color: #fef08a; color: #713f12; padding: 1px 5px; border-radius: 3px; font-weight: 600;">$1</mark>');
+  // Markdown strikethrough ~~text~~ -> <s>$1</s>
+  html = html.replace(/~~(.*?)~~/g, "<s>$1</s>");
+  return html;
+}
+
 export default function MemoGeneratorPanel({
   onClose,
   profiles = [],
@@ -459,6 +500,167 @@ export default function MemoGeneratorPanel({
   // Step 2: Memorandum Body Directives State (Starts clean / empty canvas or with loaded draft)
   const [memoContent, setMemoContent] = useState("");
   const [magnifyModalOpen, setMagnifyModalOpen] = useState(false);
+
+  // Directives Editor Refs & Rich Formatting States
+  const directivesTextareaRef = useRef(null);
+  const modalTextareaRef = useRef(null);
+  const [showDirectivesPreview, setShowDirectivesPreview] = useState(false);
+  const [shapesMenuOpen, setShapesMenuOpen] = useState(false);
+  const [highlightMenuOpen, setHighlightMenuOpen] = useState(false);
+  const [colorMenuOpen, setColorMenuOpen] = useState(false);
+  const [clausesMenuOpen, setClausesMenuOpen] = useState(false);
+
+  // Auto-close toolbar popovers on outside click
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (!e.target.closest(".memo-toolbar-menu-container")) {
+        setShapesMenuOpen(false);
+        setHighlightMenuOpen(false);
+        setColorMenuOpen(false);
+        setClausesMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const getTargetTextarea = (customRef) => {
+    if (customRef?.current) return customRef.current;
+    if (magnifyModalOpen && modalTextareaRef.current) return modalTextareaRef.current;
+    return directivesTextareaRef.current;
+  };
+
+  const insertFormatting = (prefix, suffix = "", defaultText = "", targetRef = null) => {
+    const textarea = getTargetTextarea(targetRef);
+    if (!textarea) {
+      setMemoContent((prev) => prev + prefix + (defaultText || "") + suffix);
+      return;
+    }
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const currentVal = textarea.value;
+    const selected = currentVal.substring(start, end);
+    const textToInsert = selected || defaultText;
+    const replacement = prefix + textToInsert + suffix;
+    const newContent = currentVal.substring(0, start) + replacement + currentVal.substring(end);
+    setMemoContent(newContent);
+
+    setTimeout(() => {
+      textarea.focus();
+      const selectionStart = start + prefix.length;
+      const selectionEnd = selectionStart + textToInsert.length;
+      textarea.setSelectionRange(selectionStart, selectionEnd);
+    }, 15);
+  };
+
+  const transformSelectedText = (transformFn, targetRef = null) => {
+    const textarea = getTargetTextarea(targetRef);
+    if (!textarea) return;
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const currentVal = textarea.value;
+    const selected = currentVal.substring(start, end);
+    if (!selected) return;
+    const transformed = transformFn(selected);
+    const newContent = currentVal.substring(0, start) + transformed + currentVal.substring(end);
+    setMemoContent(newContent);
+    setTimeout(() => {
+      textarea.focus();
+      textarea.setSelectionRange(start, start + transformed.length);
+    }, 15);
+  };
+
+  const insertLinePrefix = (prefixType, targetRef = null) => {
+    const textarea = getTargetTextarea(targetRef);
+    if (!textarea) return;
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const currentVal = textarea.value;
+
+    if (start === end) {
+      const p = prefixType === "bullet" ? "• " : prefixType === "number" ? "1. " : prefixType === "letter" ? "A. " : "I. ";
+      insertFormatting(p, "", "", targetRef);
+      return;
+    }
+
+    const selected = currentVal.substring(start, end);
+    const lines = selected.split("\n");
+    const prefixed = lines.map((line, idx) => {
+      if (!line.trim()) return line;
+      const cleanLine = line.replace(/^([•\-\*■●◆▲★✔➔❖]|\d+\.|\w\.)\s*/, "");
+      if (prefixType === "bullet") return `• ${cleanLine}`;
+      if (prefixType === "number") return `${idx + 1}. ${cleanLine}`;
+      if (prefixType === "letter") return `${String.fromCharCode(65 + (idx % 26))}. ${cleanLine}`;
+      if (prefixType === "roman") return `${toRoman(idx + 1)}. ${cleanLine}`;
+      return line;
+    }).join("\n");
+
+    const newContent = currentVal.substring(0, start) + prefixed + currentVal.substring(end);
+    setMemoContent(newContent);
+    setTimeout(() => {
+      textarea.focus();
+      textarea.setSelectionRange(start, start + prefixed.length);
+    }, 15);
+  };
+
+  const insertSnippet = (snippetText, targetRef = null) => {
+    const textarea = getTargetTextarea(targetRef);
+    if (!textarea) {
+      setMemoContent((prev) => (prev ? prev + "\n\n" + snippetText : snippetText));
+      return;
+    }
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const currentVal = textarea.value;
+    const before = currentVal.substring(0, start);
+    const after = currentVal.substring(end);
+    const padBefore = (before && !before.endsWith("\n\n")) ? (before.endsWith("\n") ? "\n" : "\n\n") : "";
+    const padAfter = (after && !after.startsWith("\n")) ? "\n" : "";
+    const replacement = padBefore + snippetText + padAfter;
+    const newContent = before + replacement + after;
+    setMemoContent(newContent);
+
+    setTimeout(() => {
+      textarea.focus();
+      const newPos = start + replacement.length;
+      textarea.setSelectionRange(newPos, newPos);
+    }, 15);
+  };
+
+  const clearSelectedFormatting = (targetRef = null) => {
+    const textarea = getTargetTextarea(targetRef);
+    if (!textarea) return;
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const currentVal = textarea.value;
+    const selected = currentVal.substring(start, end);
+    if (!selected) return;
+    const cleaned = selected.replace(/<[^>]*>/g, "").replace(/\*\*(.*?)\*\*/g, "$1").replace(/==(.*?)==/g, "$1");
+    const newContent = currentVal.substring(0, start) + cleaned + currentVal.substring(end);
+    setMemoContent(newContent);
+    setTimeout(() => {
+      textarea.focus();
+      textarea.setSelectionRange(start, start + cleaned.length);
+    }, 15);
+  };
+
+  const handleTextareaKeyDown = (e, targetRef = null) => {
+    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey) {
+      if (e.key.toLowerCase() === "b") {
+        e.preventDefault();
+        insertFormatting("<b>", "</b>", "Bold text", targetRef);
+      } else if (e.key.toLowerCase() === "i") {
+        e.preventDefault();
+        insertFormatting("<i>", "</i>", "Italic text", targetRef);
+      } else if (e.key.toLowerCase() === "u") {
+        e.preventDefault();
+        insertFormatting("<u>", "</u>", "Underlined text", targetRef);
+      }
+    } else if (e.key === "Tab") {
+      e.preventDefault();
+      insertFormatting("    ", "", "", targetRef);
+    }
+  };
 
   // AUTOMATIC CLASSIFICATION STATE (Auto-analyzed by system based on subject & content)
   const [memoCategory, setMemoCategory] = useState(() =>
@@ -1040,7 +1242,7 @@ SUBJECT:        ${memoSubject}
 CLASSIFICATION: ${memoCategory}
 -----------------------------------------------------
 
-${memoContent}
+${stripHtml(memoContent)}
 
 -----------------------------------------------------
 ${signatoryLabel?.trim() ? `${signatoryLabel.trim()}\n` : ""}${signatoryName}
@@ -1084,7 +1286,7 @@ Classification: ${memoCategory}
 --------------------------------------------------
 
 MEMORANDUM DIRECTIVES:
-${memoContent}
+${stripHtml(memoContent)}
 
 --------------------------------------------------
 ${signatoryLabel?.trim() ? `${signatoryLabel.trim()}\n` : ""}${signatoryName}
@@ -1229,7 +1431,7 @@ HR Contact: ${HR_OFFICIAL_EMAIL}`;
           OFFICIAL DIRECTIVES &amp; PROVISIONS:
         </p>
         <div style="color: #0f172a; font-size: 13.5px; line-height: 1.8; text-align: justify; white-space: pre-wrap; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
-${memoContent.replace(/\n/g, "<br>")}
+${renderMemoDirectivesHtml(memoContent).replace(/\n/g, "<br>")}
         </div>
       </div>
     </div>
@@ -1307,9 +1509,9 @@ ${memoContent.replace(/\n/g, "<br>")}
    * fit effortlessly without splitting to a 2nd page.
    */
   const getMemoFitMetrics = (content = memoContent) => {
-    const text = (content || "").trim();
-    const charLen = text.length;
-    const lineCount = text.split(/\r?\n/).length;
+    const rawText = stripHtml(content || "").trim();
+    const charLen = rawText.length;
+    const lineCount = rawText.split(/\r?\n/).length;
 
     // Auto-detection rules:
     // Long Bond Paper needed when content exceeds ~1250 chars or > 20 lines
@@ -1443,7 +1645,7 @@ ${memoContent.replace(/\n/g, "<br>")}
 
             <!-- Directives Body Content -->
             <div style="font-size: ${metrics.bodyFontSize}; line-height: ${metrics.bodyLineHeight}; color: #0f172a; font-weight: 400; text-align: justify; white-space: pre-wrap; padding: 6px 0;">
-${memoContent}
+${renderMemoDirectivesHtml(memoContent)}
             </div>
 
             <!-- Signatory Sign-off Block: ~4 line spaces after body directives -->
@@ -1771,6 +1973,515 @@ ${memoContent}
       setCopyingImageId(null);
     }
   };
+
+  // Render Directives Formatting Toolbar for both Step 2 and Full-Screen Editor
+  const renderDirectivesToolbar = (targetRef) => (
+    <div className="memo-toolbar-menu-container flex flex-wrap items-center gap-1.5 p-2 bg-slate-50 border border-slate-200 rounded-xl relative select-none z-30">
+      {/* 1. Basic Formatting: Bold, Italic, Underline, Strikethrough */}
+      <div className="flex items-center gap-1">
+        <button
+          type="button"
+          onClick={() => insertFormatting("<b>", "</b>", "Bold text", targetRef)}
+          className="p-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 text-slate-800 hover:text-slate-950 font-bold transition flex items-center justify-center cursor-pointer shadow-2xs"
+          title="Bold (Ctrl+B)"
+        >
+          <Bold size={14} className="stroke-[2.5]" />
+        </button>
+        <button
+          type="button"
+          onClick={() => insertFormatting("<i>", "</i>", "Italic text", targetRef)}
+          className="p-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 text-slate-800 hover:text-slate-950 italic transition flex items-center justify-center cursor-pointer shadow-2xs"
+          title="Italic (Ctrl+I)"
+        >
+          <Italic size={14} />
+        </button>
+        <button
+          type="button"
+          onClick={() => insertFormatting("<u>", "</u>", "Underlined text", targetRef)}
+          className="p-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 text-slate-800 hover:text-slate-950 underline transition flex items-center justify-center cursor-pointer shadow-2xs"
+          title="Underline (Ctrl+U)"
+        >
+          <Underline size={14} />
+        </button>
+        <button
+          type="button"
+          onClick={() => insertFormatting("<s>", "</s>", "Strikethrough text", targetRef)}
+          className="p-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 text-slate-700 hover:text-slate-950 line-through transition flex items-center justify-center cursor-pointer shadow-2xs"
+          title="Strikethrough"
+        >
+          <Strikethrough size={14} />
+        </button>
+      </div>
+
+      <div className="h-5 w-px bg-slate-300 mx-0.5" />
+
+      {/* 2. Highlight Popover */}
+      <div className="relative">
+        <button
+          type="button"
+          onClick={() => {
+            setHighlightMenuOpen(!highlightMenuOpen);
+            setShapesMenuOpen(false);
+            setColorMenuOpen(false);
+            setClausesMenuOpen(false);
+          }}
+          className={`px-2 py-1.5 rounded-lg border text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs ${
+            highlightMenuOpen ? "bg-amber-100 border-amber-300 text-amber-950" : "bg-white border-slate-200 hover:bg-slate-100 text-slate-800"
+          }`}
+          title="Highlight Text with Color"
+        >
+          <Highlighter size={14} className="text-amber-500" />
+          <span className="text-[11px] hidden sm:inline">Highlight</span>
+        </button>
+
+        {highlightMenuOpen && (
+          <div className="absolute left-0 top-full mt-1.5 w-48 bg-white border border-slate-200 rounded-xl shadow-xl p-2 z-50 space-y-1 animate-in fade-in duration-100">
+            <div className="text-[10px] font-black uppercase text-slate-400 px-2 py-1">Highlight Colors</div>
+            <button
+              type="button"
+              onClick={() => {
+                insertFormatting('<mark style="background-color: #fef08a; color: #713f12; padding: 1px 5px; border-radius: 3px; font-weight: 600;">', '</mark>', "Highlighted text", targetRef);
+                setHighlightMenuOpen(false);
+              }}
+              className="w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-semibold hover:bg-amber-50 flex items-center gap-2 cursor-pointer transition text-slate-800"
+            >
+              <span className="w-3.5 h-3.5 rounded-full bg-yellow-300 border border-yellow-400" />
+              <span>Yellow Highlight</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                insertFormatting('<mark style="background-color: #bbf7d0; color: #14532d; padding: 1px 5px; border-radius: 3px; font-weight: 600;">', '</mark>', "Highlighted text", targetRef);
+                setHighlightMenuOpen(false);
+              }}
+              className="w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-semibold hover:bg-emerald-50 flex items-center gap-2 cursor-pointer transition text-slate-800"
+            >
+              <span className="w-3.5 h-3.5 rounded-full bg-emerald-300 border border-emerald-400" />
+              <span>Green Highlight</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                insertFormatting('<mark style="background-color: #bae6fd; color: #0c4a6e; padding: 1px 5px; border-radius: 3px; font-weight: 600;">', '</mark>', "Highlighted text", targetRef);
+                setHighlightMenuOpen(false);
+              }}
+              className="w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-semibold hover:bg-sky-50 flex items-center gap-2 cursor-pointer transition text-slate-800"
+            >
+              <span className="w-3.5 h-3.5 rounded-full bg-sky-300 border border-sky-400" />
+              <span>Cyan Highlight</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                insertFormatting('<mark style="background-color: #fbcfe8; color: #831843; padding: 1px 5px; border-radius: 3px; font-weight: 600;">', '</mark>', "Highlighted text", targetRef);
+                setHighlightMenuOpen(false);
+              }}
+              className="w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-semibold hover:bg-pink-50 flex items-center gap-2 cursor-pointer transition text-slate-800"
+            >
+              <span className="w-3.5 h-3.5 rounded-full bg-pink-300 border border-pink-400" />
+              <span>Pink Highlight</span>
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* 3. Text Color Popover */}
+      <div className="relative">
+        <button
+          type="button"
+          onClick={() => {
+            setColorMenuOpen(!colorMenuOpen);
+            setShapesMenuOpen(false);
+            setHighlightMenuOpen(false);
+            setClausesMenuOpen(false);
+          }}
+          className={`px-2 py-1.5 rounded-lg border text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs ${
+            colorMenuOpen ? "bg-rose-50 border-rose-300 text-rose-950" : "bg-white border-slate-200 hover:bg-slate-100 text-slate-800"
+          }`}
+          title="Text Color"
+        >
+          <Palette size={14} className="text-rose-600" />
+          <span className="text-[11px] hidden sm:inline">Color</span>
+        </button>
+
+        {colorMenuOpen && (
+          <div className="absolute left-0 top-full mt-1.5 w-44 bg-white border border-slate-200 rounded-xl shadow-xl p-2 z-50 space-y-1 animate-in fade-in duration-100">
+            <div className="text-[10px] font-black uppercase text-slate-400 px-2 py-1">Text Color</div>
+            <button
+              type="button"
+              onClick={() => {
+                insertFormatting('<span style="color: #dc2626; font-weight: bold;">', '</span>', "Important Warning", targetRef);
+                setColorMenuOpen(false);
+              }}
+              className="w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-bold text-red-600 hover:bg-red-50 flex items-center gap-2 cursor-pointer transition"
+            >
+              <span className="w-3 h-3 rounded-full bg-red-600" />
+              <span>Red Alert</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                insertFormatting('<span style="color: #059669; font-weight: bold;">', '</span>', "Approved Directive", targetRef);
+                setColorMenuOpen(false);
+              }}
+              className="w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-bold text-emerald-600 hover:bg-emerald-50 flex items-center gap-2 cursor-pointer transition"
+            >
+              <span className="w-3 h-3 rounded-full bg-emerald-600" />
+              <span>Emerald Green</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                insertFormatting('<span style="color: #1e40af; font-weight: bold;">', '</span>', "Official Policy", targetRef);
+                setColorMenuOpen(false);
+              }}
+              className="w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-bold text-blue-800 hover:bg-blue-50 flex items-center gap-2 cursor-pointer transition"
+            >
+              <span className="w-3 h-3 rounded-full bg-blue-800" />
+              <span>Navy Blue</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                insertFormatting('<span style="color: #0f172a; font-weight: bold;">', '</span>', "Dark Emphasized Text", targetRef);
+                setColorMenuOpen(false);
+              }}
+              className="w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-bold text-slate-900 hover:bg-slate-50 flex items-center gap-2 cursor-pointer transition"
+            >
+              <span className="w-3 h-3 rounded-full bg-slate-900" />
+              <span>Dark Slate</span>
+            </button>
+          </div>
+        )}
+      </div>
+
+      <div className="h-5 w-px bg-slate-300 mx-0.5" />
+
+      {/* 4. Shapes & Badges Popover ("mag lagay ng shape") */}
+      <div className="relative">
+        <button
+          type="button"
+          onClick={() => {
+            setShapesMenuOpen(!shapesMenuOpen);
+            setHighlightMenuOpen(false);
+            setColorMenuOpen(false);
+            setClausesMenuOpen(false);
+          }}
+          className={`px-2.5 py-1.5 rounded-lg border text-xs font-black transition flex items-center gap-1.5 cursor-pointer shadow-2xs ${
+            shapesMenuOpen ? "bg-indigo-100 border-indigo-300 text-indigo-950" : "bg-white border-slate-200 hover:bg-slate-100 text-indigo-800"
+          }`}
+          title="Shapes, Official Badges & Callout Shape Boxes"
+        >
+          <Shapes size={14} className="text-indigo-600" />
+          <span className="text-[11px]">Shapes &amp; Badges</span>
+        </button>
+
+        {shapesMenuOpen && (
+          <div className="absolute left-0 sm:left-auto sm:right-0 md:left-0 top-full mt-1.5 w-76 sm:w-84 bg-white border border-slate-200 rounded-2xl shadow-2xl p-3 z-50 space-y-3 animate-in fade-in duration-100 max-h-[460px] overflow-y-auto">
+            {/* Geometric Shapes & Bullet Symbols */}
+            <div>
+              <div className="text-[10px] font-black uppercase tracking-wider text-slate-400 px-1 mb-1.5">
+                Geometric Shapes &amp; Bullet Symbols
+              </div>
+              <div className="grid grid-cols-4 gap-1.5">
+                {[
+                  { shape: "■ ", label: "Square" },
+                  { shape: "● ", label: "Circle" },
+                  { shape: "◆ ", label: "Diamond" },
+                  { shape: "▲ ", label: "Triangle" },
+                  { shape: "★ ", label: "Star" },
+                  { shape: "✔ ", label: "Check" },
+                  { shape: "➔ ", label: "Arrow" },
+                  { shape: "❖ ", label: "Ornate" }
+                ].map((item) => (
+                  <button
+                    key={item.label}
+                    type="button"
+                    onClick={() => {
+                      insertFormatting(item.shape, "", "", targetRef);
+                      setShapesMenuOpen(false);
+                    }}
+                    className="p-1.5 rounded-lg border border-slate-200 hover:border-indigo-300 bg-slate-50 hover:bg-indigo-50 text-slate-800 text-xs font-bold transition flex items-center justify-center gap-1 cursor-pointer"
+                    title={`Insert ${item.label}`}
+                  >
+                    <span className="text-sm font-black text-indigo-600">{item.shape.trim()}</span>
+                    <span className="text-[10px] text-slate-600">{item.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Official Directive Shape Badges */}
+            <div className="border-t border-slate-100 pt-2">
+              <div className="text-[10px] font-black uppercase tracking-wider text-slate-400 px-1 mb-1.5">
+                Official Compliance Shape Badges
+              </div>
+              <div className="space-y-1.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    insertSnippet('<span style="display: inline-block; background-color: #fee2e2; color: #991b1b; border: 1px solid #f87171; font-weight: 900; font-size: 8pt; padding: 1px 8px; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.5px;">MANDATORY COMPLIANCE</span> ', targetRef);
+                    setShapesMenuOpen(false);
+                  }}
+                  className="w-full text-left p-1.5 rounded-lg border border-red-200 bg-red-50 hover:bg-red-100 transition flex items-center justify-between cursor-pointer"
+                >
+                  <span className="text-[10px] font-black text-red-800 uppercase px-2 py-0.5 rounded bg-red-200/60 border border-red-300">
+                    MANDATORY COMPLIANCE
+                  </span>
+                  <span className="text-[10px] text-red-600 font-semibold">Red Badge</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    insertSnippet('<span style="display: inline-block; background-color: #fef3c7; color: #92400e; border: 1px solid #fcd34d; font-weight: 900; font-size: 8pt; padding: 1px 8px; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.5px;">CONFIDENTIAL</span> ', targetRef);
+                    setShapesMenuOpen(false);
+                  }}
+                  className="w-full text-left p-1.5 rounded-lg border border-amber-200 bg-amber-50 hover:bg-amber-100 transition flex items-center justify-between cursor-pointer"
+                >
+                  <span className="text-[10px] font-black text-amber-800 uppercase px-2 py-0.5 rounded bg-amber-200/60 border border-amber-300">
+                    CONFIDENTIAL
+                  </span>
+                  <span className="text-[10px] text-amber-600 font-semibold">Amber Badge</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    insertSnippet('<span style="display: inline-block; background-color: #dbeafe; color: #1e40af; border: 1px solid #93c5fd; font-weight: 900; font-size: 8pt; padding: 1px 8px; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.5px;">FOR IMMEDIATE COMPLIANCE</span> ', targetRef);
+                    setShapesMenuOpen(false);
+                  }}
+                  className="w-full text-left p-1.5 rounded-lg border border-blue-200 bg-blue-50 hover:bg-blue-100 transition flex items-center justify-between cursor-pointer"
+                >
+                  <span className="text-[10px] font-black text-blue-800 uppercase px-2 py-0.5 rounded bg-blue-200/60 border border-blue-300">
+                    FOR IMMEDIATE COMPLIANCE
+                  </span>
+                  <span className="text-[10px] text-blue-600 font-semibold">Blue Badge</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    insertSnippet('<span style="display: inline-block; background-color: #d1fae5; color: #065f46; border: 1px solid #6ee7b7; font-weight: 900; font-size: 8pt; padding: 1px 8px; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.5px;">OFFICIALLY APPROVED</span> ', targetRef);
+                    setShapesMenuOpen(false);
+                  }}
+                  className="w-full text-left p-1.5 rounded-lg border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 transition flex items-center justify-between cursor-pointer"
+                >
+                  <span className="text-[10px] font-black text-emerald-800 uppercase px-2 py-0.5 rounded bg-emerald-200/60 border border-emerald-300">
+                    OFFICIALLY APPROVED
+                  </span>
+                  <span className="text-[10px] text-emerald-600 font-semibold">Green Badge</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Directive Shape Callout Boxes */}
+            <div className="border-t border-slate-100 pt-2">
+              <div className="text-[10px] font-black uppercase tracking-wider text-slate-400 px-1 mb-1.5">
+                Structured Directive Shape Boxes
+              </div>
+              <div className="space-y-1.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    insertSnippet('<div style="border-left: 4px solid #059669; background-color: #f0fdf4; padding: 8px 14px; margin: 8px 0; border-radius: 0 6px 6px 0; font-weight: 500;"><b>📌 DIRECTIVE:</b> Insert specific operational instructions or guidelines here.</div>', targetRef);
+                    setShapesMenuOpen(false);
+                  }}
+                  className="w-full text-left p-2 rounded-lg border-l-4 border-l-emerald-600 bg-emerald-50 hover:bg-emerald-100/70 border border-emerald-200 transition text-[11px] font-semibold text-emerald-950 cursor-pointer"
+                >
+                  <b>📌 Green Directive Box</b>
+                  <div className="text-[10px] text-emerald-700 font-normal">Highlighted operational directive card</div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    insertSnippet('<div style="border-left: 4px solid #dc2626; background-color: #fef2f2; padding: 8px 14px; margin: 8px 0; border-radius: 0 6px 6px 0; font-weight: 500;"><b>⚠️ SANCTION NOTICE:</b> Failure to strictly observe these directives shall be dealt with under company rules.</div>', targetRef);
+                    setShapesMenuOpen(false);
+                  }}
+                  className="w-full text-left p-2 rounded-lg border-l-4 border-l-red-600 bg-red-50 hover:bg-red-100/70 border border-red-200 transition text-[11px] font-semibold text-red-950 cursor-pointer"
+                >
+                  <b>⚠️ Red Sanction Box</b>
+                  <div className="text-[10px] text-red-700 font-normal">Disciplinary penalty notice box</div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    insertSnippet('<div style="border: 1px solid #cbd5e1; background-color: #f8fafc; padding: 10px 14px; margin: 8px 0; border-radius: 6px; font-weight: 500;"><b>📋 POLICY STATEMENT:</b> All personnel are required to uphold standard corporate protocols.</div>', targetRef);
+                    setShapesMenuOpen(false);
+                  }}
+                  className="w-full text-left p-2 rounded-lg border border-slate-300 bg-slate-50 hover:bg-slate-100 transition text-[11px] font-semibold text-slate-900 cursor-pointer"
+                >
+                  <b>📋 Framed Policy Box</b>
+                  <div className="text-[10px] text-slate-500 font-normal">Enclosed formal policy statement</div>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="h-5 w-px bg-slate-300 mx-0.5" />
+
+      {/* 5. Lists: Numbers, Bullets, Alphabet, Roman */}
+      <div className="flex items-center gap-1">
+        <button
+          type="button"
+          onClick={() => insertLinePrefix("number", targetRef)}
+          className="p-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 text-slate-800 transition flex items-center justify-center cursor-pointer shadow-2xs"
+          title="Numbered List (1. 2. 3.)"
+        >
+          <ListOrdered size={14} />
+        </button>
+        <button
+          type="button"
+          onClick={() => insertLinePrefix("bullet", targetRef)}
+          className="p-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 text-slate-800 transition flex items-center justify-center cursor-pointer shadow-2xs"
+          title="Bullet List (• • •)"
+        >
+          <List size={14} />
+        </button>
+        <button
+          type="button"
+          onClick={() => insertLinePrefix("letter", targetRef)}
+          className="px-1.5 py-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 text-slate-800 font-black text-xs transition flex items-center justify-center cursor-pointer shadow-2xs"
+          title="Alphabetical List (A. B. C.)"
+        >
+          A.
+        </button>
+        <button
+          type="button"
+          onClick={() => insertLinePrefix("roman", targetRef)}
+          className="px-1.5 py-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 text-slate-800 font-black text-xs transition flex items-center justify-center cursor-pointer shadow-2xs"
+          title="Roman Numeral List (I. II. III.)"
+        >
+          I.
+        </button>
+      </div>
+
+      <div className="h-5 w-px bg-slate-300 mx-0.5" />
+
+      {/* 6. Structural: Section Title & Divider */}
+      <div className="flex items-center gap-1">
+        <button
+          type="button"
+          onClick={() => insertSnippet('<h4 style="font-weight: 900; text-transform: uppercase; font-size: 10.5pt; margin: 12px 0 4px 0; border-bottom: 1.5px solid #0f172a; padding-bottom: 2px;">SECTION TITLE</h4>', targetRef)}
+          className="p-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 text-slate-800 transition flex items-center justify-center cursor-pointer shadow-2xs"
+          title="Section Heading Banner"
+        >
+          <Heading size={14} />
+        </button>
+        <button
+          type="button"
+          onClick={() => insertSnippet('<hr style="border: none; border-top: 1.5px solid #cbd5e1; margin: 12px 0;">', targetRef)}
+          className="p-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 text-slate-800 transition flex items-center justify-center cursor-pointer shadow-2xs"
+          title="Divider Line (<hr>)"
+        >
+          <Minus size={14} />
+        </button>
+      </div>
+
+      <div className="h-5 w-px bg-slate-300 mx-0.5" />
+
+      {/* 7. Text Utilities: UPPERCASE, Indent & Clear Tags */}
+      <div className="flex items-center gap-1">
+        <button
+          type="button"
+          onClick={() => transformSelectedText((s) => s.toUpperCase(), targetRef)}
+          className="px-1.5 py-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 text-slate-800 font-black text-xs transition flex items-center justify-center cursor-pointer shadow-2xs"
+          title="Convert Selected Text to UPPERCASE"
+        >
+          <Type size={13} className="mr-0.5" />
+          <span className="text-[10px]">AA</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => insertFormatting("    ", "", "", targetRef)}
+          className="px-1.5 py-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 text-slate-800 font-bold text-[11px] transition flex items-center justify-center cursor-pointer shadow-2xs"
+          title="Insert 4-Space Indent (Tab)"
+        >
+          Tab
+        </button>
+        <button
+          type="button"
+          onClick={() => clearSelectedFormatting(targetRef)}
+          className="p-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 text-slate-500 hover:text-red-600 transition flex items-center justify-center cursor-pointer shadow-2xs"
+          title="Clear Formatting (Remove HTML tags)"
+        >
+          <Eraser size={14} />
+        </button>
+      </div>
+
+      <div className="h-5 w-px bg-slate-300 mx-0.5" />
+
+      {/* 8. HR Quick Clauses Popover */}
+      <div className="relative">
+        <button
+          type="button"
+          onClick={() => {
+            setClausesMenuOpen(!clausesMenuOpen);
+            setShapesMenuOpen(false);
+            setHighlightMenuOpen(false);
+            setColorMenuOpen(false);
+          }}
+          className={`px-2 py-1.5 rounded-lg border text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs ${
+            clausesMenuOpen ? "bg-emerald-100 border-emerald-300 text-emerald-950" : "bg-white border-slate-200 hover:bg-slate-100 text-emerald-800"
+          }`}
+          title="Insert Standard HR Policy Directives"
+        >
+          <Bookmark size={13} className="text-emerald-600" />
+          <span className="text-[11px] hidden sm:inline">HR Clauses</span>
+        </button>
+
+        {clausesMenuOpen && (
+          <div className="absolute right-0 top-full mt-1.5 w-72 bg-white border border-slate-200 rounded-xl shadow-xl p-2 z-50 space-y-1 animate-in fade-in duration-100">
+            <div className="text-[10px] font-black uppercase text-slate-400 px-2 py-1">Standard HR Directives</div>
+            <button
+              type="button"
+              onClick={() => {
+                insertSnippet("Strict compliance is hereby mandated for all concerned officers and personnel.", targetRef);
+                setClausesMenuOpen(false);
+              }}
+              className="w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-medium hover:bg-emerald-50 text-slate-800 cursor-pointer transition"
+            >
+              • "Strict compliance is hereby mandated..."
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                insertSnippet("This memorandum shall take effect immediately upon issuance and official transmission.", targetRef);
+                setClausesMenuOpen(false);
+              }}
+              className="w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-medium hover:bg-emerald-50 text-slate-800 cursor-pointer transition"
+            >
+              • "This memorandum takes effect immediately..."
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                insertSnippet("Failure to comply with the guidelines stipulated herein shall warrant corresponding disciplinary penalties pursuant to company rules and regulations.", targetRef);
+                setClausesMenuOpen(false);
+              }}
+              className="w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-medium hover:bg-emerald-50 text-slate-800 cursor-pointer transition"
+            >
+              • "Failure to comply shall warrant disciplinary..."
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                insertSnippet("For inquiries or further clarifications regarding this directive, please coordinate directly with the Human Resource Management Division.", targetRef);
+                setClausesMenuOpen(false);
+              }}
+              className="w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-medium hover:bg-emerald-50 text-slate-800 cursor-pointer transition"
+            >
+              • "For inquiries, coordinate with HRMD..."
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 
   return (
     <section className="mb-8 overflow-hidden rounded-3xl border border-emerald-200/80 bg-white shadow-xl animate-in fade-in duration-200">
@@ -2265,42 +2976,88 @@ ${memoContent}
               </span>
             </div>
 
-            {/* Large writing canvas for memorandum directives */}
+            {/* Large writing canvas for memorandum directives with Rich Formatting Toolbar */}
             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm space-y-3">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
                 <label className="text-xs font-black uppercase tracking-wider text-slate-900 flex items-center gap-2">
                   <PenTool size={14} className="text-emerald-600" />
                   Memorandum Body Directives (Full Writing Canvas)
                 </label>
-                <button
-                  type="button"
-                  onClick={() => setMagnifyModalOpen(true)}
-                  className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 hover:text-emerald-900 bg-emerald-50 hover:bg-emerald-100 px-2.5 py-1 rounded-lg transition cursor-pointer border border-emerald-200"
-                  title="Open full-screen modal editor"
-                >
-                  <Maximize2 size={12} />
-                  <span>Full-Screen Editor</span>
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowDirectivesPreview(!showDirectivesPreview)}
+                    className={`inline-flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 rounded-lg transition cursor-pointer border ${
+                      showDirectivesPreview
+                        ? "bg-emerald-600 text-white border-emerald-600 shadow-xs"
+                        : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
+                    }`}
+                    title="Toggle side-by-side formatted preview"
+                  >
+                    <Eye size={13} />
+                    <span>{showDirectivesPreview ? "Hide Preview" : "Live Preview"}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setMagnifyModalOpen(true)}
+                    className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 hover:text-emerald-900 bg-emerald-50 hover:bg-emerald-100 px-2.5 py-1.5 rounded-lg transition cursor-pointer border border-emerald-200"
+                    title="Open full-screen modal editor"
+                  >
+                    <Maximize2 size={12} />
+                    <span>Full-Screen Editor</span>
+                  </button>
+                </div>
               </div>
 
-              <textarea
-                rows={16}
-                value={memoContent}
-                onChange={(e) => setMemoContent(e.target.value)}
-                  placeholder="Enter the memorandum directives here...
+              {/* Rich Formatting Toolbar (Bold, Italic, Underline, Highlight, Shapes & Badges, Lists, etc.) */}
+              {renderDirectivesToolbar(directivesTextareaRef)}
 
-Write numbered directives or formal paragraphs.
+              {/* Editor + Optional Split Live Formatted Preview */}
+              <div className={showDirectivesPreview ? "grid grid-cols-1 lg:grid-cols-2 gap-4" : ""}>
+                <div className="space-y-1">
+                  <textarea
+                    ref={directivesTextareaRef}
+                    rows={showDirectivesPreview ? 14 : 16}
+                    value={memoContent}
+                    onChange={(e) => setMemoContent(e.target.value)}
+                    onKeyDown={(e) => handleTextareaKeyDown(e, directivesTextareaRef)}
+                    placeholder="Enter the memorandum directives here...
+
+Write numbered directives or formal paragraphs. Use the toolbar above for Bold, Italic, Underline, Highlights, and Shapes!
 
 (Example:
-1. All concerned officers are advised...
+1. All concerned officers are advised to strictly comply...
 2. Operational guidelines: ...
 3. Strict compliance is expected.)"
-                className="w-full rounded-2xl border border-slate-200 bg-white p-4 text-sm leading-relaxed text-slate-900 focus:border-emerald-500 focus:outline-none font-sans resize-y shadow-inner"
-              />
+                    className="w-full rounded-2xl border border-slate-200 bg-white p-4 text-sm leading-relaxed text-slate-900 focus:border-emerald-500 focus:outline-none font-sans resize-y shadow-inner h-full min-h-[320px]"
+                  />
+                </div>
+
+                {showDirectivesPreview && (
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 flex flex-col space-y-2 h-full min-h-[320px] max-h-[500px] overflow-hidden">
+                    <div className="flex items-center justify-between border-b border-slate-200 pb-2 shrink-0">
+                      <span className="text-[11px] font-black uppercase tracking-wider text-slate-600 flex items-center gap-1.5">
+                        <Eye size={12} className="text-emerald-600" />
+                        Live Formatted Output
+                      </span>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
+                        Real-Time
+                      </span>
+                    </div>
+                    <div
+                      className="flex-1 overflow-y-auto p-3.5 bg-white rounded-xl border border-slate-200 text-xs sm:text-[13px] leading-[1.8] text-slate-900 whitespace-pre-wrap text-justify shadow-2xs font-sans"
+                      dangerouslySetInnerHTML={{
+                        __html: renderMemoDirectivesHtml(memoContent) || `<span class="text-slate-400 italic">Formatting, shapes, and highlights will render live here as you compose directives...</span>`
+                      }}
+                    />
+                  </div>
+                )}
+              </div>
 
               <div className="flex items-center justify-between text-xs text-slate-400 font-mono pt-1">
-                <span>{memoContent.split(/\s+/).filter(Boolean).length} words</span>
-                <span>{memoContent.length} characters</span>
+                <span>{stripHtml(memoContent).split(/\s+/).filter(Boolean).length} words</span>
+                <span>{stripHtml(memoContent).length} characters</span>
               </div>
             </div>
 
@@ -3458,13 +4215,18 @@ Write numbered directives or formal paragraphs.
                           <div className="border-b-2 border-slate-900 my-1"></div>
 
                           {/* Memo Body Content */}
-                          <div className="pt-2 text-[12.5px] sm:text-[13px] text-slate-900 font-normal leading-[1.8] font-sans whitespace-pre-wrap text-justify">
-                            {memoContent || (
-                              <span className="text-slate-400 italic">
-                                (No directives entered. Return to Step 2 to write or generate them with AI.)
-                              </span>
-                            )}
-                          </div>
+                          {memoContent ? (
+                            <div
+                              className="pt-2 text-[12.5px] sm:text-[13px] text-slate-900 font-normal leading-[1.8] font-sans whitespace-pre-wrap text-justify"
+                              dangerouslySetInnerHTML={{
+                                __html: renderMemoDirectivesHtml(memoContent)
+                              }}
+                            />
+                          ) : (
+                            <div className="pt-2 text-[12.5px] sm:text-[13px] text-slate-400 italic leading-[1.8] font-sans">
+                              (No directives entered. Return to Step 2 to write or generate them with AI.)
+                            </div>
+                          )}
 
                           {/* Signatory Block with E-Signatures: ~4 line spaces after body directives */}
                           <div className="mt-8 pt-1">
@@ -4229,7 +4991,7 @@ function doGet(e) {
       {/* ================= MODAL: MAGNIFIED CANVAS EDITOR ================= */}
       {magnifyModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 p-4 backdrop-blur-sm animate-in fade-in duration-150">
-          <div className="w-full max-w-4xl rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl space-y-4 max-h-[90vh] flex flex-col">
+          <div className="w-full max-w-5xl rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl space-y-4 max-h-[92vh] flex flex-col">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3 shrink-0">
               <div className="flex items-center gap-2.5">
                 <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700">
@@ -4254,19 +5016,44 @@ function doGet(e) {
               </button>
             </div>
 
-            <div className="flex-1 min-h-[350px] flex flex-col space-y-1">
-              <textarea
-                value={memoContent}
-                onChange={(e) => setMemoContent(e.target.value)}
-                placeholder="Draft the complete memorandum directives, paragraphs, and numbered points..."
-                className="w-full flex-1 p-4 rounded-2xl border border-slate-200 bg-white text-sm sm:text-base leading-relaxed text-slate-900 focus:border-emerald-500 focus:outline-none font-sans resize-none shadow-inner"
-              />
+            <div className="flex-1 min-h-[420px] flex flex-col space-y-2">
+              {/* Rich Directives Formatting Toolbar */}
+              {renderDirectivesToolbar(modalTextareaRef)}
+
+              <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 gap-4 min-h-[350px]">
+                <textarea
+                  ref={modalTextareaRef}
+                  value={memoContent}
+                  onChange={(e) => setMemoContent(e.target.value)}
+                  onKeyDown={(e) => handleTextareaKeyDown(e, modalTextareaRef)}
+                  placeholder="Draft the complete memorandum directives, paragraphs, and numbered points... Use toolbar above for Bold, Italic, Highlights, Shapes & Badges!"
+                  className="w-full h-full p-4 rounded-2xl border border-slate-200 bg-white text-sm sm:text-base leading-relaxed text-slate-900 focus:border-emerald-500 focus:outline-none font-sans resize-none shadow-inner"
+                />
+
+                <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 flex flex-col space-y-2 h-full overflow-hidden">
+                  <div className="flex items-center justify-between border-b border-slate-200 pb-2 shrink-0">
+                    <span className="text-[11px] font-black uppercase tracking-wider text-slate-600 flex items-center gap-1.5">
+                      <Eye size={12} className="text-emerald-600" />
+                      Live Formatted Document Preview
+                    </span>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
+                      Real-Time
+                    </span>
+                  </div>
+                  <div
+                    className="flex-1 overflow-y-auto p-4 bg-white rounded-xl border border-slate-200 text-sm leading-[1.8] text-slate-900 whitespace-pre-wrap text-justify shadow-2xs font-sans"
+                    dangerouslySetInnerHTML={{
+                      __html: renderMemoDirectivesHtml(memoContent) || `<span class="text-slate-400 italic">Formatting, shapes, and highlights will render live here as you compose directives...</span>`
+                    }}
+                  />
+                </div>
+              </div>
             </div>
 
             <div className="flex items-center justify-between pt-2 border-t border-slate-100 shrink-0 text-xs">
               <div className="flex items-center gap-4 text-slate-400 font-mono text-[11px]">
-                <span>{memoContent.split(/\s+/).filter(Boolean).length} words</span>
-                <span>{memoContent.length} characters</span>
+                <span>{stripHtml(memoContent).split(/\s+/).filter(Boolean).length} words</span>
+                <span>{stripHtml(memoContent).length} characters</span>
               </div>
 
               <button
