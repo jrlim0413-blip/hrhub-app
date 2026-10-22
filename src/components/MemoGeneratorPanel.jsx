@@ -1906,38 +1906,63 @@ ${renderMemoDirectivesHtml(memoContent)}
     const sheetEl = document.getElementById(`memo-sheet-preview-${company.id}`);
     if (!sheetEl) return;
 
+    const originalZoom = sheetEl.style.zoom;
+    const originalTransform = sheetEl.style.transform;
+
     try {
       setCopyingImageId(company.id);
+
+      // Temporarily normalize zoom & transform so html2canvas computes pixel-perfect boundaries
+      sheetEl.style.zoom = "1";
+      sheetEl.style.transform = "none";
+      await new Promise((r) => setTimeout(r, 60));
+
       const canvas = await html2canvas(sheetEl, {
-        scale: 2.5,
+        scale: 2.2,
         useCORS: true,
-        allowTaint: true,
+        allowTaint: false,
         backgroundColor: "#ffffff",
         logging: false,
+        imageTimeout: 15000,
       });
 
-      canvas.toBlob(async (blob) => {
-        if (!blob) {
-          throw new Error("Canvas blob conversion failed");
-        }
-        try {
-          if (navigator.clipboard && window.ClipboardItem) {
-            const item = new ClipboardItem({ "image/png": blob });
-            await navigator.clipboard.write([item]);
-            setCopiedImageId(company.id);
-            setTimeout(() => setCopiedImageId(null), 3500);
-          } else {
+      // Restore zoom & transform immediately
+      sheetEl.style.zoom = originalZoom;
+      sheetEl.style.transform = originalTransform;
+
+      // Export canvas to blob and write to clipboard
+      await new Promise((resolve) => {
+        canvas.toBlob(async (blob) => {
+          if (!blob) {
+            console.warn("toBlob failed, falling back to download");
             handleDownloadMemoImage(company);
+            resolve();
+            return;
           }
-        } catch (clipErr) {
-          console.warn("Direct clipboard write fallback to download:", clipErr);
-          handleDownloadMemoImage(company);
-        } finally {
-          setCopyingImageId(null);
-        }
-      }, "image/png", 1.0);
+          try {
+            if (navigator.clipboard && window.ClipboardItem) {
+              const item = new ClipboardItem({ "image/png": blob });
+              await navigator.clipboard.write([item]);
+              setCopiedImageId(company.id);
+              setTimeout(() => setCopiedImageId(null), 3500);
+              resolve();
+            } else {
+              handleDownloadMemoImage(company);
+              resolve();
+            }
+          } catch (clipErr) {
+            console.warn("Direct clipboard write fallback to download:", clipErr);
+            handleDownloadMemoImage(company);
+            resolve();
+          }
+        }, "image/png", 1.0);
+      });
     } catch (err) {
       console.error("Failed to copy memo image:", err);
+      sheetEl.style.zoom = originalZoom;
+      sheetEl.style.transform = originalTransform;
+      handleDownloadMemoImage(company);
+    } finally {
       setCopyingImageId(null);
     }
   };
@@ -1946,26 +1971,42 @@ ${renderMemoDirectivesHtml(memoContent)}
     const sheetEl = document.getElementById(`memo-sheet-preview-${company.id}`);
     if (!sheetEl) return;
 
+    const originalZoom = sheetEl.style.zoom;
+    const originalTransform = sheetEl.style.transform;
+
     try {
       setCopyingImageId(company.id);
+
+      sheetEl.style.zoom = "1";
+      sheetEl.style.transform = "none";
+      await new Promise((r) => setTimeout(r, 60));
+
       const canvas = await html2canvas(sheetEl, {
-        scale: 2.5,
+        scale: 2.2,
         useCORS: true,
-        allowTaint: true,
+        allowTaint: false,
         backgroundColor: "#ffffff",
         logging: false,
+        imageTimeout: 15000,
       });
+
+      sheetEl.style.zoom = originalZoom;
+      sheetEl.style.transform = originalTransform;
 
       const dataUrl = canvas.toDataURL("image/png", 1.0);
       const compMemoRef = `MEMO-2026-${company.code}-${memoRef.split("-").pop() || "001"}`;
       const link = document.createElement("a");
       link.download = `${compMemoRef} - ${company.name}.png`;
       link.href = dataUrl;
+      document.body.appendChild(link);
       link.click();
+      document.body.removeChild(link);
       setCopiedImageId(company.id);
       setTimeout(() => setCopiedImageId(null), 3500);
     } catch (err) {
       console.error("Failed to download memo image:", err);
+      sheetEl.style.zoom = originalZoom;
+      sheetEl.style.transform = originalTransform;
     } finally {
       setCopyingImageId(null);
     }
