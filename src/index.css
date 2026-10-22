@@ -348,3 +348,16 @@ summary {
 .animate-marquee:hover {
   animation-play-state: paused;
 }
+
+/* Real-Time Live WYSIWYG Memo Editor */
+.memo-live-editor:empty::before {
+  content: attr(data-placeholder);
+  color: #94a3b8;
+  font-style: italic;
+  pointer-events: none;
+  white-space: pre-wrap;
+}
+
+.memo-live-editor:focus {
+  outline: none;
+}

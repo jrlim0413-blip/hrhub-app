@@ -8,7 +8,8 @@ import {
   Maximize2, ZoomIn, ZoomOut, Save, Archive, Trash2, Clock, Plus,
   Upload, Image, CheckSquare, Square, XCircle, Code, ShieldCheck, Key,
   Camera, Download, Bold, Italic, Underline, Strikethrough, Highlighter,
-  List, ListOrdered, Shapes, Minus, Palette, Heading, Type, Eraser
+  List, ListOrdered, Shapes, Minus, Palette, Heading, Type, Eraser,
+  ALargeSmall, CaseUpper
 } from "lucide-react";
 import { processSignatureToTransparentPng } from "../lib/signatureImageProcessor";
 import { mergeProfilesWithStored, getStoredEmployees } from "../lib/employeeStorage";
@@ -459,6 +460,26 @@ export function renderMemoDirectivesHtml(content) {
   return html;
 }
 
+export const DIRECTIVE_FONT_FAMILIES = [
+  { label: "Arial", value: "Arial, Helvetica, sans-serif", preview: "Standard Clean" },
+  { label: "Times New Roman", value: "'Times New Roman', Times, serif", preview: "Formal Memo Standard" },
+  { label: "Georgia", value: "Georgia, serif", preview: "Executive Serif" },
+  { label: "Segoe UI", value: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif", preview: "Corporate Modern" },
+  { label: "Calibri", value: "Calibri, 'Segoe UI', sans-serif", preview: "Contemporary Office" },
+  { label: "Roboto", value: "Roboto, sans-serif", preview: "Clean Digital" },
+  { label: "Courier New", value: "'Courier New', Courier, monospace", preview: "Technical / Monospace" }
+];
+
+export const DIRECTIVE_FONT_SIZES = [
+  { label: "9 pt (Compact)", value: 12 },
+  { label: "10 pt (Standard)", value: 13.3 },
+  { label: "11 pt (Executive)", value: 14.6 },
+  { label: "12 pt (Formal)", value: 16 },
+  { label: "13 pt (Large)", value: 17.3 },
+  { label: "14 pt (Extra Large)", value: 18.6 },
+  { label: "16 pt (Prominent)", value: 21.3 }
+];
+
 export default function MemoGeneratorPanel({
   onClose,
   profiles = [],
@@ -501,14 +522,43 @@ export default function MemoGeneratorPanel({
   const [memoContent, setMemoContent] = useState("");
   const [magnifyModalOpen, setMagnifyModalOpen] = useState(false);
 
-  // Directives Editor Refs & Rich Formatting States
-  const directivesTextareaRef = useRef(null);
-  const modalTextareaRef = useRef(null);
-  const [showDirectivesPreview, setShowDirectivesPreview] = useState(false);
+  // Directives Editor Refs & WYSIWYG Live Formatting States
+  const liveEditorRef = useRef(null);
+  const modalLiveEditorRef = useRef(null);
+  const [directivesFontFamily, setDirectivesFontFamily] = useState(() => {
+    try {
+      return localStorage.getItem("hrhub_memo_directives_font_family") || "Arial, Helvetica, sans-serif";
+    } catch {
+      return "Arial, Helvetica, sans-serif";
+    }
+  });
+  const [directivesFontSize, setDirectivesFontSize] = useState(() => {
+    try {
+      return Number(localStorage.getItem("hrhub_memo_directives_font_size")) || 13.3;
+    } catch {
+      return 13.3;
+    }
+  });
+  const [isSourceMode, setIsSourceMode] = useState(false);
   const [shapesMenuOpen, setShapesMenuOpen] = useState(false);
   const [highlightMenuOpen, setHighlightMenuOpen] = useState(false);
   const [colorMenuOpen, setColorMenuOpen] = useState(false);
   const [clausesMenuOpen, setClausesMenuOpen] = useState(false);
+
+  // Synchronize contentEditable div innerHTML when memoContent is changed externally
+  useEffect(() => {
+    const formattedHtml = memoContent ? renderMemoDirectivesHtml(memoContent) : "";
+    if (liveEditorRef.current && document.activeElement !== liveEditorRef.current) {
+      if (liveEditorRef.current.innerHTML !== formattedHtml) {
+        liveEditorRef.current.innerHTML = formattedHtml;
+      }
+    }
+    if (modalLiveEditorRef.current && document.activeElement !== modalLiveEditorRef.current) {
+      if (modalLiveEditorRef.current.innerHTML !== formattedHtml) {
+        modalLiveEditorRef.current.innerHTML = formattedHtml;
+      }
+    }
+  }, [memoContent, currentStep, magnifyModalOpen, isSourceMode]);
 
   // Auto-close toolbar popovers on outside click
   useEffect(() => {
@@ -524,141 +574,88 @@ export default function MemoGeneratorPanel({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const getTargetTextarea = (customRef) => {
-    if (customRef?.current) return customRef.current;
-    if (magnifyModalOpen && modalTextareaRef.current) return modalTextareaRef.current;
-    return directivesTextareaRef.current;
+  const handleSetFontFamily = (font) => {
+    setDirectivesFontFamily(font);
+    try {
+      localStorage.setItem("hrhub_memo_directives_font_family", font);
+    } catch {}
   };
 
-  const insertFormatting = (prefix, suffix = "", defaultText = "", targetRef = null) => {
-    const textarea = getTargetTextarea(targetRef);
-    if (!textarea) {
-      setMemoContent((prev) => prev + prefix + (defaultText || "") + suffix);
+  const handleSetFontSize = (size) => {
+    const clamped = Math.max(9, Math.min(26, Number(size) || 13.3));
+    setDirectivesFontSize(clamped);
+    try {
+      localStorage.setItem("hrhub_memo_directives_font_size", String(clamped));
+    } catch {}
+  };
+
+  const getActiveEditor = () => {
+    if (magnifyModalOpen && modalLiveEditorRef.current) return modalLiveEditorRef.current;
+    return liveEditorRef.current;
+  };
+
+  const handleLiveEditorInput = (e) => {
+    const html = e.currentTarget.innerHTML;
+    setMemoContent(html);
+  };
+
+  const executeCommand = (command, value = null) => {
+    const editor = getActiveEditor();
+    if (!editor) return;
+    editor.focus();
+    document.execCommand(command, false, value);
+    setMemoContent(editor.innerHTML);
+  };
+
+  const insertHtmlAtCursor = (html) => {
+    const editor = getActiveEditor();
+    if (!editor) {
+      setMemoContent((prev) => (prev ? prev + "\n" + html : html));
       return;
     }
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    const currentVal = textarea.value;
-    const selected = currentVal.substring(start, end);
-    const textToInsert = selected || defaultText;
-    const replacement = prefix + textToInsert + suffix;
-    const newContent = currentVal.substring(0, start) + replacement + currentVal.substring(end);
-    setMemoContent(newContent);
-
-    setTimeout(() => {
-      textarea.focus();
-      const selectionStart = start + prefix.length;
-      const selectionEnd = selectionStart + textToInsert.length;
-      textarea.setSelectionRange(selectionStart, selectionEnd);
-    }, 15);
-  };
-
-  const transformSelectedText = (transformFn, targetRef = null) => {
-    const textarea = getTargetTextarea(targetRef);
-    if (!textarea) return;
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    const currentVal = textarea.value;
-    const selected = currentVal.substring(start, end);
-    if (!selected) return;
-    const transformed = transformFn(selected);
-    const newContent = currentVal.substring(0, start) + transformed + currentVal.substring(end);
-    setMemoContent(newContent);
-    setTimeout(() => {
-      textarea.focus();
-      textarea.setSelectionRange(start, start + transformed.length);
-    }, 15);
-  };
-
-  const insertLinePrefix = (prefixType, targetRef = null) => {
-    const textarea = getTargetTextarea(targetRef);
-    if (!textarea) return;
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    const currentVal = textarea.value;
-
-    if (start === end) {
-      const p = prefixType === "bullet" ? "• " : prefixType === "number" ? "1. " : prefixType === "letter" ? "A. " : "I. ";
-      insertFormatting(p, "", "", targetRef);
-      return;
-    }
-
-    const selected = currentVal.substring(start, end);
-    const lines = selected.split("\n");
-    const prefixed = lines.map((line, idx) => {
-      if (!line.trim()) return line;
-      const cleanLine = line.replace(/^([•\-\*■●◆▲★✔➔❖]|\d+\.|\w\.)\s*/, "");
-      if (prefixType === "bullet") return `• ${cleanLine}`;
-      if (prefixType === "number") return `${idx + 1}. ${cleanLine}`;
-      if (prefixType === "letter") return `${String.fromCharCode(65 + (idx % 26))}. ${cleanLine}`;
-      if (prefixType === "roman") return `${toRoman(idx + 1)}. ${cleanLine}`;
-      return line;
-    }).join("\n");
-
-    const newContent = currentVal.substring(0, start) + prefixed + currentVal.substring(end);
-    setMemoContent(newContent);
-    setTimeout(() => {
-      textarea.focus();
-      textarea.setSelectionRange(start, start + prefixed.length);
-    }, 15);
-  };
-
-  const insertSnippet = (snippetText, targetRef = null) => {
-    const textarea = getTargetTextarea(targetRef);
-    if (!textarea) {
-      setMemoContent((prev) => (prev ? prev + "\n\n" + snippetText : snippetText));
-      return;
-    }
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    const currentVal = textarea.value;
-    const before = currentVal.substring(0, start);
-    const after = currentVal.substring(end);
-    const padBefore = (before && !before.endsWith("\n\n")) ? (before.endsWith("\n") ? "\n" : "\n\n") : "";
-    const padAfter = (after && !after.startsWith("\n")) ? "\n" : "";
-    const replacement = padBefore + snippetText + padAfter;
-    const newContent = before + replacement + after;
-    setMemoContent(newContent);
-
-    setTimeout(() => {
-      textarea.focus();
-      const newPos = start + replacement.length;
-      textarea.setSelectionRange(newPos, newPos);
-    }, 15);
-  };
-
-  const clearSelectedFormatting = (targetRef = null) => {
-    const textarea = getTargetTextarea(targetRef);
-    if (!textarea) return;
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    const currentVal = textarea.value;
-    const selected = currentVal.substring(start, end);
-    if (!selected) return;
-    const cleaned = selected.replace(/<[^>]*>/g, "").replace(/\*\*(.*?)\*\*/g, "$1").replace(/==(.*?)==/g, "$1");
-    const newContent = currentVal.substring(0, start) + cleaned + currentVal.substring(end);
-    setMemoContent(newContent);
-    setTimeout(() => {
-      textarea.focus();
-      textarea.setSelectionRange(start, start + cleaned.length);
-    }, 15);
-  };
-
-  const handleTextareaKeyDown = (e, targetRef = null) => {
-    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey) {
-      if (e.key.toLowerCase() === "b") {
-        e.preventDefault();
-        insertFormatting("<b>", "</b>", "Bold text", targetRef);
-      } else if (e.key.toLowerCase() === "i") {
-        e.preventDefault();
-        insertFormatting("<i>", "</i>", "Italic text", targetRef);
-      } else if (e.key.toLowerCase() === "u") {
-        e.preventDefault();
-        insertFormatting("<u>", "</u>", "Underlined text", targetRef);
+    editor.focus();
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount > 0) {
+      const range = sel.getRangeAt(0);
+      range.deleteContents();
+      const tempDiv = document.createElement("div");
+      tempDiv.innerHTML = html;
+      const frag = document.createDocumentFragment();
+      let node;
+      let lastNode;
+      while ((node = tempDiv.firstChild)) {
+        lastNode = frag.appendChild(node);
       }
-    } else if (e.key === "Tab") {
+      range.insertNode(frag);
+      if (lastNode) {
+        range.setStartAfter(lastNode);
+        range.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(range);
+      }
+    } else {
+      editor.innerHTML += html;
+    }
+    setMemoContent(editor.innerHTML);
+  };
+
+  const transformSelectedToUppercase = () => {
+    const editor = getActiveEditor();
+    if (!editor) return;
+    editor.focus();
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed) return;
+    const text = sel.toString().toUpperCase();
+    document.execCommand("insertText", false, text);
+    setMemoContent(editor.innerHTML);
+  };
+
+  const handleEditorKeyDown = (e) => {
+    if (e.key === "Tab") {
       e.preventDefault();
-      insertFormatting("    ", "", "", targetRef);
+      document.execCommand("insertHTML", false, "&nbsp;&nbsp;&nbsp;&nbsp;");
+      const editor = getActiveEditor();
+      if (editor) setMemoContent(editor.innerHTML);
     }
   };
 
@@ -1430,7 +1427,7 @@ HR Contact: ${HR_OFFICIAL_EMAIL}`;
         <p style="margin: 0 0 12px 0; font-size: 11px; font-weight: 900; text-transform: uppercase; letter-spacing: 1px; color: #64748b;">
           OFFICIAL DIRECTIVES &amp; PROVISIONS:
         </p>
-        <div style="color: #0f172a; font-size: 13.5px; line-height: 1.8; text-align: justify; white-space: pre-wrap; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+        <div style="color: #0f172a; font-size: ${directivesFontSize}px; line-height: 1.8; text-align: justify; white-space: pre-wrap; font-family: ${directivesFontFamily};">
 ${renderMemoDirectivesHtml(memoContent).replace(/\n/g, "<br>")}
         </div>
       </div>
@@ -1644,7 +1641,7 @@ ${renderMemoDirectivesHtml(memoContent).replace(/\n/g, "<br>")}
             <div style="border-bottom: 2px solid #0f172a; margin: 4px 0 8px 0;"></div>
 
             <!-- Directives Body Content -->
-            <div style="font-size: ${metrics.bodyFontSize}; line-height: ${metrics.bodyLineHeight}; color: #0f172a; font-weight: 400; text-align: justify; white-space: pre-wrap; padding: 6px 0;">
+            <div style="font-family: ${directivesFontFamily}; font-size: ${directivesFontSize}px; line-height: ${metrics.bodyLineHeight}; color: #0f172a; font-weight: 400; text-align: justify; white-space: pre-wrap; padding: 6px 0;">
 ${renderMemoDirectivesHtml(memoContent)}
             </div>
 
@@ -1975,13 +1972,64 @@ ${renderMemoDirectivesHtml(memoContent)}
   };
 
   // Render Directives Formatting Toolbar for both Step 2 and Full-Screen Editor
-  const renderDirectivesToolbar = (targetRef) => (
+  const renderDirectivesToolbar = () => (
     <div className="memo-toolbar-menu-container flex flex-wrap items-center gap-1.5 p-2 bg-slate-50 border border-slate-200 rounded-xl relative select-none z-30">
-      {/* 1. Basic Formatting: Bold, Italic, Underline, Strikethrough */}
+      {/* 1. Font Style (Family) Selector */}
+      <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-lg px-2 py-1 shadow-2xs">
+        <Type size={13} className="text-slate-500 shrink-0" />
+        <select
+          value={directivesFontFamily}
+          onChange={(e) => handleSetFontFamily(e.target.value)}
+          className="text-xs font-bold text-slate-800 bg-transparent focus:outline-none cursor-pointer max-w-[130px] sm:max-w-[150px] truncate"
+          title="Change Directives Font Style / Family"
+        >
+          {DIRECTIVE_FONT_FAMILIES.map((font) => (
+            <option key={font.value} value={font.value} style={{ fontFamily: font.value }}>
+              {font.label}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {/* 2. Font Size Selector & Quick Controls */}
+      <div className="flex items-center gap-0.5 bg-white border border-slate-200 rounded-lg p-0.5 shadow-2xs">
+        <button
+          type="button"
+          onClick={() => handleSetFontSize(directivesFontSize - 1)}
+          className="px-1.5 py-0.5 rounded text-[11px] font-black text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+          title="Decrease Font Size (A-)"
+        >
+          A-
+        </button>
+        <select
+          value={directivesFontSize}
+          onChange={(e) => handleSetFontSize(Number(e.target.value))}
+          className="text-xs font-black text-slate-800 bg-transparent focus:outline-none cursor-pointer px-1 text-center"
+          title="Set Exact Font Size"
+        >
+          {DIRECTIVE_FONT_SIZES.map((sz) => (
+            <option key={sz.value} value={sz.value}>
+              {sz.label}
+            </option>
+          ))}
+        </select>
+        <button
+          type="button"
+          onClick={() => handleSetFontSize(directivesFontSize + 1)}
+          className="px-1.5 py-0.5 rounded text-[11px] font-black text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+          title="Increase Font Size (A+)"
+        >
+          A+
+        </button>
+      </div>
+
+      <div className="h-5 w-px bg-slate-300 mx-0.5" />
+
+      {/* 3. Basic Formatting: Bold, Italic, Underline, Strikethrough */}
       <div className="flex items-center gap-1">
         <button
           type="button"
-          onClick={() => insertFormatting("<b>", "</b>", "Bold text", targetRef)}
+          onClick={() => executeCommand("bold")}
           className="p-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 text-slate-800 hover:text-slate-950 font-bold transition flex items-center justify-center cursor-pointer shadow-2xs"
           title="Bold (Ctrl+B)"
         >
@@ -1989,7 +2037,7 @@ ${renderMemoDirectivesHtml(memoContent)}
         </button>
         <button
           type="button"
-          onClick={() => insertFormatting("<i>", "</i>", "Italic text", targetRef)}
+          onClick={() => executeCommand("italic")}
           className="p-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 text-slate-800 hover:text-slate-950 italic transition flex items-center justify-center cursor-pointer shadow-2xs"
           title="Italic (Ctrl+I)"
         >
@@ -1997,7 +2045,7 @@ ${renderMemoDirectivesHtml(memoContent)}
         </button>
         <button
           type="button"
-          onClick={() => insertFormatting("<u>", "</u>", "Underlined text", targetRef)}
+          onClick={() => executeCommand("underline")}
           className="p-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 text-slate-800 hover:text-slate-950 underline transition flex items-center justify-center cursor-pointer shadow-2xs"
           title="Underline (Ctrl+U)"
         >
@@ -2005,7 +2053,7 @@ ${renderMemoDirectivesHtml(memoContent)}
         </button>
         <button
           type="button"
-          onClick={() => insertFormatting("<s>", "</s>", "Strikethrough text", targetRef)}
+          onClick={() => executeCommand("strikeThrough")}
           className="p-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 text-slate-700 hover:text-slate-950 line-through transition flex items-center justify-center cursor-pointer shadow-2xs"
           title="Strikethrough"
         >
@@ -2015,7 +2063,7 @@ ${renderMemoDirectivesHtml(memoContent)}
 
       <div className="h-5 w-px bg-slate-300 mx-0.5" />
 
-      {/* 2. Highlight Popover */}
+      {/* 4. Highlight Popover */}
       <div className="relative">
         <button
           type="button"
@@ -2040,7 +2088,7 @@ ${renderMemoDirectivesHtml(memoContent)}
             <button
               type="button"
               onClick={() => {
-                insertFormatting('<mark style="background-color: #fef08a; color: #713f12; padding: 1px 5px; border-radius: 3px; font-weight: 600;">', '</mark>', "Highlighted text", targetRef);
+                executeCommand("hiliteColor", "#fef08a");
                 setHighlightMenuOpen(false);
               }}
               className="w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-semibold hover:bg-amber-50 flex items-center gap-2 cursor-pointer transition text-slate-800"
@@ -2051,7 +2099,7 @@ ${renderMemoDirectivesHtml(memoContent)}
             <button
               type="button"
               onClick={() => {
-                insertFormatting('<mark style="background-color: #bbf7d0; color: #14532d; padding: 1px 5px; border-radius: 3px; font-weight: 600;">', '</mark>', "Highlighted text", targetRef);
+                executeCommand("hiliteColor", "#bbf7d0");
                 setHighlightMenuOpen(false);
               }}
               className="w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-semibold hover:bg-emerald-50 flex items-center gap-2 cursor-pointer transition text-slate-800"
@@ -2062,7 +2110,7 @@ ${renderMemoDirectivesHtml(memoContent)}
             <button
               type="button"
               onClick={() => {
-                insertFormatting('<mark style="background-color: #bae6fd; color: #0c4a6e; padding: 1px 5px; border-radius: 3px; font-weight: 600;">', '</mark>', "Highlighted text", targetRef);
+                executeCommand("hiliteColor", "#bae6fd");
                 setHighlightMenuOpen(false);
               }}
               className="w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-semibold hover:bg-sky-50 flex items-center gap-2 cursor-pointer transition text-slate-800"
@@ -2073,7 +2121,7 @@ ${renderMemoDirectivesHtml(memoContent)}
             <button
               type="button"
               onClick={() => {
-                insertFormatting('<mark style="background-color: #fbcfe8; color: #831843; padding: 1px 5px; border-radius: 3px; font-weight: 600;">', '</mark>', "Highlighted text", targetRef);
+                executeCommand("hiliteColor", "#fbcfe8");
                 setHighlightMenuOpen(false);
               }}
               className="w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-semibold hover:bg-pink-50 flex items-center gap-2 cursor-pointer transition text-slate-800"
@@ -2085,7 +2133,7 @@ ${renderMemoDirectivesHtml(memoContent)}
         )}
       </div>
 
-      {/* 3. Text Color Popover */}
+      {/* 5. Text Color Popover */}
       <div className="relative">
         <button
           type="button"
@@ -2110,7 +2158,7 @@ ${renderMemoDirectivesHtml(memoContent)}
             <button
               type="button"
               onClick={() => {
-                insertFormatting('<span style="color: #dc2626; font-weight: bold;">', '</span>', "Important Warning", targetRef);
+                executeCommand("foreColor", "#dc2626");
                 setColorMenuOpen(false);
               }}
               className="w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-bold text-red-600 hover:bg-red-50 flex items-center gap-2 cursor-pointer transition"
@@ -2121,7 +2169,7 @@ ${renderMemoDirectivesHtml(memoContent)}
             <button
               type="button"
               onClick={() => {
-                insertFormatting('<span style="color: #059669; font-weight: bold;">', '</span>', "Approved Directive", targetRef);
+                executeCommand("foreColor", "#059669");
                 setColorMenuOpen(false);
               }}
               className="w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-bold text-emerald-600 hover:bg-emerald-50 flex items-center gap-2 cursor-pointer transition"
@@ -2132,7 +2180,7 @@ ${renderMemoDirectivesHtml(memoContent)}
             <button
               type="button"
               onClick={() => {
-                insertFormatting('<span style="color: #1e40af; font-weight: bold;">', '</span>', "Official Policy", targetRef);
+                executeCommand("foreColor", "#1e40af");
                 setColorMenuOpen(false);
               }}
               className="w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-bold text-blue-800 hover:bg-blue-50 flex items-center gap-2 cursor-pointer transition"
@@ -2143,7 +2191,7 @@ ${renderMemoDirectivesHtml(memoContent)}
             <button
               type="button"
               onClick={() => {
-                insertFormatting('<span style="color: #0f172a; font-weight: bold;">', '</span>', "Dark Emphasized Text", targetRef);
+                executeCommand("foreColor", "#0f172a");
                 setColorMenuOpen(false);
               }}
               className="w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-bold text-slate-900 hover:bg-slate-50 flex items-center gap-2 cursor-pointer transition"
@@ -2157,7 +2205,7 @@ ${renderMemoDirectivesHtml(memoContent)}
 
       <div className="h-5 w-px bg-slate-300 mx-0.5" />
 
-      {/* 4. Shapes & Badges Popover ("mag lagay ng shape") */}
+      {/* 6. Shapes & Badges Popover ("mag lagay ng shape") */}
       <div className="relative">
         <button
           type="button"
@@ -2198,7 +2246,7 @@ ${renderMemoDirectivesHtml(memoContent)}
                     key={item.label}
                     type="button"
                     onClick={() => {
-                      insertFormatting(item.shape, "", "", targetRef);
+                      insertHtmlAtCursor(`<span>${item.shape}</span>`);
                       setShapesMenuOpen(false);
                     }}
                     className="p-1.5 rounded-lg border border-slate-200 hover:border-indigo-300 bg-slate-50 hover:bg-indigo-50 text-slate-800 text-xs font-bold transition flex items-center justify-center gap-1 cursor-pointer"
@@ -2220,7 +2268,7 @@ ${renderMemoDirectivesHtml(memoContent)}
                 <button
                   type="button"
                   onClick={() => {
-                    insertSnippet('<span style="display: inline-block; background-color: #fee2e2; color: #991b1b; border: 1px solid #f87171; font-weight: 900; font-size: 8pt; padding: 1px 8px; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.5px;">MANDATORY COMPLIANCE</span> ', targetRef);
+                    insertHtmlAtCursor('&nbsp;<span style="display: inline-block; background-color: #fee2e2; color: #991b1b; border: 1px solid #f87171; font-weight: 900; font-size: 8pt; padding: 1px 8px; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.5px;">MANDATORY COMPLIANCE</span>&nbsp;');
                     setShapesMenuOpen(false);
                   }}
                   className="w-full text-left p-1.5 rounded-lg border border-red-200 bg-red-50 hover:bg-red-100 transition flex items-center justify-between cursor-pointer"
@@ -2234,7 +2282,7 @@ ${renderMemoDirectivesHtml(memoContent)}
                 <button
                   type="button"
                   onClick={() => {
-                    insertSnippet('<span style="display: inline-block; background-color: #fef3c7; color: #92400e; border: 1px solid #fcd34d; font-weight: 900; font-size: 8pt; padding: 1px 8px; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.5px;">CONFIDENTIAL</span> ', targetRef);
+                    insertHtmlAtCursor('&nbsp;<span style="display: inline-block; background-color: #fef3c7; color: #92400e; border: 1px solid #fcd34d; font-weight: 900; font-size: 8pt; padding: 1px 8px; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.5px;">CONFIDENTIAL</span>&nbsp;');
                     setShapesMenuOpen(false);
                   }}
                   className="w-full text-left p-1.5 rounded-lg border border-amber-200 bg-amber-50 hover:bg-amber-100 transition flex items-center justify-between cursor-pointer"
@@ -2248,7 +2296,7 @@ ${renderMemoDirectivesHtml(memoContent)}
                 <button
                   type="button"
                   onClick={() => {
-                    insertSnippet('<span style="display: inline-block; background-color: #dbeafe; color: #1e40af; border: 1px solid #93c5fd; font-weight: 900; font-size: 8pt; padding: 1px 8px; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.5px;">FOR IMMEDIATE COMPLIANCE</span> ', targetRef);
+                    insertHtmlAtCursor('&nbsp;<span style="display: inline-block; background-color: #dbeafe; color: #1e40af; border: 1px solid #93c5fd; font-weight: 900; font-size: 8pt; padding: 1px 8px; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.5px;">FOR IMMEDIATE COMPLIANCE</span>&nbsp;');
                     setShapesMenuOpen(false);
                   }}
                   className="w-full text-left p-1.5 rounded-lg border border-blue-200 bg-blue-50 hover:bg-blue-100 transition flex items-center justify-between cursor-pointer"
@@ -2262,7 +2310,7 @@ ${renderMemoDirectivesHtml(memoContent)}
                 <button
                   type="button"
                   onClick={() => {
-                    insertSnippet('<span style="display: inline-block; background-color: #d1fae5; color: #065f46; border: 1px solid #6ee7b7; font-weight: 900; font-size: 8pt; padding: 1px 8px; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.5px;">OFFICIALLY APPROVED</span> ', targetRef);
+                    insertHtmlAtCursor('&nbsp;<span style="display: inline-block; background-color: #d1fae5; color: #065f46; border: 1px solid #6ee7b7; font-weight: 900; font-size: 8pt; padding: 1px 8px; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.5px;">OFFICIALLY APPROVED</span>&nbsp;');
                     setShapesMenuOpen(false);
                   }}
                   className="w-full text-left p-1.5 rounded-lg border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 transition flex items-center justify-between cursor-pointer"
@@ -2284,7 +2332,7 @@ ${renderMemoDirectivesHtml(memoContent)}
                 <button
                   type="button"
                   onClick={() => {
-                    insertSnippet('<div style="border-left: 4px solid #059669; background-color: #f0fdf4; padding: 8px 14px; margin: 8px 0; border-radius: 0 6px 6px 0; font-weight: 500;"><b>📌 DIRECTIVE:</b> Insert specific operational instructions or guidelines here.</div>', targetRef);
+                    insertHtmlAtCursor('<div style="border-left: 4px solid #059669; background-color: #f0fdf4; padding: 8px 14px; margin: 8px 0; border-radius: 0 6px 6px 0; font-weight: 500;"><b>📌 DIRECTIVE:</b> Insert specific operational instructions or guidelines here.</div><p><br></p>');
                     setShapesMenuOpen(false);
                   }}
                   className="w-full text-left p-2 rounded-lg border-l-4 border-l-emerald-600 bg-emerald-50 hover:bg-emerald-100/70 border border-emerald-200 transition text-[11px] font-semibold text-emerald-950 cursor-pointer"
@@ -2296,7 +2344,7 @@ ${renderMemoDirectivesHtml(memoContent)}
                 <button
                   type="button"
                   onClick={() => {
-                    insertSnippet('<div style="border-left: 4px solid #dc2626; background-color: #fef2f2; padding: 8px 14px; margin: 8px 0; border-radius: 0 6px 6px 0; font-weight: 500;"><b>⚠️ SANCTION NOTICE:</b> Failure to strictly observe these directives shall be dealt with under company rules.</div>', targetRef);
+                    insertHtmlAtCursor('<div style="border-left: 4px solid #dc2626; background-color: #fef2f2; padding: 8px 14px; margin: 8px 0; border-radius: 0 6px 6px 0; font-weight: 500;"><b>⚠️ SANCTION NOTICE:</b> Failure to strictly observe these directives shall be dealt with under company rules.</div><p><br></p>');
                     setShapesMenuOpen(false);
                   }}
                   className="w-full text-left p-2 rounded-lg border-l-4 border-l-red-600 bg-red-50 hover:bg-red-100/70 border border-red-200 transition text-[11px] font-semibold text-red-950 cursor-pointer"
@@ -2308,7 +2356,7 @@ ${renderMemoDirectivesHtml(memoContent)}
                 <button
                   type="button"
                   onClick={() => {
-                    insertSnippet('<div style="border: 1px solid #cbd5e1; background-color: #f8fafc; padding: 10px 14px; margin: 8px 0; border-radius: 6px; font-weight: 500;"><b>📋 POLICY STATEMENT:</b> All personnel are required to uphold standard corporate protocols.</div>', targetRef);
+                    insertHtmlAtCursor('<div style="border: 1px solid #cbd5e1; background-color: #f8fafc; padding: 10px 14px; margin: 8px 0; border-radius: 6px; font-weight: 500;"><b>📋 POLICY STATEMENT:</b> All personnel are required to uphold standard corporate protocols.</div><p><br></p>');
                     setShapesMenuOpen(false);
                   }}
                   className="w-full text-left p-2 rounded-lg border border-slate-300 bg-slate-50 hover:bg-slate-100 transition text-[11px] font-semibold text-slate-900 cursor-pointer"
@@ -2324,11 +2372,11 @@ ${renderMemoDirectivesHtml(memoContent)}
 
       <div className="h-5 w-px bg-slate-300 mx-0.5" />
 
-      {/* 5. Lists: Numbers, Bullets, Alphabet, Roman */}
+      {/* 7. Lists: Numbers, Bullets, Alphabet, Roman */}
       <div className="flex items-center gap-1">
         <button
           type="button"
-          onClick={() => insertLinePrefix("number", targetRef)}
+          onClick={() => executeCommand("insertOrderedList")}
           className="p-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 text-slate-800 transition flex items-center justify-center cursor-pointer shadow-2xs"
           title="Numbered List (1. 2. 3.)"
         >
@@ -2336,37 +2384,21 @@ ${renderMemoDirectivesHtml(memoContent)}
         </button>
         <button
           type="button"
-          onClick={() => insertLinePrefix("bullet", targetRef)}
+          onClick={() => executeCommand("insertUnorderedList")}
           className="p-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 text-slate-800 transition flex items-center justify-center cursor-pointer shadow-2xs"
           title="Bullet List (• • •)"
         >
           <List size={14} />
         </button>
-        <button
-          type="button"
-          onClick={() => insertLinePrefix("letter", targetRef)}
-          className="px-1.5 py-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 text-slate-800 font-black text-xs transition flex items-center justify-center cursor-pointer shadow-2xs"
-          title="Alphabetical List (A. B. C.)"
-        >
-          A.
-        </button>
-        <button
-          type="button"
-          onClick={() => insertLinePrefix("roman", targetRef)}
-          className="px-1.5 py-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 text-slate-800 font-black text-xs transition flex items-center justify-center cursor-pointer shadow-2xs"
-          title="Roman Numeral List (I. II. III.)"
-        >
-          I.
-        </button>
       </div>
 
       <div className="h-5 w-px bg-slate-300 mx-0.5" />
 
-      {/* 6. Structural: Section Title & Divider */}
+      {/* 8. Structural: Section Title & Divider */}
       <div className="flex items-center gap-1">
         <button
           type="button"
-          onClick={() => insertSnippet('<h4 style="font-weight: 900; text-transform: uppercase; font-size: 10.5pt; margin: 12px 0 4px 0; border-bottom: 1.5px solid #0f172a; padding-bottom: 2px;">SECTION TITLE</h4>', targetRef)}
+          onClick={() => insertHtmlAtCursor('<h4 style="font-weight: 900; text-transform: uppercase; font-size: 1.15em; margin: 14px 0 6px 0; border-bottom: 2px solid #0f172a; padding-bottom: 2px;">SECTION TITLE</h4><p><br></p>')}
           className="p-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 text-slate-800 transition flex items-center justify-center cursor-pointer shadow-2xs"
           title="Section Heading Banner"
         >
@@ -2374,7 +2406,7 @@ ${renderMemoDirectivesHtml(memoContent)}
         </button>
         <button
           type="button"
-          onClick={() => insertSnippet('<hr style="border: none; border-top: 1.5px solid #cbd5e1; margin: 12px 0;">', targetRef)}
+          onClick={() => insertHtmlAtCursor('<hr style="border: none; border-top: 1.5px solid #cbd5e1; margin: 14px 0;"><p><br></p>')}
           className="p-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 text-slate-800 transition flex items-center justify-center cursor-pointer shadow-2xs"
           title="Divider Line (<hr>)"
         >
@@ -2384,20 +2416,20 @@ ${renderMemoDirectivesHtml(memoContent)}
 
       <div className="h-5 w-px bg-slate-300 mx-0.5" />
 
-      {/* 7. Text Utilities: UPPERCASE, Indent & Clear Tags */}
+      {/* 9. Text Utilities: UPPERCASE, Indent & Clear Tags */}
       <div className="flex items-center gap-1">
         <button
           type="button"
-          onClick={() => transformSelectedText((s) => s.toUpperCase(), targetRef)}
+          onClick={transformSelectedToUppercase}
           className="px-1.5 py-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 text-slate-800 font-black text-xs transition flex items-center justify-center cursor-pointer shadow-2xs"
           title="Convert Selected Text to UPPERCASE"
         >
-          <Type size={13} className="mr-0.5" />
+          <CaseUpper size={13} className="mr-0.5" />
           <span className="text-[10px]">AA</span>
         </button>
         <button
           type="button"
-          onClick={() => insertFormatting("    ", "", "", targetRef)}
+          onClick={() => executeCommand("insertHTML", "&nbsp;&nbsp;&nbsp;&nbsp;")}
           className="px-1.5 py-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 text-slate-800 font-bold text-[11px] transition flex items-center justify-center cursor-pointer shadow-2xs"
           title="Insert 4-Space Indent (Tab)"
         >
@@ -2405,9 +2437,9 @@ ${renderMemoDirectivesHtml(memoContent)}
         </button>
         <button
           type="button"
-          onClick={() => clearSelectedFormatting(targetRef)}
+          onClick={() => executeCommand("removeFormat")}
           className="p-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 text-slate-500 hover:text-red-600 transition flex items-center justify-center cursor-pointer shadow-2xs"
-          title="Clear Formatting (Remove HTML tags)"
+          title="Clear Formatting"
         >
           <Eraser size={14} />
         </button>
@@ -2415,7 +2447,7 @@ ${renderMemoDirectivesHtml(memoContent)}
 
       <div className="h-5 w-px bg-slate-300 mx-0.5" />
 
-      {/* 8. HR Quick Clauses Popover */}
+      {/* 10. HR Quick Clauses Popover */}
       <div className="relative">
         <button
           type="button"
@@ -2440,7 +2472,7 @@ ${renderMemoDirectivesHtml(memoContent)}
             <button
               type="button"
               onClick={() => {
-                insertSnippet("Strict compliance is hereby mandated for all concerned officers and personnel.", targetRef);
+                insertHtmlAtCursor("<p>Strict compliance is hereby mandated for all concerned officers and personnel.</p>");
                 setClausesMenuOpen(false);
               }}
               className="w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-medium hover:bg-emerald-50 text-slate-800 cursor-pointer transition"
@@ -2450,7 +2482,7 @@ ${renderMemoDirectivesHtml(memoContent)}
             <button
               type="button"
               onClick={() => {
-                insertSnippet("This memorandum shall take effect immediately upon issuance and official transmission.", targetRef);
+                insertHtmlAtCursor("<p>This memorandum shall take effect immediately upon issuance and official transmission.</p>");
                 setClausesMenuOpen(false);
               }}
               className="w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-medium hover:bg-emerald-50 text-slate-800 cursor-pointer transition"
@@ -2460,7 +2492,7 @@ ${renderMemoDirectivesHtml(memoContent)}
             <button
               type="button"
               onClick={() => {
-                insertSnippet("Failure to comply with the guidelines stipulated herein shall warrant corresponding disciplinary penalties pursuant to company rules and regulations.", targetRef);
+                insertHtmlAtCursor("<p>Failure to comply with the guidelines stipulated herein shall warrant corresponding disciplinary penalties pursuant to company rules and regulations.</p>");
                 setClausesMenuOpen(false);
               }}
               className="w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-medium hover:bg-emerald-50 text-slate-800 cursor-pointer transition"
@@ -2470,7 +2502,7 @@ ${renderMemoDirectivesHtml(memoContent)}
             <button
               type="button"
               onClick={() => {
-                insertSnippet("For inquiries or further clarifications regarding this directive, please coordinate directly with the Human Resource Management Division.", targetRef);
+                insertHtmlAtCursor("<p>For inquiries or further clarifications regarding this directive, please coordinate directly with the Human Resource Management Division.</p>");
                 setClausesMenuOpen(false);
               }}
               className="w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-medium hover:bg-emerald-50 text-slate-800 cursor-pointer transition"
@@ -2984,18 +3016,23 @@ ${renderMemoDirectivesHtml(memoContent)}
                   Memorandum Body Directives (Full Writing Canvas)
                 </label>
                 <div className="flex items-center gap-2">
+                  <span className="hidden sm:inline-flex items-center gap-1.5 text-[10.5px] font-bold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                    Live WYSIWYG Sheet
+                  </span>
+
                   <button
                     type="button"
-                    onClick={() => setShowDirectivesPreview(!showDirectivesPreview)}
-                    className={`inline-flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 rounded-lg transition cursor-pointer border ${
-                      showDirectivesPreview
-                        ? "bg-emerald-600 text-white border-emerald-600 shadow-xs"
+                    onClick={() => setIsSourceMode(!isSourceMode)}
+                    className={`inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1.5 rounded-lg transition cursor-pointer border ${
+                      isSourceMode
+                        ? "bg-slate-900 text-emerald-400 border-slate-800 shadow-xs"
                         : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
                     }`}
-                    title="Toggle side-by-side formatted preview"
+                    title="Toggle between Live WYSIWYG Sheet and HTML Source Code"
                   >
-                    <Eye size={13} />
-                    <span>{showDirectivesPreview ? "Hide Preview" : "Live Preview"}</span>
+                    <Code size={13} />
+                    <span>{isSourceMode ? "Live Sheet View" : "HTML Source"}</span>
                   </button>
 
                   <button
@@ -3010,54 +3047,53 @@ ${renderMemoDirectivesHtml(memoContent)}
                 </div>
               </div>
 
-              {/* Rich Formatting Toolbar (Bold, Italic, Underline, Highlight, Shapes & Badges, Lists, etc.) */}
-              {renderDirectivesToolbar(directivesTextareaRef)}
+              {/* Rich Formatting Toolbar (Font Style, Font Size, Bold, Italic, Underline, Highlight, Shapes & Badges, Lists, etc.) */}
+              {renderDirectivesToolbar()}
 
-              {/* Editor + Optional Split Live Formatted Preview */}
-              <div className={showDirectivesPreview ? "grid grid-cols-1 lg:grid-cols-2 gap-4" : ""}>
-                <div className="space-y-1">
-                  <textarea
-                    ref={directivesTextareaRef}
-                    rows={showDirectivesPreview ? 14 : 16}
-                    value={memoContent}
-                    onChange={(e) => setMemoContent(e.target.value)}
-                    onKeyDown={(e) => handleTextareaKeyDown(e, directivesTextareaRef)}
-                    placeholder="Enter the memorandum directives here...
-
-Write numbered directives or formal paragraphs. Use the toolbar above for Bold, Italic, Underline, Highlights, and Shapes!
-
-(Example:
-1. All concerned officers are advised to strictly comply...
-2. Operational guidelines: ...
-3. Strict compliance is expected.)"
-                    className="w-full rounded-2xl border border-slate-200 bg-white p-4 text-sm leading-relaxed text-slate-900 focus:border-emerald-500 focus:outline-none font-sans resize-y shadow-inner h-full min-h-[320px]"
-                  />
-                </div>
-
-                {showDirectivesPreview && (
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 flex flex-col space-y-2 h-full min-h-[320px] max-h-[500px] overflow-hidden">
-                    <div className="flex items-center justify-between border-b border-slate-200 pb-2 shrink-0">
-                      <span className="text-[11px] font-black uppercase tracking-wider text-slate-600 flex items-center gap-1.5">
-                        <Eye size={12} className="text-emerald-600" />
-                        Live Formatted Output
-                      </span>
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
-                        Real-Time
-                      </span>
-                    </div>
+              {/* Real-Time Live Formatted Output Canvas */}
+              {!isSourceMode ? (
+                <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-2 sm:p-3 shadow-inner">
+                  <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs min-h-[380px] p-5 sm:p-6 transition-all">
                     <div
-                      className="flex-1 overflow-y-auto p-3.5 bg-white rounded-xl border border-slate-200 text-xs sm:text-[13px] leading-[1.8] text-slate-900 whitespace-pre-wrap text-justify shadow-2xs font-sans"
-                      dangerouslySetInnerHTML={{
-                        __html: renderMemoDirectivesHtml(memoContent) || `<span class="text-slate-400 italic">Formatting, shapes, and highlights will render live here as you compose directives...</span>`
+                      ref={liveEditorRef}
+                      contentEditable
+                      suppressContentEditableWarning
+                      onInput={handleLiveEditorInput}
+                      onKeyDown={handleEditorKeyDown}
+                      data-placeholder="Start typing your official memorandum directives here in real-time...
+
+Write numbered directives (1. 2. 3.), policy bullet points, or formal executive guidelines.
+Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highlights, Colors, and Shapes & Badges — all formatted live in real-time!"
+                      style={{
+                        fontFamily: directivesFontFamily,
+                        fontSize: `${directivesFontSize}px`,
+                        lineHeight: 1.8,
+                        whiteSpace: "pre-wrap"
                       }}
+                      className="memo-live-editor w-full min-h-[340px] text-slate-900 text-justify whitespace-pre-wrap outline-none selection:bg-emerald-200 selection:text-emerald-950"
                     />
                   </div>
-                )}
-              </div>
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  <textarea
+                    rows={16}
+                    value={memoContent}
+                    onChange={(e) => setMemoContent(e.target.value)}
+                    placeholder="HTML Source code..."
+                    className="w-full rounded-2xl border border-slate-200 bg-slate-900 text-emerald-300 p-4 font-mono text-xs leading-relaxed focus:border-emerald-500 focus:outline-none resize-y shadow-inner min-h-[340px]"
+                  />
+                </div>
+              )}
 
-              <div className="flex items-center justify-between text-xs text-slate-400 font-mono pt-1">
-                <span>{stripHtml(memoContent).split(/\s+/).filter(Boolean).length} words</span>
-                <span>{stripHtml(memoContent).length} characters</span>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-xs text-slate-400 font-mono pt-1">
+                <span className="text-[11px] text-slate-500 font-sans">
+                  ✨ Real-time formatted output: Changes are instantly rendered and applied to print, PDF, and email.
+                </span>
+                <div className="flex items-center gap-3">
+                  <span>{stripHtml(memoContent).split(/\s+/).filter(Boolean).length} words</span>
+                  <span>{stripHtml(memoContent).length} characters</span>
+                </div>
               </div>
             </div>
 
@@ -4217,7 +4253,12 @@ Write numbered directives or formal paragraphs. Use the toolbar above for Bold, 
                           {/* Memo Body Content */}
                           {memoContent ? (
                             <div
-                              className="pt-2 text-[12.5px] sm:text-[13px] text-slate-900 font-normal leading-[1.8] font-sans whitespace-pre-wrap text-justify"
+                              style={{
+                                fontFamily: directivesFontFamily,
+                                fontSize: `${directivesFontSize}px`,
+                                lineHeight: 1.8
+                              }}
+                              className="pt-2 text-slate-900 font-normal leading-[1.8] whitespace-pre-wrap text-justify"
                               dangerouslySetInnerHTML={{
                                 __html: renderMemoDirectivesHtml(memoContent)
                               }}
@@ -5018,33 +5059,24 @@ function doGet(e) {
 
             <div className="flex-1 min-h-[420px] flex flex-col space-y-2">
               {/* Rich Directives Formatting Toolbar */}
-              {renderDirectivesToolbar(modalTextareaRef)}
+              {renderDirectivesToolbar()}
 
-              <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 gap-4 min-h-[350px]">
-                <textarea
-                  ref={modalTextareaRef}
-                  value={memoContent}
-                  onChange={(e) => setMemoContent(e.target.value)}
-                  onKeyDown={(e) => handleTextareaKeyDown(e, modalTextareaRef)}
-                  placeholder="Draft the complete memorandum directives, paragraphs, and numbered points... Use toolbar above for Bold, Italic, Highlights, Shapes & Badges!"
-                  className="w-full h-full p-4 rounded-2xl border border-slate-200 bg-white text-sm sm:text-base leading-relaxed text-slate-900 focus:border-emerald-500 focus:outline-none font-sans resize-none shadow-inner"
-                />
-
-                <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 flex flex-col space-y-2 h-full overflow-hidden">
-                  <div className="flex items-center justify-between border-b border-slate-200 pb-2 shrink-0">
-                    <span className="text-[11px] font-black uppercase tracking-wider text-slate-600 flex items-center gap-1.5">
-                      <Eye size={12} className="text-emerald-600" />
-                      Live Formatted Document Preview
-                    </span>
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
-                      Real-Time
-                    </span>
-                  </div>
+              <div className="flex-1 min-h-[350px] rounded-2xl border border-slate-200 bg-slate-50/60 p-3 sm:p-4 shadow-inner flex flex-col">
+                <div className="bg-white rounded-xl border border-slate-200/90 shadow-sm flex-1 p-5 sm:p-8 flex flex-col">
                   <div
-                    className="flex-1 overflow-y-auto p-4 bg-white rounded-xl border border-slate-200 text-sm leading-[1.8] text-slate-900 whitespace-pre-wrap text-justify shadow-2xs font-sans"
-                    dangerouslySetInnerHTML={{
-                      __html: renderMemoDirectivesHtml(memoContent) || `<span class="text-slate-400 italic">Formatting, shapes, and highlights will render live here as you compose directives...</span>`
+                    ref={modalLiveEditorRef}
+                    contentEditable
+                    suppressContentEditableWarning
+                    onInput={handleLiveEditorInput}
+                    onKeyDown={handleEditorKeyDown}
+                    data-placeholder="Draft your full-screen official memorandum directives here in real-time... Use toolbar above for Font Style, Font Size, Bold, Italic, Highlights, Colors, and Shapes!"
+                    style={{
+                      fontFamily: directivesFontFamily,
+                      fontSize: `${directivesFontSize}px`,
+                      lineHeight: 1.8,
+                      whiteSpace: "pre-wrap"
                     }}
+                    className="memo-live-editor flex-1 w-full text-slate-900 text-justify whitespace-pre-wrap outline-none overflow-y-auto selection:bg-emerald-200 selection:text-emerald-950"
                   />
                 </div>
               </div>
