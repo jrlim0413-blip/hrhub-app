@@ -1372,7 +1372,7 @@ ${memoContent.replace(/\n/g, "<br>")}
         <div style="position: relative; z-index: 10; display: flex; flex-direction: column; justify-content: space-between; flex: 1; height: 100%;">
           
           <!-- Top Section: Letterhead + Memorandum Title Banner + Header Grid + Directives (Step 4 Format) -->
-          <div style="display: flex; flex-direction: column; flex: 1;">
+          <div style="display: flex; flex-direction: column;">
             
             <!-- Corporate Letterhead (Left Logo, Center Details, Right Emblem) -->
             <table style="width: 100%; border-collapse: collapse; margin-bottom: 2px;">
@@ -1442,52 +1442,51 @@ ${memoContent.replace(/\n/g, "<br>")}
             <div style="border-bottom: 2px solid #0f172a; margin: 4px 0 8px 0;"></div>
 
             <!-- Directives Body Content -->
-            <div style="font-size: ${metrics.bodyFontSize}; line-height: ${metrics.bodyLineHeight}; color: #0f172a; font-weight: 400; text-align: justify; white-space: pre-wrap; flex: 1; padding: 6px 0;">
+            <div style="font-size: ${metrics.bodyFontSize}; line-height: ${metrics.bodyLineHeight}; color: #0f172a; font-weight: 400; text-align: justify; white-space: pre-wrap; padding: 6px 0;">
 ${memoContent}
+            </div>
+
+            <!-- Signatory Sign-off Block: ~4 line spaces after body directives -->
+            <div style="margin-top: 28px; padding-top: 4px; page-break-inside: avoid; break-inside: avoid;">
+              <table style="width: 100%; border-collapse: collapse; font-size: 9.5pt;">
+                <tr>
+                  <td style="width: 50%; vertical-align: top; padding-right: 18px;">
+                    ${signatoryLabel?.trim() ? `<p style="margin: 0 0 2px 0; color: #475569; font-size: 8pt; font-weight: 900; text-transform: uppercase; letter-spacing: 0.5px;">${signatoryLabel.trim()}</p>` : ""}
+                    <div style="height: ${Math.max(56, signatorySize + 8)}px; display: flex; align-items: flex-end;">
+                      ${signatorySignature ? `
+                        <img src="${signatorySignature}" style="height: ${signatorySize}px; max-height: ${signatorySize}px; max-width: ${Math.round(signatorySize * 3.5)}px; display: block; margin-left: ${signatoryOffsetX}px; margin-bottom: ${signatoryOffsetY}px; position: relative; z-index: 2; object-fit: contain; object-position: bottom left;" alt="Signatory Signature">
+                      ` : '<div style="height: 30px; margin-bottom: 2px;"></div>'}
+                    </div>
+                    <p style="margin: 0; font-weight: 900; color: #020617; font-size: 10pt; text-transform: uppercase; letter-spacing: 0.2px; position: relative; z-index: 1;">${signatoryName}</p>
+                    <p style="margin: 1px 0 0 0; color: #334155; font-size: 8.5pt; font-weight: 700;">${signatoryTitle}</p>
+                    <p style="margin: 1px 0 0 0; color: #64748b; font-weight: 600; font-size: 8pt;">${getSignatoryAffiliation(comp)}</p>
+                  </td>
+                  ${signatoryLayout === "dual" ? `
+                  <td style="width: 50%; vertical-align: top; padding-left: 18px;">
+                    ${approverLabel?.trim() ? `<p style="margin: 0 0 2px 0; color: #475569; font-size: 8pt; font-weight: 900; text-transform: uppercase; letter-spacing: 0.5px;">${approverLabel.trim()}</p>` : ""}
+                    <div style="height: ${Math.max(56, approverSize + 8)}px; display: flex; align-items: flex-end;">
+                      ${approverSignature ? `
+                        <img src="${approverSignature}" style="height: ${approverSize}px; max-height: ${approverSize}px; max-width: ${Math.round(approverSize * 3.5)}px; display: block; margin-left: ${approverOffsetX}px; margin-bottom: ${approverOffsetY}px; position: relative; z-index: 2; object-fit: contain; object-position: bottom left;" alt="Approver Signature">
+                      ` : '<div style="height: 30px; margin-bottom: 2px;"></div>'}
+                    </div>
+                    <p style="margin: 0; font-weight: 900; color: #020617; font-size: 10pt; text-transform: uppercase; letter-spacing: 0.2px; position: relative; z-index: 1;">${approverName}</p>
+                    <p style="margin: 1px 0 0 0; color: #334155; font-size: 8.5pt; font-weight: 700;">${approverTitle}</p>
+                    <p style="margin: 1px 0 0 0; color: #64748b; font-weight: 600; font-size: 8pt;">${compLegal}</p>
+                  </td>` : ""}
+                </tr>
+              </table>
             </div>
           </div>
 
-          <!-- Bottom Section: Signatories + Official Division Footer - Sagad sa pinaka-baba -->
-          <div style="margin-top: auto; padding-top: 14px;">
-            <!-- Signatory Sign-off Block -->
-            <table style="width: 100%; border-collapse: collapse; font-size: 9.5pt; page-break-inside: avoid; break-inside: avoid;">
-              <tr>
-                <td style="width: 50%; vertical-align: top; padding-right: 18px;">
-                  ${signatoryLabel?.trim() ? `<p style="margin: 0 0 2px 0; color: #475569; font-size: 8pt; font-weight: 900; text-transform: uppercase; letter-spacing: 0.5px;">${signatoryLabel.trim()}</p>` : ""}
-                  <div style="height: ${Math.max(56, signatorySize + 8)}px; display: flex; align-items: flex-end;">
-                    ${signatorySignature ? `
-                      <img src="${signatorySignature}" style="height: ${signatorySize}px; max-height: ${signatorySize}px; max-width: ${Math.round(signatorySize * 3.5)}px; display: block; margin-left: ${signatoryOffsetX}px; margin-bottom: ${signatoryOffsetY}px; position: relative; z-index: 2; object-fit: contain; object-position: bottom left;" alt="Signatory Signature">
-                    ` : '<div style="height: 30px; margin-bottom: 2px;"></div>'}
-                  </div>
-                  <p style="margin: 0; font-weight: 900; color: #020617; font-size: 10pt; text-transform: uppercase; letter-spacing: 0.2px; position: relative; z-index: 1;">${signatoryName}</p>
-                  <p style="margin: 1px 0 0 0; color: #334155; font-size: 8.5pt; font-weight: 700;">${signatoryTitle}</p>
-                  <p style="margin: 1px 0 0 0; color: #64748b; font-weight: 600; font-size: 8pt;">${getSignatoryAffiliation(comp)}</p>
-                </td>
-                ${signatoryLayout === "dual" ? `
-                <td style="width: 50%; vertical-align: top; padding-left: 18px;">
-                  ${approverLabel?.trim() ? `<p style="margin: 0 0 2px 0; color: #475569; font-size: 8pt; font-weight: 900; text-transform: uppercase; letter-spacing: 0.5px;">${approverLabel.trim()}</p>` : ""}
-                  <div style="height: ${Math.max(56, approverSize + 8)}px; display: flex; align-items: flex-end;">
-                    ${approverSignature ? `
-                      <img src="${approverSignature}" style="height: ${approverSize}px; max-height: ${approverSize}px; max-width: ${Math.round(approverSize * 3.5)}px; display: block; margin-left: ${approverOffsetX}px; margin-bottom: ${approverOffsetY}px; position: relative; z-index: 2; object-fit: contain; object-position: bottom left;" alt="Approver Signature">
-                    ` : '<div style="height: 30px; margin-bottom: 2px;"></div>'}
-                  </div>
-                  <p style="margin: 0; font-weight: 900; color: #020617; font-size: 10pt; text-transform: uppercase; letter-spacing: 0.2px; position: relative; z-index: 1;">${approverName}</p>
-                  <p style="margin: 1px 0 0 0; color: #334155; font-size: 8.5pt; font-weight: 700;">${approverTitle}</p>
-                  <p style="margin: 1px 0 0 0; color: #64748b; font-weight: 600; font-size: 8pt;">${compLegal}</p>
-                </td>` : ""}
-              </tr>
-            </table>
-
-            <!-- Bottom Official Division Footer (Identical to Step 4, sagad sa pinaka-baba) -->
-            <div style="padding-top: 10px; margin-top: 6px;">
-              <div style="border-top: 1px solid #cbd5e1; padding-top: 6px; display: flex; justify-content: space-between; align-items: center; font-size: 7.5pt; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px;">
-                <span>OFFICE OF THE HUMAN RESOURCES &amp; ADMINISTRATION</span>
-                <span style="font-weight: 900; color: #0f172a;">STRICT COMPLIANCE MANDATED</span>
-                <span>${comp.code} • OFFICIAL TRANSMISSION</span>
-              </div>
-              <div style="text-align: center; font-size: 7pt; color: #94a3b8; font-weight: 800; text-transform: uppercase; letter-spacing: 2px; margin-top: 2px;">
-                HUMAN RESOURCE MANAGEMENT DIVISION
-              </div>
+          <!-- Bottom Section: ONLY Official Division Footer - Sagad sa pinaka-baba -->
+          <div style="margin-top: auto; padding-top: 10px;">
+            <div style="border-top: 1px solid #cbd5e1; padding-top: 6px; display: flex; justify-content: space-between; align-items: center; font-size: 7.5pt; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px;">
+              <span>OFFICE OF THE HUMAN RESOURCES &amp; ADMINISTRATION</span>
+              <span style="font-weight: 900; color: #0f172a;">STRICT COMPLIANCE MANDATED</span>
+              <span>${comp.code} • OFFICIAL TRANSMISSION</span>
+            </div>
+            <div style="text-align: center; font-size: 7pt; color: #94a3b8; font-weight: 800; text-transform: uppercase; letter-spacing: 2px; margin-top: 2px;">
+              HUMAN RESOURCE MANAGEMENT DIVISION
             </div>
           </div>
 
@@ -3377,10 +3376,10 @@ Write numbered directives or formal paragraphs.
                         </div>
                       )}
 
-                      {/* Foreground Content (Flush Top, Flex Middle, Flush Bottom Signatories & Footer) */}
-                      <div className="relative z-10 flex flex-col justify-between flex-1 h-full space-y-3">
+                      {/* Foreground Content (Flush Top, Natural Signatory Flow, Flush Bottom Footer) */}
+                      <div className="relative z-10 flex flex-col flex-1 h-full">
                         {/* Top Section: Letterhead + Memorandum Title Banner + Metadata Grid + Directives */}
-                        <div className="flex flex-col flex-1 space-y-2">
+                        <div className="flex flex-col space-y-2">
                           {/* Corporate Letterhead (Left Logo, Center Info, Right Corporate Group Emblem) */}
                           <div className="flex items-center justify-between gap-4 pb-1">
                             <div className="h-18 w-18 p-1 flex items-center justify-center shrink-0">
@@ -3459,19 +3458,16 @@ Write numbered directives or formal paragraphs.
                           <div className="border-b-2 border-slate-900 my-1"></div>
 
                           {/* Memo Body Content */}
-                          <div className="pt-2 text-[12.5px] sm:text-[13px] text-slate-900 font-normal leading-[1.8] font-sans whitespace-pre-wrap text-justify flex-1">
+                          <div className="pt-2 text-[12.5px] sm:text-[13px] text-slate-900 font-normal leading-[1.8] font-sans whitespace-pre-wrap text-justify">
                             {memoContent || (
                               <span className="text-slate-400 italic">
                                 (No directives entered. Return to Step 2 to write or generate them with AI.)
                               </span>
                             )}
                           </div>
-                        </div>
 
-                        {/* Bottom Section: Signatories + Official Footer - Sagad sa baba */}
-                        <div className="mt-auto pt-6 space-y-4">
-                          {/* Signatory Block with E-Signatures and Natural Sign-off */}
-                          <div>
+                          {/* Signatory Block with E-Signatures: ~4 line spaces after body directives */}
+                          <div className="mt-8 pt-1">
                             {signatoryLayout === "dual" ? (
                               <div className="grid grid-cols-2 gap-8 items-start">
                                 {/* Left: Issued By */}
@@ -3600,17 +3596,17 @@ Write numbered directives or formal paragraphs.
                               </div>
                             )}
                           </div>
+                        </div>
 
-                          {/* Bottom Official Division Footer - Sagad sa pinaka-baba */}
-                          <div className="pt-4 pb-1">
-                            <div className="border-t border-slate-300 pt-2.5 flex items-center justify-between text-[9.5px] sm:text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">
-                              <span>OFFICE OF THE HUMAN RESOURCES &amp; ADMINISTRATION</span>
-                              <span className="font-black text-slate-800">STRICT COMPLIANCE MANDATED</span>
-                              <span>{company.code} • OFFICIAL TRANSMISSION</span>
-                            </div>
-                            <div className="text-center text-[9px] text-slate-400 font-black uppercase tracking-[0.25em] mt-1">
-                              HUMAN RESOURCE MANAGEMENT DIVISION
-                            </div>
+                        {/* Bottom Section: ONLY Official Division Footer - Sagad sa pinaka-baba */}
+                        <div className="mt-auto pt-4 pb-1">
+                          <div className="border-t border-slate-300 pt-2.5 flex items-center justify-between text-[9.5px] sm:text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">
+                            <span>OFFICE OF THE HUMAN RESOURCES &amp; ADMINISTRATION</span>
+                            <span className="font-black text-slate-800">STRICT COMPLIANCE MANDATED</span>
+                            <span>{company.code} • OFFICIAL TRANSMISSION</span>
+                          </div>
+                          <div className="text-center text-[9px] text-slate-400 font-black uppercase tracking-[0.25em] mt-1">
+                            HUMAN RESOURCE MANAGEMENT DIVISION
                           </div>
                         </div>
                       </div>
