@@ -1,16 +1,19 @@
 /**
  * Dedicated User Settings Storage Service
- * Purpose: Save, load, and manage default settings as JSON per user account in Supabase ('user_settings')
- * with zero-latency local cache fallback.
+ * Purpose: Manage all user default settings in dedicated Supabase table ('user_settings')
+ * per user account without localStorage.
  */
 
 import { supabase } from "./supabase";
 
 export const USER_SETTINGS_TABLE = "user_settings";
 
+// In-memory session cache (replaces localStorage)
+const memorySettingsStore = new Map();
+
 /**
  * Extracts a normalized, stable account key for the current user.
- * Prioritizes email, then user id, then username, then stored auth cache.
+ * Prioritizes email, then user id, then username, then fallback.
  */
 export function getUserAccountKey(currentUser = null) {
   if (currentUser) {
@@ -28,22 +31,11 @@ export function getUserAccountKey(currentUser = null) {
     }
   }
 
-  // Fallback to currently logged-in auth user in localStorage
-  try {
-    const savedUserStr = localStorage.getItem("hrhub_auth_user");
-    if (savedUserStr) {
-      const u = JSON.parse(savedUserStr);
-      if (u?.email) return u.email.trim().toLowerCase();
-      if (u?.id) return String(u.id).trim().toLowerCase();
-      if (u?.name) return u.name.trim().toLowerCase();
-    }
-  } catch {}
-
   return "default_account";
 }
 
 /**
- * Clean factory defaults for all user-configurable parameters
+ * Clean factory baseline defaults for all user-configurable parameters
  */
 export function getDefaultUserSettings() {
   return {
@@ -92,75 +84,98 @@ export function getDefaultUserSettings() {
       "glowing_fortune"
     ],
     emailWebhookUrl: "",
+    activeDraft: null,
     updatedAt: new Date().toISOString()
   };
 }
 
 /**
- * Gets user settings cache key for localStorage
- */
-function getStorageKey(accountKey) {
-  return `hrhub_user_settings_${accountKey}`;
-}
-
-/**
- * Synchronous local cache reader for immediate 0ms initial render
+ * Synchronous in-memory session reader for immediate initial state
  */
 export function getLocalUserSettings(currentUser = null) {
   const accountKey = getUserAccountKey(currentUser);
   const defaults = getDefaultUserSettings();
+  const cached = memorySettingsStore.get(accountKey);
 
-  try {
-    const raw = localStorage.getItem(getStorageKey(accountKey));
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      return {
-        ...defaults,
-        ...parsed,
-        directives: { ...defaults.directives, ...(parsed.directives || {}) },
-        signatory: { ...defaults.signatory, ...(parsed.signatory || {}) },
-        approver: { ...defaults.approver, ...(parsed.approver || {}) },
-        headerDefaults: { ...defaults.headerDefaults, ...(parsed.headerDefaults || {}) },
-        watermark: { ...defaults.watermark, ...(parsed.watermark || {}) }
-      };
-    }
-  } catch (err) {
-    console.warn("Failed to read local user settings cache:", err);
+  if (cached) {
+    return {
+      ...defaults,
+      ...cached,
+      directives: { ...defaults.directives, ...(cached.directives || {}) },
+      signatory: { ...defaults.signatory, ...(cached.signatory || {}) },
+      approver: { ...defaults.approver, ...(cached.approver || {}) },
+      headerDefaults: { ...defaults.headerDefaults, ...(cached.headerDefaults || {}) },
+      watermark: { ...defaults.watermark, ...(cached.watermark || {}) }
+    };
   }
 
   return defaults;
 }
 
 /**
- * Loads user settings from Supabase ('user_settings' table) with local cache fallback
+ * Loads user settings directly from Supabase ('user_settings' table) for the account
  */
 export async function getUserSettings(currentUser = null) {
   const accountKey = getUserAccountKey(currentUser);
-  const localSettings = getLocalUserSettings(currentUser);
+  const defaults = getDefaultUserSettings();
 
   try {
     const { data, error } = await supabase
       .from(USER_SETTINGS_TABLE)
-      .select("settings, updated_at")
+      .select("*")
       .eq("user_id", accountKey)
       .maybeSingle();
 
-    if (!error && data?.settings && typeof data.settings === "object") {
+    if (!error && data) {
+      // Map dedicated DB table columns + JSON fallback
+      const jsonSettings = data.settings_json || data.settings || {};
+
       const merged = {
-        ...localSettings,
-        ...data.settings,
-        directives: { ...localSettings.directives, ...(data.settings.directives || {}) },
-        signatory: { ...localSettings.signatory, ...(data.settings.signatory || {}) },
-        approver: { ...localSettings.approver, ...(data.settings.approver || {}) },
-        headerDefaults: { ...localSettings.headerDefaults, ...(data.settings.headerDefaults || {}) },
-        watermark: { ...localSettings.watermark, ...(data.settings.watermark || {}) },
-        updatedAt: data.updated_at || data.settings.updatedAt || new Date().toISOString()
+        ...defaults,
+        ...jsonSettings,
+        directives: {
+          fontFamily: data.directives_font_family || jsonSettings.directives?.fontFamily || defaults.directives.fontFamily,
+          fontSize: data.directives_font_size ? Number(data.directives_font_size) : (jsonSettings.directives?.fontSize || defaults.directives.fontSize)
+        },
+        signatory: {
+          name: data.signatory_name || jsonSettings.signatory?.name || defaults.signatory.name,
+          title: data.signatory_title || jsonSettings.signatory?.title || defaults.signatory.title,
+          label: data.signatory_label || jsonSettings.signatory?.label || defaults.signatory.label,
+          signature: data.signatory_signature || jsonSettings.signatory?.signature || null,
+          size: data.signatory_size ? Number(data.signatory_size) : (jsonSettings.signatory?.size || defaults.signatory.size),
+          offsetX: data.signatory_offset_x !== null && data.signatory_offset_x !== undefined ? Number(data.signatory_offset_x) : (jsonSettings.signatory?.offsetX ?? defaults.signatory.offsetX),
+          offsetY: data.signatory_offset_y !== null && data.signatory_offset_y !== undefined ? Number(data.signatory_offset_y) : (jsonSettings.signatory?.offsetY ?? defaults.signatory.offsetY)
+        },
+        approver: {
+          name: data.approver_name || jsonSettings.approver?.name || defaults.approver.name,
+          title: data.approver_title || jsonSettings.approver?.title || defaults.approver.title,
+          label: data.approver_label || jsonSettings.approver?.label || defaults.approver.label,
+          signature: data.approver_signature || jsonSettings.approver?.signature || null,
+          size: data.approver_size ? Number(data.approver_size) : (jsonSettings.approver?.size || defaults.approver.size),
+          offsetX: data.approver_offset_x !== null && data.approver_offset_x !== undefined ? Number(data.approver_offset_x) : (jsonSettings.approver?.offsetX ?? defaults.approver.offsetX),
+          offsetY: data.approver_offset_y !== null && data.approver_offset_y !== undefined ? Number(data.approver_offset_y) : (jsonSettings.approver?.offsetY ?? defaults.approver.offsetY)
+        },
+        signatoryLayout: data.signatory_layout || jsonSettings.signatoryLayout || defaults.signatoryLayout,
+        letterheadDefaults: data.letterhead_defaults || jsonSettings.letterheadDefaults || {},
+        headerDefaults: {
+          defaultTo: data.memo_to_default || jsonSettings.headerDefaults?.defaultTo || defaults.headerDefaults.defaultTo,
+          defaultFrom: data.memo_from_default || jsonSettings.headerDefaults?.defaultFrom || defaults.headerDefaults.defaultFrom,
+          defaultSubject: data.memo_subject_default || jsonSettings.headerDefaults?.defaultSubject || defaults.headerDefaults.defaultSubject
+        },
+        watermark: {
+          size: data.watermark_size ? Number(data.watermark_size) : (jsonSettings.watermark?.size || defaults.watermark.size),
+          opacity: data.watermark_opacity !== null && data.watermark_opacity !== undefined ? Number(data.watermark_opacity) : (jsonSettings.watermark?.opacity ?? defaults.watermark.opacity),
+          showDiagonalStamp: data.show_diagonal_stamp !== null && data.show_diagonal_stamp !== undefined ? Boolean(data.show_diagonal_stamp) : (jsonSettings.watermark?.showDiagonalStamp ?? defaults.watermark.showDiagonalStamp),
+          diagonalStampText: data.diagonal_stamp_text || jsonSettings.watermark?.diagonalStampText || defaults.watermark.diagonalStampText
+        },
+        includedCompanyIds: Array.isArray(data.included_company_ids) ? data.included_company_ids : (jsonSettings.includedCompanyIds || defaults.includedCompanyIds),
+        emailWebhookUrl: data.email_webhook_url || jsonSettings.emailWebhookUrl || "",
+        activeDraft: data.active_draft || jsonSettings.activeDraft || null,
+        updatedAt: data.updated_at || new Date().toISOString()
       };
 
-      // Synchronize local cache with latest database record
-      try {
-        localStorage.setItem(getStorageKey(accountKey), JSON.stringify(merged));
-      } catch {}
+      // Cache in active session memory
+      memorySettingsStore.set(accountKey, merged);
 
       return {
         settings: merged,
@@ -169,18 +184,19 @@ export async function getUserSettings(currentUser = null) {
       };
     }
   } catch (err) {
-    console.warn("Supabase user_settings fetch notice, falling back to local cache:", err);
+    console.warn("Supabase user_settings fetch notice:", err);
   }
 
+  const inMem = memorySettingsStore.get(accountKey) || defaults;
   return {
-    settings: localSettings,
-    source: "local",
+    settings: inMem,
+    source: "memory",
     accountKey
   };
 }
 
 /**
- * Saves or updates user default settings in Supabase and local cache
+ * Saves or updates user default settings directly in Supabase ('user_settings' table)
  */
 export async function saveUserSettings(currentUser = null, settingsPartial = {}) {
   const accountKey = getUserAccountKey(currentUser);
@@ -197,24 +213,49 @@ export async function saveUserSettings(currentUser = null, settingsPartial = {})
     updatedAt: new Date().toISOString()
   };
 
-  // 1. Immediately persist to localStorage for instant local reflection
-  try {
-    localStorage.setItem(getStorageKey(accountKey), JSON.stringify(merged));
-  } catch (err) {
-    console.warn("Failed to save local user settings cache:", err);
-  }
+  // Cache in active session memory
+  memorySettingsStore.set(accountKey, merged);
 
-  // 2. Persist to Supabase dedicated table
+  // Dedicated row payload with both explicit columns & JSON document column
+  const payload = {
+    user_id: accountKey,
+    directives_font_family: merged.directives.fontFamily,
+    directives_font_size: merged.directives.fontSize,
+    signatory_layout: merged.signatoryLayout,
+    signatory_name: merged.signatory.name,
+    signatory_title: merged.signatory.title,
+    signatory_label: merged.signatory.label,
+    signatory_size: merged.signatory.size,
+    signatory_offset_x: merged.signatory.offsetX,
+    signatory_offset_y: merged.signatory.offsetY,
+    signatory_signature: merged.signatory.signature,
+    approver_name: merged.approver.name,
+    approver_title: merged.approver.title,
+    approver_label: merged.approver.label,
+    approver_size: merged.approver.size,
+    approver_offset_x: merged.approver.offsetX,
+    approver_offset_y: merged.approver.offsetY,
+    approver_signature: merged.approver.signature,
+    watermark_size: merged.watermark.size,
+    watermark_opacity: merged.watermark.opacity,
+    show_diagonal_stamp: merged.watermark.showDiagonalStamp,
+    diagonal_stamp_text: merged.watermark.diagonalStampText,
+    memo_to_default: merged.headerDefaults.defaultTo,
+    memo_from_default: merged.headerDefaults.defaultFrom,
+    memo_subject_default: merged.headerDefaults.defaultSubject,
+    email_webhook_url: merged.emailWebhookUrl,
+    included_company_ids: merged.includedCompanyIds,
+    letterhead_defaults: merged.letterheadDefaults,
+    active_draft: merged.activeDraft || null,
+    settings_json: merged,
+    settings: merged, // Dual compatibility
+    updated_at: merged.updatedAt
+  };
+
   let syncedToSupabase = false;
   let supabaseError = null;
 
   try {
-    const payload = {
-      user_id: accountKey,
-      settings: merged,
-      updated_at: merged.updatedAt
-    };
-
     const { error } = await supabase
       .from(USER_SETTINGS_TABLE)
       .upsert(payload, { onConflict: "user_id" });
@@ -223,7 +264,7 @@ export async function saveUserSettings(currentUser = null, settingsPartial = {})
       syncedToSupabase = true;
     } else {
       supabaseError = error.message;
-      console.warn("Supabase user_settings save notice:", error.message);
+      console.warn("Supabase user_settings upsert notice:", error.message);
     }
   } catch (err) {
     supabaseError = err?.message || String(err);
@@ -240,15 +281,13 @@ export async function saveUserSettings(currentUser = null, settingsPartial = {})
 }
 
 /**
- * Resets user settings back to initial factory defaults
+ * Resets user settings back to initial factory defaults in Supabase
  */
 export async function resetUserSettings(currentUser = null) {
   const accountKey = getUserAccountKey(currentUser);
   const defaults = getDefaultUserSettings();
 
-  try {
-    localStorage.removeItem(getStorageKey(accountKey));
-  } catch {}
+  memorySettingsStore.set(accountKey, defaults);
 
   let syncedToSupabase = false;
   try {
@@ -256,6 +295,7 @@ export async function resetUserSettings(currentUser = null) {
       .from(USER_SETTINGS_TABLE)
       .upsert({
         user_id: accountKey,
+        settings_json: defaults,
         settings: defaults,
         updated_at: new Date().toISOString()
       }, { onConflict: "user_id" });
@@ -275,7 +315,7 @@ export function exportSettingsAsJson(currentUser = null) {
 }
 
 /**
- * Imports settings from a JSON string and saves them for the user
+ * Imports settings from a JSON string and saves them directly to Supabase
  */
 export async function importSettingsFromJson(currentUser = null, jsonString) {
   try {

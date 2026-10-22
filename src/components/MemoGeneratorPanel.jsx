@@ -17,12 +17,20 @@ import { mergeProfilesWithStored, getStoredEmployees } from "../lib/employeeStor
 import {
   getUserAccountKey,
   getUserSettings,
+  getLocalUserSettings,
   saveUserSettings,
   resetUserSettings,
+  getDefaultUserSettings,
   exportSettingsAsJson,
   importSettingsFromJson,
   USER_SETTINGS_TABLE
 } from "../lib/userSettingsStorage";
+import {
+  getSavedMemosFromDb,
+  saveMemoRecordToDb,
+  deleteMemoRecordFromDb,
+  SAVED_MEMOS_TABLE
+} from "../lib/savedMemosStorage";
 export const HR_OFFICIAL_EMAIL = "imsoroglohr@gmail.com";
 export const CORPORATE_GROUP_EMBLEM = "/logos/group_emblem.jpg";
 
@@ -231,32 +239,26 @@ export const COMPANIES = [
   }
 ];
 
-const LETTERHEAD_STORAGE_KEY = "hrhub_memo_letterhead_defaults";
 const LETTERHEAD_FIELDS = ["legalName", "tagline", "address", "contact"];
 
-const loadLetterheadDefaults = () => {
-  try {
-    const stored = JSON.parse(localStorage.getItem(LETTERHEAD_STORAGE_KEY) || "{}");
-    if (!stored || typeof stored !== "object" || Array.isArray(stored)) return {};
+const filterValidLetterheadFields = (letterheadMap) => {
+  if (!letterheadMap || typeof letterheadMap !== "object" || Array.isArray(letterheadMap)) return {};
 
-    return COMPANIES.reduce((defaults, company) => {
-      const savedFields = stored[company.id];
-      if (!savedFields || typeof savedFields !== "object" || Array.isArray(savedFields)) return defaults;
+  return COMPANIES.reduce((defaults, company) => {
+    const savedFields = letterheadMap[company.id];
+    if (!savedFields || typeof savedFields !== "object" || Array.isArray(savedFields)) return defaults;
 
-      const validFields = Object.fromEntries(
-        LETTERHEAD_FIELDS
-          .filter((field) =>
-            typeof savedFields[field] === "string" &&
-            (field !== "legalName" || savedFields[field].trim().length > 0)
-          )
-          .map((field) => [field, savedFields[field]])
-      );
-      if (Object.keys(validFields).length) defaults[company.id] = validFields;
-      return defaults;
-    }, {});
-  } catch {
-    return {};
-  }
+    const validFields = Object.fromEntries(
+      LETTERHEAD_FIELDS
+        .filter((field) =>
+          typeof savedFields[field] === "string" &&
+          (field !== "legalName" || savedFields[field].trim().length > 0)
+        )
+        .map((field) => [field, savedFields[field]])
+    );
+    if (Object.keys(validFields).length) defaults[company.id] = validFields;
+    return defaults;
+  }, {});
 };
 
 const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (character) => ({
@@ -498,13 +500,18 @@ export default function MemoGeneratorPanel({
   onOpenAiBuddy,
   onNavigateToDirectory
 }) {
+  const userAccountKey = useMemo(() => getUserAccountKey(currentUser), [currentUser]);
+  const initialUserSettings = useMemo(() => getLocalUserSettings(currentUser), [currentUser]);
+
   // Stepper State: 1 = Header & Addressing, 2 = Body Directives, 3 = Signatories, 4 = Final Memo & Multi-Company
   const [currentStep, setCurrentStep] = useState(1);
   const [unlinkedNoticeModalOpen, setUnlinkedNoticeModalOpen] = useState(false);
 
   // Selected Company State - Default to Lucky Betplay Corporation (LBC)
   const [selectedCompanyId, setSelectedCompanyId] = useState("lucky_betplay");
-  const [savedLetterheadDefaults, setSavedLetterheadDefaults] = useState(loadLetterheadDefaults);
+  const [savedLetterheadDefaults, setSavedLetterheadDefaults] = useState(() => {
+    return filterValidLetterheadFields(initialUserSettings.letterheadDefaults);
+  });
   const [letterheadOverrides, setLetterheadOverrides] = useState(() => savedLetterheadDefaults);
   const [dirtyLetterheadCompanyIds, setDirtyLetterheadCompanyIds] = useState([]);
   const [letterheadStatus, setLetterheadStatus] = useState(null);
@@ -536,18 +543,10 @@ export default function MemoGeneratorPanel({
   const liveEditorRef = useRef(null);
   const modalLiveEditorRef = useRef(null);
   const [directivesFontFamily, setDirectivesFontFamily] = useState(() => {
-    try {
-      return localStorage.getItem("hrhub_memo_directives_font_family") || "Arial, Helvetica, sans-serif";
-    } catch {
-      return "Arial, Helvetica, sans-serif";
-    }
+    return initialUserSettings.directives?.fontFamily || "Arial, Helvetica, sans-serif";
   });
   const [directivesFontSize, setDirectivesFontSize] = useState(() => {
-    try {
-      return Number(localStorage.getItem("hrhub_memo_directives_font_size")) || 13.3;
-    } catch {
-      return 13.3;
-    }
+    return Number(initialUserSettings.directives?.fontSize) || 13.3;
   });
   const [isSourceMode, setIsSourceMode] = useState(false);
   const [shapesMenuOpen, setShapesMenuOpen] = useState(false);
@@ -586,17 +585,13 @@ export default function MemoGeneratorPanel({
 
   const handleSetFontFamily = (font) => {
     setDirectivesFontFamily(font);
-    try {
-      localStorage.setItem("hrhub_memo_directives_font_family", font);
-    } catch {}
+    saveUserSettings(currentUser, { directives: { fontFamily: font, fontSize: directivesFontSize } });
   };
 
   const handleSetFontSize = (size) => {
     const clamped = Math.max(9, Math.min(26, Number(size) || 13.3));
     setDirectivesFontSize(clamped);
-    try {
-      localStorage.setItem("hrhub_memo_directives_font_size", String(clamped));
-    } catch {}
+    saveUserSettings(currentUser, { directives: { fontFamily: directivesFontFamily, fontSize: clamped } });
   };
 
   const getActiveEditor = () => {
@@ -690,88 +685,54 @@ export default function MemoGeneratorPanel({
   const [approverName, setApproverName] = useState("CHARMIE JEAN M. SIMPAL");
   const [approverTitle, setApproverTitle] = useState("President & CEO");
 
-  // E-Signatures (Loaded from and saved to localStorage)
+  // E-Signatures (Loaded from and saved to user account settings)
   const [signatorySignature, setSignatorySignature] = useState(() => {
-    try {
-      return localStorage.getItem("hrhub_memo_signatory_signature") || null;
-    } catch {
-      return null;
-    }
+    return initialUserSettings.signatory?.signature || null;
   });
   const [approverSignature, setApproverSignature] = useState(() => {
-    try {
-      return localStorage.getItem("hrhub_memo_approver_signature") || null;
-    } catch {
-      return null;
-    }
+    return initialUserSettings.approver?.signature || null;
   });
 
   // Signature Position Offsets & Sizes (Horizontal, Vertical alignment & Scale)
   const [signatoryOffsetX, setSignatoryOffsetX] = useState(() => {
-    try {
-      const val = localStorage.getItem("hrhub_memo_signatory_offset_x");
-      return val !== null ? Number(val) : 48;
-    } catch {
-      return 48;
-    }
+    return initialUserSettings.signatory?.offsetX ?? 48;
   });
   const [signatoryOffsetY, setSignatoryOffsetY] = useState(() => {
-    try {
-      const val = localStorage.getItem("hrhub_memo_signatory_offset_y");
-      return val !== null ? Number(val) : -3;
-    } catch {
-      return -3;
-    }
+    return initialUserSettings.signatory?.offsetY ?? -3;
   });
   const [signatorySize, setSignatorySize] = useState(() => {
-    try {
-      const val = localStorage.getItem("hrhub_memo_signatory_size");
-      return val !== null ? Number(val) : 56;
-    } catch {
-      return 56;
-    }
+    return initialUserSettings.signatory?.size ?? 56;
   });
 
   const [approverOffsetX, setApproverOffsetX] = useState(() => {
-    try {
-      const val = localStorage.getItem("hrhub_memo_approver_offset_x");
-      return val !== null ? Number(val) : 48;
-    } catch {
-      return 48;
-    }
+    return initialUserSettings.approver?.offsetX ?? 48;
   });
   const [approverOffsetY, setApproverOffsetY] = useState(() => {
-    try {
-      const val = localStorage.getItem("hrhub_memo_approver_offset_y");
-      return val !== null ? Number(val) : -3;
-    } catch {
-      return -3;
-    }
+    return initialUserSettings.approver?.offsetY ?? -3;
   });
   const [approverSize, setApproverSize] = useState(() => {
-    try {
-      const val = localStorage.getItem("hrhub_memo_approver_size");
-      return val !== null ? Number(val) : 56;
-    } catch {
-      return 56;
-    }
+    return initialUserSettings.approver?.size ?? 56;
   });
 
   useEffect(() => {
-    try {
-      localStorage.setItem("hrhub_memo_signatory_offset_x", signatoryOffsetX);
-      localStorage.setItem("hrhub_memo_signatory_offset_y", signatoryOffsetY);
-      localStorage.setItem("hrhub_memo_signatory_size", signatorySize);
-    } catch {}
-  }, [signatoryOffsetX, signatoryOffsetY, signatorySize]);
+    saveUserSettings(currentUser, {
+      signatory: {
+        offsetX: signatoryOffsetX,
+        offsetY: signatoryOffsetY,
+        size: signatorySize
+      }
+    });
+  }, [signatoryOffsetX, signatoryOffsetY, signatorySize, currentUser]);
 
   useEffect(() => {
-    try {
-      localStorage.setItem("hrhub_memo_approver_offset_x", approverOffsetX);
-      localStorage.setItem("hrhub_memo_approver_offset_y", approverOffsetY);
-      localStorage.setItem("hrhub_memo_approver_size", approverSize);
-    } catch {}
-  }, [approverOffsetX, approverOffsetY, approverSize]);
+    saveUserSettings(currentUser, {
+      approver: {
+        offsetX: approverOffsetX,
+        offsetY: approverOffsetY,
+        size: approverSize
+      }
+    });
+  }, [approverOffsetX, approverOffsetY, approverSize, currentUser]);
 
   // Step 4: Preview, Zoom & Watermark States
   const [previewZoom, setPreviewZoom] = useState(100); // 90, 100, 110
@@ -820,15 +781,28 @@ export default function MemoGeneratorPanel({
     setIncludedCompanyIds([companyId]);
   };
 
-  // Saved Memos Archive State
-  const [savedMemos, setSavedMemos] = useState(() => {
-    try {
-      const raw = localStorage.getItem("hrhub_saved_memos_archive");
-      return raw ? JSON.parse(raw) : [];
-    } catch {
-      return [];
-    }
-  });
+  // Saved Memos Archive State (Loaded from and saved to Supabase 'saved_memos' table per account)
+  const [savedMemos, setSavedMemos] = useState([]);
+  const [isLoadingSavedMemos, setIsLoadingSavedMemos] = useState(true);
+
+  useEffect(() => {
+    let isMounted = true;
+    (async () => {
+      try {
+        setIsLoadingSavedMemos(true);
+        const { memos } = await getSavedMemosFromDb(currentUser);
+        if (isMounted) {
+          setSavedMemos(memos || []);
+        }
+      } catch (err) {
+        console.warn("Failed to load saved memos from Supabase:", err);
+      } finally {
+        if (isMounted) setIsLoadingSavedMemos(false);
+      }
+    })();
+    return () => { isMounted = false; };
+  }, [currentUser]);
+
   const [archiveModalOpen, setArchiveModalOpen] = useState(false);
   const [saveSuccessNotice, setSaveSuccessNotice] = useState(false);
 
@@ -836,15 +810,11 @@ export default function MemoGeneratorPanel({
   const [emailModalOpen, setEmailModalOpen] = useState(false);
   const [copiedNotice, setCopiedNotice] = useState(false);
   const [customWebhookUrl, setCustomWebhookUrl] = useState(() => {
-    try {
-      return (
-        (typeof localStorage !== "undefined" ? localStorage.getItem("hrhub_gmail_webhook_url") : "") ||
-        (typeof import.meta !== "undefined" && import.meta.env?.VITE_HR_EMAIL_WEBHOOK_URL ? import.meta.env.VITE_HR_EMAIL_WEBHOOK_URL : "") ||
-        ""
-      ).trim();
-    } catch {
-      return "";
-    }
+    return (
+      initialUserSettings.emailWebhookUrl ||
+      (typeof import.meta !== "undefined" && import.meta.env?.VITE_HR_EMAIL_WEBHOOK_URL ? import.meta.env.VITE_HR_EMAIL_WEBHOOK_URL : "") ||
+      ""
+    ).trim();
   });
   const [showScriptGuideModal, setShowScriptGuideModal] = useState(false);
   const [copiedScriptNotice, setCopiedScriptNotice] = useState(false);
@@ -864,7 +834,6 @@ export default function MemoGeneratorPanel({
   const [isSavingAccountSettings, setIsSavingAccountSettings] = useState(false);
   const [showJsonRawViewer, setShowJsonRawViewer] = useState(false);
   const [copiedSettingsJsonNotice, setCopiedSettingsJsonNotice] = useState(false);
-  const userAccountKey = useMemo(() => getUserAccountKey(currentUser), [currentUser]);
 
   // Build the complete JSON payload of current user configuration
   const getCurrentSettingsPayload = () => ({
@@ -906,7 +875,7 @@ export default function MemoGeneratorPanel({
       diagonalStampText
     },
     includedCompanyIds,
-    emailWebhookUrl,
+    emailWebhookUrl: customWebhookUrl,
     updatedAt: new Date().toISOString()
   });
 
@@ -966,7 +935,7 @@ export default function MemoGeneratorPanel({
         }
 
         if (settings.emailWebhookUrl) {
-          setEmailWebhookUrl(settings.emailWebhookUrl);
+          setCustomWebhookUrl(settings.emailWebhookUrl);
         }
 
         setAccountSettingsSyncStatus({
@@ -1187,24 +1156,15 @@ export default function MemoGeneratorPanel({
   const saveCustomWebhookUrl = (urlToSave) => {
     const trimmed = urlToSave.trim();
     setCustomWebhookUrl(trimmed);
-    try {
-      localStorage.setItem("hrhub_gmail_webhook_url", trimmed);
-    } catch (e) {
-      console.error(e);
-    }
+    saveUserSettings(currentUser, { emailWebhookUrl: trimmed });
     setIsEditingWebhook(false);
   };
 
-  // Sync initial draft from HRHub Ai Buddy if provided or stored
+  // Sync initial draft from HRHub Ai Buddy if provided or stored in user settings
   useEffect(() => {
     let draft = initialDraft;
-    if (!draft) {
-      try {
-        const saved = localStorage.getItem("hrhub_active_memo_draft");
-        if (saved) {
-          draft = JSON.parse(saved);
-        }
-      } catch {}
+    if (!draft && initialUserSettings.activeDraft) {
+      draft = initialUserSettings.activeDraft;
     }
 
     if (draft) {
@@ -1226,7 +1186,7 @@ export default function MemoGeneratorPanel({
         setMemoContent(cleanDirectivesBody(draft.content));
       }
     }
-  }, [initialDraft]);
+  }, [initialDraft, initialUserSettings]);
 
   // Company-Specific Dispatches List: Strictly pre-registered employees' work emails only!
   const companyDispatches = useMemo(() => {
@@ -1313,7 +1273,7 @@ export default function MemoGeneratorPanel({
     setLetterheadStatus(null);
   };
 
-  const saveLetterheadDefaults = () => {
+  const saveLetterheadDefaults = async () => {
     const company = companies.find((item) => item.id === selectedCompanyId) || selectedCompany;
     const heading = company.legalName ?? company.name ?? "";
     if (!heading.trim()) {
@@ -1330,28 +1290,28 @@ export default function MemoGeneratorPanel({
     const nextSavedDefaults = { ...savedLetterheadDefaults, [selectedCompanyId]: savedFields };
 
     try {
-      localStorage.setItem(LETTERHEAD_STORAGE_KEY, JSON.stringify(nextSavedDefaults));
       setSavedLetterheadDefaults(nextSavedDefaults);
       setLetterheadOverrides((previous) => ({ ...previous, [selectedCompanyId]: savedFields }));
       setDirtyLetterheadCompanyIds((previous) => previous.filter((id) => id !== selectedCompanyId));
-      setLetterheadStatus({ type: "success", message: `Letterhead saved as the default for ${company.name}.` });
+      await saveUserSettings(currentUser, { letterheadDefaults: nextSavedDefaults });
+      setLetterheadStatus({ type: "success", message: `Letterhead saved to account defaults for ${company.name}.` });
     } catch (error) {
       console.error("Could not save memo letterhead defaults:", error);
       setLetterheadStatus({ type: "error", message: "Could not save letterhead defaults. Please try again." });
     }
   };
 
-  const restoreLetterheadDefaults = () => {
+  const restoreLetterheadDefaults = async () => {
     const nextSavedDefaults = { ...savedLetterheadDefaults };
     const nextOverrides = { ...letterheadOverrides };
     delete nextSavedDefaults[selectedCompanyId];
     delete nextOverrides[selectedCompanyId];
 
     try {
-      localStorage.setItem(LETTERHEAD_STORAGE_KEY, JSON.stringify(nextSavedDefaults));
       setSavedLetterheadDefaults(nextSavedDefaults);
       setLetterheadOverrides(nextOverrides);
       setDirtyLetterheadCompanyIds((previous) => previous.filter((id) => id !== selectedCompanyId));
+      await saveUserSettings(currentUser, { letterheadDefaults: nextSavedDefaults });
       setLetterheadStatus({ type: "success", message: `Original letterhead restored for ${selectedCompany.name}.` });
     } catch (error) {
       console.error("Could not restore memo letterhead defaults:", error);
@@ -1359,8 +1319,8 @@ export default function MemoGeneratorPanel({
     }
   };
 
-  // E-Signature Upload & Removal Handlers
-  const handleSignatureUpload = async (event, setSignature, storageKey, roleLabel) => {
+  // E-Signature Upload & Removal Handlers (Per User Account)
+  const handleSignatureUpload = async (event, setSignature, roleKey, roleLabel) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
@@ -1382,37 +1342,43 @@ export default function MemoGeneratorPanel({
 
     setSignature(processedSignature);
     try {
-      localStorage.setItem(storageKey, processedSignature);
+      await saveUserSettings(currentUser, {
+        [roleKey]: { signature: processedSignature }
+      });
     } catch (error) {
       console.error(`Could not save ${roleLabel.toLowerCase()} signature:`, error);
-      alert("The signature was converted for this session but could not be saved for future use.");
+      alert("The signature was converted for this session but could not be saved to account settings.");
     } finally {
       event.target.value = "";
     }
   };
 
   const handleUploadSignatorySignature = (event) =>
-    handleSignatureUpload(event, setSignatorySignature, "hrhub_memo_signatory_signature", "Signatory");
+    handleSignatureUpload(event, setSignatorySignature, "signatory", "Signatory");
 
-  const handleRemoveSignatorySignature = () => {
+  const handleRemoveSignatorySignature = async () => {
     setSignatorySignature(null);
     try {
-      localStorage.removeItem("hrhub_memo_signatory_signature");
+      await saveUserSettings(currentUser, {
+        signatory: { signature: null }
+      });
     } catch {}
   };
 
   const handleUploadApproverSignature = (event) =>
-    handleSignatureUpload(event, setApproverSignature, "hrhub_memo_approver_signature", "Approver");
+    handleSignatureUpload(event, setApproverSignature, "approver", "Approver");
 
-  const handleRemoveApproverSignature = () => {
+  const handleRemoveApproverSignature = async () => {
     setApproverSignature(null);
     try {
-      localStorage.removeItem("hrhub_memo_approver_signature");
+      await saveUserSettings(currentUser, {
+        approver: { signature: null }
+      });
     } catch {}
   };
 
-  // Save Memo to Records / Local Archive
-  const handleSaveMemoToArchive = () => {
+  // Save Memo to Records / Database Archive (Supabase 'saved_memos' table per account)
+  const handleSaveMemoToArchive = async () => {
     const newMemo = {
       id: "memo_" + Date.now(),
       ref: distributionMemoRef,
@@ -1433,28 +1399,45 @@ export default function MemoGeneratorPanel({
       approverName,
       approverTitle,
       signatoryLayout,
+      directivesFontFamily,
+      directivesFontSize,
+      signatorySignature,
+      approverSignature,
+      signatoryOffsetX,
+      signatoryOffsetY,
+      signatorySize,
+      approverOffsetX,
+      approverOffsetY,
+      approverSize,
       savedAt: new Date().toISOString()
     };
 
     const updated = [newMemo, ...savedMemos.filter((m) => m.ref !== distributionMemoRef || m.companyId !== distributionCompany.id)];
     setSavedMemos(updated);
+
     try {
-      localStorage.setItem("hrhub_saved_memos_archive", JSON.stringify(updated));
+      const res = await saveMemoRecordToDb(currentUser, newMemo);
+      if (res.syncedToSupabase) {
+        setImageCopyToast({
+          type: "success",
+          message: `✓ Memo '${distributionMemoRef}' saved to Supabase table for ${userAccountKey}!`
+        });
+      }
     } catch (e) {
-      console.error("Failed to save memo archive to localStorage:", e);
+      console.error("Failed to save memo to database:", e);
     }
     setSaveSuccessNotice(true);
     setTimeout(() => setSaveSuccessNotice(false), 3500);
   };
 
-  // Delete saved memo
-  const handleDeleteSavedMemo = (id) => {
+  // Delete saved memo from database
+  const handleDeleteSavedMemo = async (id) => {
     const filtered = savedMemos.filter((m) => m.id !== id);
     setSavedMemos(filtered);
     try {
-      localStorage.setItem("hrhub_saved_memos_archive", JSON.stringify(filtered));
+      await deleteMemoRecordFromDb(currentUser, id);
     } catch (e) {
-      console.error("Failed to save after deletion", e);
+      console.error("Failed to delete memo from database:", e);
     }
   };
 
