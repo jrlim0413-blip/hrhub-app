@@ -497,7 +497,7 @@ export default function MemoGeneratorPanel({
     }
   });
 
-  // Signature Position Offsets (Horizontal & Vertical alignment)
+  // Signature Position Offsets & Sizes (Horizontal, Vertical alignment & Scale)
   const [signatoryOffsetX, setSignatoryOffsetX] = useState(() => {
     try {
       const val = localStorage.getItem("hrhub_memo_signatory_offset_x");
@@ -514,6 +514,15 @@ export default function MemoGeneratorPanel({
       return -3;
     }
   });
+  const [signatorySize, setSignatorySize] = useState(() => {
+    try {
+      const val = localStorage.getItem("hrhub_memo_signatory_size");
+      return val !== null ? Number(val) : 56;
+    } catch {
+      return 56;
+    }
+  });
+
   const [approverOffsetX, setApproverOffsetX] = useState(() => {
     try {
       const val = localStorage.getItem("hrhub_memo_approver_offset_x");
@@ -530,20 +539,30 @@ export default function MemoGeneratorPanel({
       return -3;
     }
   });
+  const [approverSize, setApproverSize] = useState(() => {
+    try {
+      const val = localStorage.getItem("hrhub_memo_approver_size");
+      return val !== null ? Number(val) : 56;
+    } catch {
+      return 56;
+    }
+  });
 
   useEffect(() => {
     try {
       localStorage.setItem("hrhub_memo_signatory_offset_x", signatoryOffsetX);
       localStorage.setItem("hrhub_memo_signatory_offset_y", signatoryOffsetY);
+      localStorage.setItem("hrhub_memo_signatory_size", signatorySize);
     } catch {}
-  }, [signatoryOffsetX, signatoryOffsetY]);
+  }, [signatoryOffsetX, signatoryOffsetY, signatorySize]);
 
   useEffect(() => {
     try {
       localStorage.setItem("hrhub_memo_approver_offset_x", approverOffsetX);
       localStorage.setItem("hrhub_memo_approver_offset_y", approverOffsetY);
+      localStorage.setItem("hrhub_memo_approver_size", approverSize);
     } catch {}
-  }, [approverOffsetX, approverOffsetY]);
+  }, [approverOffsetX, approverOffsetY, approverSize]);
 
   // Step 4: Preview, Zoom & Watermark States
   const [previewZoom, setPreviewZoom] = useState(100); // 90, 100, 110
@@ -1238,8 +1257,8 @@ ${memoContent.replace(/\n/g, "<br>")}
         <tr>
           <td style="width: 50%; vertical-align: top; padding-right: 18px;">
             ${signatoryLabel?.trim() ? `<p style="margin: 0 0 4px 0; color: #64748b; font-size: 9.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.8px;">${signatoryLabel.trim()}</p>` : ""}
-            <div style="height: 52px; display: flex; align-items: flex-end;">
-              ${signatorySignature ? `<img src="${signatorySignature}" style="max-height: 50px; max-width: 170px; display: block; margin-left: ${signatoryOffsetX}px; margin-bottom: ${signatoryOffsetY}px; position: relative; z-index: 2;" alt="Signatory Signature">` : '<div style="height: 38px; margin-bottom: 2px;"></div>'}
+            <div style="height: ${Math.max(52, signatorySize + 6)}px; display: flex; align-items: flex-end;">
+              ${signatorySignature ? `<img src="${signatorySignature}" style="height: ${signatorySize}px; max-height: ${signatorySize}px; max-width: ${Math.round(signatorySize * 3.5)}px; display: block; margin-left: ${signatoryOffsetX}px; margin-bottom: ${signatoryOffsetY}px; position: relative; z-index: 2; object-fit: contain; object-position: bottom left;" alt="Signatory Signature">` : '<div style="height: 38px; margin-bottom: 2px;"></div>'}
             </div>
             <p style="margin: 0; font-weight: 900; color: #0f172a; font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.2px; position: relative; z-index: 1;">${signatoryName}</p>
             <p style="margin: 2px 0 0 0; color: #475569; font-size: 11px; font-weight: 600;">${signatoryTitle}</p>
@@ -1248,8 +1267,8 @@ ${memoContent.replace(/\n/g, "<br>")}
           ${signatoryLayout === "dual" ? `
           <td style="width: 50%; vertical-align: top; padding-left: 18px;">
             ${approverLabel?.trim() ? `<p style="margin: 0 0 4px 0; color: #64748b; font-size: 9.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.8px;">${approverLabel.trim()}</p>` : ""}
-            <div style="height: 52px; display: flex; align-items: flex-end;">
-              ${approverSignature ? `<img src="${approverSignature}" style="max-height: 50px; max-width: 170px; display: block; margin-left: ${approverOffsetX}px; margin-bottom: ${approverOffsetY}px; position: relative; z-index: 2;" alt="Approver Signature">` : '<div style="height: 38px; margin-bottom: 2px;"></div>'}
+            <div style="height: ${Math.max(52, approverSize + 6)}px; display: flex; align-items: flex-end;">
+              ${approverSignature ? `<img src="${approverSignature}" style="height: ${approverSize}px; max-height: ${approverSize}px; max-width: ${Math.round(approverSize * 3.5)}px; display: block; margin-left: ${approverOffsetX}px; margin-bottom: ${approverOffsetY}px; position: relative; z-index: 2; object-fit: contain; object-position: bottom left;" alt="Approver Signature">` : '<div style="height: 38px; margin-bottom: 2px;"></div>'}
             </div>
             <p style="margin: 0; font-weight: 900; color: #0f172a; font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.2px; position: relative; z-index: 1;">${approverName}</p>
             <p style="margin: 2px 0 0 0; color: #475569; font-size: 11px; font-weight: 600;">${approverTitle}</p>
@@ -1337,11 +1356,11 @@ ${memoContent.replace(/\n/g, "<br>")}
     const metrics = getMemoFitMetrics(memoContent);
 
     return `
-      <div style="position: relative; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 780px; margin: 0 auto; padding: ${metrics.containerPadding}; color: #0f172a; background: #ffffff; box-sizing: border-box; overflow: hidden; page-break-inside: avoid; break-inside: avoid; min-height: ${metrics.isLongPaper ? '1180px' : '980px'}; display: flex; flex-direction: column; justify-content: space-between;">
+      <div class="memo-print-sheet" style="position: relative; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; width: 100%; box-sizing: border-box; overflow: hidden; page-break-inside: avoid; break-inside: avoid; display: flex; flex-direction: column; justify-content: space-between; height: 100vh; min-height: 100vh; max-height: 100vh; padding: 12px 16px 8px 16px; background: #ffffff; color: #0f172a;">
         
         <!-- ================= COMPANY-SPECIFIC EXECUTIVE WATERMARK LAYER ================= -->
         <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: ${watermarkSize}px; height: ${watermarkSize}px; pointer-events: none; z-index: 0; user-select: none; display: flex; align-items: center; justify-content: center; opacity: ${watermarkOpacity / 100};">
-          <img src="${companyLogoDataMap[comp.id] || comp.logoUrl}" style="max-width: 100%; max-height: 100%; object-fit: contain; filter: grayscale(15%);" alt="${comp.name} Watermark" />
+          <img src="${companyLogoDataMap[comp.id] || comp.logoUrl}" style="max-width: 100%; max-height: 100%; object-fit: contain; filter: grayscale(15%);" alt="${escapeHtml(comp.name)} Watermark" />
         </div>
 
         ${showDiagonalStamp ? `
@@ -1349,130 +1368,125 @@ ${memoContent.replace(/\n/g, "<br>")}
           ${escapeHtml(diagonalStampText)}
         </div>` : ""}
 
-        <!-- Foreground Official Content (Flush top, flexible middle, sagad sa baba footer) -->
+        <!-- Foreground Official Content (Flush top, flexible middle, sagad sa pinaka-baba footer) -->
         <div style="position: relative; z-index: 10; display: flex; flex-direction: column; justify-content: space-between; flex: 1; height: 100%;">
           
-          <!-- Top Section: Accent Bar + Header + Banner + Metadata Table + Directives -->
+          <!-- Top Section: Letterhead + Memorandum Title Banner + Header Grid + Directives (Step 4 Format) -->
           <div style="display: flex; flex-direction: column; flex: 1;">
-            <!-- Top Accent Border Line - Sagad sa taas -->
-            <div style="height: ${metrics.topAccentHeight}; background: linear-gradient(90deg, ${accentColor} 0%, #0d9488 50%, #0284c7 100%); margin-bottom: ${metrics.headerMarginBottom}; border-radius: 2px;"></div>
+            
+            <!-- Corporate Letterhead (Left Logo, Center Details, Right Emblem) -->
+            <table style="width: 100%; border-collapse: collapse; margin-bottom: 2px;">
+              <tr>
+                <td style="width: 72px; vertical-align: middle; text-align: left;">
+                  ${(companyLogoDataMap[comp.id] || comp.logoUrl) ? `
+                    <img src="${companyLogoDataMap[comp.id] || comp.logoUrl}" style="max-height: 56px; max-width: 70px; display: block; object-fit: contain;" alt="${escapeHtml(comp.name)} Logo">
+                  ` : ""}
+                </td>
+                <td style="vertical-align: middle; text-align: center; padding: 0 10px;">
+                  <h1 style="font-size: 14pt; font-weight: 900; color: #020617; text-transform: uppercase; margin: 0; letter-spacing: 0.3px; line-height: 1.15; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+                    ${escapeHtml(compLegal)}
+                  </h1>
+                  ${comp.tagline ? `<div style="font-size: 8pt; color: #047857; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 2px;">${escapeHtml(comp.tagline)}</div>` : ""}
+                  <div style="font-size: 8pt; color: #334155; font-weight: 600; text-transform: uppercase; margin-top: 2px; line-height: 1.3;">${addressHtml}</div>
+                  <div style="font-size: 7.5pt; color: #64748b; font-weight: 500; margin-top: 1px;">${escapeHtml(comp.contact || "")}</div>
+                </td>
+                <td style="width: 72px; vertical-align: middle; text-align: right;">
+                  ${(groupEmblemDataUrl || comp.rightLogoUrl || CORPORATE_GROUP_EMBLEM) ? `
+                    <img src="${groupEmblemDataUrl || comp.rightLogoUrl || CORPORATE_GROUP_EMBLEM}" style="max-height: 54px; max-width: 68px; display: inline-block; object-fit: contain; border-radius: 4px;" alt="Corporate Group Emblem">
+                  ` : ""}
+                </td>
+              </tr>
+            </table>
 
-            <!-- Official Executive Letterhead (Left Company Logo, Center Info, Right Corporate Emblem) -->
-            <div style="border-bottom: 2px solid ${accentColor}; padding-bottom: ${metrics.headerPaddingBottom}; margin-bottom: ${metrics.headerMarginBottom};">
+            <!-- Top Letterhead Divider Line -->
+            <div style="border-bottom: 2px solid #0f172a; margin: 4px 0 6px 0;"></div>
+
+            <!-- Prominent MEMORANDUM Title Banner with Ref No & Classification -->
+            <div style="border-top: 2px solid #0f172a; border-bottom: 2px solid #0f172a; padding: 6px 4px; margin: 4px 0 6px 0; text-align: center;">
+              <h2 style="font-size: 14.5pt; font-weight: 900; letter-spacing: 0.35em; color: #020617; text-transform: uppercase; margin: 0; line-height: 1; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+                MEMORANDUM
+              </h2>
+              <div style="display: flex; justify-content: space-between; align-items: center; font-size: 8pt; font-weight: 700; padding-top: 4px; margin-top: 4px; border-top: 1px solid #e2e8f0;">
+                <span style="color: #334155;">
+                  REF NO: <strong style="color: #020617; font-family: monospace; font-weight: 900;">${compMemoRef}</strong>
+                </span>
+                <span style="display: inline-block; padding: 1px 10px; border-radius: 9999px; font-size: 7.5pt; font-weight: 900; text-transform: uppercase; letter-spacing: 0.5px; background: #d1fae5; color: #065f46; border: 1px solid #6ee7b7;">
+                  ${memoCategory}
+                </span>
+              </div>
+            </div>
+
+            <!-- Official HR Memo Header Grid (Step 4 Format) -->
+            <div style="padding: 4px 0; font-size: 8.5pt; line-height: 1.5;">
               <table style="width: 100%; border-collapse: collapse;">
                 <tr>
-                  <!-- Left: Company Logo -->
-                  <td style="width: 72px; vertical-align: middle; text-align: left;">
-                    ${(companyLogoDataMap[comp.id] || comp.logoUrl) ? `
-                      <img src="${companyLogoDataMap[comp.id] || comp.logoUrl}" style="max-height: 56px; max-width: 70px; display: block; object-fit: contain;" alt="${escapeHtml(comp.name)} Logo">
-                    ` : ""}
-                  </td>
-
-                  <!-- Center: Corporate Entity Details -->
-                  <td style="vertical-align: middle; text-align: center; padding: 0 8px;">
-                    <div style="display: inline-block; font-size: 7.5pt; font-weight: 800; text-transform: uppercase; letter-spacing: 1.5px; color: ${accentColor}; background: #ecfdf5; border: 1px solid #a7f3d0; padding: 1px 8px; border-radius: 9999px; margin-bottom: 2px;">
-                      OFFICIAL CORPORATE MEMORANDUM
-                    </div>
-                    <h1 style="font-size: ${metrics.titleFontSize}; font-weight: 900; margin: 0; color: #0f172a; text-transform: uppercase; letter-spacing: 0.5px; line-height: 1.15;">
-                      ${escapeHtml(compLegal)}
-                    </h1>
-                    ${comp.tagline ? `<div style="font-size: 8.5pt; color: ${accentColor}; font-weight: 800; margin-top: 1px; letter-spacing: 0.3px;">${escapeHtml(comp.tagline)}</div>` : ""}
-                    <div style="font-size: 8pt; color: #475569; margin-top: 2px; line-height: 1.3;">${addressHtml}</div>
-                    <div style="font-size: 7.5pt; color: #64748b; margin-top: 1px; font-family: monospace;">${escapeHtml(comp.contact || "")}</div>
-                  </td>
-
-                  <!-- Right: Corporate Group Emblem -->
-                  <td style="width: 72px; vertical-align: middle; text-align: right;">
-                    ${(groupEmblemDataUrl || comp.rightLogoUrl || CORPORATE_GROUP_EMBLEM) ? `
-                      <img src="${groupEmblemDataUrl || comp.rightLogoUrl || CORPORATE_GROUP_EMBLEM}" style="max-height: 52px; max-width: 65px; display: inline-block; object-fit: contain; border-radius: 4px;" alt="Corporate Group Emblem">
-                    ` : ""}
-                  </td>
+                  <td style="width: 75px; font-weight: 900; color: #0f172a; text-transform: uppercase; padding: 2px 0;">TO:</td>
+                  <td style="font-weight: 800; color: #020617; text-transform: uppercase; letter-spacing: 0.2px; padding: 2px 0;">${memoTo}</td>
+                </tr>
+                <tr>
+                  <td style="width: 75px; font-weight: 900; color: #0f172a; text-transform: uppercase; padding: 2px 0;">FROM:</td>
+                  <td style="font-weight: 800; color: #020617; text-transform: uppercase; letter-spacing: 0.2px; padding: 2px 0;">${memoFrom}</td>
+                </tr>
+                <tr>
+                  <td style="width: 75px; font-weight: 900; color: #0f172a; text-transform: uppercase; padding: 2px 0;">DATE:</td>
+                  <td style="font-weight: 800; color: #020617; text-transform: uppercase; letter-spacing: 0.2px; padding: 2px 0;">${memoDate}</td>
+                </tr>
+                <tr>
+                  <td style="width: 75px; font-weight: 900; color: #0f172a; text-transform: uppercase; padding: 2px 0;">SUBJECT:</td>
+                  <td style="font-weight: 900; color: #020617; text-transform: uppercase; letter-spacing: -0.2px; padding: 2px 0;">${memoSubject}</td>
                 </tr>
               </table>
             </div>
 
-            <!-- Memorandum Dark Banner Bar -->
-            <table style="width: 100%; border-collapse: collapse; background: #0f172a; border-radius: 4px; margin-bottom: ${metrics.tableMarginBottom};">
-              <tr>
-                <td style="padding: ${metrics.bannerPadding}; font-weight: 900; font-size: ${metrics.bannerFontSize}; letter-spacing: 3px; color: #ffffff; text-transform: uppercase;">
-                  MEMORANDUM
-                </td>
-                <td style="padding: ${metrics.bannerPadding}; text-align: right;">
-                  <span style="background: rgba(16, 185, 129, 0.2); border: 1px solid #10b981; padding: 2px 8px; border-radius: 4px; font-family: monospace; font-size: 9.5pt; font-weight: 900; color: #6ee7b7; letter-spacing: 0.5px;">
-                    REF: ${compMemoRef}
-                  </span>
-                </td>
-              </tr>
-            </table>
-
-            <!-- Metadata Matrix Grid -->
-            <table style="width: 100%; border-collapse: collapse; margin-bottom: ${metrics.tableMarginBottom}; font-size: ${metrics.tableFontSize}; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px;">
-              <tr>
-                <td style="padding: ${metrics.tableCellPadding}; font-weight: 900; width: 95px; color: #475569; border-bottom: 1px solid #e2e8f0; text-transform: uppercase; font-size: 8pt; letter-spacing: 0.5px;">DATE:</td>
-                <td style="padding: ${metrics.tableCellPadding}; font-weight: 800; color: #0f172a; border-bottom: 1px solid #e2e8f0; font-size: 9pt;">${memoDate}</td>
-                <td style="padding: ${metrics.tableCellPadding}; font-weight: 900; width: 105px; color: #475569; border-bottom: 1px solid #e2e8f0; text-transform: uppercase; font-size: 8pt; letter-spacing: 0.5px;">CLASSIFICATION:</td>
-                <td style="padding: ${metrics.tableCellPadding}; font-weight: 800; color: ${accentColor}; border-bottom: 1px solid #e2e8f0; font-size: 8.5pt; text-transform: uppercase;">
-                  ${memoCategory}
-                </td>
-              </tr>
-              <tr>
-                <td style="padding: ${metrics.tableCellPadding}; font-weight: 900; color: #475569; border-bottom: 1px solid #e2e8f0; text-transform: uppercase; font-size: 8pt; letter-spacing: 0.5px;">TO:</td>
-                <td colspan="3" style="padding: ${metrics.tableCellPadding}; color: #0f172a; border-bottom: 1px solid #e2e8f0; font-weight: 800; font-size: 9pt;">${memoTo}</td>
-              </tr>
-              <tr>
-                <td style="padding: ${metrics.tableCellPadding}; font-weight: 900; color: #475569; border-bottom: 1px solid #e2e8f0; text-transform: uppercase; font-size: 8pt; letter-spacing: 0.5px;">FROM:</td>
-                <td colspan="3" style="padding: ${metrics.tableCellPadding}; color: #0f172a; border-bottom: 1px solid #e2e8f0; font-weight: 800; font-size: 9pt;">${memoFrom}</td>
-              </tr>
-              <tr>
-                <td style="padding: ${metrics.tableCellPadding}; font-weight: 900; color: #475569; text-transform: uppercase; font-size: 8pt; letter-spacing: 0.5px;">SUBJECT:</td>
-                <td colspan="3" style="padding: ${metrics.tableCellPadding}; font-weight: 900; color: ${accentColor}; font-size: 10pt; text-transform: uppercase; letter-spacing: 0.3px;">
-                  ${memoSubject}
-                </td>
-              </tr>
-            </table>
+            <!-- Solid Divider between Header and Directives -->
+            <div style="border-bottom: 2px solid #0f172a; margin: 4px 0 8px 0;"></div>
 
             <!-- Directives Body Content -->
-            <div style="font-size: ${metrics.bodyFontSize}; line-height: ${metrics.bodyLineHeight}; color: #1e293b; margin-bottom: ${metrics.bodyMarginBottom}; text-align: justify; white-space: pre-wrap; flex: 1; padding: 0 2px;">
+            <div style="font-size: ${metrics.bodyFontSize}; line-height: ${metrics.bodyLineHeight}; color: #0f172a; font-weight: 400; text-align: justify; white-space: pre-wrap; flex: 1; padding: 6px 0;">
 ${memoContent}
             </div>
           </div>
 
-          <!-- Bottom Section: Signatories + Footer - Sagad sa baba -->
-          <div style="margin-top: auto; padding-top: ${metrics.sigMarginTop};">
+          <!-- Bottom Section: Signatories + Official Division Footer - Sagad sa pinaka-baba -->
+          <div style="margin-top: auto; padding-top: 14px;">
             <!-- Signatory Sign-off Block -->
-            <table style="width: 100%; border-collapse: collapse; font-size: 9.5pt; page-break-inside: avoid; break-inside: avoid; margin-bottom: ${metrics.footerMarginTop};">
+            <table style="width: 100%; border-collapse: collapse; font-size: 9.5pt; page-break-inside: avoid; break-inside: avoid;">
               <tr>
                 <td style="width: 50%; vertical-align: top; padding-right: 18px;">
-                  ${signatoryLabel?.trim() ? `<p style="margin: 0 0 3px 0; color: #64748b; font-size: 8pt; font-weight: 900; text-transform: uppercase; letter-spacing: 0.8px;">${signatoryLabel.trim()}</p>` : ""}
-                  <div style="height: ${metrics.sigHeight}; display: flex; align-items: flex-end;">
-                    ${signatorySignature ? `<img src="${signatorySignature}" style="max-height: ${metrics.sigHeight}; max-width: 170px; display: block; margin-left: ${signatoryOffsetX}px; margin-bottom: ${signatoryOffsetY}px; position: relative; z-index: 2;" alt="Signatory Signature">` : '<div style="height: 30px; margin-bottom: 2px;"></div>'}
+                  ${signatoryLabel?.trim() ? `<p style="margin: 0 0 2px 0; color: #475569; font-size: 8pt; font-weight: 900; text-transform: uppercase; letter-spacing: 0.5px;">${signatoryLabel.trim()}</p>` : ""}
+                  <div style="height: ${Math.max(56, signatorySize + 8)}px; display: flex; align-items: flex-end;">
+                    ${signatorySignature ? `
+                      <img src="${signatorySignature}" style="height: ${signatorySize}px; max-height: ${signatorySize}px; max-width: ${Math.round(signatorySize * 3.5)}px; display: block; margin-left: ${signatoryOffsetX}px; margin-bottom: ${signatoryOffsetY}px; position: relative; z-index: 2; object-fit: contain; object-position: bottom left;" alt="Signatory Signature">
+                    ` : '<div style="height: 30px; margin-bottom: 2px;"></div>'}
                   </div>
-                  <p style="margin: 0; font-weight: 900; color: #0f172a; font-size: 10.5pt; text-transform: uppercase; letter-spacing: 0.2px; position: relative; z-index: 1;">${signatoryName}</p>
-                  <p style="margin: 1px 0 0 0; color: #475569; font-size: 9pt; font-weight: 600;">${signatoryTitle}</p>
-                  <p style="margin: 1px 0 0 0; color: ${accentColor}; font-weight: 700; font-size: 8.5pt;">${getSignatoryAffiliation(comp)}</p>
+                  <p style="margin: 0; font-weight: 900; color: #020617; font-size: 10pt; text-transform: uppercase; letter-spacing: 0.2px; position: relative; z-index: 1;">${signatoryName}</p>
+                  <p style="margin: 1px 0 0 0; color: #334155; font-size: 8.5pt; font-weight: 700;">${signatoryTitle}</p>
+                  <p style="margin: 1px 0 0 0; color: #64748b; font-weight: 600; font-size: 8pt;">${getSignatoryAffiliation(comp)}</p>
                 </td>
                 ${signatoryLayout === "dual" ? `
                 <td style="width: 50%; vertical-align: top; padding-left: 18px;">
-                  ${approverLabel?.trim() ? `<p style="margin: 0 0 3px 0; color: #64748b; font-size: 8pt; font-weight: 900; text-transform: uppercase; letter-spacing: 0.8px;">${approverLabel.trim()}</p>` : ""}
-                  <div style="height: ${metrics.sigHeight}; display: flex; align-items: flex-end;">
-                    ${approverSignature ? `<img src="${approverSignature}" style="max-height: ${metrics.sigHeight}; max-width: 170px; display: block; margin-left: ${approverOffsetX}px; margin-bottom: ${approverOffsetY}px; position: relative; z-index: 2;" alt="Approver Signature">` : '<div style="height: 30px; margin-bottom: 2px;"></div>'}
+                  ${approverLabel?.trim() ? `<p style="margin: 0 0 2px 0; color: #475569; font-size: 8pt; font-weight: 900; text-transform: uppercase; letter-spacing: 0.5px;">${approverLabel.trim()}</p>` : ""}
+                  <div style="height: ${Math.max(56, approverSize + 8)}px; display: flex; align-items: flex-end;">
+                    ${approverSignature ? `
+                      <img src="${approverSignature}" style="height: ${approverSize}px; max-height: ${approverSize}px; max-width: ${Math.round(approverSize * 3.5)}px; display: block; margin-left: ${approverOffsetX}px; margin-bottom: ${approverOffsetY}px; position: relative; z-index: 2; object-fit: contain; object-position: bottom left;" alt="Approver Signature">
+                    ` : '<div style="height: 30px; margin-bottom: 2px;"></div>'}
                   </div>
-                  <p style="margin: 0; font-weight: 900; color: #0f172a; font-size: 10.5pt; text-transform: uppercase; letter-spacing: 0.2px; position: relative; z-index: 1;">${approverName}</p>
-                  <p style="margin: 1px 0 0 0; color: #475569; font-size: 9pt; font-weight: 600;">${approverTitle}</p>
-                  <p style="margin: 1px 0 0 0; color: #64748b; font-weight: 700; font-size: 8.5pt;">${compLegal}</p>
+                  <p style="margin: 0; font-weight: 900; color: #020617; font-size: 10pt; text-transform: uppercase; letter-spacing: 0.2px; position: relative; z-index: 1;">${approverName}</p>
+                  <p style="margin: 1px 0 0 0; color: #334155; font-size: 8.5pt; font-weight: 700;">${approverTitle}</p>
+                  <p style="margin: 1px 0 0 0; color: #64748b; font-weight: 600; font-size: 8pt;">${compLegal}</p>
                 </td>` : ""}
               </tr>
             </table>
 
-            <!-- Print & Archival Official Footer -->
-            <div style="padding-top: ${metrics.footerPaddingTop}; border-top: 1px solid #cbd5e1; text-align: center; font-size: 7.5pt; color: #94a3b8; font-weight: 600; page-break-inside: avoid; break-inside: avoid;">
-              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;">
+            <!-- Bottom Official Division Footer (Identical to Step 4, sagad sa pinaka-baba) -->
+            <div style="padding-top: 10px; margin-top: 6px;">
+              <div style="border-top: 1px solid #cbd5e1; padding-top: 6px; display: flex; justify-content: space-between; align-items: center; font-size: 7.5pt; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px;">
                 <span>OFFICE OF THE HUMAN RESOURCES &amp; ADMINISTRATION</span>
                 <span style="font-weight: 900; color: #0f172a;">STRICT COMPLIANCE MANDATED</span>
                 <span>${comp.code} • OFFICIAL TRANSMISSION</span>
               </div>
-              <div style="letter-spacing: 0.4px;">
-                Official Administrative Record • HR Helpdesk: <span style="font-family: monospace; color: #059669;">${HR_OFFICIAL_EMAIL}</span>
+              <div style="text-align: center; font-size: 7pt; color: #94a3b8; font-weight: 800; text-transform: uppercase; letter-spacing: 2px; margin-top: 2px;">
+                HUMAN RESOURCE MANAGEMENT DIVISION
               </div>
             </div>
           </div>
@@ -1609,7 +1623,7 @@ ${memoContent}
   <style>
     @page {
       size: ${metrics.paperSize};
-      margin: ${metrics.pageMargin};
+      margin: 8mm 12mm 8mm 12mm;
     }
     * {
       box-sizing: border-box;
@@ -1625,12 +1639,52 @@ ${memoContent}
       background: #ffffff;
       padding: 0;
       margin: 0;
-      line-height: 1.5;
+      width: 100%;
+      height: 100%;
+    }
+    .memo-print-sheet {
+      width: 100%;
+      height: 100vh;
+      min-height: 100vh;
+      max-height: 100vh;
+      box-sizing: border-box;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      page-break-inside: avoid;
+      break-inside: avoid;
+      page-break-after: always;
+      break-after: page;
+      padding: 6px 10px 4px 10px;
+    }
+    .memo-print-sheet:last-child {
+      page-break-after: auto;
+      break-after: auto;
     }
     @media print {
-      body {
-        padding: 0 !important;
+      html, body {
+        width: 100% !important;
+        height: 100% !important;
         margin: 0 !important;
+        padding: 0 !important;
+      }
+      .memo-print-sheet {
+        width: 100% !important;
+        height: 100vh !important;
+        min-height: 100vh !important;
+        max-height: 100vh !important;
+        margin: 0 !important;
+        padding: 4px 8px 4px 8px !important;
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
+        page-break-after: always !important;
+        break-after: page !important;
+      }
+      .memo-print-sheet:last-child {
+        page-break-after: auto !important;
+        break-after: auto !important;
       }
     }
   </style>
@@ -2439,21 +2493,21 @@ Write numbered directives or formal paragraphs.
                     <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-2.5 text-xs">
                       <div className="flex items-center justify-between">
                         <span className="text-[10px] font-bold text-slate-700 uppercase tracking-wide">
-                          Signature Alignment &amp; Overlap
+                          Signature Alignment &amp; Size
                         </span>
                         <button
                           type="button"
-                          onClick={() => { setSignatoryOffsetX(48); setSignatoryOffsetY(-6); }}
+                          onClick={() => { setSignatoryOffsetX(48); setSignatoryOffsetY(-6); setSignatorySize(56); }}
                           className="text-[10px] text-emerald-600 hover:text-emerald-700 font-bold cursor-pointer"
                         >
                           Reset Default
                         </button>
                       </div>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                         <div>
                           <div className="flex justify-between text-[10px] text-slate-600 font-medium mb-1">
-                            <span>Horizontal (Left ↔ Right)</span>
+                            <span>Horizontal</span>
                             <span className="font-mono font-bold text-slate-800">{signatoryOffsetX}px</span>
                           </div>
                           <input
@@ -2466,14 +2520,14 @@ Write numbered directives or formal paragraphs.
                             className="w-full accent-emerald-600 h-1.5 bg-slate-200 rounded-lg cursor-pointer"
                           />
                           <div className="flex justify-between text-[9px] text-slate-400 mt-0.5">
-                            <span>← Left (-20px)</span>
-                            <span>Right (200px) →</span>
+                            <span>← Left</span>
+                            <span>Right →</span>
                           </div>
                         </div>
 
                         <div>
                           <div className="flex justify-between text-[10px] text-slate-600 font-medium mb-1">
-                            <span>Vertical (Up ↕ Down)</span>
+                            <span>Vertical</span>
                             <span className="font-mono font-bold text-slate-800">{signatoryOffsetY}px</span>
                           </div>
                           <input
@@ -2486,8 +2540,28 @@ Write numbered directives or formal paragraphs.
                             className="w-full accent-emerald-600 h-1.5 bg-slate-200 rounded-lg cursor-pointer"
                           />
                           <div className="flex justify-between text-[9px] text-slate-400 mt-0.5">
-                            <span className="text-emerald-700 font-semibold">← Lower Down (-50px)</span>
-                            <span>Raise Up (+20px) →</span>
+                            <span className="text-emerald-700 font-semibold">← Lower</span>
+                            <span>Raise →</span>
+                          </div>
+                        </div>
+
+                        <div>
+                          <div className="flex justify-between text-[10px] text-slate-600 font-medium mb-1">
+                            <span>Signature Size</span>
+                            <span className="font-mono font-bold text-slate-800">{signatorySize}px</span>
+                          </div>
+                          <input
+                            type="range"
+                            min="30"
+                            max="120"
+                            step="2"
+                            value={signatorySize}
+                            onChange={(e) => setSignatorySize(Number(e.target.value))}
+                            className="w-full accent-emerald-600 h-1.5 bg-slate-200 rounded-lg cursor-pointer"
+                          />
+                          <div className="flex justify-between text-[9px] text-slate-400 mt-0.5">
+                            <span>Smaller (30px)</span>
+                            <span>Larger (120px)</span>
                           </div>
                         </div>
                       </div>
@@ -2500,28 +2574,44 @@ Write numbered directives or formal paragraphs.
                           onClick={() => setSignatoryOffsetY((prev) => Math.max(-50, prev - 3))}
                           className="px-2 py-0.5 rounded-md bg-white border border-slate-300 hover:border-emerald-500 hover:text-emerald-700 text-[10px] font-bold text-slate-700 transition cursor-pointer"
                         >
-                          ↓ 3px Down
+                          ↓ Down
                         </button>
                         <button
                           type="button"
                           onClick={() => setSignatoryOffsetY((prev) => Math.min(20, prev + 3))}
                           className="px-2 py-0.5 rounded-md bg-white border border-slate-300 hover:border-emerald-500 hover:text-emerald-700 text-[10px] font-bold text-slate-700 transition cursor-pointer"
                         >
-                          ↑ 3px Up
+                          ↑ Up
                         </button>
                         <button
                           type="button"
                           onClick={() => setSignatoryOffsetX((prev) => Math.min(200, prev + 6))}
                           className="px-2 py-0.5 rounded-md bg-white border border-slate-300 hover:border-emerald-500 hover:text-emerald-700 text-[10px] font-bold text-slate-700 transition cursor-pointer"
                         >
-                          → 6px Right
+                          → Right
                         </button>
                         <button
                           type="button"
                           onClick={() => setSignatoryOffsetX((prev) => Math.max(-20, prev - 6))}
                           className="px-2 py-0.5 rounded-md bg-white border border-slate-300 hover:border-emerald-500 hover:text-emerald-700 text-[10px] font-bold text-slate-700 transition cursor-pointer"
                         >
-                          ← 6px Left
+                          ← Left
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSignatorySize((prev) => Math.max(30, prev - 4))}
+                          className="px-2 py-0.5 rounded-md bg-white border border-slate-300 hover:border-emerald-500 hover:text-emerald-700 text-[10px] font-bold text-slate-700 transition cursor-pointer"
+                          title="Decrease signature size"
+                        >
+                          - Size
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSignatorySize((prev) => Math.min(120, prev + 4))}
+                          className="px-2 py-0.5 rounded-md bg-white border border-slate-300 hover:border-emerald-500 hover:text-emerald-700 text-[10px] font-bold text-slate-700 transition cursor-pointer"
+                          title="Increase signature size"
+                        >
+                          + Size
                         </button>
                       </div>
                     </div>
@@ -2539,16 +2629,22 @@ Write numbered directives or formal paragraphs.
                         {signatoryLabel.trim()}
                       </p>
                     ) : null}
-                    <div className="h-14 flex items-end">
+                    <div
+                      className="flex items-end"
+                      style={{ height: `${Math.max(56, signatorySize + 8)}px` }}
+                    >
                       {signatorySignature ? (
                         <img
                           src={signatorySignature}
                           alt="Signatory E-Signature"
                           style={{
+                            height: `${signatorySize}px`,
+                            maxHeight: `${signatorySize}px`,
+                            maxWidth: `${Math.round(signatorySize * 3.5)}px`,
                             marginLeft: `${signatoryOffsetX}px`,
                             marginBottom: `${signatoryOffsetY}px`
                           }}
-                          className="max-h-14 max-w-[190px] object-contain object-bottom pointer-events-none select-none relative z-10"
+                          className="object-contain object-bottom pointer-events-none select-none relative z-10"
                         />
                       ) : (
                         <div className="h-8 text-[11px] text-slate-400 italic flex items-center mb-1">
@@ -2667,21 +2763,21 @@ Write numbered directives or formal paragraphs.
                     <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-2.5 text-xs">
                       <div className="flex items-center justify-between">
                         <span className="text-[10px] font-bold text-slate-700 uppercase tracking-wide">
-                          Signature Alignment &amp; Overlap
+                          Signature Alignment &amp; Size
                         </span>
                         <button
                           type="button"
-                          onClick={() => { setApproverOffsetX(48); setApproverOffsetY(-6); }}
+                          onClick={() => { setApproverOffsetX(48); setApproverOffsetY(-6); setApproverSize(56); }}
                           className="text-[10px] text-emerald-600 hover:text-emerald-700 font-bold cursor-pointer"
                         >
                           Reset Default
                         </button>
                       </div>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                         <div>
                           <div className="flex justify-between text-[10px] text-slate-600 font-medium mb-1">
-                            <span>Horizontal (Left ↔ Right)</span>
+                            <span>Horizontal</span>
                             <span className="font-mono font-bold text-slate-800">{approverOffsetX}px</span>
                           </div>
                           <input
@@ -2694,14 +2790,14 @@ Write numbered directives or formal paragraphs.
                             className="w-full accent-emerald-600 h-1.5 bg-slate-200 rounded-lg cursor-pointer"
                           />
                           <div className="flex justify-between text-[9px] text-slate-400 mt-0.5">
-                            <span>← Left (-20px)</span>
-                            <span>Right (200px) →</span>
+                            <span>← Left</span>
+                            <span>Right →</span>
                           </div>
                         </div>
 
                         <div>
                           <div className="flex justify-between text-[10px] text-slate-600 font-medium mb-1">
-                            <span>Vertical (Up ↕ Down)</span>
+                            <span>Vertical</span>
                             <span className="font-mono font-bold text-slate-800">{approverOffsetY}px</span>
                           </div>
                           <input
@@ -2714,8 +2810,28 @@ Write numbered directives or formal paragraphs.
                             className="w-full accent-emerald-600 h-1.5 bg-slate-200 rounded-lg cursor-pointer"
                           />
                           <div className="flex justify-between text-[9px] text-slate-400 mt-0.5">
-                            <span className="text-emerald-700 font-semibold">← Lower Down (-50px)</span>
-                            <span>Raise Up (+20px) →</span>
+                            <span className="text-emerald-700 font-semibold">← Lower</span>
+                            <span>Raise →</span>
+                          </div>
+                        </div>
+
+                        <div>
+                          <div className="flex justify-between text-[10px] text-slate-600 font-medium mb-1">
+                            <span>Signature Size</span>
+                            <span className="font-mono font-bold text-slate-800">{approverSize}px</span>
+                          </div>
+                          <input
+                            type="range"
+                            min="30"
+                            max="120"
+                            step="2"
+                            value={approverSize}
+                            onChange={(e) => setApproverSize(Number(e.target.value))}
+                            className="w-full accent-emerald-600 h-1.5 bg-slate-200 rounded-lg cursor-pointer"
+                          />
+                          <div className="flex justify-between text-[9px] text-slate-400 mt-0.5">
+                            <span>Smaller (30px)</span>
+                            <span>Larger (120px)</span>
                           </div>
                         </div>
                       </div>
@@ -2728,28 +2844,44 @@ Write numbered directives or formal paragraphs.
                           onClick={() => setApproverOffsetY((prev) => Math.max(-50, prev - 3))}
                           className="px-2 py-0.5 rounded-md bg-white border border-slate-300 hover:border-emerald-500 hover:text-emerald-700 text-[10px] font-bold text-slate-700 transition cursor-pointer"
                         >
-                          ↓ 3px Down
+                          ↓ Down
                         </button>
                         <button
                           type="button"
                           onClick={() => setApproverOffsetY((prev) => Math.min(20, prev + 3))}
                           className="px-2 py-0.5 rounded-md bg-white border border-slate-300 hover:border-emerald-500 hover:text-emerald-700 text-[10px] font-bold text-slate-700 transition cursor-pointer"
                         >
-                          ↑ 3px Up
+                          ↑ Up
                         </button>
                         <button
                           type="button"
                           onClick={() => setApproverOffsetX((prev) => Math.min(200, prev + 6))}
                           className="px-2 py-0.5 rounded-md bg-white border border-slate-300 hover:border-emerald-500 hover:text-emerald-700 text-[10px] font-bold text-slate-700 transition cursor-pointer"
                         >
-                          → 6px Right
+                          → Right
                         </button>
                         <button
                           type="button"
                           onClick={() => setApproverOffsetX((prev) => Math.max(-20, prev - 6))}
                           className="px-2 py-0.5 rounded-md bg-white border border-slate-300 hover:border-emerald-500 hover:text-emerald-700 text-[10px] font-bold text-slate-700 transition cursor-pointer"
                         >
-                          ← 6px Left
+                          ← Left
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setApproverSize((prev) => Math.max(30, prev - 4))}
+                          className="px-2 py-0.5 rounded-md bg-white border border-slate-300 hover:border-emerald-500 hover:text-emerald-700 text-[10px] font-bold text-slate-700 transition cursor-pointer"
+                          title="Decrease signature size"
+                        >
+                          - Size
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setApproverSize((prev) => Math.min(120, prev + 4))}
+                          className="px-2 py-0.5 rounded-md bg-white border border-slate-300 hover:border-emerald-500 hover:text-emerald-700 text-[10px] font-bold text-slate-700 transition cursor-pointer"
+                          title="Increase signature size"
+                        >
+                          + Size
                         </button>
                       </div>
                     </div>
@@ -2766,16 +2898,22 @@ Write numbered directives or formal paragraphs.
                           {approverLabel.trim()}
                         </p>
                       ) : null}
-                      <div className="h-14 flex items-end">
+                      <div
+                        className="flex items-end"
+                        style={{ height: `${Math.max(56, approverSize + 8)}px` }}
+                      >
                         {approverSignature ? (
                           <img
                             src={approverSignature}
                             alt="Approver E-Signature"
                             style={{
+                              height: `${approverSize}px`,
+                              maxHeight: `${approverSize}px`,
+                              maxWidth: `${Math.round(approverSize * 3.5)}px`,
                               marginLeft: `${approverOffsetX}px`,
                               marginBottom: `${approverOffsetY}px`
                             }}
-                            className="max-h-14 max-w-[190px] object-contain object-bottom pointer-events-none select-none relative z-10"
+                            className="object-contain object-bottom pointer-events-none select-none relative z-10"
                           />
                         ) : (
                           <div className="h-8 text-[11px] text-slate-400 italic flex items-center mb-1">
@@ -3343,16 +3481,22 @@ Write numbered directives or formal paragraphs.
                                       {signatoryLabel.trim()}
                                     </p>
                                   ) : null}
-                                  <div className="h-16 flex items-end">
+                                  <div
+                                    className="flex items-end"
+                                    style={{ height: `${Math.max(64, signatorySize + 10)}px` }}
+                                  >
                                     {signatorySignature ? (
                                       <img
                                         src={signatorySignature}
                                         alt="Signatory E-Signature"
                                         style={{
+                                          height: `${signatorySize}px`,
+                                          maxHeight: `${signatorySize}px`,
+                                          maxWidth: `${Math.round(signatorySize * 3.5)}px`,
                                           marginLeft: `${signatoryOffsetX}px`,
                                           marginBottom: `${signatoryOffsetY}px`
                                         }}
-                                        className="max-h-16 max-w-[210px] object-contain object-bottom pointer-events-none select-none relative z-10"
+                                        className="object-contain object-bottom pointer-events-none select-none relative z-10"
                                       />
                                     ) : (
                                       <div className="h-10 text-[11px] text-slate-400 italic flex items-center mb-1">
@@ -3378,16 +3522,22 @@ Write numbered directives or formal paragraphs.
                                       {approverLabel.trim()}
                                     </p>
                                   ) : null}
-                                  <div className="h-16 flex items-end">
+                                  <div
+                                    className="flex items-end"
+                                    style={{ height: `${Math.max(64, approverSize + 10)}px` }}
+                                  >
                                     {approverSignature ? (
                                       <img
                                         src={approverSignature}
                                         alt="Approver E-Signature"
                                         style={{
+                                          height: `${approverSize}px`,
+                                          maxHeight: `${approverSize}px`,
+                                          maxWidth: `${Math.round(approverSize * 3.5)}px`,
                                           marginLeft: `${approverOffsetX}px`,
                                           marginBottom: `${approverOffsetY}px`
                                         }}
-                                        className="max-h-16 max-w-[210px] object-contain object-bottom pointer-events-none select-none relative z-10"
+                                        className="object-contain object-bottom pointer-events-none select-none relative z-10"
                                       />
                                     ) : (
                                       <div className="h-10 text-[11px] text-slate-400 italic flex items-center mb-1">
@@ -3414,16 +3564,22 @@ Write numbered directives or formal paragraphs.
                                       {signatoryLabel.trim()}
                                     </p>
                                   ) : null}
-                                  <div className="h-16 flex items-end">
+                                  <div
+                                    className="flex items-end"
+                                    style={{ height: `${Math.max(64, signatorySize + 10)}px` }}
+                                  >
                                     {signatorySignature ? (
                                       <img
                                         src={signatorySignature}
                                         alt="Signatory E-Signature"
                                         style={{
+                                          height: `${signatorySize}px`,
+                                          maxHeight: `${signatorySize}px`,
+                                          maxWidth: `${Math.round(signatorySize * 3.5)}px`,
                                           marginLeft: `${signatoryOffsetX}px`,
                                           marginBottom: `${signatoryOffsetY}px`
                                         }}
-                                        className="max-h-16 max-w-[210px] object-contain object-bottom pointer-events-none select-none relative z-10"
+                                        className="object-contain object-bottom pointer-events-none select-none relative z-10"
                                       />
                                     ) : (
                                       <div className="h-10 text-[11px] text-slate-400 italic flex items-center mb-1">
