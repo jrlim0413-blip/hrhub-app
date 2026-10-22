@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import html2canvas from "html2canvas";
+import { toBlob as htmlToImageBlob } from "html-to-image";
 import {
   FileText, Building2, Send, Printer, Copy, Check, Sparkles,
   Layers, RefreshCw, X, Mail, Eye, Sliders, CheckCircle2,
@@ -843,6 +844,7 @@ export default function MemoGeneratorPanel({
   const [directSendStatus, setDirectSendStatus] = useState(null);
   const [copyingImageId, setCopyingImageId] = useState(null);
   const [copiedImageId, setCopiedImageId] = useState(null);
+  const [imageCopyToast, setImageCopyToast] = useState(null);
   const [companyLogoDataMap, setCompanyLogoDataMap] = useState({});
   const [fadedWatermarkMap, setFadedWatermarkMap] = useState({});
   const [groupEmblemDataUrl, setGroupEmblemDataUrl] = useState("");
@@ -1901,22 +1903,32 @@ ${renderMemoDirectivesHtml(memoContent)}
     }, 350);
   };
 
-  // High-Resolution Image Generation & Clipboard Copying (for chat apps: Viber, Messenger, Telegram, WhatsApp, Gmail)
-  const handleCopyMemoAsImage = async (company) => {
-    const sheetEl = document.getElementById(`memo-sheet-preview-${company.id}`);
-    if (!sheetEl) return;
-
+  // Generate high-resolution image Blob of a company's executive memo sheet
+  const generateMemoSheetBlob = async (sheetEl) => {
     const originalZoom = sheetEl.style.zoom;
     const originalTransform = sheetEl.style.transform;
 
     try {
-      setCopyingImageId(company.id);
-
-      // Temporarily normalize zoom & transform so html2canvas computes pixel-perfect boundaries
       sheetEl.style.zoom = "1";
       sheetEl.style.transform = "none";
       await new Promise((r) => setTimeout(r, 60));
 
+      // Engine 1: html-to-image (Native SVG foreignObject - supports modern CSS & oklch)
+      try {
+        const blob = await htmlToImageBlob(sheetEl, {
+          pixelRatio: 2.2,
+          backgroundColor: "#ffffff",
+          cacheBust: false,
+          skipAutoScale: true,
+        });
+        if (blob && blob.size > 1000) {
+          return blob;
+        }
+      } catch (errHtmlToImage) {
+        console.warn("html-to-image failed, falling back to html2canvas:", errHtmlToImage);
+      }
+
+      // Engine 2: html2canvas fallback
       const canvas = await html2canvas(sheetEl, {
         scale: 2.2,
         useCORS: true,
@@ -1926,42 +1938,81 @@ ${renderMemoDirectivesHtml(memoContent)}
         imageTimeout: 15000,
       });
 
-      // Restore zoom & transform immediately
-      sheetEl.style.zoom = originalZoom;
-      sheetEl.style.transform = originalTransform;
-
-      // Export canvas to blob and write to clipboard
-      await new Promise((resolve) => {
-        canvas.toBlob(async (blob) => {
-          if (!blob) {
-            console.warn("toBlob failed, falling back to download");
-            handleDownloadMemoImage(company);
-            resolve();
-            return;
-          }
-          try {
-            if (navigator.clipboard && window.ClipboardItem) {
-              const item = new ClipboardItem({ "image/png": blob });
-              await navigator.clipboard.write([item]);
-              setCopiedImageId(company.id);
-              setTimeout(() => setCopiedImageId(null), 3500);
-              resolve();
-            } else {
-              handleDownloadMemoImage(company);
-              resolve();
-            }
-          } catch (clipErr) {
-            console.warn("Direct clipboard write fallback to download:", clipErr);
-            handleDownloadMemoImage(company);
-            resolve();
-          }
+      return await new Promise((resolve, reject) => {
+        canvas.toBlob((b) => {
+          if (b) resolve(b);
+          else reject(new Error("Canvas conversion produced empty blob"));
         }, "image/png", 1.0);
       });
-    } catch (err) {
-      console.error("Failed to copy memo image:", err);
+    } finally {
       sheetEl.style.zoom = originalZoom;
       sheetEl.style.transform = originalTransform;
-      handleDownloadMemoImage(company);
+    }
+  };
+
+  // High-Resolution Image Generation & Clipboard Copying (for chat apps: Viber, Messenger, Telegram, WhatsApp, Gmail)
+  const handleCopyMemoAsImage = async (company) => {
+    const sheetEl = document.getElementById(`memo-sheet-preview-${company.id}`);
+    if (!sheetEl) return;
+
+    try {
+      setCopyingImageId(company.id);
+
+      const blob = await generateMemoSheetBlob(sheetEl);
+      if (!blob) throw new Error("Could not create memo image blob");
+
+      let copiedSuccessfully = false;
+
+      // Modern Clipboard API
+      if (navigator.clipboard && window.ClipboardItem) {
+        try {
+          const item = new ClipboardItem({ "image/png": blob });
+          await navigator.clipboard.write([item]);
+          copiedSuccessfully = true;
+        } catch (clipErr) {
+          console.warn("Direct clipboard.write failed (likely browser permission restriction):", clipErr);
+        }
+      }
+
+      if (copiedSuccessfully) {
+        setCopiedImageId(company.id);
+        setImageCopyToast({
+          type: "success",
+          message: `✓ ${company.name} memorandum copied to clipboard! You can now paste (Ctrl+V) directly into Viber, Messenger, Telegram, or Gmail.`
+        });
+        setTimeout(() => {
+          setCopiedImageId(null);
+          setImageCopyToast(null);
+        }, 5000);
+      } else {
+        // Fallback: automatically trigger direct PNG download so user always gets the image file!
+        const compMemoRef = `MEMO-2026-${company.code}-${memoRef.split("-").pop() || "001"}`;
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.download = `${compMemoRef} - ${company.name}.png`;
+        link.href = url;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        setTimeout(() => URL.revokeObjectURL(url), 3000);
+
+        setCopiedImageId(company.id);
+        setImageCopyToast({
+          type: "fallback",
+          message: `✓ Saved ${company.name} image as PNG! (Browser clipboard write permission was restricted, saved to your Downloads instead).`
+        });
+        setTimeout(() => {
+          setCopiedImageId(null);
+          setImageCopyToast(null);
+        }, 6000);
+      }
+    } catch (err) {
+      console.error("Failed to copy memo image:", err);
+      setImageCopyToast({
+        type: "error",
+        message: `✕ Could not generate image: ${err?.message || "Error"}. Try using the PNG download button.`
+      });
+      setTimeout(() => setImageCopyToast(null), 5000);
     } finally {
       setCopyingImageId(null);
     }
@@ -1971,42 +2022,38 @@ ${renderMemoDirectivesHtml(memoContent)}
     const sheetEl = document.getElementById(`memo-sheet-preview-${company.id}`);
     if (!sheetEl) return;
 
-    const originalZoom = sheetEl.style.zoom;
-    const originalTransform = sheetEl.style.transform;
-
     try {
       setCopyingImageId(company.id);
 
-      sheetEl.style.zoom = "1";
-      sheetEl.style.transform = "none";
-      await new Promise((r) => setTimeout(r, 60));
+      const blob = await generateMemoSheetBlob(sheetEl);
+      if (!blob) throw new Error("Could not create memo image blob");
 
-      const canvas = await html2canvas(sheetEl, {
-        scale: 2.2,
-        useCORS: true,
-        allowTaint: false,
-        backgroundColor: "#ffffff",
-        logging: false,
-        imageTimeout: 15000,
-      });
-
-      sheetEl.style.zoom = originalZoom;
-      sheetEl.style.transform = originalTransform;
-
-      const dataUrl = canvas.toDataURL("image/png", 1.0);
       const compMemoRef = `MEMO-2026-${company.code}-${memoRef.split("-").pop() || "001"}`;
+      const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.download = `${compMemoRef} - ${company.name}.png`;
-      link.href = dataUrl;
+      link.href = url;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+      setTimeout(() => URL.revokeObjectURL(url), 3000);
+
       setCopiedImageId(company.id);
-      setTimeout(() => setCopiedImageId(null), 3500);
+      setImageCopyToast({
+        type: "success",
+        message: `✓ ${compMemoRef} - ${company.name}.png downloaded successfully!`
+      });
+      setTimeout(() => {
+        setCopiedImageId(null);
+        setImageCopyToast(null);
+      }, 4000);
     } catch (err) {
       console.error("Failed to download memo image:", err);
-      sheetEl.style.zoom = originalZoom;
-      sheetEl.style.transform = originalTransform;
+      setImageCopyToast({
+        type: "error",
+        message: `✕ Failed to download image: ${err?.message || "Unknown error"}`
+      });
+      setTimeout(() => setImageCopyToast(null), 5000);
     } finally {
       setCopyingImageId(null);
     }
@@ -5237,6 +5284,40 @@ function doGet(e) {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Floating Action Feedback Toast for Image Copy & Download */}
+      {imageCopyToast && (
+        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 px-4 py-3 rounded-2xl bg-slate-950 text-white shadow-2xl border border-slate-800 animate-in fade-in slide-in-from-bottom-3 duration-200">
+          <div
+            className={`p-1.5 rounded-xl shrink-0 ${
+              imageCopyToast.type === "success"
+                ? "bg-emerald-500/20 text-emerald-400"
+                : imageCopyToast.type === "download" || imageCopyToast.type === "fallback"
+                ? "bg-sky-500/20 text-sky-400"
+                : "bg-rose-500/20 text-rose-400"
+            }`}
+          >
+            {imageCopyToast.type === "success" ? (
+              <Check size={18} />
+            ) : imageCopyToast.type === "download" || imageCopyToast.type === "fallback" ? (
+              <Download size={18} />
+            ) : (
+              <AlertCircle size={18} />
+            )}
+          </div>
+          <div className="text-xs font-bold text-slate-100 max-w-sm leading-snug">
+            {imageCopyToast.message}
+          </div>
+          <button
+            type="button"
+            onClick={() => setImageCopyToast(null)}
+            className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 cursor-pointer transition shrink-0"
+            title="Dismiss"
+          >
+            <X size={14} />
+          </button>
         </div>
       )}
     </section>
