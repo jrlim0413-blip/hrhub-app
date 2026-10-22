@@ -1190,20 +1190,20 @@ ${memoContent.replace(/\n/g, "<br>")}
         <tr>
           <td style="width: 50%; vertical-align: top; padding-right: 18px;">
             ${signatoryLabel?.trim() ? `<p style="margin: 0 0 4px 0; color: #64748b; font-size: 9.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.8px;">${signatoryLabel.trim()}</p>` : ""}
-            <div style="height: 52px; display: flex; align-items: flex-end; margin-bottom: 4px;">
-              ${signatorySignature ? `<img src="${signatorySignature}" style="max-height: 50px; max-width: 170px; display: block;" alt="Signatory Signature">` : '<div style="height: 38px;"></div>'}
+            <div style="height: 52px; display: flex; align-items: flex-end;">
+              ${signatorySignature ? `<img src="${signatorySignature}" style="max-height: 50px; max-width: 170px; display: block; margin-bottom: -8px; position: relative; z-index: 2;" alt="Signatory Signature">` : '<div style="height: 38px; margin-bottom: 2px;"></div>'}
             </div>
-            <p style="margin: 0; font-weight: 900; color: #0f172a; font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.2px;">${signatoryName}</p>
+            <p style="margin: 0; font-weight: 900; color: #0f172a; font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.2px; position: relative; z-index: 1;">${signatoryName}</p>
             <p style="margin: 2px 0 0 0; color: #475569; font-size: 11px; font-weight: 600;">${signatoryTitle}</p>
             <p style="margin: 1px 0 0 0; color: ${accentColor}; font-size: 10px; font-weight: 700;">${getSignatoryAffiliation(comp)}</p>
           </td>
           ${signatoryLayout === "dual" ? `
           <td style="width: 50%; vertical-align: top; padding-left: 18px;">
             ${approverLabel?.trim() ? `<p style="margin: 0 0 4px 0; color: #64748b; font-size: 9.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.8px;">${approverLabel.trim()}</p>` : ""}
-            <div style="height: 52px; display: flex; align-items: flex-end; margin-bottom: 4px;">
-              ${approverSignature ? `<img src="${approverSignature}" style="max-height: 50px; max-width: 170px; display: block;" alt="Approver Signature">` : '<div style="height: 38px;"></div>'}
+            <div style="height: 52px; display: flex; align-items: flex-end;">
+              ${approverSignature ? `<img src="${approverSignature}" style="max-height: 50px; max-width: 170px; display: block; margin-bottom: -8px; position: relative; z-index: 2;" alt="Approver Signature">` : '<div style="height: 38px; margin-bottom: 2px;"></div>'}
             </div>
-            <p style="margin: 0; font-weight: 900; color: #0f172a; font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.2px;">${approverName}</p>
+            <p style="margin: 0; font-weight: 900; color: #0f172a; font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.2px; position: relative; z-index: 1;">${approverName}</p>
             <p style="margin: 2px 0 0 0; color: #475569; font-size: 11px; font-weight: 600;">${approverTitle}</p>
             <p style="margin: 1px 0 0 0; color: #64748b; font-size: 10px; font-weight: 700;">${compLegal}</p>
           </td>` : ""}
@@ -1396,20 +1396,20 @@ ${memoContent}
               <tr>
                 <td style="width: 50%; vertical-align: top; padding-right: 18px;">
                   ${signatoryLabel?.trim() ? `<p style="margin: 0 0 3px 0; color: #64748b; font-size: 8pt; font-weight: 900; text-transform: uppercase; letter-spacing: 0.8px;">${signatoryLabel.trim()}</p>` : ""}
-                  <div style="height: ${metrics.sigHeight}; display: flex; align-items: flex-end; margin-bottom: 2px;">
-                    ${signatorySignature ? `<img src="${signatorySignature}" style="max-height: ${metrics.sigHeight}; max-width: 170px; display: block;" alt="Signatory Signature">` : '<div style="height: 30px;"></div>'}
+                  <div style="height: ${metrics.sigHeight}; display: flex; align-items: flex-end;">
+                    ${signatorySignature ? `<img src="${signatorySignature}" style="max-height: ${metrics.sigHeight}; max-width: 170px; display: block; margin-bottom: -10px; position: relative; z-index: 2;" alt="Signatory Signature">` : '<div style="height: 30px; margin-bottom: 2px;"></div>'}
                   </div>
-                  <p style="margin: 0; font-weight: 900; color: #0f172a; font-size: 10.5pt; text-transform: uppercase; letter-spacing: 0.2px;">${signatoryName}</p>
+                  <p style="margin: 0; font-weight: 900; color: #0f172a; font-size: 10.5pt; text-transform: uppercase; letter-spacing: 0.2px; position: relative; z-index: 1;">${signatoryName}</p>
                   <p style="margin: 1px 0 0 0; color: #475569; font-size: 9pt; font-weight: 600;">${signatoryTitle}</p>
                   <p style="margin: 1px 0 0 0; color: ${accentColor}; font-weight: 700; font-size: 8.5pt;">${getSignatoryAffiliation(comp)}</p>
                 </td>
                 ${signatoryLayout === "dual" ? `
                 <td style="width: 50%; vertical-align: top; padding-left: 18px;">
                   ${approverLabel?.trim() ? `<p style="margin: 0 0 3px 0; color: #64748b; font-size: 8pt; font-weight: 900; text-transform: uppercase; letter-spacing: 0.8px;">${approverLabel.trim()}</p>` : ""}
-                  <div style="height: ${metrics.sigHeight}; display: flex; align-items: flex-end; margin-bottom: 2px;">
-                    ${approverSignature ? `<img src="${approverSignature}" style="max-height: ${metrics.sigHeight}; max-width: 170px; display: block;" alt="Approver Signature">` : '<div style="height: 30px;"></div>'}
+                  <div style="height: ${metrics.sigHeight}; display: flex; align-items: flex-end;">
+                    ${approverSignature ? `<img src="${approverSignature}" style="max-height: ${metrics.sigHeight}; max-width: 170px; display: block; margin-bottom: -10px; position: relative; z-index: 2;" alt="Approver Signature">` : '<div style="height: 30px; margin-bottom: 2px;"></div>'}
                   </div>
-                  <p style="margin: 0; font-weight: 900; color: #0f172a; font-size: 10.5pt; text-transform: uppercase; letter-spacing: 0.2px;">${approverName}</p>
+                  <p style="margin: 0; font-weight: 900; color: #0f172a; font-size: 10.5pt; text-transform: uppercase; letter-spacing: 0.2px; position: relative; z-index: 1;">${approverName}</p>
                   <p style="margin: 1px 0 0 0; color: #475569; font-size: 9pt; font-weight: 600;">${approverTitle}</p>
                   <p style="margin: 1px 0 0 0; color: #64748b; font-weight: 700; font-size: 8.5pt;">${compLegal}</p>
                 </td>` : ""}
@@ -2399,20 +2399,20 @@ Write numbered directives or formal paragraphs.
                         {signatoryLabel.trim()}
                       </p>
                     ) : null}
-                    <div className="h-14 flex items-end mb-1">
+                    <div className="h-14 flex items-end">
                       {signatorySignature ? (
                         <img
                           src={signatorySignature}
                           alt="Signatory E-Signature"
-                          className="max-h-14 max-w-[190px] object-contain object-bottom pointer-events-none select-none"
+                          className="max-h-14 max-w-[190px] object-contain object-bottom pointer-events-none select-none -mb-2.5 relative z-10"
                         />
                       ) : (
-                        <div className="h-8 text-[11px] text-slate-400 italic flex items-center">
+                        <div className="h-8 text-[11px] text-slate-400 italic flex items-center mb-1">
                           (Physical signature space on printed copy)
                         </div>
                       )}
                     </div>
-                    <p className="text-xs font-black text-slate-950 uppercase">{signatoryName}</p>
+                    <p className="text-xs font-black text-slate-950 uppercase relative z-0">{signatoryName}</p>
                     <p className="text-[11px] font-bold text-slate-800 leading-tight">{signatoryTitle}</p>
                     <p className="text-[10px] text-slate-600 font-semibold">{getSignatoryAffiliation(selectedCompany)}</p>
                   </div>
@@ -2530,20 +2530,20 @@ Write numbered directives or formal paragraphs.
                           {approverLabel.trim()}
                         </p>
                       ) : null}
-                      <div className="h-14 flex items-end mb-1">
+                      <div className="h-14 flex items-end">
                         {approverSignature ? (
                           <img
                             src={approverSignature}
                             alt="Approver E-Signature"
-                            className="max-h-14 max-w-[190px] object-contain object-bottom pointer-events-none select-none"
+                            className="max-h-14 max-w-[190px] object-contain object-bottom pointer-events-none select-none -mb-2.5 relative z-10"
                           />
                         ) : (
-                          <div className="h-8 text-[11px] text-slate-400 italic flex items-center">
+                          <div className="h-8 text-[11px] text-slate-400 italic flex items-center mb-1">
                             (Physical signature space on printed copy)
                           </div>
                         )}
                       </div>
-                      <p className="text-xs font-black text-slate-950 uppercase">{approverName}</p>
+                      <p className="text-xs font-black text-slate-950 uppercase relative z-0">{approverName}</p>
                       <p className="text-[11px] font-bold text-slate-800 leading-tight">{approverTitle}</p>
                       <p className="text-[10px] text-slate-600 font-semibold">{selectedCompany.legalName || selectedCompany.name}</p>
                     </div>
@@ -3103,20 +3103,20 @@ Write numbered directives or formal paragraphs.
                                       {signatoryLabel.trim()}
                                     </p>
                                   ) : null}
-                                  <div className="h-16 flex items-end mb-1">
+                                  <div className="h-16 flex items-end">
                                     {signatorySignature ? (
                                       <img
                                         src={signatorySignature}
                                         alt="Signatory E-Signature"
-                                        className="max-h-16 max-w-[210px] object-contain object-bottom pointer-events-none select-none"
+                                        className="max-h-16 max-w-[210px] object-contain object-bottom pointer-events-none select-none -mb-3 relative z-10"
                                       />
                                     ) : (
-                                      <div className="h-10 text-[11px] text-slate-400 italic flex items-center">
+                                      <div className="h-10 text-[11px] text-slate-400 italic flex items-center mb-1">
                                         (Signature over printed name)
                                       </div>
                                     )}
                                   </div>
-                                  <p className="text-xs sm:text-[13.5px] font-black text-slate-950 uppercase tracking-tight">
+                                  <p className="text-xs sm:text-[13.5px] font-black text-slate-950 uppercase tracking-tight relative z-0">
                                     {signatoryName}
                                   </p>
                                   <p className="text-[11.5px] font-bold text-slate-800 leading-tight">
@@ -3134,20 +3134,20 @@ Write numbered directives or formal paragraphs.
                                       {approverLabel.trim()}
                                     </p>
                                   ) : null}
-                                  <div className="h-16 flex items-end mb-1">
+                                  <div className="h-16 flex items-end">
                                     {approverSignature ? (
                                       <img
                                         src={approverSignature}
                                         alt="Approver E-Signature"
-                                        className="max-h-16 max-w-[210px] object-contain object-bottom pointer-events-none select-none"
+                                        className="max-h-16 max-w-[210px] object-contain object-bottom pointer-events-none select-none -mb-3 relative z-10"
                                       />
                                     ) : (
-                                      <div className="h-10 text-[11px] text-slate-400 italic flex items-center">
+                                      <div className="h-10 text-[11px] text-slate-400 italic flex items-center mb-1">
                                         (Signature over printed name)
                                       </div>
                                     )}
                                   </div>
-                                  <p className="text-xs sm:text-[13.5px] font-black text-slate-950 uppercase tracking-tight">
+                                  <p className="text-xs sm:text-[13.5px] font-black text-slate-950 uppercase tracking-tight relative z-0">
                                     {approverName}
                                   </p>
                                   <p className="text-[11.5px] font-bold text-slate-800 leading-tight">
@@ -3166,20 +3166,20 @@ Write numbered directives or formal paragraphs.
                                       {signatoryLabel.trim()}
                                     </p>
                                   ) : null}
-                                  <div className="h-16 flex items-end mb-1">
+                                  <div className="h-16 flex items-end">
                                     {signatorySignature ? (
                                       <img
                                         src={signatorySignature}
                                         alt="Signatory E-Signature"
-                                        className="max-h-16 max-w-[210px] object-contain object-bottom pointer-events-none select-none"
+                                        className="max-h-16 max-w-[210px] object-contain object-bottom pointer-events-none select-none -mb-3 relative z-10"
                                       />
                                     ) : (
-                                      <div className="h-10 text-[11px] text-slate-400 italic flex items-center">
+                                      <div className="h-10 text-[11px] text-slate-400 italic flex items-center mb-1">
                                         (Signature over printed name)
                                       </div>
                                     )}
                                   </div>
-                                  <p className="text-xs sm:text-[13.5px] font-black text-slate-950 uppercase tracking-tight">
+                                  <p className="text-xs sm:text-[13.5px] font-black text-slate-950 uppercase tracking-tight relative z-0">
                                     {signatoryName}
                                   </p>
                                   <p className="text-[11.5px] font-bold text-slate-800 leading-tight">
