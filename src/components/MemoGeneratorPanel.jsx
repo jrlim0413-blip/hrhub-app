@@ -2453,7 +2453,7 @@ Write numbered directives or formal paragraphs.
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
                           <div className="flex justify-between text-[10px] text-slate-600 font-medium mb-1">
-                            <span>Left ↔ Right (Kanan / Kaliwa)</span>
+                            <span>Horizontal (Left ↔ Right)</span>
                             <span className="font-mono font-bold text-slate-800">{signatoryOffsetX}px</span>
                           </div>
                           <input
@@ -2466,14 +2466,14 @@ Write numbered directives or formal paragraphs.
                             className="w-full accent-emerald-600 h-1.5 bg-slate-200 rounded-lg cursor-pointer"
                           />
                           <div className="flex justify-between text-[9px] text-slate-400 mt-0.5">
-                            <span>← Kaliwa (-20px)</span>
-                            <span>Kanan (200px) →</span>
+                            <span>← Left (-20px)</span>
+                            <span>Right (200px) →</span>
                           </div>
                         </div>
 
                         <div>
                           <div className="flex justify-between text-[10px] text-slate-600 font-medium mb-1">
-                            <span>Up ↕ Down (Taas / Baba)</span>
+                            <span>Vertical (Up ↕ Down)</span>
                             <span className="font-mono font-bold text-slate-800">{signatoryOffsetY}px</span>
                           </div>
                           <input
@@ -2486,42 +2486,42 @@ Write numbered directives or formal paragraphs.
                             className="w-full accent-emerald-600 h-1.5 bg-slate-200 rounded-lg cursor-pointer"
                           />
                           <div className="flex justify-between text-[9px] text-slate-400 mt-0.5">
-                            <span className="text-emerald-700 font-semibold">← Mas Pababa (-50px)</span>
-                            <span>Pataas (+20px) →</span>
+                            <span className="text-emerald-700 font-semibold">← Lower Down (-50px)</span>
+                            <span>Raise Up (+20px) →</span>
                           </div>
                         </div>
                       </div>
 
                       {/* Quick Nudge Buttons */}
                       <div className="flex flex-wrap items-center gap-1.5 pt-1 border-t border-slate-200/60">
-                        <span className="text-[9.5px] text-slate-500 font-semibold mr-1">Quick Adjust:</span>
+                        <span className="text-[9.5px] text-slate-500 font-semibold mr-1">Quick Nudge:</span>
                         <button
                           type="button"
                           onClick={() => setSignatoryOffsetY((prev) => Math.max(-50, prev - 3))}
                           className="px-2 py-0.5 rounded-md bg-white border border-slate-300 hover:border-emerald-500 hover:text-emerald-700 text-[10px] font-bold text-slate-700 transition cursor-pointer"
                         >
-                          ↓ 3px Pababa
+                          ↓ 3px Down
                         </button>
                         <button
                           type="button"
                           onClick={() => setSignatoryOffsetY((prev) => Math.min(20, prev + 3))}
                           className="px-2 py-0.5 rounded-md bg-white border border-slate-300 hover:border-emerald-500 hover:text-emerald-700 text-[10px] font-bold text-slate-700 transition cursor-pointer"
                         >
-                          ↑ 3px Pataas
+                          ↑ 3px Up
                         </button>
                         <button
                           type="button"
                           onClick={() => setSignatoryOffsetX((prev) => Math.min(200, prev + 6))}
                           className="px-2 py-0.5 rounded-md bg-white border border-slate-300 hover:border-emerald-500 hover:text-emerald-700 text-[10px] font-bold text-slate-700 transition cursor-pointer"
                         >
-                          → 6px Pakanan
+                          → 6px Right
                         </button>
                         <button
                           type="button"
                           onClick={() => setSignatoryOffsetX((prev) => Math.max(-20, prev - 6))}
                           className="px-2 py-0.5 rounded-md bg-white border border-slate-300 hover:border-emerald-500 hover:text-emerald-700 text-[10px] font-bold text-slate-700 transition cursor-pointer"
                         >
-                          ← 6px Pakaliwa
+                          ← 6px Left
                         </button>
                       </div>
                     </div>
@@ -2681,7 +2681,7 @@ Write numbered directives or formal paragraphs.
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
                           <div className="flex justify-between text-[10px] text-slate-600 font-medium mb-1">
-                            <span>Left ↔ Right (Kanan / Kaliwa)</span>
+                            <span>Horizontal (Left ↔ Right)</span>
                             <span className="font-mono font-bold text-slate-800">{approverOffsetX}px</span>
                           </div>
                           <input
@@ -2694,14 +2694,14 @@ Write numbered directives or formal paragraphs.
                             className="w-full accent-emerald-600 h-1.5 bg-slate-200 rounded-lg cursor-pointer"
                           />
                           <div className="flex justify-between text-[9px] text-slate-400 mt-0.5">
-                            <span>← Kaliwa (-20px)</span>
-                            <span>Kanan (200px) →</span>
+                            <span>← Left (-20px)</span>
+                            <span>Right (200px) →</span>
                           </div>
                         </div>
 
                         <div>
                           <div className="flex justify-between text-[10px] text-slate-600 font-medium mb-1">
-                            <span>Up ↕ Down (Taas / Baba)</span>
+                            <span>Vertical (Up ↕ Down)</span>
                             <span className="font-mono font-bold text-slate-800">{approverOffsetY}px</span>
                           </div>
                           <input
@@ -2714,42 +2714,42 @@ Write numbered directives or formal paragraphs.
                             className="w-full accent-emerald-600 h-1.5 bg-slate-200 rounded-lg cursor-pointer"
                           />
                           <div className="flex justify-between text-[9px] text-slate-400 mt-0.5">
-                            <span className="text-emerald-700 font-semibold">← Mas Pababa (-50px)</span>
-                            <span>Pataas (+20px) →</span>
+                            <span className="text-emerald-700 font-semibold">← Lower Down (-50px)</span>
+                            <span>Raise Up (+20px) →</span>
                           </div>
                         </div>
                       </div>
 
                       {/* Quick Nudge Buttons */}
                       <div className="flex flex-wrap items-center gap-1.5 pt-1 border-t border-slate-200/60">
-                        <span className="text-[9.5px] text-slate-500 font-semibold mr-1">Quick Adjust:</span>
+                        <span className="text-[9.5px] text-slate-500 font-semibold mr-1">Quick Nudge:</span>
                         <button
                           type="button"
                           onClick={() => setApproverOffsetY((prev) => Math.max(-50, prev - 3))}
                           className="px-2 py-0.5 rounded-md bg-white border border-slate-300 hover:border-emerald-500 hover:text-emerald-700 text-[10px] font-bold text-slate-700 transition cursor-pointer"
                         >
-                          ↓ 3px Pababa
+                          ↓ 3px Down
                         </button>
                         <button
                           type="button"
                           onClick={() => setApproverOffsetY((prev) => Math.min(20, prev + 3))}
                           className="px-2 py-0.5 rounded-md bg-white border border-slate-300 hover:border-emerald-500 hover:text-emerald-700 text-[10px] font-bold text-slate-700 transition cursor-pointer"
                         >
-                          ↑ 3px Pataas
+                          ↑ 3px Up
                         </button>
                         <button
                           type="button"
                           onClick={() => setApproverOffsetX((prev) => Math.min(200, prev + 6))}
                           className="px-2 py-0.5 rounded-md bg-white border border-slate-300 hover:border-emerald-500 hover:text-emerald-700 text-[10px] font-bold text-slate-700 transition cursor-pointer"
                         >
-                          → 6px Pakanan
+                          → 6px Right
                         </button>
                         <button
                           type="button"
                           onClick={() => setApproverOffsetX((prev) => Math.max(-20, prev - 6))}
                           className="px-2 py-0.5 rounded-md bg-white border border-slate-300 hover:border-emerald-500 hover:text-emerald-700 text-[10px] font-bold text-slate-700 transition cursor-pointer"
                         >
-                          ← 6px Pakaliwa
+                          ← 6px Left
                         </button>
                       </div>
                     </div>
