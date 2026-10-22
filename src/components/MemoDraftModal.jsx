@@ -581,8 +581,10 @@ export default function MemoDraftModal({
   const [fromPreset, setFromPreset] = useState("hr_dept");
   
   // Default signatory requested by user
+  const [signatoryLabel, setSignatoryLabel] = useState("ISSUED BY:");
   const [signatoryName, setSignatoryName] = useState("JEVINCE JAYE S. JUBAY, CHRP");
   const [signatoryTitle, setSignatoryTitle] = useState("HRMD Manager");
+  const [approverLabel, setApproverLabel] = useState("NOTED & APPROVED BY:");
   const [approverName, setApproverName] = useState("CHARMIE JEAN M. SIMPAL");
   const [approverTitle, setApproverTitle] = useState("President & CEO");
 
@@ -879,9 +881,11 @@ HUMAN RESOURCE MANAGEMENT DIVISION`;
       subject: subject.trim().toUpperCase(),
       classification: classification,
       content: directivesContent.trim(),
+      signatoryLabel: signatoryLabel.trim().toUpperCase(),
       signatoryName: signatoryName.trim().toUpperCase(),
       signatoryTitle: signatoryTitle.trim(),
       signatoryCompany: currentCompany.defaultSignatoryCompany || currentCompany.name,
+      approverLabel: approverLabel.trim().toUpperCase(),
       approverName: approverName.trim().toUpperCase(),
       approverTitle: approverTitle.trim()
     };
@@ -922,12 +926,12 @@ SUBJECT: ${subject.trim().toUpperCase()}
 
 ${directivesContent.trim()}
 
-ISSUED BY:
+${signatoryLabel.trim().toUpperCase() || "ISSUED BY:"}
 ${signatoryName.trim().toUpperCase()}
 ${signatoryTitle.trim()}
 ${currentCompany.defaultSignatoryCompany || currentCompany.name}
 
-NOTED & APPROVED BY:
+${approverLabel.trim().toUpperCase() || "NOTED & APPROVED BY:"}
 ${approverName.trim().toUpperCase()}
 ${approverTitle.trim()}
 ${currentCompany.name}`;
@@ -1580,12 +1584,12 @@ ${currentCompany.name}`;
                 {!isSignatoriesExpanded ? (
                   <div className="grid grid-cols-2 gap-2 text-[11px] pt-1 border-t border-slate-100 text-slate-600">
                     <div>
-                      <span className="text-[9px] uppercase font-bold text-slate-400 block">Issued By</span>
+                      <span className="text-[9px] uppercase font-bold text-slate-400 block truncate">{signatoryLabel || "Issued By"}</span>
                       <strong className="text-slate-800 block truncate">{signatoryName}</strong>
                       <span className="text-[10px] text-slate-500 block truncate">{signatoryTitle}</span>
                     </div>
                     <div>
-                      <span className="text-[9px] uppercase font-bold text-slate-400 block">Approved By</span>
+                      <span className="text-[9px] uppercase font-bold text-slate-400 block truncate">{approverLabel || "Approved By"}</span>
                       <strong className="text-slate-800 block truncate">{approverName}</strong>
                       <span className="text-[10px] text-slate-500 block truncate">{approverTitle}</span>
                     </div>
@@ -1593,7 +1597,15 @@ ${currentCompany.name}`;
                 ) : (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-slate-100">
                     <div className="space-y-1">
-                      <label className="text-[9px] font-bold text-slate-400 uppercase">Issued By</label>
+                      <label className="text-[9px] font-bold text-slate-400 uppercase">Signatory Header Label</label>
+                      <input
+                        type="text"
+                        value={signatoryLabel}
+                        onChange={(e) => setSignatoryLabel(e.target.value)}
+                        placeholder="e.g. ISSUED BY:"
+                        className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-bold text-slate-800 uppercase"
+                      />
+                      <label className="text-[9px] font-bold text-slate-400 uppercase">Official Signer Name</label>
                       <input
                         type="text"
                         value={signatoryName}
@@ -1604,11 +1616,20 @@ ${currentCompany.name}`;
                         type="text"
                         value={signatoryTitle}
                         onChange={(e) => setSignatoryTitle(e.target.value)}
+                        placeholder="Designation"
                         className="w-full rounded-lg border border-slate-200 bg-white px-2 py-0.5 text-[11px] text-slate-500"
                       />
                     </div>
                     <div className="space-y-1">
-                      <label className="text-[9px] font-bold text-slate-400 uppercase">Approved By</label>
+                      <label className="text-[9px] font-bold text-slate-400 uppercase">Approver Header Label</label>
+                      <input
+                        type="text"
+                        value={approverLabel}
+                        onChange={(e) => setApproverLabel(e.target.value)}
+                        placeholder="e.g. NOTED & APPROVED BY:"
+                        className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-bold text-slate-800 uppercase"
+                      />
+                      <label className="text-[9px] font-bold text-slate-400 uppercase">Approver Official Name</label>
                       <input
                         type="text"
                         value={approverName}
@@ -1619,6 +1640,7 @@ ${currentCompany.name}`;
                         type="text"
                         value={approverTitle}
                         onChange={(e) => setApproverTitle(e.target.value)}
+                        placeholder="Designation"
                         className="w-full rounded-lg border border-slate-200 bg-white px-2 py-0.5 text-[11px] text-slate-500"
                       />
                     </div>
@@ -1735,9 +1757,9 @@ ${currentCompany.name}`;
                 <div className="mt-8 pt-4 grid grid-cols-2 gap-6 text-[11px]">
                   <div>
                     <span className="text-[9px] uppercase font-bold text-slate-400 block mb-6">
-                      ISSUED BY:
+                      {signatoryLabel || "ISSUED BY:"}
                     </span>
-                    <strong className="block text-slate-900 uppercase font-black tracking-wide underline decoration-slate-300 decoration-1 underline-offset-4">
+                    <strong className="block text-slate-900 uppercase font-black tracking-wide">
                       {signatoryName}
                     </strong>
                     <span className="text-slate-600 block text-[10px] mt-0.5">{signatoryTitle}</span>
@@ -1748,9 +1770,9 @@ ${currentCompany.name}`;
 
                   <div>
                     <span className="text-[9px] uppercase font-bold text-slate-400 block mb-6">
-                      NOTED & APPROVED BY:
+                      {approverLabel || "NOTED & APPROVED BY:"}
                     </span>
-                    <strong className="block text-slate-900 uppercase font-black tracking-wide underline decoration-slate-300 decoration-1 underline-offset-4">
+                    <strong className="block text-slate-900 uppercase font-black tracking-wide">
                       {approverName}
                     </strong>
                     <span className="text-slate-600 block text-[10px] mt-0.5">{approverTitle}</span>

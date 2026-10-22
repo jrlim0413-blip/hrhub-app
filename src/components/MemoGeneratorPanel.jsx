@@ -473,9 +473,11 @@ export default function MemoGeneratorPanel({
 
   // Step 3: Signatory Setup & E-Signature States
   const [signatoryLayout, setSignatoryLayout] = useState("dual"); // 'dual' | 'single'
+  const [signatoryLabel, setSignatoryLabel] = useState("ISSUED BY:");
   const [signatoryName, setSignatoryName] = useState("JEVINCE JAYE S. JUBAY, CHRP");
   const [signatoryTitle, setSignatoryTitle] = useState("HRMD Manager");
   const [signatoryCompany, setSignatoryCompany] = useState(selectedCompany.name);
+  const [approverLabel, setApproverLabel] = useState("NOTED & APPROVED BY:");
   const [approverName, setApproverName] = useState("CHARMIE JEAN M. SIMPAL");
   const [approverTitle, setApproverTitle] = useState("President & CEO");
 
@@ -688,8 +690,10 @@ export default function MemoGeneratorPanel({
       if (draft.to) setMemoTo(draft.to.trim());
       if (draft.from) setMemoFrom(draft.from.trim());
       if (draft.subject) setMemoSubject(draft.subject.trim());
+      if (draft.signatoryLabel) setSignatoryLabel(draft.signatoryLabel.trim());
       if (draft.signatoryName) setSignatoryName(draft.signatoryName.trim());
       if (draft.signatoryTitle) setSignatoryTitle(draft.signatoryTitle.trim());
+      if (draft.approverLabel) setApproverLabel(draft.approverLabel.trim());
       if (draft.approverName) setApproverName(draft.approverName.trim());
       if (draft.approverTitle) setApproverTitle(draft.approverTitle.trim());
       if (draft.content) {
@@ -895,9 +899,11 @@ export default function MemoGeneratorPanel({
       companyId: distributionCompany.id,
       companyName: distributionCompany.name,
       companyCode: distributionCompany.code,
+      signatoryLabel,
       signatoryName,
       signatoryTitle,
       signatoryCompany: getSignatoryAffiliation(distributionCompany),
+      approverLabel,
       approverName,
       approverTitle,
       signatoryLayout,
@@ -937,9 +943,11 @@ export default function MemoGeneratorPanel({
     if (m.subject) setMemoSubject(m.subject);
     if (m.category) setMemoCategory(m.category);
     if (m.content) setMemoContent(m.content);
+    if (m.signatoryLabel) setSignatoryLabel(m.signatoryLabel);
     if (m.signatoryName) setSignatoryName(m.signatoryName);
     if (m.signatoryTitle) setSignatoryTitle(m.signatoryTitle);
     setSignatoryCompany(resolveSignatoryAffiliation(memoCompany, m.signatoryCompany));
+    if (m.approverLabel) setApproverLabel(m.approverLabel);
     if (m.approverName) setApproverName(m.approverName);
     if (m.approverTitle) setApproverTitle(m.approverTitle);
     if (m.signatoryLayout) setSignatoryLayout(m.signatoryLayout);
@@ -968,12 +976,12 @@ CLASSIFICATION: ${memoCategory}
 ${memoContent}
 
 -----------------------------------------------------
-ISSUED BY:
+${signatoryLabel || "ISSUED BY:"}
 ${signatoryName}
 ${signatoryTitle}
 ${getSignatoryAffiliation(distributionCompany)}
 
-${signatoryLayout === "dual" ? `NOTED & APPROVED BY:
+${signatoryLayout === "dual" ? `${approverLabel || "NOTED & APPROVED BY:"}
 ${approverName}
 ${approverTitle}
 ${distributionCompany.legalName || distributionCompany.name}
@@ -1014,12 +1022,12 @@ MEMORANDUM DIRECTIVES:
 ${memoContent}
 
 --------------------------------------------------
-ISSUED BY:
+${signatoryLabel || "ISSUED BY:"}
 ${signatoryName}
 ${signatoryTitle}
 ${getSignatoryAffiliation(comp)}
 
-${signatoryLayout === "dual" ? `NOTED & APPROVED BY:
+${signatoryLayout === "dual" ? `${approverLabel || "NOTED & APPROVED BY:"}
 ${approverName}
 ${approverTitle}
 ${compLegal}
@@ -1185,22 +1193,20 @@ ${memoContent.replace(/\n/g, "<br>")}
       <table style="width: 100%; border-collapse: collapse;">
         <tr>
           <td style="width: 50%; vertical-align: top; padding-right: 18px;">
-            <p style="margin: 0; color: #64748b; font-size: 9.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.8px;">ISSUED BY:</p>
+            <p style="margin: 0; color: #64748b; font-size: 9.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.8px;">${signatoryLabel || "ISSUED BY:"}</p>
             <div style="height: 52px; display: flex; align-items: flex-end; margin-bottom: 4px;">
               ${signatorySignature ? `<img src="${signatorySignature}" style="max-height: 50px; max-width: 170px; display: block;" alt="Signatory Signature">` : '<div style="height: 38px;"></div>'}
             </div>
-            <div style="border-bottom: 2px solid #0f172a; width: 190px; margin: 4px 0 6px 0;"></div>
             <p style="margin: 0; font-weight: 900; color: #0f172a; font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.2px;">${signatoryName}</p>
             <p style="margin: 2px 0 0 0; color: #475569; font-size: 11px; font-weight: 600;">${signatoryTitle}</p>
             <p style="margin: 1px 0 0 0; color: ${accentColor}; font-size: 10px; font-weight: 700;">${getSignatoryAffiliation(comp)}</p>
           </td>
           ${signatoryLayout === "dual" ? `
           <td style="width: 50%; vertical-align: top; padding-left: 18px;">
-            <p style="margin: 0; color: #64748b; font-size: 9.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.8px;">NOTED &amp; APPROVED BY:</p>
+            <p style="margin: 0; color: #64748b; font-size: 9.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.8px;">${approverLabel || "NOTED &amp; APPROVED BY:"}</p>
             <div style="height: 52px; display: flex; align-items: flex-end; margin-bottom: 4px;">
               ${approverSignature ? `<img src="${approverSignature}" style="max-height: 50px; max-width: 170px; display: block;" alt="Approver Signature">` : '<div style="height: 38px;"></div>'}
             </div>
-            <div style="border-bottom: 2px solid #0f172a; width: 190px; margin: 4px 0 6px 0;"></div>
             <p style="margin: 0; font-weight: 900; color: #0f172a; font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.2px;">${approverName}</p>
             <p style="margin: 2px 0 0 0; color: #475569; font-size: 11px; font-weight: 600;">${approverTitle}</p>
             <p style="margin: 1px 0 0 0; color: #64748b; font-size: 10px; font-weight: 700;">${compLegal}</p>
@@ -1393,22 +1399,20 @@ ${memoContent}
             <table style="width: 100%; border-collapse: collapse; font-size: 9.5pt; page-break-inside: avoid; break-inside: avoid; margin-bottom: ${metrics.footerMarginTop};">
               <tr>
                 <td style="width: 50%; vertical-align: top; padding-right: 18px;">
-                  <p style="margin: 0; color: #64748b; font-size: 8pt; font-weight: 900; text-transform: uppercase; letter-spacing: 0.8px;">ISSUED BY:</p>
+                  <p style="margin: 0; color: #64748b; font-size: 8pt; font-weight: 900; text-transform: uppercase; letter-spacing: 0.8px;">${signatoryLabel || "ISSUED BY:"}</p>
                   <div style="height: ${metrics.sigHeight}; display: flex; align-items: flex-end; margin-bottom: 2px;">
                     ${signatorySignature ? `<img src="${signatorySignature}" style="max-height: ${metrics.sigHeight}; max-width: 170px; display: block;" alt="Signatory Signature">` : '<div style="height: 30px;"></div>'}
                   </div>
-                  <div style="border-bottom: 2px solid #0f172a; width: 190px; margin: 3px 0 4px 0;"></div>
                   <p style="margin: 0; font-weight: 900; color: #0f172a; font-size: 10.5pt; text-transform: uppercase; letter-spacing: 0.2px;">${signatoryName}</p>
                   <p style="margin: 1px 0 0 0; color: #475569; font-size: 9pt; font-weight: 600;">${signatoryTitle}</p>
                   <p style="margin: 1px 0 0 0; color: ${accentColor}; font-weight: 700; font-size: 8.5pt;">${getSignatoryAffiliation(comp)}</p>
                 </td>
                 ${signatoryLayout === "dual" ? `
                 <td style="width: 50%; vertical-align: top; padding-left: 18px;">
-                  <p style="margin: 0; color: #64748b; font-size: 8pt; font-weight: 900; text-transform: uppercase; letter-spacing: 0.8px;">NOTED &amp; APPROVED BY:</p>
+                  <p style="margin: 0; color: #64748b; font-size: 8pt; font-weight: 900; text-transform: uppercase; letter-spacing: 0.8px;">${approverLabel || "NOTED &amp; APPROVED BY:"}</p>
                   <div style="height: ${metrics.sigHeight}; display: flex; align-items: flex-end; margin-bottom: 2px;">
                     ${approverSignature ? `<img src="${approverSignature}" style="max-height: ${metrics.sigHeight}; max-width: 170px; display: block;" alt="Approver Signature">` : '<div style="height: 30px;"></div>'}
                   </div>
-                  <div style="border-bottom: 2px solid #0f172a; width: 190px; margin: 3px 0 4px 0;"></div>
                   <p style="margin: 0; font-weight: 900; color: #0f172a; font-size: 10.5pt; text-transform: uppercase; letter-spacing: 0.2px;">${approverName}</p>
                   <p style="margin: 1px 0 0 0; color: #475569; font-size: 9pt; font-weight: 600;">${approverTitle}</p>
                   <p style="margin: 1px 0 0 0; color: #64748b; font-weight: 700; font-size: 8.5pt;">${compLegal}</p>
@@ -2299,6 +2303,20 @@ Write numbered directives or formal paragraphs.
 
                 <div className="space-y-3">
                   <div className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[10px] font-bold uppercase text-slate-500">Signatory Header / Section Label</label>
+                      <span className="text-[9px] text-emerald-600 font-semibold bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">Discretionary</span>
+                    </div>
+                    <input
+                      type="text"
+                      value={signatoryLabel}
+                      onChange={(e) => setSignatoryLabel(e.target.value)}
+                      placeholder="e.g. ISSUED BY: or PREPARED BY:"
+                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-black text-slate-900 uppercase focus:border-emerald-500 focus:bg-white focus:outline-none"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
                     <label className="text-[10px] font-bold uppercase text-slate-500">Official Signer Name</label>
                     <input
                       type="text"
@@ -2381,7 +2399,7 @@ Write numbered directives or formal paragraphs.
                   </span>
                   <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-left">
                     <p className="text-[10px] font-black uppercase text-slate-500 tracking-wider">
-                      ISSUED BY:
+                      {signatoryLabel || "ISSUED BY:"}
                     </p>
                     <div className="h-14 flex items-end mb-1">
                       {signatorySignature ? (
@@ -2396,7 +2414,6 @@ Write numbered directives or formal paragraphs.
                         </div>
                       )}
                     </div>
-                    <div className="w-56 border-b-2 border-slate-900 mb-1.5"></div>
                     <p className="text-xs font-black text-slate-950 uppercase">{signatoryName}</p>
                     <p className="text-[11px] font-bold text-slate-800 leading-tight">{signatoryTitle}</p>
                     <p className="text-[10px] text-slate-600 font-semibold">{getSignatoryAffiliation(selectedCompany)}</p>
@@ -2415,6 +2432,20 @@ Write numbered directives or formal paragraphs.
                   </div>
 
                   <div className="space-y-3">
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <label className="text-[10px] font-bold uppercase text-slate-500">Approver Header / Section Label</label>
+                        <span className="text-[9px] text-emerald-600 font-semibold bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">Discretionary</span>
+                      </div>
+                      <input
+                        type="text"
+                        value={approverLabel}
+                        onChange={(e) => setApproverLabel(e.target.value)}
+                        placeholder="e.g. NOTED & APPROVED BY: or APPROVED BY:"
+                        className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-black text-slate-900 uppercase focus:border-emerald-500 focus:bg-white focus:outline-none"
+                      />
+                    </div>
+
                     <div className="space-y-1">
                       <label className="text-[10px] font-bold uppercase text-slate-500">Approver Official Name</label>
                       <input
@@ -2497,7 +2528,7 @@ Write numbered directives or formal paragraphs.
                     </span>
                     <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-left">
                       <p className="text-[10px] font-black uppercase text-slate-500 tracking-wider">
-                        NOTED &amp; APPROVED BY:
+                        {approverLabel || "NOTED & APPROVED BY:"}
                       </p>
                       <div className="h-14 flex items-end mb-1">
                         {approverSignature ? (
@@ -2512,7 +2543,6 @@ Write numbered directives or formal paragraphs.
                           </div>
                         )}
                       </div>
-                      <div className="w-56 border-b-2 border-slate-900 mb-1.5"></div>
                       <p className="text-xs font-black text-slate-950 uppercase">{approverName}</p>
                       <p className="text-[11px] font-bold text-slate-800 leading-tight">{approverTitle}</p>
                       <p className="text-[10px] text-slate-600 font-semibold">{selectedCompany.legalName || selectedCompany.name}</p>
@@ -3062,21 +3092,21 @@ Write numbered directives or formal paragraphs.
 
                         {/* Bottom Section: Signatories + Official Footer - Sagad sa baba */}
                         <div className="mt-auto pt-6 space-y-4">
-                          {/* Signatory Block with E-Signatures and Crisp Solid Underline */}
+                          {/* Signatory Block with E-Signatures and Natural Sign-off */}
                           <div>
                             {signatoryLayout === "dual" ? (
                               <div className="grid grid-cols-2 gap-8 items-start">
                                 {/* Left: Issued By */}
                                 <div className="space-y-0.5 text-left">
                                   <p className="text-[10.5px] font-black uppercase text-slate-700 tracking-wider">
-                                    ISSUED BY:
+                                    {signatoryLabel || "ISSUED BY:"}
                                   </p>
                                   <div className="h-16 flex items-end mb-1">
                                     {signatorySignature ? (
                                       <img
                                         src={signatorySignature}
                                         alt="Signatory E-Signature"
-                                        className="max-h-16 max-w-[210px] object-contain object-bottom pointer-events-none select-none -mb-2"
+                                        className="max-h-16 max-w-[210px] object-contain object-bottom pointer-events-none select-none"
                                       />
                                     ) : (
                                       <div className="h-10 text-[11px] text-slate-400 italic flex items-center">
@@ -3084,7 +3114,6 @@ Write numbered directives or formal paragraphs.
                                       </div>
                                     )}
                                   </div>
-                                  <div className="w-64 border-b-2 border-slate-950 mb-1.5"></div>
                                   <p className="text-xs sm:text-[13.5px] font-black text-slate-950 uppercase tracking-tight">
                                     {signatoryName}
                                   </p>
@@ -3099,14 +3128,14 @@ Write numbered directives or formal paragraphs.
                                 {/* Right: Noted & Approved By */}
                                 <div className="space-y-0.5 text-left">
                                   <p className="text-[10.5px] font-black uppercase text-slate-700 tracking-wider">
-                                    NOTED &amp; APPROVED BY:
+                                    {approverLabel || "NOTED & APPROVED BY:"}
                                   </p>
                                   <div className="h-16 flex items-end mb-1">
                                     {approverSignature ? (
                                       <img
                                         src={approverSignature}
                                         alt="Approver E-Signature"
-                                        className="max-h-16 max-w-[210px] object-contain object-bottom pointer-events-none select-none -mb-2"
+                                        className="max-h-16 max-w-[210px] object-contain object-bottom pointer-events-none select-none"
                                       />
                                     ) : (
                                       <div className="h-10 text-[11px] text-slate-400 italic flex items-center">
@@ -3114,7 +3143,6 @@ Write numbered directives or formal paragraphs.
                                       </div>
                                     )}
                                   </div>
-                                  <div className="w-64 border-b-2 border-slate-950 mb-1.5"></div>
                                   <p className="text-xs sm:text-[13.5px] font-black text-slate-950 uppercase tracking-tight">
                                     {approverName}
                                   </p>
@@ -3130,14 +3158,14 @@ Write numbered directives or formal paragraphs.
                               <div className="flex items-start justify-start">
                                 <div className="space-y-0.5 text-left max-w-[320px]">
                                   <p className="text-[10.5px] font-black uppercase text-slate-700 tracking-wider">
-                                    ISSUED BY:
+                                    {signatoryLabel || "ISSUED BY:"}
                                   </p>
                                   <div className="h-16 flex items-end mb-1">
                                     {signatorySignature ? (
                                       <img
                                         src={signatorySignature}
                                         alt="Signatory E-Signature"
-                                        className="max-h-16 max-w-[210px] object-contain object-bottom pointer-events-none select-none -mb-2"
+                                        className="max-h-16 max-w-[210px] object-contain object-bottom pointer-events-none select-none"
                                       />
                                     ) : (
                                       <div className="h-10 text-[11px] text-slate-400 italic flex items-center">
@@ -3145,7 +3173,6 @@ Write numbered directives or formal paragraphs.
                                       </div>
                                     )}
                                   </div>
-                                  <div className="w-64 border-b-2 border-slate-950 mb-1.5"></div>
                                   <p className="text-xs sm:text-[13.5px] font-black text-slate-950 uppercase tracking-tight">
                                     {signatoryName}
                                   </p>
