@@ -248,7 +248,6 @@ export async function saveUserSettings(currentUser = null, settingsPartial = {})
     letterhead_defaults: merged.letterheadDefaults,
     active_draft: merged.activeDraft || null,
     settings_json: merged,
-    settings: merged, // Dual compatibility
     updated_at: merged.updatedAt
   };
 
@@ -256,9 +255,28 @@ export async function saveUserSettings(currentUser = null, settingsPartial = {})
   let supabaseError = null;
 
   try {
-    const { error } = await supabase
+    let { error } = await supabase
       .from(USER_SETTINGS_TABLE)
       .upsert(payload, { onConflict: "user_id" });
+
+    // Auto-heal schema differences: if any column is reported missing from Supabase schema cache, strip and retry
+    if (error && error.message?.includes("Could not find the")) {
+      const workingPayload = { ...payload };
+      let retries = 5;
+      while (error && error.message?.includes("Could not find the") && retries > 0) {
+        retries--;
+        const missingColMatch = error.message.match(/Could not find the '([^']+)' column/i);
+        if (missingColMatch && missingColMatch[1]) {
+          delete workingPayload[missingColMatch[1]];
+          const retryRes = await supabase
+            .from(USER_SETTINGS_TABLE)
+            .upsert(workingPayload, { onConflict: "user_id" });
+          error = retryRes.error;
+        } else {
+          break;
+        }
+      }
+    }
 
     if (!error) {
       syncedToSupabase = true;
@@ -296,7 +314,6 @@ export async function resetUserSettings(currentUser = null) {
       .upsert({
         user_id: accountKey,
         settings_json: defaults,
-        settings: defaults,
         updated_at: new Date().toISOString()
       }, { onConflict: "user_id" });
 

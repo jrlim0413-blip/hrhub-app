@@ -6,6 +6,7 @@ import {
   Layers, RefreshCw, X, Mail, Eye, Sliders, CheckCircle2,
   AlertCircle, Users, UserPlus, PenTool, Calendar, Bookmark,
   RotateCcw, ArrowRight, ArrowLeft, ExternalLink, Zap,
+  ChevronLeft, ChevronRight, LayoutGrid,
   Maximize2, ZoomIn, ZoomOut, Save, Archive, Trash2, Clock, Plus,
   Upload, Image, CheckSquare, Square, XCircle, Code, ShieldCheck, Key,
   Camera, Download, Bold, Italic, Underline, Strikethrough, Highlighter,
@@ -24,6 +25,7 @@ import {
   getSavedMemosFromDb,
   saveMemoRecordToDb,
   deleteMemoRecordFromDb,
+  getAllGlobalMemoRefs,
   SAVED_MEMOS_TABLE
 } from "../lib/savedMemosStorage";
 export const HR_OFFICIAL_EMAIL = "imsoroglohr@gmail.com";
@@ -487,6 +489,71 @@ export const DIRECTIVE_FONT_SIZES = [
   { label: "16 pt (Prominent)", value: 21.3 }
 ];
 
+/**
+ * In-memory registry of references used in current active browser session
+ * to guarantee immediate uniqueness across all tabs/drafts before DB persistence.
+ */
+const sessionUsedRefs = new Set();
+
+/**
+ * Replace company code in a reference while strictly preserving the date-sequence suffix (e.g. 261023-01).
+ */
+export function getCompanySpecificMemoRef(companyCode = "LBC", baseRef = "") {
+  if (!baseRef) return `MEMO-${new Date().getFullYear()}-${companyCode}`;
+  const parts = String(baseRef).trim().split("-");
+  if (parts.length >= 4) {
+    const prefix = parts.slice(0, 2).join("-"); // "MEMO-2026"
+    const suffix = parts.slice(3).join("-"); // "261023-01" or "001"
+    return `${prefix}-${companyCode}-${suffix}`;
+  }
+  return baseRef.replace(/-(?:LBC|SARG|SIMCON|GTI|RMC|FES|OPC)-/i, `-${companyCode}-`);
+}
+
+/**
+ * Generate sequential, unique memorandum reference across all accounts.
+ * Pattern: MEMO-[YEAR]-[CODE]-[YY][MMDD]-[SEQ (starting at 01)]
+ * Example: MEMO-2026-LBC-261023-01
+ */
+export function generateUniqueMemoRef(companyCode = "LBC", allKnownRefs = []) {
+  const now = new Date();
+  const fullYear = now.getFullYear();
+  const yy = String(fullYear).slice(-2);
+  const mm = String(now.getMonth() + 1).padStart(2, "0");
+  const dd = String(now.getDate()).padStart(2, "0");
+  const dateTag = `${yy}${mm}${dd}`; // e.g. "261023"
+
+  const candidatePool = new Set([
+    ...sessionUsedRefs,
+    ...(Array.isArray(allKnownRefs) ? allKnownRefs : [])
+  ]);
+
+  let maxSeq = 0;
+  const dateTagRegex = new RegExp(`(?:${dateTag})[-_]?(\\d+)`, "i");
+
+  for (const ref of candidatePool) {
+    if (!ref || typeof ref !== "string") continue;
+    const match = ref.match(dateTagRegex);
+    if (match && match[1]) {
+      const parsed = parseInt(match[1], 10);
+      if (!isNaN(parsed) && parsed > maxSeq) {
+        maxSeq = parsed;
+      }
+    }
+  }
+
+  const nextSeq = maxSeq + 1;
+  const seqStr = String(nextSeq).padStart(2, "0");
+  const generatedRef = `MEMO-${fullYear}-${companyCode}-${dateTag}-${seqStr}`;
+  sessionUsedRefs.add(generatedRef);
+  return generatedRef;
+}
+
+export function registerUsedMemoRef(ref) {
+  if (ref && typeof ref === "string") {
+    sessionUsedRefs.add(ref.trim());
+  }
+}
+
 export default function MemoGeneratorPanel({
   onClose,
   profiles = [],
@@ -522,7 +589,7 @@ export default function MemoGeneratorPanel({
   const isLetterheadHeadingInvalid = !letterheadHeading.trim();
 
   // Step 1: Memo Header & Routing States
-  const [memoRef, setMemoRef] = useState(() => `MEMO-2026-LBC-001`);
+  const [memoRef, setMemoRef] = useState(() => generateUniqueMemoRef("LBC"));
   const [memoDate, setMemoDate] = useState(() => {
     const now = new Date();
     return new Intl.DateTimeFormat("en-US", { month: "long", day: "2-digit", year: "numeric" }).format(now).toUpperCase();
@@ -711,6 +778,7 @@ export default function MemoGeneratorPanel({
   });
 
   useEffect(() => {
+    if (!isSettingsInitialized.current) return;
     saveUserSettings(currentUser, {
       signatory: {
         offsetX: signatoryOffsetX,
@@ -721,6 +789,7 @@ export default function MemoGeneratorPanel({
   }, [signatoryOffsetX, signatoryOffsetY, signatorySize, currentUser]);
 
   useEffect(() => {
+    if (!isSettingsInitialized.current) return;
     saveUserSettings(currentUser, {
       approver: {
         offsetX: approverOffsetX,
@@ -732,6 +801,9 @@ export default function MemoGeneratorPanel({
 
   // Step 4: Preview, Zoom & Watermark States
   const [previewZoom, setPreviewZoom] = useState(100); // 90, 100, 110
+  const [paperSize, setPaperSize] = useState("auto"); // "auto" | "short" | "a4" | "legal13" | "legal14"
+  const [previewEntityIndex, setPreviewEntityIndex] = useState(0);
+  const [previewViewMode, setPreviewViewMode] = useState("slide"); // "slide" | "scroll"
   const [watermarkOpacity, setWatermarkOpacity] = useState(6); // 4% to 25% (default 6% for clean look)
   const [watermarkSize, setWatermarkSize] = useState(400);
   const [showDiagonalStamp, setShowDiagonalStamp] = useState(false);
@@ -746,10 +818,32 @@ export default function MemoGeneratorPanel({
     return companies.filter((company) => includedCompanyIds.includes(company.id));
   }, [companies, includedCompanyIds]);
   const companiesToPreview = activeCompanies;
+
+  const safePreviewIndex = Math.min(
+    Math.max(0, previewEntityIndex),
+    Math.max(0, companiesToPreview.length - 1)
+  );
+
+  // Keyboard navigation for Step 4 Memorandum Output Viewer (Left / Right Arrow Keys)
+  useEffect(() => {
+    if (currentStep !== 4) return;
+    const handleKeyDown = (e) => {
+      if (["INPUT", "TEXTAREA"].includes(e.target?.tagName)) return;
+      if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        setPreviewEntityIndex((prev) => Math.max(0, prev - 1));
+      } else if (e.key === "ArrowRight") {
+        e.preventDefault();
+        setPreviewEntityIndex((prev) => Math.min(companiesToPreview.length - 1, prev + 1));
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [currentStep, companiesToPreview.length]);
   const distributionCompany = activeCompanies.find((company) => company.id === selectedCompanyId) || activeCompanies[0] || selectedCompany;
   const distributionMemoRef = selectedCompanyId === distributionCompany.id
     ? memoRef
-    : `MEMO-2026-${distributionCompany.code}-${memoRef.split("-").pop() || "001"}`;
+    : getCompanySpecificMemoRef(distributionCompany.code, memoRef);
   const getSignatoryAffiliation = (company) =>
     company.id === selectedCompanyId
       ? resolveSignatoryAffiliation(company, signatoryCompany)
@@ -786,9 +880,18 @@ export default function MemoGeneratorPanel({
     (async () => {
       try {
         setIsLoadingSavedMemos(true);
-        const { memos } = await getSavedMemosFromDb(currentUser);
+        const [{ memos }, globalRefs] = await Promise.all([
+          getSavedMemosFromDb(currentUser),
+          getAllGlobalMemoRefs()
+        ]);
         if (isMounted) {
           setSavedMemos(memos || []);
+          if (!initialDraft?.ref && !initialUserSettings?.activeDraft?.ref) {
+            setMemoRef((prevRef) => {
+              const compCode = selectedCompany?.code || "LBC";
+              return generateUniqueMemoRef(compCode, globalRefs);
+            });
+          }
         }
       } catch (err) {
         console.warn("Failed to load saved memos from Supabase:", err);
@@ -846,6 +949,9 @@ export default function MemoGeneratorPanel({
         }
         if (settings.directives?.fontSize) {
           setDirectivesFontSize(Number(settings.directives.fontSize));
+        }
+        if (settings.paperSize) {
+          setPaperSize(settings.paperSize);
         }
 
         if (settings.signatory) {
@@ -1106,7 +1212,7 @@ export default function MemoGeneratorPanel({
 
       // STRICT: Zero fallback to generic company contacts. Pre-registered work emails only!
       const recipients = Array.from(compEmailSet);
-      const compMemoRef = `MEMO-2026-${comp.code}-${memoRef.split("-").pop() || "001"}`;
+      const compMemoRef = getCompanySpecificMemoRef(comp.code, memoRef);
 
       return {
         companyId: comp.id,
@@ -1155,7 +1261,7 @@ export default function MemoGeneratorPanel({
     if (!comp) return;
     setSelectedCompanyId(companyId);
     setSignatoryCompany(comp.name);
-    setMemoRef(`MEMO-2026-${comp.code}-${String(Math.floor(Math.random() * 900) + 100).padStart(3, "0")}`);
+    setMemoRef((prevRef) => getCompanySpecificMemoRef(comp.code, prevRef));
     setLetterheadStatus(null);
   };
 
@@ -1314,6 +1420,7 @@ export default function MemoGeneratorPanel({
 
     const updated = [newMemo, ...savedMemos.filter((m) => m.ref !== distributionMemoRef || m.companyId !== distributionCompany.id)];
     setSavedMemos(updated);
+    registerUsedMemoRef(distributionMemoRef);
 
     try {
       const res = await saveMemoRecordToDb(currentUser, newMemo);
@@ -1403,7 +1510,7 @@ ${distributionCompany.legalName || distributionCompany.name}
   // Email & PDF Generators (Company-Tailored)
   const generateEmailBody = (targetComp = distributionCompany) => {
     const comp = targetComp || distributionCompany;
-    const compMemoRef = `MEMO-2026-${comp.code}-${memoRef.split("-").pop() || "001"}`;
+    const compMemoRef = getCompanySpecificMemoRef(comp.code, memoRef);
     const compLegal = comp.legalName || comp.name;
 
     return `Dear Team,
@@ -1446,7 +1553,7 @@ HR Contact: ${HR_OFFICIAL_EMAIL}`;
 
   const generateCompanyEmailHtml = (targetComp = distributionCompany) => {
     const comp = targetComp || distributionCompany;
-    const compMemoRef = `MEMO-2026-${comp.code}-${memoRef.split("-").pop() || "001"}`;
+    const compMemoRef = getCompanySpecificMemoRef(comp.code, memoRef);
     const compLegal = comp.legalName || comp.name;
     const accentColor = comp.accentColor || "#059669";
 
@@ -1648,57 +1755,171 @@ ${renderMemoDirectivesHtml(memoContent).replace(/\n/g, "<br>")}
    * and compacts typography and margins so header, metadata, directives, signatures, and footer
    * fit effortlessly without splitting to a 2nd page.
    */
-  const getMemoFitMetrics = (content = memoContent) => {
+  const getMemoFitMetrics = (content = memoContent, preferredPaper = paperSize) => {
     const rawText = stripHtml(content || "").trim();
     const charLen = rawText.length;
-    const lineCount = rawText.split(/\r?\n/).length;
+    const lineCount = rawText.split(/\r?\n/).filter(Boolean).length;
 
-    // Auto-detection rules:
-    // Long Bond Paper needed when content exceeds ~1250 chars or > 20 lines
-    const isLongPaper = charLen > 1250 || lineCount > 20;
-    const isCompact = charLen > 700 || lineCount > 13;
+    // Determine target paper size (Auto, Short 8.5x11, A4, Long 8.5x13, Legal 8.5x14)
+    let effectivePaper = preferredPaper || "auto";
+    if (effectivePaper === "auto") {
+      effectivePaper = (charLen > 950 || lineCount > 15) ? "legal13" : "a4";
+    }
+
+    const isShort = effectivePaper === "short" || effectivePaper === "letter";
+    const isLegal14 = effectivePaper === "legal14";
+    const isLegal13 = effectivePaper === "legal13" || effectivePaper === "legal" || effectivePaper === "long";
+    const isLegal = isLegal13 || isLegal14;
+
+    // Standard print page margins: 4mm top/bottom (sagad sa margin), 8mm left/right
+    const pageMargin = "4mm 8mm 4mm 8mm";
+
+    // Exact physical dimensions and printable heights (paper height minus 8mm margins - safety buffer)
+    let paperSizeCss = "A4 portrait";
+    let paperLabel = "A4 (210 × 297 mm)";
+    let paperBadgeLabel = "A4 (210×297)";
+    let sheetHeightMm = 286; // 297mm - 8mm - 3mm buffer
+    let sheetWidthMm = 194;  // 210mm - 16mm
+    let aspectRatioCss = "210 / 297";
+    let previewMinHeightPx = 990;
+
+    if (isShort) {
+      paperSizeCss = "8.5in 11in";
+      paperLabel = "Short Bond (8.5 × 11 in / Letter)";
+      paperBadgeLabel = "Short (8.5×11)";
+      sheetHeightMm = 267;
+      sheetWidthMm = 199.9;
+      aspectRatioCss = "8.5 / 11";
+      previewMinHeightPx = 920;
+    } else if (isLegal14) {
+      paperSizeCss = "8.5in 14in";
+      paperLabel = "Legal (8.5 × 14 in)";
+      paperBadgeLabel = "Legal (8.5×14)";
+      sheetHeightMm = 344;
+      sheetWidthMm = 199.9;
+      aspectRatioCss = "8.5 / 14";
+      previewMinHeightPx = 1180;
+    } else if (isLegal) {
+      paperSizeCss = "8.5in 13in";
+      paperLabel = "Long Bond (8.5 × 13 in / Folio)";
+      paperBadgeLabel = "Long (8.5×13)";
+      sheetHeightMm = 319;
+      sheetWidthMm = 199.9;
+      aspectRatioCss = "8.5 / 13";
+      previewMinHeightPx = 1090;
+    }
+
+    // Dynamic Density Tuning for Guaranteed 1-Page Fit across all paper sizes
+    let isCompact = false;
+    let isUltraCompact = false;
+
+    if (isShort) {
+      if (charLen > 1050 || lineCount > 17) {
+        isUltraCompact = true;
+        isCompact = true;
+      } else if (charLen > 550 || lineCount > 10) {
+        isCompact = true;
+      }
+    } else if (!isLegal) {
+      if (charLen > 1300 || lineCount > 21) {
+        isUltraCompact = true;
+        isCompact = true;
+      } else if (charLen > 700 || lineCount > 12) {
+        isCompact = true;
+      }
+    } else {
+      if (charLen > 1800 || lineCount > 27) {
+        isUltraCompact = true;
+        isCompact = true;
+      } else if (charLen > 1050 || lineCount > 16) {
+        isCompact = true;
+      }
+    }
+
+    // CRITICAL: Strictly respect user's configured directivesFontSize without auto-downscaling
+    const directivesFontSizePx = Number(directivesFontSize) || 13.3;
+    let directivesLineHeight = "1.6";
+    let directivesPadding = "4px 0";
+    let sigMarginTop = "24px";
+    let bannerPadding = "4px 4px";
+    let bannerTitleSize = "14pt";
+    let logoMaxHeight = "54px";
+    let letterheadTitleSize = "13.5pt";
+    let headerPadding = "2.5px 0";
+    let effectiveSignatorySize = signatorySize;
+    let effectiveApproverSize = approverSize;
+
+    if (isUltraCompact) {
+      directivesLineHeight = isShort ? "1.26" : "1.30";
+      directivesPadding = "1.5px 0";
+      sigMarginTop = isShort ? "4px" : isLegal ? "10px" : "6px";
+      bannerPadding = "2.5px 4px";
+      bannerTitleSize = "12pt";
+      logoMaxHeight = isShort ? "38px" : "44px";
+      letterheadTitleSize = isShort ? "11.5pt" : "12pt";
+      headerPadding = "1px 0";
+      effectiveSignatorySize = Math.min(signatorySize, isShort ? 32 : 36);
+      effectiveApproverSize = Math.min(approverSize, isShort ? 32 : 36);
+    } else if (isCompact) {
+      directivesLineHeight = isShort ? "1.38" : "1.44";
+      directivesPadding = "3px 0";
+      sigMarginTop = isShort ? "10px" : isLegal ? "18px" : "12px";
+      bannerPadding = "3.5px 4px";
+      bannerTitleSize = "13pt";
+      logoMaxHeight = isShort ? "46px" : "50px";
+      letterheadTitleSize = isShort ? "12.5pt" : "13pt";
+      headerPadding = "2px 0";
+      effectiveSignatorySize = Math.min(signatorySize, isShort ? 40 : 44);
+      effectiveApproverSize = Math.min(approverSize, isShort ? 40 : 44);
+    } else {
+      directivesLineHeight = isShort ? "1.52" : isLegal ? "1.65" : "1.58";
+      sigMarginTop = isShort ? "18px" : isLegal ? "28px" : "22px";
+    }
 
     return {
-      isLongPaper,
+      effectivePaper,
+      isShort,
+      isLegal,
+      isLongPaper: isLegal,
       isCompact,
-      paperSize: isLongPaper ? "8.5in 13in" : "A4 portrait",
-      paperLabel: isLongPaper ? "Long Bond Paper (8.5 x 13 in)" : "Standard Bond Paper (A4 / Short)",
-      pageMargin: isLongPaper ? "2mm 6mm 3mm 6mm" : (isCompact ? "2mm 8mm 3mm 8mm" : "3mm 10mm 4mm 10mm"),
-      containerPadding: isLongPaper ? "6px 20px 10px 20px" : (isCompact ? "6px 22px 10px 22px" : "10px 26px 14px 26px"),
-      topAccentHeight: "5px",
-      headerMarginBottom: isCompact ? "8px" : "14px",
-      headerPaddingBottom: isCompact ? "8px" : "12px",
-      titleFontSize: isCompact ? "17pt" : "19pt",
-      bannerPadding: isCompact ? "5px 12px" : "7px 16px",
-      bannerFontSize: isCompact ? "11.5pt" : "13pt",
-      tableMarginBottom: isCompact ? "8px" : "14px",
-      tableCellPadding: isCompact ? "3.5px 8px" : "5.5px 10px",
-      tableFontSize: isCompact ? "8.5pt" : "9.5pt",
-      bodyFontSize: isLongPaper ? "9.5pt" : (isCompact ? "9.5pt" : "10.5pt"),
-      bodyLineHeight: isLongPaper ? "1.52" : (isCompact ? "1.52" : "1.72"),
-      bodyMarginBottom: isCompact ? "12px" : "20px",
-      bodyMinHeight: isLongPaper ? "380px" : (isCompact ? "200px" : "260px"),
-      sigHeight: isCompact ? "36px" : "48px",
-      sigMarginTop: isCompact ? "12px" : "20px",
-      footerMarginTop: isCompact ? "12px" : "22px",
-      footerPaddingTop: isCompact ? "6px" : "10px",
-      watermarkFontSize: isLongPaper ? "50pt" : (isCompact ? "42pt" : "46pt"),
+      isUltraCompact,
+      paperSizeCss,
+      paperSize: paperSizeCss,
+      paperLabel,
+      paperBadgeLabel,
+      pageMargin,
+      sheetHeightMm,
+      sheetWidthMm,
+      aspectRatioCss,
+      previewMinHeightPx,
+      directivesFontSizePx,
+      directivesLineHeight,
+      directivesPadding,
+      sigMarginTop,
+      bannerPadding,
+      bannerTitleSize,
+      logoMaxHeight,
+      letterheadTitleSize,
+      headerPadding,
+      effectiveSignatorySize,
+      effectiveApproverSize,
+      bodyLineHeight: directivesLineHeight,
     };
   };
 
-  const generateCompanyPrintHtml = (targetComp = distributionCompany) => {
+  const generateCompanyPrintHtml = (targetComp = distributionCompany, preferredPaper = paperSize) => {
     const comp = targetComp || distributionCompany;
     const addrLines = formatAddressLines(escapeHtml(comp.address || ""));
     const addressHtml = addrLines.length > 1
       ? `${addrLines[0]}<br>${addrLines[1]}`
       : addrLines[0];
-    const compMemoRef = `MEMO-2026-${comp.code}-${memoRef.split("-").pop() || "001"}`;
+    const compMemoRef = getCompanySpecificMemoRef(comp.code, memoRef);
     const compLegal = comp.legalName || comp.name;
     const accentColor = comp.accentColor || "#059669";
-    const metrics = getMemoFitMetrics(memoContent);
+    const metrics = getMemoFitMetrics(memoContent, preferredPaper);
 
     return `
-      <div class="memo-print-sheet" style="position: relative; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; width: 100%; box-sizing: border-box; overflow: hidden; page-break-inside: avoid; break-inside: avoid; display: flex; flex-direction: column; justify-content: space-between; height: 100vh; min-height: 100vh; max-height: 100vh; padding: 12px 16px 8px 16px; background: #ffffff; color: #0f172a;">
+      <div class="memo-print-sheet" style="position: relative; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; width: 100%; height: ${metrics.sheetHeightMm}mm; min-height: ${metrics.sheetHeightMm}mm; max-height: ${metrics.sheetHeightMm}mm; box-sizing: border-box; overflow: hidden; display: flex; flex-direction: column; justify-content: space-between; padding: 0 2mm; margin: 0; background: #ffffff; color: #0f172a;">
         
         <!-- ================= COMPANY-SPECIFIC EXECUTIVE WATERMARK LAYER ================= -->
         <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: ${watermarkSize}px; height: ${watermarkSize}px; pointer-events: none; z-index: 0; user-select: none; display: flex; align-items: center; justify-content: center; opacity: ${watermarkOpacity / 100};">
@@ -1789,46 +2010,46 @@ ${renderMemoDirectivesHtml(memoContent)}
             </div>
 
             <!-- Signatory Sign-off Block: ~4 line spaces after body directives -->
-            <div style="margin-top: 28px; padding-top: 4px; page-break-inside: avoid; break-inside: avoid;">
+            <div style="margin-top: ${metrics.sigMarginTop}; padding-top: 4px; page-break-inside: avoid; break-inside: avoid;">
               <table style="width: 100%; border-collapse: collapse; font-size: 9.5pt;">
                 <tr>
-                  <td style="width: 50%; vertical-align: top; padding-right: 18px;">
-                    ${signatoryLabel?.trim() ? `<p style="margin: 0 0 2px 0; color: #475569; font-size: 8pt; font-weight: 900; text-transform: uppercase; letter-spacing: 0.5px;">${signatoryLabel.trim()}</p>` : ""}
+                  <td style="width: ${signatoryLayout === "dual" ? "50%" : "auto"}; max-width: ${signatoryLayout === "dual" ? "none" : "320px"}; vertical-align: top; text-align: left; padding-right: 18px;">
+                    <p style="margin: 0 0 2px 0; color: #475569; font-size: 8pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">${signatoryLabel?.trim() ? escapeHtml(signatoryLabel.trim()) : "ISSUED BY:"}</p>
                     <div style="height: ${Math.max(56, signatorySize + 8)}px; display: flex; align-items: flex-end;">
                       ${signatorySignature ? `
                         <img src="${signatorySignature}" style="height: ${signatorySize}px; max-height: ${signatorySize}px; max-width: ${Math.round(signatorySize * 3.5)}px; display: block; margin-left: ${signatoryOffsetX}px; margin-bottom: ${signatoryOffsetY}px; position: relative; z-index: 2; object-fit: contain; object-position: bottom left;" alt="Signatory Signature">
                       ` : '<div style="height: 30px; margin-bottom: 2px;"></div>'}
                     </div>
-                    <p style="margin: 0; font-weight: 900; color: #020617; font-size: 10pt; text-transform: uppercase; letter-spacing: 0.2px; position: relative; z-index: 1;">${signatoryName}</p>
-                    <p style="margin: 1px 0 0 0; color: #334155; font-size: 8.5pt; font-weight: 700;">${signatoryTitle}</p>
-                    <p style="margin: 1px 0 0 0; color: #64748b; font-weight: 600; font-size: 8pt;">${getSignatoryAffiliation(comp)}</p>
+                    <p style="margin: 0; font-weight: 900; color: #020617; font-size: 10pt; text-transform: uppercase; letter-spacing: 0.2px; position: relative; z-index: 1;">${escapeHtml(signatoryName)}</p>
+                    <p style="margin: 1px 0 0 0; color: #334155; font-size: 8.5pt; font-weight: 700;">${escapeHtml(signatoryTitle)}</p>
+                    <p style="margin: 1px 0 0 0; color: #64748b; font-weight: 600; font-size: 8pt;">${escapeHtml(getSignatoryAffiliation(comp))}</p>
                   </td>
                   ${signatoryLayout === "dual" ? `
-                  <td style="width: 50%; vertical-align: top; padding-left: 18px;">
-                    ${approverLabel?.trim() ? `<p style="margin: 0 0 2px 0; color: #475569; font-size: 8pt; font-weight: 900; text-transform: uppercase; letter-spacing: 0.5px;">${approverLabel.trim()}</p>` : ""}
+                  <td style="width: 50%; vertical-align: top; text-align: left; padding-left: 18px;">
+                    <p style="margin: 0 0 2px 0; color: #475569; font-size: 8pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">${approverLabel?.trim() ? escapeHtml(approverLabel.trim()) : "APPROVED BY:"}</p>
                     <div style="height: ${Math.max(56, approverSize + 8)}px; display: flex; align-items: flex-end;">
                       ${approverSignature ? `
                         <img src="${approverSignature}" style="height: ${approverSize}px; max-height: ${approverSize}px; max-width: ${Math.round(approverSize * 3.5)}px; display: block; margin-left: ${approverOffsetX}px; margin-bottom: ${approverOffsetY}px; position: relative; z-index: 2; object-fit: contain; object-position: bottom left;" alt="Approver Signature">
                       ` : '<div style="height: 30px; margin-bottom: 2px;"></div>'}
                     </div>
-                    <p style="margin: 0; font-weight: 900; color: #020617; font-size: 10pt; text-transform: uppercase; letter-spacing: 0.2px; position: relative; z-index: 1;">${approverName}</p>
-                    <p style="margin: 1px 0 0 0; color: #334155; font-size: 8.5pt; font-weight: 700;">${approverTitle}</p>
-                    <p style="margin: 1px 0 0 0; color: #64748b; font-weight: 600; font-size: 8pt;">${compLegal}</p>
+                    <p style="margin: 0; font-weight: 900; color: #020617; font-size: 10pt; text-transform: uppercase; letter-spacing: 0.2px; position: relative; z-index: 1;">${escapeHtml(approverName)}</p>
+                    <p style="margin: 1px 0 0 0; color: #334155; font-size: 8.5pt; font-weight: 700;">${escapeHtml(approverTitle)}</p>
+                    <p style="margin: 1px 0 0 0; color: #64748b; font-weight: 600; font-size: 8pt;">${escapeHtml(compLegal)}</p>
                   </td>` : ""}
                 </tr>
               </table>
             </div>
           </div>
 
-          <!-- Bottom Section: ONLY Official Division Footer - Sagad sa pinaka-baba -->
-          <div style="margin-top: auto; padding-top: 10px;">
-            <div style="border-top: 1px solid #cbd5e1; padding-top: 6px; display: flex; justify-content: space-between; align-items: center; font-size: 7.5pt; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px;">
-              <span>OFFICE OF THE HUMAN RESOURCES &amp; ADMINISTRATION</span>
-              <span style="font-weight: 900; color: #0f172a;">STRICT COMPLIANCE MANDATED</span>
-              <span>${comp.code} • OFFICIAL TRANSMISSION</span>
+          <!-- Bottom Section: Official Division Footer (SAGAD SA BOTTOM MARGIN) - Thin, Crisp & Professional -->
+          <div style="margin-top: auto; padding-top: 5px; padding-bottom: 0; margin-bottom: 0; flex-shrink: 0;">
+            <div style="border-top: 1px solid #cbd5e1; padding-top: 3.5px; display: flex; justify-content: space-between; align-items: center; font-size: 6.8pt; font-weight: 500; color: #475569; text-transform: uppercase; letter-spacing: 0.8px;">
+              <span style="font-weight: 500;">HUMAN RESOURCES &amp; ADMINISTRATION</span>
+              <span style="font-weight: 600; color: #0f172a; letter-spacing: 1.2px;">STRICT COMPLIANCE MANDATED</span>
+              <span style="font-weight: 500;">${comp.code} • OFFICIAL TRANSMISSION</span>
             </div>
-            <div style="text-align: center; font-size: 7pt; color: #94a3b8; font-weight: 800; text-transform: uppercase; letter-spacing: 2px; margin-top: 2px;">
-              HUMAN RESOURCE MANAGEMENT DIVISION
+            <div style="text-align: center; font-size: 5.8pt; color: #64748b; font-weight: 400; text-transform: uppercase; letter-spacing: 1.8px; margin-top: 1.5px;">
+              CORPORATE EXECUTIVE RECORD • CONFIDENTIAL TRANSMISSION
             </div>
           </div>
 
@@ -1946,15 +2167,15 @@ ${renderMemoDirectivesHtml(memoContent)}
       return;
     }
 
-    const metrics = getMemoFitMetrics(memoContent);
+    const metrics = getMemoFitMetrics(memoContent, paperSize);
 
     const companiesToPrint = targetCompany && targetCompany !== "all"
       ? [typeof targetCompany === "string" ? (companies.find((company) => company.id === targetCompany) || companies[0]) : targetCompany]
       : activeCompanies;
 
-    const sheetsHtml = companiesToPrint.map((comp, idx) => {
-      return generateCompanyPrintHtml(comp);
-    }).join(companiesToPrint.length > 1 ? '<div style="page-break-after: always; break-after: page;"></div>' : "");
+    const sheetsHtml = companiesToPrint.map((comp) => {
+      return generateCompanyPrintHtml(comp, paperSize);
+    }).join("");
 
     const printHtml = `<!doctype html>
 <html>
@@ -1963,16 +2184,16 @@ ${renderMemoDirectivesHtml(memoContent)}
   <title>${memoRef} - ${memoSubject} (${metrics.paperLabel})</title>
   <style>
     @page {
-      size: ${metrics.paperSize};
-      margin: 8mm 12mm 8mm 12mm;
+      size: ${metrics.paperSizeCss};
+      margin: 4mm 8mm 4mm 8mm;
     }
     * {
       box-sizing: border-box;
       margin: 0;
       padding: 0;
       -webkit-font-smoothing: antialiased;
-      -webkit-print-color-adjust: exact;
-      print-color-adjust: exact;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
     }
     html, body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -1985,9 +2206,9 @@ ${renderMemoDirectivesHtml(memoContent)}
     }
     .memo-print-sheet {
       width: 100%;
-      height: 100vh;
-      min-height: 100vh;
-      max-height: 100vh;
+      height: ${metrics.sheetHeightMm}mm;
+      min-height: ${metrics.sheetHeightMm}mm;
+      max-height: ${metrics.sheetHeightMm}mm;
       box-sizing: border-box;
       position: relative;
       overflow: hidden;
@@ -1998,34 +2219,49 @@ ${renderMemoDirectivesHtml(memoContent)}
       break-inside: avoid;
       page-break-after: always;
       break-after: page;
-      padding: 6px 10px 4px 10px;
+      padding: 0 2mm;
+      margin: 0;
+      background: #ffffff;
     }
-    .memo-print-sheet:last-child {
-      page-break-after: auto;
-      break-after: auto;
+    .memo-print-sheet:last-child,
+    .memo-print-sheet:last-of-type {
+      page-break-after: avoid !important;
+      break-after: avoid !important;
     }
     @media print {
+      @page {
+        size: ${metrics.paperSizeCss};
+        margin: 4mm 8mm 4mm 8mm;
+      }
       html, body {
         width: 100% !important;
         height: 100% !important;
         margin: 0 !important;
         padding: 0 !important;
+        background: #ffffff !important;
+        overflow: hidden !important;
       }
       .memo-print-sheet {
         width: 100% !important;
-        height: 100vh !important;
-        min-height: 100vh !important;
-        max-height: 100vh !important;
+        height: ${metrics.sheetHeightMm}mm !important;
+        min-height: ${metrics.sheetHeightMm}mm !important;
+        max-height: ${metrics.sheetHeightMm}mm !important;
+        box-sizing: border-box !important;
         margin: 0 !important;
-        padding: 4px 8px 4px 8px !important;
+        padding: 0 2mm !important;
+        display: flex !important;
+        flex-direction: column !important;
+        justify-content: space-between !important;
         page-break-inside: avoid !important;
         break-inside: avoid !important;
         page-break-after: always !important;
         break-after: page !important;
+        overflow: hidden !important;
       }
-      .memo-print-sheet:last-child {
-        page-break-after: auto !important;
-        break-after: auto !important;
+      .memo-print-sheet:last-child,
+      .memo-print-sheet:last-of-type {
+        page-break-after: avoid !important;
+        break-after: avoid !important;
       }
     }
   </style>
@@ -2127,7 +2363,7 @@ ${renderMemoDirectivesHtml(memoContent)}
         }, 5000);
       } else {
         // Fallback: automatically trigger direct PNG download so user always gets the image file!
-        const compMemoRef = `MEMO-2026-${company.code}-${memoRef.split("-").pop() || "001"}`;
+        const compMemoRef = getCompanySpecificMemoRef(company.code, memoRef);
         const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
         link.download = `${compMemoRef} - ${company.name}.png`;
@@ -2169,7 +2405,7 @@ ${renderMemoDirectivesHtml(memoContent)}
       const blob = await generateMemoSheetBlob(sheetEl);
       if (!blob) throw new Error("Could not create memo image blob");
 
-      const compMemoRef = `MEMO-2026-${company.code}-${memoRef.split("-").pop() || "001"}`;
+      const compMemoRef = getCompanySpecificMemoRef(company.code, memoRef);
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.download = `${compMemoRef} - ${company.name}.png`;
@@ -2744,6 +2980,410 @@ ${renderMemoDirectivesHtml(memoContent)}
     </div>
   );
 
+  // Render Individual Company Memo Sheet Card (used in both Slide View and View All)
+  const renderCompanyMemoCard = (company, index) => {
+    if (!company) return null;
+    const compMemoRef = getCompanySpecificMemoRef(company.code, memoRef);
+    const isIncluded = includedCompanyIds.includes(company.id);
+    const metrics = getMemoFitMetrics(memoContent, paperSize);
+
+    return (
+      <div
+        key={company.id}
+        id={`memo-sheet-${company.id}`}
+        className="w-full max-w-[760px] flex flex-col items-center space-y-2.5 scroll-mt-24"
+      >
+        {/* Executive Company Section Header Bar */}
+        <div className="w-full rounded-xl border border-slate-200/90 bg-white px-3.5 py-2.5 shadow-xs flex flex-col md:flex-row md:items-center md:justify-between gap-2.5">
+          {/* Left: Entity Identifier, Code, and Status Badges */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className={`h-5 w-5 rounded-md flex items-center justify-center text-[10.5px] font-black shrink-0 ${
+              isIncluded ? "bg-slate-900 text-white" : "bg-slate-400 text-white"
+            }`}>
+              {index + 1}
+            </span>
+            <span className="text-slate-900 font-extrabold uppercase tracking-wide text-xs sm:text-[13px]">
+              {company.name}
+            </span>
+            <span className="text-[10px] font-mono font-bold text-slate-700 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded">
+              {compMemoRef}
+            </span>
+            <span className={`text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded-full border ${
+              isIncluded
+                ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                : "bg-rose-50 text-rose-700 border-rose-200"
+            }`}>
+              {isIncluded ? "✓ Included" : "✕ Excluded"}
+            </span>
+            <span className="text-[10px] font-semibold text-slate-600 bg-slate-50 border border-slate-200 px-2 py-0.5 rounded-full inline-flex items-center gap-1">
+              📄 <span className="font-bold text-slate-800">{metrics.paperBadgeLabel}</span> • 1-Page Fit
+            </span>
+          </div>
+
+          {/* Right: Actions Group */}
+          <div className="flex items-center gap-1.5 flex-wrap sm:flex-nowrap shrink-0">
+            {isIncluded && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => handlePrintMemo(company)}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-bold px-2.5 py-1.5 text-xs shadow-2xs transition cursor-pointer"
+                  title={`Print only the ${company.name} memorandum`}
+                >
+                  <Printer size={13} className="text-slate-600" />
+                  <span>Print</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleCopyMemoAsImage(company)}
+                  disabled={copyingImageId === company.id}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-bold px-3 py-1.5 text-xs shadow-xs transition cursor-pointer"
+                  title="Copy high-res memorandum image to clipboard"
+                >
+                  {copyingImageId === company.id ? (
+                    <>
+                      <RefreshCw size={13} className="animate-spin text-emerald-400" />
+                      <span>Generating...</span>
+                    </>
+                  ) : copiedImageId === company.id ? (
+                    <>
+                      <Check size={13} className="text-emerald-400" />
+                      <span className="text-emerald-300">Copied!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Camera size={13} className="text-emerald-400" />
+                      <span>Copy Image</span>
+                    </>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleDownloadMemoImage(company)}
+                  disabled={copyingImageId === company.id}
+                  className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-bold px-2.5 py-1.5 text-xs shadow-2xs transition cursor-pointer"
+                  title="Download memo as high-res PNG image"
+                >
+                  <Download size={13} className="text-slate-500" />
+                  <span>PNG</span>
+                </button>
+              </>
+            )}
+
+            <button
+              type="button"
+              onClick={() => toggleCompanyInclusion(company.id)}
+              className={`inline-flex items-center gap-1 rounded-lg font-bold px-2.5 py-1.5 text-xs transition cursor-pointer border ${
+                isIncluded
+                  ? "border-slate-200 bg-white hover:bg-rose-50 hover:border-rose-300 text-slate-600 hover:text-rose-700 shadow-2xs"
+                  : "border-emerald-600 bg-emerald-600 hover:bg-emerald-500 text-white shadow-xs"
+              }`}
+              title={isIncluded ? `Exclude ${company.name} from memo distribution` : `Include ${company.name} in memo distribution`}
+            >
+              {isIncluded ? (
+                <>
+                  <XCircle size={13} />
+                  <span>Exclude</span>
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 size={13} />
+                  <span>Include</span>
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+
+        {/* Excluded notice banner if company is untoggled */}
+        {!isIncluded && (
+          <div className="w-full rounded-2xl border border-dashed border-rose-300 bg-rose-50/80 p-3 text-center space-y-1">
+            <div className="flex items-center justify-center gap-1.5 text-xs font-black text-rose-800 uppercase tracking-wide">
+              <AlertCircle size={15} />
+              <span>EXCLUDED FROM MEMORANDUM DISTRIBUTION</span>
+            </div>
+            <p className="text-[11px] text-rose-700 font-medium">
+              <strong>{company.name}</strong> is excluded and will not appear in the final memo, PDF output, or email distribution.
+            </p>
+          </div>
+        )}
+
+        {/* Executive Sheet Representation - Sagad sa taas at sagad sa baba */}
+        <div
+          id={`memo-sheet-preview-${company.id}`}
+          style={{
+            zoom: previewZoom === 100 ? undefined : `${previewZoom}%`,
+            aspectRatio: metrics.aspectRatioCss,
+            minHeight: `${metrics.previewMinHeightPx}px`
+          }}
+          className={`relative w-full bg-white border border-slate-300 rounded-sm shadow-xl px-5 py-4 sm:px-8 sm:py-5 overflow-hidden select-none transition-all duration-150 flex flex-col justify-between ${
+            !isIncluded ? "opacity-40 grayscale-[25%] pointer-events-none" : ""
+          }`}
+        >
+          {/* Watermark Layer */}
+          <div
+            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none z-0 flex items-center justify-center transition-opacity duration-200"
+            style={{
+              width: `${watermarkSize}px`,
+              height: `${watermarkSize}px`,
+              opacity: watermarkOpacity / 100
+            }}
+          >
+            <img
+              src={company.logoUrl}
+              alt={`${company.name} Watermark`}
+              className="max-w-full max-h-full object-contain filter grayscale-[15%]"
+            />
+          </div>
+
+          {/* Optional Diagonal Stamp */}
+          {showDiagonalStamp && (
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 -rotate-[35deg] pointer-events-none z-10 whitespace-nowrap border-3 border-dashed border-rose-600/20 text-rose-600/20 font-black text-xl px-8 py-2.5 tracking-[0.25em] uppercase">
+              {diagonalStampText}
+            </div>
+          )}
+
+          {/* Foreground Content (Flush Top, Natural Signatory Flow, Flush Bottom Footer) */}
+          <div className="relative z-10 flex flex-col flex-1 h-full">
+            {/* Top Section: Letterhead + Memorandum Title Banner + Metadata Grid + Directives */}
+            <div className="flex flex-col space-y-2">
+              {/* Corporate Letterhead (Left Logo, Center Info, Right Corporate Group Emblem) */}
+              <div className="flex items-center justify-between gap-4 pb-1">
+                <div className="h-18 w-18 p-1 flex items-center justify-center shrink-0">
+                  <img
+                    src={company.logoUrl}
+                    alt={company.name}
+                    className="max-h-full max-w-full object-contain"
+                  />
+                </div>
+                <div className="min-w-0 flex-1 text-center">
+                  <h1 className="text-base sm:text-lg font-black text-slate-950 tracking-wide uppercase leading-tight font-sans">
+                    {company.legalName || company.name}
+                  </h1>
+                  {company.tagline && (
+                    <div className="text-[10px] text-emerald-800 font-bold uppercase tracking-wider mt-0.5">
+                      {company.tagline}
+                    </div>
+                  )}
+                  <div className="text-[10px] sm:text-[10.5px] text-slate-700 font-semibold uppercase leading-snug mt-1">
+                    {formatAddressLines(company.address).map((line, idx) => (
+                      <div key={idx}>{line}</div>
+                    ))}
+                  </div>
+                  <div className="text-[9.5px] text-slate-500 font-medium tracking-tight mt-0.5">
+                    {company.contact}
+                  </div>
+                </div>
+                <div className="h-18 w-18 p-1 flex items-center justify-center shrink-0">
+                  <img
+                    src={company.rightLogoUrl || CORPORATE_GROUP_EMBLEM}
+                    alt="Corporate Emblem"
+                    className="max-h-full max-w-full object-contain"
+                  />
+                </div>
+              </div>
+
+              {/* Top Letterhead Divider Line */}
+              <div className="mt-1 mb-1 border-b-2 border-slate-900"></div>
+
+              {/* Prominent MEMORANDUM Title Banner with Ref No & Classification */}
+              <div className="py-2 my-1 border-y-2 border-slate-900 text-center space-y-1">
+                <h2 className="text-lg sm:text-xl font-black tracking-[0.35em] text-slate-950 uppercase leading-none font-sans">
+                  MEMORANDUM
+                </h2>
+                <div className="flex items-center justify-between text-[11px] px-2 font-bold pt-1 border-t border-slate-200">
+                  <span className="text-slate-700 font-bold">
+                    REF NO: <strong className="text-slate-950 font-mono font-black">{compMemoRef}</strong>
+                  </span>
+                  <span className="inline-flex items-center px-3 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-900 border border-emerald-300 shadow-2xs">
+                    {memoCategory}
+                  </span>
+                </div>
+              </div>
+
+              {/* Official HR Memo Header Grid - Standard 12pt (12px) */}
+              <div className="space-y-1 text-xs py-1.5">
+                <div className="grid grid-cols-[90px_1fr] items-baseline">
+                  <span className="font-black text-[12px] text-slate-900 uppercase">TO:</span>
+                  <span className="font-extrabold text-slate-950 uppercase text-[12px] tracking-wide">{memoTo}</span>
+                </div>
+                <div className="grid grid-cols-[90px_1fr] items-baseline">
+                  <span className="font-black text-[12px] text-slate-900 uppercase">FROM:</span>
+                  <span className="font-extrabold text-slate-950 uppercase text-[12px] tracking-wide">{memoFrom}</span>
+                </div>
+                <div className="grid grid-cols-[90px_1fr] items-baseline">
+                  <span className="font-black text-[12px] text-slate-900 uppercase">DATE:</span>
+                  <span className="font-extrabold text-slate-950 uppercase text-[12px] tracking-wide">{memoDate}</span>
+                </div>
+                <div className="grid grid-cols-[90px_1fr] items-baseline">
+                  <span className="font-black text-[12px] text-slate-900 uppercase">SUBJECT:</span>
+                  <span className="font-black text-slate-950 uppercase text-[12px] tracking-tight">{memoSubject}</span>
+                </div>
+              </div>
+
+              {/* Bottom Metadata Divider Line */}
+              <div className="my-1 border-b-2 border-slate-900"></div>
+
+              {/* Directives / Guidelines Body Section - Strictly Preserved User Font Size */}
+              {memoContent && (
+                <div
+                  style={{
+                    fontFamily: directivesFontFamily,
+                    fontSize: `${metrics.directivesFontSizePx}px`,
+                    lineHeight: metrics.directivesLineHeight
+                  }}
+                  className="pt-1.5 text-slate-900 font-normal whitespace-pre-wrap text-justify"
+                  dangerouslySetInnerHTML={{
+                    __html: renderMemoDirectivesHtml(memoContent)
+                  }}
+                />
+              )}
+
+              {/* Signatory Block with E-Signatures: Auto-adjusted fit */}
+              <div style={{ marginTop: metrics.sigMarginTop }} className="pt-1">
+                {signatoryLayout === "dual" ? (
+                  <div className="grid grid-cols-2 gap-8 items-start">
+                    {/* Left: Issued By */}
+                    <div>
+                      <p className="text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-0.5">
+                        {signatoryLabel?.trim() ? signatoryLabel.trim() : "Issued By:"}
+                      </p>
+                      <div
+                        className="flex items-end"
+                        style={{ height: `${Math.max(64, signatorySize + 10)}px` }}
+                      >
+                        {signatorySignature ? (
+                          <img
+                            src={signatorySignature}
+                            alt="Signatory E-Signature"
+                            style={{
+                              height: `${signatorySize}px`,
+                              maxHeight: `${signatorySize}px`,
+                              maxWidth: `${Math.round(signatorySize * 3.5)}px`,
+                              marginLeft: `${signatoryOffsetX}px`,
+                              marginBottom: `${signatoryOffsetY}px`
+                            }}
+                            className="object-contain object-bottom pointer-events-none select-none relative z-10"
+                          />
+                        ) : (
+                          <div className="h-10 text-[11px] text-slate-400 italic flex items-center mb-1">
+                            (Signature over printed name)
+                          </div>
+                        )}
+                      </div>
+                      <p className="text-xs sm:text-[13.5px] font-black text-slate-950 uppercase tracking-tight relative z-0">
+                        {signatoryName}
+                      </p>
+                      <p className="text-[11.5px] font-bold text-slate-800 leading-tight">
+                        {signatoryTitle}
+                      </p>
+                      <p className="text-[10px] text-slate-600 font-semibold">
+                        {getSignatoryAffiliation(company)}
+                      </p>
+                    </div>
+
+                    {/* Right: Approved By */}
+                    <div>
+                      <p className="text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-0.5">
+                        {approverLabel?.trim() ? approverLabel.trim() : "Approved By:"}
+                      </p>
+                      <div
+                        className="flex items-end"
+                        style={{ height: `${Math.max(64, approverSize + 10)}px` }}
+                      >
+                        {approverSignature ? (
+                          <img
+                            src={approverSignature}
+                            alt="Approver E-Signature"
+                            style={{
+                              height: `${approverSize}px`,
+                              maxHeight: `${approverSize}px`,
+                              maxWidth: `${Math.round(approverSize * 3.5)}px`,
+                              marginLeft: `${approverOffsetX}px`,
+                              marginBottom: `${approverOffsetY}px`
+                            }}
+                            className="object-contain object-bottom pointer-events-none select-none relative z-10"
+                          />
+                        ) : (
+                          <div className="h-10 text-[11px] text-slate-400 italic flex items-center mb-1">
+                            (Signature over printed name)
+                          </div>
+                        )}
+                      </div>
+                      <p className="text-xs sm:text-[13.5px] font-black text-slate-950 uppercase tracking-tight relative z-0">
+                        {approverName}
+                      </p>
+                      <p className="text-[11.5px] font-bold text-slate-800 leading-tight">
+                        {approverTitle}
+                      </p>
+                      <p className="text-[10px] text-slate-600 font-semibold">
+                        {getSignatoryAffiliation(company)}
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex justify-start">
+                    <div className="min-w-[200px] max-w-[280px] text-left">
+                      <p className="text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-0.5">
+                        {signatoryLabel?.trim() ? signatoryLabel.trim() : "Issued By:"}
+                      </p>
+                      <div
+                        className="flex items-end"
+                        style={{ height: `${Math.max(64, signatorySize + 10)}px` }}
+                      >
+                        {signatorySignature ? (
+                          <img
+                            src={signatorySignature}
+                            alt="Signatory E-Signature"
+                            style={{
+                              height: `${signatorySize}px`,
+                              maxHeight: `${signatorySize}px`,
+                              maxWidth: `${Math.round(signatorySize * 3.5)}px`,
+                              marginLeft: `${signatoryOffsetX}px`,
+                              marginBottom: `${signatoryOffsetY}px`
+                            }}
+                            className="object-contain object-bottom pointer-events-none select-none relative z-10"
+                          />
+                        ) : (
+                          <div className="h-10 text-[11px] text-slate-400 italic flex items-center mb-1">
+                            (Signature over printed name)
+                          </div>
+                        )}
+                      </div>
+                      <p className="text-xs sm:text-[13.5px] font-black text-slate-950 uppercase tracking-tight relative z-0">
+                        {signatoryName}
+                      </p>
+                      <p className="text-[11.5px] font-bold text-slate-800 leading-tight">
+                        {signatoryTitle}
+                      </p>
+                      <p className="text-[10px] text-slate-600 font-semibold">
+                        {getSignatoryAffiliation(company)}
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Bottom Section: Official Division Footer - Thin, Crisp & Professional */}
+            <div className="mt-auto pt-3 pb-0">
+              <div className="border-t border-slate-300 pt-2 flex items-center justify-between text-[8.5px] sm:text-[9px] font-medium text-slate-600 uppercase tracking-[0.08em]">
+                <span className="font-medium text-slate-600">HUMAN RESOURCES &amp; ADMINISTRATION</span>
+                <span className="font-semibold text-slate-900 tracking-[0.12em]">STRICT COMPLIANCE MANDATED</span>
+                <span className="font-medium text-slate-600">{company.code} • OFFICIAL TRANSMISSION</span>
+              </div>
+              <div className="text-center text-[7.5px] sm:text-[8px] text-slate-400 font-normal uppercase tracking-[0.22em] mt-1">
+                CORPORATE EXECUTIVE RECORD • CONFIDENTIAL TRANSMISSION
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <section className="mb-8 overflow-hidden rounded-3xl border border-emerald-200/80 bg-white shadow-xl animate-in fade-in duration-200">
       {/* 1. EXECUTIVE TOP COMMAND BAR (Green & White Concept) */}
@@ -3052,22 +3692,40 @@ ${renderMemoDirectivesHtml(memoContent)}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <label className="text-xs font-black uppercase tracking-wider text-slate-700 flex items-center justify-between">
-                    <span>Memorandum Reference #</span>
+                    <span className="flex items-center gap-1.5">
+                      <ShieldCheck size={13} className="text-emerald-600" />
+                      <span>Memorandum Reference #</span>
+                    </span>
                     <button
                       type="button"
-                      onClick={() => setMemoRef(`MEMO-2026-${selectedCompany.code}-${String(Math.floor(Math.random() * 900) + 100).padStart(3, "0")}`)}
-                      className="text-[10px] text-emerald-600 hover:text-emerald-800 normal-case font-bold cursor-pointer"
+                      onClick={async () => {
+                        const globalRefs = await getAllGlobalMemoRefs();
+                        const nextRef = generateUniqueMemoRef(selectedCompany.code, globalRefs);
+                        setMemoRef(nextRef);
+                      }}
+                      className="text-[10px] text-emerald-600 hover:text-emerald-800 normal-case font-bold cursor-pointer flex items-center gap-1 transition"
+                      title="Sync next available sequential number from database"
                     >
-                      Generate New Ref
+                      <RefreshCw size={11} />
+                      Sync Next Sequence
                     </button>
                   </label>
-                  <input
-                    type="text"
-                    value={memoRef}
-                    onChange={(e) => setMemoRef(e.target.value)}
-                    placeholder="e.g. MEMO-2026-LBC-001"
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-xs font-mono font-bold text-slate-900 focus:border-emerald-500 focus:bg-white focus:outline-none shadow-2xs"
-                  />
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={memoRef}
+                      readOnly
+                      placeholder="e.g. MEMO-2026-LBC-261023-01"
+                      className="w-full rounded-xl border border-slate-200 bg-slate-100/90 pl-3.5 pr-28 py-2.5 text-xs font-mono font-black text-slate-800 cursor-not-allowed select-all shadow-2xs focus:outline-none"
+                    />
+                    <div className="absolute right-2 top-2 px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 text-[10px] font-black uppercase tracking-wider border border-emerald-200 pointer-events-none flex items-center gap-1">
+                      <Key size={10} />
+                      Auto-Generated
+                    </div>
+                  </div>
+                  <p className="text-[10.5px] text-slate-500 font-medium">
+                    Auto-generated incremental reference across all accounts (YYMMDD-01). Non-editable to prevent collisions.
+                  </p>
                 </div>
 
                 <div className="space-y-1.5">
@@ -3511,133 +4169,135 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                     )}
                   </div>
 
-                  {signatorySignature && (
-                    <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-2.5 text-xs">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-bold text-slate-700 uppercase tracking-wide">
-                          Signature Alignment &amp; Size
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => { setSignatoryOffsetX(48); setSignatoryOffsetY(-6); setSignatorySize(56); }}
-                          className="text-[10px] text-emerald-600 hover:text-emerald-700 font-bold cursor-pointer"
-                        >
-                          Reset Default
-                        </button>
-                      </div>
+                  {/* Signature Alignment, Position & Size Controls (Always Accessible) */}
+                  <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-2.5 text-xs">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-black text-slate-700 uppercase tracking-wide flex items-center gap-1">
+                        <span>Signature Alignment &amp; Size</span>
+                        <span className="text-[9px] font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200">Urong / Lakihan</span>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => { setSignatoryOffsetX(48); setSignatoryOffsetY(-6); setSignatorySize(56); }}
+                        className="text-[10px] text-emerald-600 hover:text-emerald-700 font-bold cursor-pointer underline"
+                      >
+                        Reset Default
+                      </button>
+                    </div>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        <div>
-                          <div className="flex justify-between text-[10px] text-slate-600 font-medium mb-1">
-                            <span>Horizontal</span>
-                            <span className="font-mono font-bold text-slate-800">{signatoryOffsetX}px</span>
-                          </div>
-                          <input
-                            type="range"
-                            min="-20"
-                            max="200"
-                            step="2"
-                            value={signatoryOffsetX}
-                            onChange={(e) => setSignatoryOffsetX(Number(e.target.value))}
-                            className="w-full accent-emerald-600 h-1.5 bg-slate-200 rounded-lg cursor-pointer"
-                          />
-                          <div className="flex justify-between text-[9px] text-slate-400 mt-0.5">
-                            <span>← Left</span>
-                            <span>Right →</span>
-                          </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div>
+                        <div className="flex justify-between text-[10px] text-slate-600 font-medium mb-1">
+                          <span className="font-bold">Horizontal (← / →)</span>
+                          <span className="font-mono font-bold text-slate-800">{signatoryOffsetX}px</span>
                         </div>
-
-                        <div>
-                          <div className="flex justify-between text-[10px] text-slate-600 font-medium mb-1">
-                            <span>Vertical</span>
-                            <span className="font-mono font-bold text-slate-800">{signatoryOffsetY}px</span>
-                          </div>
-                          <input
-                            type="range"
-                            min="-50"
-                            max="20"
-                            step="1"
-                            value={signatoryOffsetY}
-                            onChange={(e) => setSignatoryOffsetY(Number(e.target.value))}
-                            className="w-full accent-emerald-600 h-1.5 bg-slate-200 rounded-lg cursor-pointer"
-                          />
-                          <div className="flex justify-between text-[9px] text-slate-400 mt-0.5">
-                            <span className="text-emerald-700 font-semibold">← Lower</span>
-                            <span>Raise →</span>
-                          </div>
-                        </div>
-
-                        <div>
-                          <div className="flex justify-between text-[10px] text-slate-600 font-medium mb-1">
-                            <span>Signature Size</span>
-                            <span className="font-mono font-bold text-slate-800">{signatorySize}px</span>
-                          </div>
-                          <input
-                            type="range"
-                            min="30"
-                            max="120"
-                            step="2"
-                            value={signatorySize}
-                            onChange={(e) => setSignatorySize(Number(e.target.value))}
-                            className="w-full accent-emerald-600 h-1.5 bg-slate-200 rounded-lg cursor-pointer"
-                          />
-                          <div className="flex justify-between text-[9px] text-slate-400 mt-0.5">
-                            <span>Smaller (30px)</span>
-                            <span>Larger (120px)</span>
-                          </div>
+                        <input
+                          type="range"
+                          min="-50"
+                          max="250"
+                          step="2"
+                          value={signatoryOffsetX}
+                          onChange={(e) => setSignatoryOffsetX(Number(e.target.value))}
+                          className="w-full accent-emerald-600 h-1.5 bg-slate-200 rounded-lg cursor-pointer"
+                        />
+                        <div className="flex justify-between text-[9px] text-slate-400 mt-0.5 font-semibold">
+                          <span>← Left (-50px)</span>
+                          <span>Right (+250px) →</span>
                         </div>
                       </div>
 
-                      {/* Quick Nudge Buttons */}
-                      <div className="flex flex-wrap items-center gap-1.5 pt-1 border-t border-slate-200/60">
-                        <span className="text-[9.5px] text-slate-500 font-semibold mr-1">Quick Nudge:</span>
-                        <button
-                          type="button"
-                          onClick={() => setSignatoryOffsetY((prev) => Math.max(-50, prev - 3))}
-                          className="px-2 py-0.5 rounded-md bg-white border border-slate-300 hover:border-emerald-500 hover:text-emerald-700 text-[10px] font-bold text-slate-700 transition cursor-pointer"
-                        >
-                          ↓ Down
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setSignatoryOffsetY((prev) => Math.min(20, prev + 3))}
-                          className="px-2 py-0.5 rounded-md bg-white border border-slate-300 hover:border-emerald-500 hover:text-emerald-700 text-[10px] font-bold text-slate-700 transition cursor-pointer"
-                        >
-                          ↑ Up
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setSignatoryOffsetX((prev) => Math.min(200, prev + 6))}
-                          className="px-2 py-0.5 rounded-md bg-white border border-slate-300 hover:border-emerald-500 hover:text-emerald-700 text-[10px] font-bold text-slate-700 transition cursor-pointer"
-                        >
-                          → Right
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setSignatoryOffsetX((prev) => Math.max(-20, prev - 6))}
-                          className="px-2 py-0.5 rounded-md bg-white border border-slate-300 hover:border-emerald-500 hover:text-emerald-700 text-[10px] font-bold text-slate-700 transition cursor-pointer"
-                        >
-                          ← Left
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setSignatorySize((prev) => Math.max(30, prev - 4))}
-                          className="px-2 py-0.5 rounded-md bg-white border border-slate-300 hover:border-emerald-500 hover:text-emerald-700 text-[10px] font-bold text-slate-700 transition cursor-pointer"
-                          title="Decrease signature size"
-                        >
-                          - Size
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setSignatorySize((prev) => Math.min(120, prev + 4))}
-                          className="px-2 py-0.5 rounded-md bg-white border border-slate-300 hover:border-emerald-500 hover:text-emerald-700 text-[10px] font-bold text-slate-700 transition cursor-pointer"
-                          title="Increase signature size"
-                        >
-                          + Size
-                        </button>
+                      <div>
+                        <div className="flex justify-between text-[10px] text-slate-600 font-medium mb-1">
+                          <span className="font-bold">Vertical (↓ / ↑)</span>
+                          <span className="font-mono font-bold text-slate-800">{signatoryOffsetY}px</span>
+                        </div>
+                        <input
+                          type="range"
+                          min="-50"
+                          max="30"
+                          step="1"
+                          value={signatoryOffsetY}
+                          onChange={(e) => setSignatoryOffsetY(Number(e.target.value))}
+                          className="w-full accent-emerald-600 h-1.5 bg-slate-200 rounded-lg cursor-pointer"
+                        />
+                        <div className="flex justify-between text-[9px] text-slate-400 mt-0.5 font-semibold">
+                          <span className="text-emerald-700">← Lower (-50px)</span>
+                          <span>Raise (+30px) →</span>
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="flex justify-between text-[10px] text-slate-600 font-medium mb-1">
+                          <span className="font-bold">Signature Size</span>
+                          <span className="font-mono font-bold text-slate-800">{signatorySize}px</span>
+                        </div>
+                        <input
+                          type="range"
+                          min="28"
+                          max="160"
+                          step="2"
+                          value={signatorySize}
+                          onChange={(e) => setSignatorySize(Number(e.target.value))}
+                          className="w-full accent-emerald-600 h-1.5 bg-slate-200 rounded-lg cursor-pointer"
+                        />
+                        <div className="flex justify-between text-[9px] text-slate-400 mt-0.5 font-semibold">
+                          <span>Smaller (28px)</span>
+                          <span>Larger (160px)</span>
+                        </div>
                       </div>
                     </div>
-                  )}
+
+                    {/* Quick Nudge Buttons */}
+                    <div className="flex flex-wrap items-center gap-1.5 pt-1.5 border-t border-slate-200/60">
+                      <span className="text-[9.5px] text-slate-500 font-bold mr-1">Quick Nudge:</span>
+                      <button
+                        type="button"
+                        onClick={() => setSignatoryOffsetX((prev) => Math.max(-50, prev - 6))}
+                        className="px-2 py-1 rounded-md bg-white border border-slate-300 hover:border-emerald-500 hover:text-emerald-700 text-[10px] font-bold text-slate-700 transition cursor-pointer shadow-2xs"
+                        title="Urong pakaliwa"
+                      >
+                        ← Urong Left
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSignatoryOffsetX((prev) => Math.min(250, prev + 6))}
+                        className="px-2 py-1 rounded-md bg-white border border-slate-300 hover:border-emerald-500 hover:text-emerald-700 text-[10px] font-bold text-slate-700 transition cursor-pointer shadow-2xs"
+                        title="Urong pakanan"
+                      >
+                        Urong Right →
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSignatorySize((prev) => Math.max(28, prev - 4))}
+                        className="px-2 py-1 rounded-md bg-white border border-slate-300 hover:border-emerald-500 hover:text-emerald-700 text-[10px] font-bold text-slate-700 transition cursor-pointer shadow-2xs"
+                        title="Paliitin ang size"
+                      >
+                        - Paliitin
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSignatorySize((prev) => Math.min(160, prev + 4))}
+                        className="px-2 py-1 rounded-md bg-white border border-slate-300 hover:border-emerald-500 hover:text-emerald-700 text-[10px] font-bold text-slate-700 transition cursor-pointer shadow-2xs"
+                        title="Palakihin ang size"
+                      >
+                        + Palakihin
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSignatoryOffsetY((prev) => Math.max(-50, prev - 3))}
+                        className="px-2 py-1 rounded-md bg-white border border-slate-300 hover:border-emerald-500 hover:text-emerald-700 text-[10px] font-bold text-slate-700 transition cursor-pointer shadow-2xs"
+                      >
+                        ↓ Down
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSignatoryOffsetY((prev) => Math.min(30, prev + 3))}
+                        className="px-2 py-1 rounded-md bg-white border border-slate-300 hover:border-emerald-500 hover:text-emerald-700 text-[10px] font-bold text-slate-700 transition cursor-pointer shadow-2xs"
+                      >
+                        ↑ Up
+                      </button>
+                    </div>
+                  </div>
                 </div>
 
                 {/* Signature Line Preview */}
@@ -3781,133 +4441,135 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                     </div>
                   </div>
 
-                  {approverSignature && (
-                    <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-2.5 text-xs">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-bold text-slate-700 uppercase tracking-wide">
-                          Signature Alignment &amp; Size
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => { setApproverOffsetX(48); setApproverOffsetY(-6); setApproverSize(56); }}
-                          className="text-[10px] text-emerald-600 hover:text-emerald-700 font-bold cursor-pointer"
-                        >
-                          Reset Default
-                        </button>
-                      </div>
+                  {/* Approver Alignment, Position & Size Controls (Always Accessible) */}
+                  <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-2.5 text-xs">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-black text-slate-700 uppercase tracking-wide flex items-center gap-1">
+                        <span>Approver Signature Alignment &amp; Size</span>
+                        <span className="text-[9px] font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200">Urong / Lakihan</span>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => { setApproverOffsetX(48); setApproverOffsetY(-6); setApproverSize(56); }}
+                        className="text-[10px] text-emerald-600 hover:text-emerald-700 font-bold cursor-pointer underline"
+                      >
+                        Reset Default
+                      </button>
+                    </div>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        <div>
-                          <div className="flex justify-between text-[10px] text-slate-600 font-medium mb-1">
-                            <span>Horizontal</span>
-                            <span className="font-mono font-bold text-slate-800">{approverOffsetX}px</span>
-                          </div>
-                          <input
-                            type="range"
-                            min="-20"
-                            max="200"
-                            step="2"
-                            value={approverOffsetX}
-                            onChange={(e) => setApproverOffsetX(Number(e.target.value))}
-                            className="w-full accent-emerald-600 h-1.5 bg-slate-200 rounded-lg cursor-pointer"
-                          />
-                          <div className="flex justify-between text-[9px] text-slate-400 mt-0.5">
-                            <span>← Left</span>
-                            <span>Right →</span>
-                          </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div>
+                        <div className="flex justify-between text-[10px] text-slate-600 font-medium mb-1">
+                          <span className="font-bold">Horizontal (← / →)</span>
+                          <span className="font-mono font-bold text-slate-800">{approverOffsetX}px</span>
                         </div>
-
-                        <div>
-                          <div className="flex justify-between text-[10px] text-slate-600 font-medium mb-1">
-                            <span>Vertical</span>
-                            <span className="font-mono font-bold text-slate-800">{approverOffsetY}px</span>
-                          </div>
-                          <input
-                            type="range"
-                            min="-50"
-                            max="20"
-                            step="1"
-                            value={approverOffsetY}
-                            onChange={(e) => setApproverOffsetY(Number(e.target.value))}
-                            className="w-full accent-emerald-600 h-1.5 bg-slate-200 rounded-lg cursor-pointer"
-                          />
-                          <div className="flex justify-between text-[9px] text-slate-400 mt-0.5">
-                            <span className="text-emerald-700 font-semibold">← Lower</span>
-                            <span>Raise →</span>
-                          </div>
-                        </div>
-
-                        <div>
-                          <div className="flex justify-between text-[10px] text-slate-600 font-medium mb-1">
-                            <span>Signature Size</span>
-                            <span className="font-mono font-bold text-slate-800">{approverSize}px</span>
-                          </div>
-                          <input
-                            type="range"
-                            min="30"
-                            max="120"
-                            step="2"
-                            value={approverSize}
-                            onChange={(e) => setApproverSize(Number(e.target.value))}
-                            className="w-full accent-emerald-600 h-1.5 bg-slate-200 rounded-lg cursor-pointer"
-                          />
-                          <div className="flex justify-between text-[9px] text-slate-400 mt-0.5">
-                            <span>Smaller (30px)</span>
-                            <span>Larger (120px)</span>
-                          </div>
+                        <input
+                          type="range"
+                          min="-50"
+                          max="250"
+                          step="2"
+                          value={approverOffsetX}
+                          onChange={(e) => setApproverOffsetX(Number(e.target.value))}
+                          className="w-full accent-emerald-600 h-1.5 bg-slate-200 rounded-lg cursor-pointer"
+                        />
+                        <div className="flex justify-between text-[9px] text-slate-400 mt-0.5 font-semibold">
+                          <span>← Left (-50px)</span>
+                          <span>Right (+250px) →</span>
                         </div>
                       </div>
 
-                      {/* Quick Nudge Buttons */}
-                      <div className="flex flex-wrap items-center gap-1.5 pt-1 border-t border-slate-200/60">
-                        <span className="text-[9.5px] text-slate-500 font-semibold mr-1">Quick Nudge:</span>
-                        <button
-                          type="button"
-                          onClick={() => setApproverOffsetY((prev) => Math.max(-50, prev - 3))}
-                          className="px-2 py-0.5 rounded-md bg-white border border-slate-300 hover:border-emerald-500 hover:text-emerald-700 text-[10px] font-bold text-slate-700 transition cursor-pointer"
-                        >
-                          ↓ Down
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setApproverOffsetY((prev) => Math.min(20, prev + 3))}
-                          className="px-2 py-0.5 rounded-md bg-white border border-slate-300 hover:border-emerald-500 hover:text-emerald-700 text-[10px] font-bold text-slate-700 transition cursor-pointer"
-                        >
-                          ↑ Up
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setApproverOffsetX((prev) => Math.min(200, prev + 6))}
-                          className="px-2 py-0.5 rounded-md bg-white border border-slate-300 hover:border-emerald-500 hover:text-emerald-700 text-[10px] font-bold text-slate-700 transition cursor-pointer"
-                        >
-                          → Right
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setApproverOffsetX((prev) => Math.max(-20, prev - 6))}
-                          className="px-2 py-0.5 rounded-md bg-white border border-slate-300 hover:border-emerald-500 hover:text-emerald-700 text-[10px] font-bold text-slate-700 transition cursor-pointer"
-                        >
-                          ← Left
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setApproverSize((prev) => Math.max(30, prev - 4))}
-                          className="px-2 py-0.5 rounded-md bg-white border border-slate-300 hover:border-emerald-500 hover:text-emerald-700 text-[10px] font-bold text-slate-700 transition cursor-pointer"
-                          title="Decrease signature size"
-                        >
-                          - Size
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setApproverSize((prev) => Math.min(120, prev + 4))}
-                          className="px-2 py-0.5 rounded-md bg-white border border-slate-300 hover:border-emerald-500 hover:text-emerald-700 text-[10px] font-bold text-slate-700 transition cursor-pointer"
-                          title="Increase signature size"
-                        >
-                          + Size
-                        </button>
+                      <div>
+                        <div className="flex justify-between text-[10px] text-slate-600 font-medium mb-1">
+                          <span className="font-bold">Vertical (↓ / ↑)</span>
+                          <span className="font-mono font-bold text-slate-800">{approverOffsetY}px</span>
+                        </div>
+                        <input
+                          type="range"
+                          min="-50"
+                          max="30"
+                          step="1"
+                          value={approverOffsetY}
+                          onChange={(e) => setApproverOffsetY(Number(e.target.value))}
+                          className="w-full accent-emerald-600 h-1.5 bg-slate-200 rounded-lg cursor-pointer"
+                        />
+                        <div className="flex justify-between text-[9px] text-slate-400 mt-0.5 font-semibold">
+                          <span className="text-emerald-700">← Lower (-50px)</span>
+                          <span>Raise (+30px) →</span>
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="flex justify-between text-[10px] text-slate-600 font-medium mb-1">
+                          <span className="font-bold">Signature Size</span>
+                          <span className="font-mono font-bold text-slate-800">{approverSize}px</span>
+                        </div>
+                        <input
+                          type="range"
+                          min="28"
+                          max="160"
+                          step="2"
+                          value={approverSize}
+                          onChange={(e) => setApproverSize(Number(e.target.value))}
+                          className="w-full accent-emerald-600 h-1.5 bg-slate-200 rounded-lg cursor-pointer"
+                        />
+                        <div className="flex justify-between text-[9px] text-slate-400 mt-0.5 font-semibold">
+                          <span>Smaller (28px)</span>
+                          <span>Larger (160px)</span>
+                        </div>
                       </div>
                     </div>
-                  )}
+
+                    {/* Quick Nudge Buttons */}
+                    <div className="flex flex-wrap items-center gap-1.5 pt-1.5 border-t border-slate-200/60">
+                      <span className="text-[9.5px] text-slate-500 font-bold mr-1">Quick Nudge:</span>
+                      <button
+                        type="button"
+                        onClick={() => setApproverOffsetX((prev) => Math.max(-50, prev - 6))}
+                        className="px-2 py-1 rounded-md bg-white border border-slate-300 hover:border-emerald-500 hover:text-emerald-700 text-[10px] font-bold text-slate-700 transition cursor-pointer shadow-2xs"
+                        title="Urong pakaliwa"
+                      >
+                        ← Urong Left
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setApproverOffsetX((prev) => Math.min(250, prev + 6))}
+                        className="px-2 py-1 rounded-md bg-white border border-slate-300 hover:border-emerald-500 hover:text-emerald-700 text-[10px] font-bold text-slate-700 transition cursor-pointer shadow-2xs"
+                        title="Urong pakanan"
+                      >
+                        Urong Right →
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setApproverSize((prev) => Math.max(28, prev - 4))}
+                        className="px-2 py-1 rounded-md bg-white border border-slate-300 hover:border-emerald-500 hover:text-emerald-700 text-[10px] font-bold text-slate-700 transition cursor-pointer shadow-2xs"
+                        title="Paliitin ang size"
+                      >
+                        - Paliitin
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setApproverSize((prev) => Math.min(160, prev + 4))}
+                        className="px-2 py-1 rounded-md bg-white border border-slate-300 hover:border-emerald-500 hover:text-emerald-700 text-[10px] font-bold text-slate-700 transition cursor-pointer shadow-2xs"
+                        title="Palakihin ang size"
+                      >
+                        + Palakihin
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setApproverOffsetY((prev) => Math.max(-50, prev - 3))}
+                        className="px-2 py-1 rounded-md bg-white border border-slate-300 hover:border-emerald-500 hover:text-emerald-700 text-[10px] font-bold text-slate-700 transition cursor-pointer shadow-2xs"
+                      >
+                        ↓ Down
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setApproverOffsetY((prev) => Math.min(30, prev + 3))}
+                        className="px-2 py-1 rounded-md bg-white border border-slate-300 hover:border-emerald-500 hover:text-emerald-700 text-[10px] font-bold text-slate-700 transition cursor-pointer shadow-2xs"
+                      >
+                        ↑ Up
+                      </button>
+                    </div>
+                  </div>
 
                   {/* Signature Line Preview */}
                   <div className="pt-2 border-t border-slate-100 space-y-1">
@@ -4135,519 +4797,549 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
               </div>
             </div>
 
-            {/* Document Action Toolbar (Print All, Save, Email, Zoom, Watermark) */}
-            <div className="rounded-2xl border border-slate-200 bg-white p-3.5 shadow-sm flex flex-col md:flex-row md:items-center md:justify-between gap-3 sticky top-4 z-20 shadow-md">
-              {/* Left Action Buttons */}
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => handlePrintMemo("all")}
-                  className="inline-flex items-center gap-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-black px-4 py-2 text-xs shadow-md transition cursor-pointer"
-                  title="Print or Save included company memos as PDF"
-                >
-                  <Printer size={15} />
-                  <span>Print {activeCompanies.length} {activeCompanies.length === 1 ? "Entity" : "Entities"} (PDF)</span>
-                </button>
+            {/* Document Action Toolbar (Executive Corporate Command Bar) */}
+            <div className="rounded-2xl border border-slate-200 bg-white shadow-md sticky top-3 z-30 overflow-hidden divide-y divide-slate-100">
+              {/* Tier 1: Primary Dispatch & Archive Actions */}
+              <div className="p-2.5 sm:px-4 sm:py-3 flex flex-wrap items-center justify-between gap-2.5 bg-white">
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handlePrintMemo("all")}
+                    className="inline-flex items-center gap-2 rounded-xl bg-slate-900 hover:bg-slate-800 active:scale-[0.98] text-white font-bold px-3.5 py-2 text-xs shadow-xs transition cursor-pointer"
+                    title="Print or Save all included company memos as PDF"
+                  >
+                    <Printer size={14} className="text-white" />
+                    <span>Print All ({activeCompanies.length} {activeCompanies.length === 1 ? "Entity" : "Entities"})</span>
+                  </button>
 
-                <button
-                  type="button"
-                  onClick={handleSaveMemoToArchive}
-                  className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-4 py-2 text-xs shadow-md shadow-emerald-600/20 transition cursor-pointer"
-                  title="Save memo to local records archive"
-                >
-                  <Save size={15} />
-                  <span>Save to Records</span>
-                </button>
+                  <button
+                    type="button"
+                    onClick={handleSaveMemoToArchive}
+                    className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-[0.98] text-white font-bold px-3.5 py-2 text-xs shadow-xs transition cursor-pointer"
+                    title="Save memo to local records archive"
+                  >
+                    <Save size={14} />
+                    <span>Save to Records</span>
+                  </button>
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (totalCompanyRecipients === 0) {
-                      setUnlinkedNoticeModalOpen(true);
-                    } else {
-                      setEmailModalOpen(true);
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (totalCompanyRecipients === 0) {
+                        setUnlinkedNoticeModalOpen(true);
+                      } else {
+                        setEmailModalOpen(true);
+                      }
+                    }}
+                    className={`inline-flex items-center gap-2 rounded-xl font-bold px-3.5 py-2 text-xs transition cursor-pointer ${
+                      totalCompanyRecipients === 0
+                        ? "border border-amber-200 bg-amber-50 hover:bg-amber-100 text-amber-900 shadow-2xs"
+                        : "bg-emerald-700 hover:bg-emerald-600 text-white shadow-xs"
+                    }`}
+                    title={
+                      totalCompanyRecipients === 0
+                        ? "Walang pre-registered employee work email na naka-link. I-click para sa detalye."
+                        : "Send via Email to pre-registered employee recipients"
                     }
-                  }}
-                  className={`inline-flex items-center gap-2 rounded-xl text-white font-black px-4 py-2 text-xs shadow-md transition cursor-pointer ${
-                    totalCompanyRecipients === 0
-                      ? "bg-amber-700 hover:bg-amber-600 shadow-amber-700/20"
-                      : "bg-emerald-700 hover:bg-emerald-600 shadow-emerald-700/20"
-                  }`}
-                  title={
-                    totalCompanyRecipients === 0
-                      ? "Walang pre-registered employee work email na naka-link. I-click para sa dahilan."
-                      : "Send via Email to pre-registered employee recipients"
-                  }
-                >
-                  <Send size={15} />
-                  <span>Send via Email ({recipientEmails.length})</span>
-                  {unlinkedEntities.length > 0 && totalCompanyRecipients > 0 && (
-                    <span className="bg-amber-400 text-amber-950 text-[9.5px] font-black px-1.5 py-0.2 rounded-full">
-                      {unlinkedEntities.length} unlinked
-                    </span>
-                  )}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleCopyMemoText}
-                  className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-bold px-3 py-2 text-xs transition cursor-pointer"
-                  title="Copy plain formatted text"
-                >
-                  {copiedNotice ? <Check size={14} className="text-emerald-600" /> : <Copy size={14} />}
-                  <span>{copiedNotice ? "Copied!" : "Copy"}</span>
-                </button>
-              </div>
-
-              {/* Right Settings (Zoom & Watermark Controls) */}
-              <div className="flex items-center gap-3">
-                {/* Zoom scale */}
-                <div className="inline-flex items-center rounded-lg border border-slate-200 bg-slate-100 p-0.5 text-[10px] font-bold text-slate-700">
-                  <button
-                    type="button"
-                    onClick={() => setPreviewZoom(90)}
-                    className={`px-2 py-0.5 rounded cursor-pointer ${previewZoom === 90 ? "bg-white text-slate-900 shadow-2xs" : ""}`}
                   >
-                    90%
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setPreviewZoom(100)}
-                    className={`px-2 py-0.5 rounded cursor-pointer ${previewZoom === 100 ? "bg-white text-slate-900 shadow-2xs" : ""}`}
-                  >
-                    100%
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setPreviewZoom(110)}
-                    className={`px-2 py-0.5 rounded cursor-pointer ${previewZoom === 110 ? "bg-white text-slate-900 shadow-2xs" : ""}`}
-                  >
-                    110%
-                  </button>
-                </div>
-
-                {/* Watermark opacity */}
-                <div className="flex items-center gap-2 text-xs text-slate-600 font-bold">
-                  <span className="text-[10px] text-slate-400 uppercase">Watermark:</span>
-                  <input
-                    type="range"
-                    min={4}
-                    max={25}
-                    value={watermarkOpacity}
-                    onChange={(e) => setWatermarkOpacity(Number(e.target.value))}
-                    className="w-20 accent-emerald-600 cursor-pointer"
-                    title={`Watermark opacity: ${watermarkOpacity}%`}
-                  />
-                  <span className="font-mono text-[10px] font-bold text-emerald-700">{watermarkOpacity}%</span>
-                </div>
-              </div>
-            </div>
-
-            {/* UNIFIED MULTI-COMPANY VIEWER: Renders all 6 companies sequentially in one place */}
-            <div className="w-full flex flex-col items-center gap-10 py-2">
-              {companiesToPreview.map((company, index) => {
-                const compMemoRef = `MEMO-2026-${company.code}-${memoRef.split("-").pop() || "001"}`;
-                const isIncluded = includedCompanyIds.includes(company.id);
-
-                return (
-                  <div
-                    key={company.id}
-                    id={`memo-sheet-${company.id}`}
-                    className="w-full max-w-[760px] flex flex-col items-center space-y-2 scroll-mt-24"
-                  >
-                    {/* Company Section Header Pill */}
-                    <div className="w-full flex items-center justify-between px-3 text-xs font-bold text-slate-600">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className={`h-6 w-6 rounded-full flex items-center justify-center text-[11px] font-black ${
-                          isIncluded ? "bg-emerald-700 text-white" : "bg-slate-400 text-white"
-                        }`}>
-                          {index + 1}
-                        </span>
-                        <span className="text-slate-900 font-black uppercase tracking-wide">
-                          {company.name}
-                        </span>
-                        <span className="text-[10px] text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded border border-emerald-200 font-mono font-bold">
-                          {compMemoRef}
-                        </span>
-                        <span className={`text-[9.5px] font-black uppercase px-2 py-0.5 rounded-full border ${
-                          isIncluded ? "bg-emerald-100 text-emerald-800 border-emerald-300" : "bg-rose-100 text-rose-800 border-rose-300"
-                        }`}>
-                          {isIncluded ? "✓ Included" : "✕ Excluded"}
-                        </span>
-                        <span className="text-[9.5px] font-bold text-blue-800 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-md">
-                          📄 {getMemoFitMetrics(memoContent).paperLabel} • 1-Page Fit
-                        </span>
-                      </div>
-
-                      <div className="flex items-center flex-wrap gap-2">
-                        {isIncluded && (
-                          <>
-                            <button
-                              type="button"
-                              onClick={() => handleCopyMemoAsImage(company)}
-                              disabled={copyingImageId === company.id}
-                              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer bg-slate-900 hover:bg-slate-800 text-white shadow-xs"
-                              title="Copy high-res memorandum image to clipboard for Viber, Messenger, Telegram, WhatsApp or Gmail"
-                            >
-                              {copyingImageId === company.id ? (
-                                <>
-                                  <RefreshCw size={13} className="animate-spin" />
-                                  <span>Generating Image...</span>
-                                </>
-                              ) : copiedImageId === company.id ? (
-                                <>
-                                  <Check size={13} className="text-emerald-400" />
-                                  <span className="text-emerald-300">Copied to Clipboard!</span>
-                                </>
-                              ) : (
-                                <>
-                                  <Camera size={13} className="text-emerald-400" />
-                                  <span>Copy Memo Image</span>
-                                </>
-                              )}
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={() => handleDownloadMemoImage(company)}
-                              disabled={copyingImageId === company.id}
-                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer bg-white hover:bg-slate-100 text-slate-700 border border-slate-300"
-                              title="Download memo as high-res PNG image"
-                            >
-                              <Download size={13} className="text-slate-500" />
-                              <span>PNG</span>
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={() => handlePrintMemo(company)}
-                              className="text-[11px] text-emerald-700 hover:text-emerald-950 font-bold underline cursor-pointer px-1"
-                              title={`Print only the ${company.name} memorandum`}
-                            >
-                              Print this copy only
-                            </button>
-                          </>
-                        )}
-
-                        <button
-                          type="button"
-                          onClick={() => toggleCompanyInclusion(company.id)}
-                          className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer border ${
-                            isIncluded
-                              ? "bg-slate-100 hover:bg-rose-50 text-slate-700 hover:text-rose-700 border-slate-300 hover:border-rose-300"
-                              : "bg-emerald-600 hover:bg-emerald-500 text-white border-emerald-600 shadow-xs"
-                          }`}
-                        >
-                          {isIncluded ? (
-                            <>
-                              <XCircle size={13} />
-                              <span>Exclude</span>
-                            </>
-                          ) : (
-                            <>
-                              <CheckCircle2 size={13} />
-                              <span>Include in Memo</span>
-                            </>
-                          )}
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Excluded notice banner if company is untoggled */}
-                    {!isIncluded && (
-                      <div className="w-full rounded-2xl border border-dashed border-rose-300 bg-rose-50/80 p-3 text-center space-y-1">
-                        <div className="flex items-center justify-center gap-1.5 text-xs font-black text-rose-800 uppercase tracking-wide">
-                          <AlertCircle size={15} />
-                          <span>EXCLUDED FROM MEMORANDUM DISTRIBUTION</span>
-                        </div>
-                        <p className="text-[11px] text-rose-700 font-medium">
-                          <strong>{company.name}</strong> is excluded and will not appear in the final memo, PDF output, or email distribution.
-                        </p>
-                      </div>
+                    <Send size={13} className={totalCompanyRecipients === 0 ? "text-amber-700" : "text-white"} />
+                    <span>Send via Email ({recipientEmails.length})</span>
+                    {unlinkedEntities.length > 0 && totalCompanyRecipients > 0 && (
+                      <span className="bg-amber-400 text-amber-950 text-[9px] font-black px-1.5 py-0.2 rounded-full">
+                        {unlinkedEntities.length} unlinked
+                      </span>
                     )}
+                  </button>
 
-                    {/* Executive Sheet Representation - Sagad sa taas at sagad sa baba */}
-                    <div
-                      id={`memo-sheet-preview-${company.id}`}
-                      style={{
-                        zoom: previewZoom === 100 ? undefined : `${previewZoom}%`,
-                      }}
-                      className={`relative w-full bg-white border border-slate-300 rounded-sm shadow-xl px-6 py-5 sm:px-9 sm:py-6 min-h-[960px] overflow-hidden select-none transition-all duration-150 flex flex-col justify-between ${
-                        !isIncluded ? "opacity-40 grayscale-[25%] pointer-events-none" : ""
+                  <button
+                    type="button"
+                    onClick={handleCopyMemoText}
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-semibold px-3 py-2 text-xs shadow-2xs transition cursor-pointer"
+                    title="Copy plain formatted text"
+                  >
+                    {copiedNotice ? <Check size={14} className="text-emerald-600" /> : <Copy size={13} className="text-slate-500" />}
+                    <span>{copiedNotice ? "Copied Text!" : "Copy Text"}</span>
+                  </button>
+                </div>
+
+                {/* Right: Selected Entities Indicator */}
+                <div className="hidden lg:flex items-center gap-2 text-xs font-semibold text-slate-500">
+                  <span className="inline-flex items-center gap-1.5 bg-slate-50 text-slate-700 px-2.5 py-1 rounded-md border border-slate-200 text-[11px]">
+                    <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                    <span>{activeCompanies.length} of {companies.length} Entities Active</span>
+                  </span>
+                </div>
+              </div>
+
+              {/* Tier 2: Bond Paper Format Calibration & View Controls */}
+              <div className="px-3 sm:px-4 py-2 bg-slate-50/90 flex flex-wrap items-center justify-between gap-3 text-xs">
+                {/* Left: Paper Format Selector */}
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-[10px] font-black text-slate-600 uppercase tracking-wider flex items-center gap-1">
+                    <FileText size={13} className="text-slate-500" />
+                    Bond Paper:
+                  </span>
+                  <div className="inline-flex items-center rounded-lg border border-slate-200 bg-white p-0.5 text-[11px] font-medium text-slate-700 shadow-2xs">
+                    <button
+                      type="button"
+                      onClick={() => setPaperSize("auto")}
+                      className={`px-2.5 py-1 rounded-md cursor-pointer transition ${
+                        paperSize === "auto"
+                          ? "bg-slate-900 text-white shadow-2xs font-bold"
+                          : "text-slate-600 hover:text-slate-900 font-medium"
                       }`}
+                      title="Auto-detect Short, A4 or Long/Legal based on directives length"
                     >
-                      {/* Watermark Layer */}
-                      <div
-                        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none z-0 flex items-center justify-center transition-opacity duration-200"
-                        style={{
-                          width: `${watermarkSize}px`,
-                          height: `${watermarkSize}px`,
-                          opacity: watermarkOpacity / 100
-                        }}
+                      Auto
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPaperSize("short")}
+                      className={`px-2.5 py-1 rounded-md cursor-pointer transition ${
+                        paperSize === "short"
+                          ? "bg-slate-900 text-white shadow-2xs font-bold"
+                          : "text-slate-600 hover:text-slate-900 font-medium"
+                      }`}
+                      title="Philippine Short Bond Paper / US Letter (8.5 x 11 in / 215.9 x 279.4 mm)"
+                    >
+                      Short (8.5×11)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPaperSize("a4")}
+                      className={`px-2.5 py-1 rounded-md cursor-pointer transition ${
+                        paperSize === "a4"
+                          ? "bg-slate-900 text-white shadow-2xs font-bold"
+                          : "text-slate-600 hover:text-slate-900 font-medium"
+                      }`}
+                      title="Standard A4 Paper (210 x 297 mm)"
+                    >
+                      A4
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPaperSize("legal13")}
+                      className={`px-2.5 py-1 rounded-md cursor-pointer transition ${
+                        paperSize === "legal13"
+                          ? "bg-slate-900 text-white shadow-2xs font-bold"
+                          : "text-slate-600 hover:text-slate-900 font-medium"
+                      }`}
+                      title="Philippine Long Bond Paper / Folio (8.5 x 13 in)"
+                    >
+                      Long (8.5×13)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPaperSize("legal14")}
+                      className={`px-2.5 py-1 rounded-md cursor-pointer transition ${
+                        paperSize === "legal14"
+                          ? "bg-slate-900 text-white shadow-2xs font-bold"
+                          : "text-slate-600 hover:text-slate-900 font-medium"
+                      }`}
+                      title="US Legal Paper (8.5 x 14 in)"
+                    >
+                      Legal (8.5×14)
+                    </button>
+                  </div>
+                </div>
+
+                {/* Right: Watermark & Zoom Controls */}
+                <div className="flex items-center gap-3 sm:gap-4">
+                  {/* Watermark opacity */}
+                  <div className="flex items-center gap-1.5 text-slate-600">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Watermark:</span>
+                    <input
+                      type="range"
+                      min={4}
+                      max={25}
+                      value={watermarkOpacity}
+                      onChange={(e) => setWatermarkOpacity(Number(e.target.value))}
+                      className="w-18 sm:w-22 accent-slate-800 cursor-pointer"
+                      title={`Watermark opacity: ${watermarkOpacity}%`}
+                    />
+                    <span className="font-mono text-[10.5px] font-bold text-slate-700 bg-white px-1.5 py-0.5 rounded border border-slate-200">
+                      {watermarkOpacity}%
+                    </span>
+                  </div>
+
+                  <div className="h-4 w-px bg-slate-200"></div>
+
+                  {/* Zoom scale */}
+                  <div className="flex items-center gap-1.5 text-slate-600">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Zoom:</span>
+                    <div className="inline-flex items-center rounded-lg border border-slate-200 bg-white p-0.5 text-[10.5px] font-medium text-slate-700 shadow-2xs">
+                      <button
+                        type="button"
+                        onClick={() => setPreviewZoom(90)}
+                        className={`px-2 py-0.5 rounded cursor-pointer transition ${previewZoom === 90 ? "bg-slate-900 text-white font-bold shadow-2xs" : "hover:text-slate-900"}`}
                       >
-                        <img
-                          src={company.logoUrl}
-                          alt={`${company.name} Watermark`}
-                          className="max-w-full max-h-full object-contain filter grayscale-[15%]"
-                        />
-                      </div>
-
-                      {/* Optional Diagonal Stamp */}
-                      {showDiagonalStamp && (
-                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 -rotate-[35deg] pointer-events-none z-10 whitespace-nowrap border-3 border-dashed border-rose-600/20 text-rose-600/20 font-black text-xl px-8 py-2.5 tracking-[0.25em] uppercase">
-                          {diagonalStampText}
-                        </div>
-                      )}
-
-                      {/* Foreground Content (Flush Top, Natural Signatory Flow, Flush Bottom Footer) */}
-                      <div className="relative z-10 flex flex-col flex-1 h-full">
-                        {/* Top Section: Letterhead + Memorandum Title Banner + Metadata Grid + Directives */}
-                        <div className="flex flex-col space-y-2">
-                          {/* Corporate Letterhead (Left Logo, Center Info, Right Corporate Group Emblem) */}
-                          <div className="flex items-center justify-between gap-4 pb-1">
-                            <div className="h-18 w-18 p-1 flex items-center justify-center shrink-0">
-                              <img
-                                src={company.logoUrl}
-                                alt={company.name}
-                                className="max-h-full max-w-full object-contain"
-                              />
-                            </div>
-                            <div className="min-w-0 flex-1 text-center">
-                              <h1 className="text-base sm:text-lg font-black text-slate-950 tracking-wide uppercase leading-tight font-sans">
-                                {company.legalName || company.name}
-                              </h1>
-                              {company.tagline && (
-                                <div className="text-[10px] text-emerald-800 font-bold uppercase tracking-wider mt-0.5">
-                                  {company.tagline}
-                                </div>
-                              )}
-                              <div className="text-[10px] sm:text-[10.5px] text-slate-700 font-semibold uppercase leading-snug mt-1">
-                                {formatAddressLines(company.address).map((line, idx) => (
-                                  <div key={idx}>{line}</div>
-                                ))}
-                              </div>
-                              <div className="text-[9.5px] text-slate-500 font-medium tracking-tight mt-0.5">
-                                {company.contact}
-                              </div>
-                            </div>
-                            <div className="h-18 w-18 p-1 flex items-center justify-center shrink-0">
-                              <img
-                                src={company.rightLogoUrl || CORPORATE_GROUP_EMBLEM}
-                                alt="Corporate Emblem"
-                                className="max-h-full max-w-full object-contain"
-                              />
-                            </div>
-                          </div>
-
-                          {/* Top Letterhead Divider Line */}
-                          <div className="mt-1 mb-1 border-b-2 border-slate-900"></div>
-
-                          {/* Prominent MEMORANDUM Title Banner with Ref No & Classification */}
-                          <div className="py-2 my-1 border-y-2 border-slate-900 text-center space-y-1">
-                            <h2 className="text-lg sm:text-xl font-black tracking-[0.35em] text-slate-950 uppercase leading-none font-sans">
-                              MEMORANDUM
-                            </h2>
-                            <div className="flex items-center justify-between text-[11px] px-2 font-bold pt-1 border-t border-slate-200">
-                              <span className="text-slate-700 font-bold">
-                                REF NO: <strong className="text-slate-950 font-mono font-black">{compMemoRef}</strong>
-                              </span>
-                              <span className="inline-flex items-center px-3 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-900 border border-emerald-300 shadow-2xs">
-                                {memoCategory}
-                              </span>
-                            </div>
-                          </div>
-
-                          {/* Official HR Memo Header Grid */}
-                          <div className="space-y-1 text-xs py-1.5">
-                            <div className="grid grid-cols-[90px_1fr] items-baseline">
-                              <span className="font-black text-[12px] text-slate-900 uppercase">TO:</span>
-                              <span className="font-extrabold text-slate-950 uppercase text-[12px] tracking-wide">{memoTo}</span>
-                            </div>
-                            <div className="grid grid-cols-[90px_1fr] items-baseline">
-                              <span className="font-black text-[12px] text-slate-900 uppercase">FROM:</span>
-                              <span className="font-extrabold text-slate-950 uppercase text-[12px] tracking-wide">{memoFrom}</span>
-                            </div>
-                            <div className="grid grid-cols-[90px_1fr] items-baseline">
-                              <span className="font-black text-[12px] text-slate-900 uppercase">DATE:</span>
-                              <span className="font-extrabold text-slate-950 uppercase text-[12px] tracking-wide">{memoDate}</span>
-                            </div>
-                            <div className="grid grid-cols-[90px_1fr] items-baseline">
-                              <span className="font-black text-[12px] text-slate-900 uppercase">SUBJECT:</span>
-                              <span className="font-black text-slate-950 uppercase text-[13px] tracking-tight">{memoSubject}</span>
-                            </div>
-                          </div>
-
-                          {/* Solid Divider between Header and Directives */}
-                          <div className="border-b-2 border-slate-900 my-1"></div>
-
-                          {/* Memo Body Content */}
-                          {memoContent ? (
-                            <div
-                              style={{
-                                fontFamily: directivesFontFamily,
-                                fontSize: `${directivesFontSize}px`,
-                                lineHeight: 1.8
-                              }}
-                              className="pt-2 text-slate-900 font-normal leading-[1.8] whitespace-pre-wrap text-justify"
-                              dangerouslySetInnerHTML={{
-                                __html: renderMemoDirectivesHtml(memoContent)
-                              }}
-                            />
-                          ) : (
-                            <div className="pt-2 text-[12.5px] sm:text-[13px] text-slate-400 italic leading-[1.8] font-sans">
-                              (No directives entered. Return to Step 2 to write or generate them with AI.)
-                            </div>
-                          )}
-
-                          {/* Signatory Block with E-Signatures: ~4 line spaces after body directives */}
-                          <div className="mt-8 pt-1">
-                            {signatoryLayout === "dual" ? (
-                              <div className="grid grid-cols-2 gap-8 items-start">
-                                {/* Left: Issued By */}
-                                <div className="space-y-0.5 text-left">
-                                  {signatoryLabel?.trim() ? (
-                                    <p className="text-[10.5px] font-black uppercase text-slate-700 tracking-wider">
-                                      {signatoryLabel.trim()}
-                                    </p>
-                                  ) : null}
-                                  <div
-                                    className="flex items-end"
-                                    style={{ height: `${Math.max(64, signatorySize + 10)}px` }}
-                                  >
-                                    {signatorySignature ? (
-                                      <img
-                                        src={signatorySignature}
-                                        alt="Signatory E-Signature"
-                                        style={{
-                                          height: `${signatorySize}px`,
-                                          maxHeight: `${signatorySize}px`,
-                                          maxWidth: `${Math.round(signatorySize * 3.5)}px`,
-                                          marginLeft: `${signatoryOffsetX}px`,
-                                          marginBottom: `${signatoryOffsetY}px`
-                                        }}
-                                        className="object-contain object-bottom pointer-events-none select-none relative z-10"
-                                      />
-                                    ) : (
-                                      <div className="h-10 text-[11px] text-slate-400 italic flex items-center mb-1">
-                                        (Signature over printed name)
-                                      </div>
-                                    )}
-                                  </div>
-                                  <p className="text-xs sm:text-[13.5px] font-black text-slate-950 uppercase tracking-tight relative z-0">
-                                    {signatoryName}
-                                  </p>
-                                  <p className="text-[11.5px] font-bold text-slate-800 leading-tight">
-                                    {signatoryTitle}
-                                  </p>
-                                  <p className="text-[10px] text-slate-600 font-semibold">
-                                    {getSignatoryAffiliation(company)}
-                                  </p>
-                                </div>
-
-                                {/* Right: Noted & Approved By */}
-                                <div className="space-y-0.5 text-left">
-                                  {approverLabel?.trim() ? (
-                                    <p className="text-[10.5px] font-black uppercase text-slate-700 tracking-wider">
-                                      {approverLabel.trim()}
-                                    </p>
-                                  ) : null}
-                                  <div
-                                    className="flex items-end"
-                                    style={{ height: `${Math.max(64, approverSize + 10)}px` }}
-                                  >
-                                    {approverSignature ? (
-                                      <img
-                                        src={approverSignature}
-                                        alt="Approver E-Signature"
-                                        style={{
-                                          height: `${approverSize}px`,
-                                          maxHeight: `${approverSize}px`,
-                                          maxWidth: `${Math.round(approverSize * 3.5)}px`,
-                                          marginLeft: `${approverOffsetX}px`,
-                                          marginBottom: `${approverOffsetY}px`
-                                        }}
-                                        className="object-contain object-bottom pointer-events-none select-none relative z-10"
-                                      />
-                                    ) : (
-                                      <div className="h-10 text-[11px] text-slate-400 italic flex items-center mb-1">
-                                        (Signature over printed name)
-                                      </div>
-                                    )}
-                                  </div>
-                                  <p className="text-xs sm:text-[13.5px] font-black text-slate-950 uppercase tracking-tight relative z-0">
-                                    {approverName}
-                                  </p>
-                                  <p className="text-[11.5px] font-bold text-slate-800 leading-tight">
-                                    {approverTitle}
-                                  </p>
-                                  <p className="text-[10px] text-slate-600 font-semibold">
-                                    {company.legalName || company.name}
-                                  </p>
-                                </div>
-                              </div>
-                            ) : (
-                              <div className="flex items-start justify-start">
-                                <div className="space-y-0.5 text-left max-w-[320px]">
-                                  {signatoryLabel?.trim() ? (
-                                    <p className="text-[10.5px] font-black uppercase text-slate-700 tracking-wider">
-                                      {signatoryLabel.trim()}
-                                    </p>
-                                  ) : null}
-                                  <div
-                                    className="flex items-end"
-                                    style={{ height: `${Math.max(64, signatorySize + 10)}px` }}
-                                  >
-                                    {signatorySignature ? (
-                                      <img
-                                        src={signatorySignature}
-                                        alt="Signatory E-Signature"
-                                        style={{
-                                          height: `${signatorySize}px`,
-                                          maxHeight: `${signatorySize}px`,
-                                          maxWidth: `${Math.round(signatorySize * 3.5)}px`,
-                                          marginLeft: `${signatoryOffsetX}px`,
-                                          marginBottom: `${signatoryOffsetY}px`
-                                        }}
-                                        className="object-contain object-bottom pointer-events-none select-none relative z-10"
-                                      />
-                                    ) : (
-                                      <div className="h-10 text-[11px] text-slate-400 italic flex items-center mb-1">
-                                        (Signature over printed name)
-                                      </div>
-                                    )}
-                                  </div>
-                                  <p className="text-xs sm:text-[13.5px] font-black text-slate-950 uppercase tracking-tight relative z-0">
-                                    {signatoryName}
-                                  </p>
-                                  <p className="text-[11.5px] font-bold text-slate-800 leading-tight">
-                                    {signatoryTitle}
-                                  </p>
-                                  <p className="text-[10px] text-slate-600 font-semibold">
-                                    {getSignatoryAffiliation(company)}
-                                  </p>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Bottom Section: ONLY Official Division Footer - Sagad sa pinaka-baba */}
-                        <div className="mt-auto pt-4 pb-1">
-                          <div className="border-t border-slate-300 pt-2.5 flex items-center justify-between text-[9.5px] sm:text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">
-                            <span>OFFICE OF THE HUMAN RESOURCES &amp; ADMINISTRATION</span>
-                            <span className="font-black text-slate-800">STRICT COMPLIANCE MANDATED</span>
-                            <span>{company.code} • OFFICIAL TRANSMISSION</span>
-                          </div>
-                          <div className="text-center text-[9px] text-slate-400 font-black uppercase tracking-[0.25em] mt-1">
-                            HUMAN RESOURCE MANAGEMENT DIVISION
-                          </div>
-                        </div>
-                      </div>
+                        90%
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPreviewZoom(100)}
+                        className={`px-2 py-0.5 rounded cursor-pointer transition ${previewZoom === 100 ? "bg-slate-900 text-white font-bold shadow-2xs" : "hover:text-slate-900"}`}
+                      >
+                        100%
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPreviewZoom(110)}
+                        className={`px-2 py-0.5 rounded cursor-pointer transition ${previewZoom === 110 ? "bg-slate-900 text-white font-bold shadow-2xs" : "hover:text-slate-900"}`}
+                      >
+                        110%
+                      </button>
                     </div>
                   </div>
-                );
-              })}
+                </div>
+              </div>
+
+              {/* Tier 3: E-Signature Alignment & Scale Quick Controls (Realtime on Viewer & Print) */}
+              <div className="px-3 sm:px-4 py-2 bg-slate-50/60 flex flex-wrap items-center justify-between gap-3 text-xs border-t border-slate-100">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-[10px] font-black text-slate-700 uppercase tracking-wider flex items-center gap-1 bg-white px-2 py-1 rounded border border-slate-200 shadow-2xs">
+                    ✍ E-Sig Alignment:
+                  </span>
+
+                  {/* Horizontal Left ↔ Right Nudge & Controls */}
+                  <div className="inline-flex items-center gap-1 bg-white border border-slate-200 rounded-lg px-2 py-1 shadow-2xs">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase">Pos:</span>
+                    <button
+                      type="button"
+                      onClick={() => setSignatoryOffsetX((prev) => Math.max(-50, prev - 4))}
+                      className="px-2 py-0.5 rounded bg-slate-50 hover:bg-slate-100 border border-slate-300 font-bold text-[10.5px] text-slate-800 transition cursor-pointer"
+                      title="Urong pakaliwa (-4px)"
+                    >
+                      ← Left
+                    </button>
+                    <span className="font-mono font-black text-[11px] text-slate-900 w-10 text-center">
+                      {signatoryOffsetX}px
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setSignatoryOffsetX((prev) => Math.min(250, prev + 4))}
+                      className="px-2 py-0.5 rounded bg-slate-50 hover:bg-slate-100 border border-slate-300 font-bold text-[10.5px] text-slate-800 transition cursor-pointer"
+                      title="Urong pakanan (+4px)"
+                    >
+                      Right →
+                    </button>
+                  </div>
+
+                  {/* Signature Size Scale */}
+                  <div className="inline-flex items-center gap-1 bg-white border border-slate-200 rounded-lg px-2 py-1 shadow-2xs">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase">Size:</span>
+                    <button
+                      type="button"
+                      onClick={() => setSignatorySize((prev) => Math.max(28, prev - 4))}
+                      className="px-2 py-0.5 rounded bg-slate-50 hover:bg-slate-100 border border-slate-300 font-bold text-[10.5px] text-slate-800 transition cursor-pointer"
+                      title="Paliitin ang signature size (-4px)"
+                    >
+                      - Paliitin
+                    </button>
+                    <span className="font-mono font-black text-[11px] text-slate-900 w-10 text-center">
+                      {signatorySize}px
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setSignatorySize((prev) => Math.min(160, prev + 4))}
+                      className="px-2 py-0.5 rounded bg-slate-50 hover:bg-slate-100 border border-slate-300 font-bold text-[10.5px] text-slate-800 transition cursor-pointer"
+                      title="Palakihin ang signature size (+4px)"
+                    >
+                      + Palakihin
+                    </button>
+                  </div>
+
+                  {/* Vertical Position */}
+                  <div className="inline-flex items-center gap-1 bg-white border border-slate-200 rounded-lg px-2 py-1 shadow-2xs">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase">Y:</span>
+                    <button
+                      type="button"
+                      onClick={() => setSignatoryOffsetY((prev) => Math.max(-50, prev - 2))}
+                      className="px-1.5 py-0.5 rounded bg-slate-50 hover:bg-slate-100 border border-slate-300 font-bold text-[10px] text-slate-800 transition cursor-pointer"
+                      title="Pababa"
+                    >
+                      ↓
+                    </button>
+                    <span className="font-mono font-bold text-[10.5px] text-slate-900 w-8 text-center">
+                      {signatoryOffsetY}px
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setSignatoryOffsetY((prev) => Math.min(30, prev + 2))}
+                      className="px-1.5 py-0.5 rounded bg-slate-50 hover:bg-slate-100 border border-slate-300 font-bold text-[10px] text-slate-800 transition cursor-pointer"
+                      title="Pataas"
+                    >
+                      ↑
+                    </button>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => { setSignatoryOffsetX(48); setSignatoryOffsetY(-6); setSignatorySize(56); }}
+                    className="px-2 py-1 text-[10.5px] text-slate-500 hover:text-slate-800 font-bold underline cursor-pointer"
+                    title="Reset to default alignment and size"
+                  >
+                    Reset
+                  </button>
+                </div>
+
+                {/* If dual signatory mode is active, Approver quick adjust */}
+                {signatoryLayout === "dual" && (
+                  <div className="flex items-center gap-2 flex-wrap text-slate-600">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase">Approver E-Sig:</span>
+                    <div className="inline-flex items-center gap-1 bg-white border border-slate-200 rounded-lg px-2 py-1 shadow-2xs">
+                      <button
+                        type="button"
+                        onClick={() => setApproverOffsetX((prev) => Math.max(-50, prev - 4))}
+                        className="px-1.5 py-0.5 rounded bg-slate-50 hover:bg-slate-100 border border-slate-300 font-bold text-[10px] text-slate-800 cursor-pointer"
+                        title="Approver left"
+                      >
+                        ←
+                      </button>
+                      <span className="font-mono font-bold text-[10.5px] text-slate-800 w-8 text-center">{approverOffsetX}px</span>
+                      <button
+                        type="button"
+                        onClick={() => setApproverOffsetX((prev) => Math.min(250, prev + 4))}
+                        className="px-1.5 py-0.5 rounded bg-slate-50 hover:bg-slate-100 border border-slate-300 font-bold text-[10px] text-slate-800 cursor-pointer"
+                        title="Approver right"
+                      >
+                        →
+                      </button>
+                      <span className="text-slate-300 mx-0.5">|</span>
+                      <button
+                        type="button"
+                        onClick={() => setApproverSize((prev) => Math.max(28, prev - 4))}
+                        className="px-1.5 py-0.5 rounded bg-slate-50 hover:bg-slate-100 border border-slate-300 font-bold text-[10px] text-slate-800 cursor-pointer"
+                        title="Approver smaller"
+                      >
+                        -
+                      </button>
+                      <span className="font-mono font-bold text-[10.5px] text-slate-800 w-8 text-center">{approverSize}px</span>
+                      <button
+                        type="button"
+                        onClick={() => setApproverSize((prev) => Math.min(160, prev + 4))}
+                        className="px-1.5 py-0.5 rounded bg-slate-50 hover:bg-slate-100 border border-slate-300 font-bold text-[10px] text-slate-800 cursor-pointer"
+                        title="Approver larger"
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
+
+            {/* ================= MEMORANDUM OUTPUT VIEWER ================= */}
+            {/* Navigation Shell & Entity Selector */}
+            <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-xs space-y-2.5">
+              {/* Top Row: Left / Right Navigation & View Mode Toggle */}
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5">
+                {/* Left: Previous, Active Entity Details, Next */}
+                <div className="flex items-center gap-2 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={() => setPreviewEntityIndex((prev) => Math.max(0, prev - 1))}
+                    disabled={safePreviewIndex === 0}
+                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-800 font-bold text-xs shadow-2xs transition disabled:opacity-30 disabled:pointer-events-none cursor-pointer"
+                    title="Previous Entity Memo (Keyboard: Left Arrow ←)"
+                  >
+                    <ChevronLeft size={16} />
+                    <span>Prev</span>
+                  </button>
+
+                  <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-100/90 border border-slate-200 text-xs">
+                    <span className="h-5 w-5 rounded-md bg-slate-900 text-white text-[10.5px] font-black flex items-center justify-center shrink-0">
+                      {safePreviewIndex + 1}
+                    </span>
+                    <span className="font-extrabold text-slate-900 truncate max-w-[130px] sm:max-w-[200px]">
+                      {companiesToPreview[safePreviewIndex]?.name}
+                    </span>
+                    <span className="font-mono text-[10px] font-bold text-slate-700 bg-white px-1.5 py-0.5 rounded border border-slate-200">
+                      {companiesToPreview[safePreviewIndex]?.code}
+                    </span>
+                    <span className="text-[10px] font-semibold text-slate-500">
+                      ({safePreviewIndex + 1} of {companiesToPreview.length})
+                    </span>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setPreviewEntityIndex((prev) => Math.min(companiesToPreview.length - 1, prev + 1))}
+                    disabled={safePreviewIndex >= companiesToPreview.length - 1}
+                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-800 font-bold text-xs shadow-2xs transition disabled:opacity-30 disabled:pointer-events-none cursor-pointer"
+                    title="Next Entity Memo (Keyboard: Right Arrow →)"
+                  >
+                    <span>Next</span>
+                    <ChevronRight size={16} />
+                  </button>
+                </div>
+
+                {/* Right: Keyboard Hint & View Mode Switcher */}
+                <div className="flex items-center gap-2 self-end sm:self-auto">
+                  <span className="hidden md:inline-flex items-center gap-1 text-[11px] font-semibold text-slate-400 bg-slate-50 border border-slate-200 px-2 py-1 rounded-md">
+                    ⌨ Use ← / → keys
+                  </span>
+
+                  <div className="inline-flex items-center rounded-lg border border-slate-200 bg-white p-0.5 text-xs font-semibold text-slate-700 shadow-2xs">
+                    <button
+                      type="button"
+                      onClick={() => setPreviewViewMode("slide")}
+                      className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md cursor-pointer transition ${
+                        previewViewMode === "slide"
+                          ? "bg-slate-900 text-white font-bold shadow-2xs"
+                          : "text-slate-600 hover:text-slate-900 font-medium"
+                      }`}
+                      title="Slide View (Focus 1 memo at a time, flip with Left / Right arrows)"
+                    >
+                      <FileText size={13} />
+                      <span>Slide View (← / →)</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPreviewViewMode("scroll")}
+                      className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md cursor-pointer transition ${
+                        previewViewMode === "scroll"
+                          ? "bg-slate-900 text-white font-bold shadow-2xs"
+                          : "text-slate-600 hover:text-slate-900 font-medium"
+                      }`}
+                      title="Continuous Scroll View (Show all sheets vertically)"
+                    >
+                      <LayoutGrid size={13} />
+                      <span>View All</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Bottom Entity Tab Strip: Quick Pill Picker */}
+              <div className="flex items-center gap-1.5 overflow-x-auto pt-1 pb-0.5 scrollbar-thin">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider shrink-0 mr-1">
+                  Entities:
+                </span>
+                {companiesToPreview.map((comp, idx) => {
+                  const isSelected = previewViewMode === "slide" ? idx === safePreviewIndex : false;
+                  return (
+                    <button
+                      key={comp.id}
+                      type="button"
+                      onClick={() => {
+                        setPreviewEntityIndex(idx);
+                        if (previewViewMode === "scroll") {
+                          const el = document.getElementById(`memo-sheet-${comp.id}`);
+                          if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+                        }
+                      }}
+                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs transition cursor-pointer shrink-0 ${
+                        isSelected
+                          ? "bg-slate-900 text-white border-slate-900 font-bold shadow-xs"
+                          : "bg-white hover:bg-slate-50 text-slate-700 border-slate-200 font-medium"
+                      }`}
+                      title={`Jump to ${comp.name}`}
+                    >
+                      <span className={`h-4 w-4 rounded-full flex items-center justify-center text-[9px] font-black ${
+                        isSelected ? "bg-white text-slate-900" : "bg-slate-100 text-slate-700 border border-slate-200"
+                      }`}>
+                        {idx + 1}
+                      </span>
+                      <span>{comp.code}</span>
+                      <span className="hidden lg:inline text-[10.5px] opacity-75 truncate max-w-[90px]">{comp.name}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Memorandum Output Viewer Stage with Coverflow 3D Animation */}
+            {previewViewMode === "slide" ? (
+              <div className="relative w-full overflow-hidden py-8 px-0 bg-slate-100/80 border border-slate-200/90 rounded-3xl shadow-inner select-none flex flex-col items-center">
+                {/* Floating Left Navigation Arrow Button */}
+                <button
+                  type="button"
+                  onClick={() => setPreviewEntityIndex((prev) => Math.max(0, prev - 1))}
+                  disabled={safePreviewIndex === 0}
+                  className="absolute left-3 sm:left-6 top-1/2 -translate-y-1/2 z-30 h-12 w-12 sm:h-14 sm:w-14 rounded-full bg-white/95 hover:bg-white text-slate-800 shadow-2xl border border-slate-200/90 flex items-center justify-center cursor-pointer transition hover:scale-110 active:scale-95 disabled:opacity-20 disabled:pointer-events-none"
+                  title="Previous Entity (Keyboard: Left Arrow ←)"
+                >
+                  <ChevronLeft size={28} className="text-slate-800" />
+                </button>
+
+                {/* Floating Right Navigation Arrow Button */}
+                <button
+                  type="button"
+                  onClick={() => setPreviewEntityIndex((prev) => Math.min(companiesToPreview.length - 1, prev + 1))}
+                  disabled={safePreviewIndex >= companiesToPreview.length - 1}
+                  className="absolute right-3 sm:right-6 top-1/2 -translate-y-1/2 z-30 h-12 w-12 sm:h-14 sm:w-14 rounded-full bg-white/95 hover:bg-white text-slate-800 shadow-2xl border border-slate-200/90 flex items-center justify-center cursor-pointer transition hover:scale-110 active:scale-95 disabled:opacity-20 disabled:pointer-events-none"
+                  title="Next Entity (Keyboard: Right Arrow →)"
+                >
+                  <ChevronRight size={28} className="text-slate-800" />
+                </button>
+
+                {/* Coverflow Sliding Track: All cards visible in horizontal line, center card highlighted & full size */}
+                <div
+                  className="w-full flex items-center transition-transform duration-500 ease-out py-2"
+                  style={{
+                    gap: "24px",
+                    transform: `translateX(calc(50% - ${safePreviewIndex} * (min(760px, 86vw) + 24px) - min(760px, 86vw) / 2))`
+                  }}
+                >
+                  {companiesToPreview.map((company, index) => {
+                    const isCenter = index === safePreviewIndex;
+                    return (
+                      <div
+                        key={company.id}
+                        onClick={() => {
+                          if (!isCenter) setPreviewEntityIndex(index);
+                        }}
+                        style={{ width: "min(760px, 86vw)" }}
+                        className={`shrink-0 relative transition-all duration-500 ease-out origin-center flex flex-col items-center ${
+                          isCenter
+                            ? "scale-100 opacity-100 z-20 pointer-events-auto shadow-2xl ring-1 ring-slate-900/10 rounded-2xl"
+                            : "scale-[0.84] sm:scale-[0.88] opacity-40 hover:opacity-75 z-10 cursor-pointer pointer-events-auto filter brightness-[0.97] hover:scale-[0.86] sm:hover:scale-[0.90]"
+                        }`}
+                      >
+                        {!isCenter && (
+                          <div
+                            className="absolute inset-0 z-30 rounded-2xl cursor-pointer flex items-center justify-center bg-slate-900/0 hover:bg-slate-900/10 transition group"
+                            title={`Click to view ${company.name}`}
+                          >
+                            <span className="opacity-0 group-hover:opacity-100 transition-opacity bg-slate-900/90 text-white font-bold text-xs px-3.5 py-2 rounded-full shadow-xl flex items-center gap-1.5">
+                              <span>View {company.code}</span>
+                              <ArrowRight size={13} />
+                            </span>
+                          </div>
+                        )}
+                        {renderCompanyMemoCard(company, index)}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Bottom Pagination Pill Indicators */}
+                <div className="flex items-center justify-center gap-1.5 pt-6 pb-1">
+                  {companiesToPreview.map((comp, idx) => {
+                    const isActive = idx === safePreviewIndex;
+                    return (
+                      <button
+                        key={comp.id}
+                        type="button"
+                        onClick={() => setPreviewEntityIndex(idx)}
+                        className={`h-2 rounded-full transition-all duration-300 cursor-pointer ${
+                          isActive
+                            ? "w-8 sm:w-10 bg-slate-900 shadow-xs"
+                            : "w-3 sm:w-4 bg-slate-300 hover:bg-slate-400"
+                        }`}
+                        title={`Go to ${comp.name} (${comp.code})`}
+                      />
+                    );
+                  })}
+                </div>
+              </div>
+            ) : (
+              /* Continuous Scroll: View All */
+              <div className="w-full flex flex-col items-center gap-10 py-2">
+                {companiesToPreview.map((company, index) => renderCompanyMemoCard(company, index))}
+              </div>
+            )}
 
             {/* Step 4 Bottom Navigation Buttons */}
             <div className="flex items-center justify-between pt-2">

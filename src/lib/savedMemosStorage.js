@@ -62,6 +62,36 @@ export async function getSavedMemosFromDb(currentUser = null) {
 }
 
 /**
+ * Fetch all memorandum reference numbers across all users/accounts in Supabase.
+ * Checks the database across accounts to ensure strictly unique incremental sequences.
+ */
+export async function getAllGlobalMemoRefs() {
+  try {
+    const { data, error } = await supabase
+      .from(SAVED_MEMOS_TABLE)
+      .select("ref_no, created_at")
+      .order("created_at", { ascending: false });
+
+    if (!error && Array.isArray(data)) {
+      return data.map((r) => r.ref_no).filter(Boolean);
+    }
+  } catch (err) {
+    console.warn("Notice: Querying all global memo refs fallback to memory:", err);
+  }
+
+  // Fallback to memory store across all user accounts
+  const allInMemory = [];
+  memoryMemosStore.forEach((memoList) => {
+    if (Array.isArray(memoList)) {
+      memoList.forEach((m) => {
+        if (m.ref) allInMemory.push(m.ref);
+      });
+    }
+  });
+  return allInMemory;
+}
+
+/**
  * Save an official memorandum record to Supabase ('saved_memos' table)
  */
 export async function saveMemoRecordToDb(currentUser = null, memoRecord = {}) {
@@ -73,7 +103,7 @@ export async function saveMemoRecordToDb(currentUser = null, memoRecord = {}) {
   const payload = {
     id,
     user_id: accountKey,
-    ref_no: memoRecord.ref || memoRecord.ref_no || "MEMO-2026-001",
+    ref_no: memoRecord.ref || memoRecord.ref_no || `MEMO-${new Date().getFullYear()}-01`,
     date: memoRecord.date || "",
     to_field: memoRecord.to || memoRecord.to_field || "",
     from_field: memoRecord.from || memoRecord.from_field || "",

@@ -874,7 +874,7 @@ HUMAN RESOURCE MANAGEMENT DIVISION`;
       companyCode: currentCompany.code,
       companyId: currentCompany.id,
       companyName: currentCompany.name,
-      ref: `MEMO-2026-${currentCompany.code}-001`,
+      ref: null,
       date: new Intl.DateTimeFormat("en-US", { month: "long", day: "2-digit", year: "numeric" }).format(new Date()).toUpperCase(),
       to: memoTo.trim().toUpperCase(),
       from: memoFrom.trim().toUpperCase(),
