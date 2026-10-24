@@ -475,25 +475,193 @@ export function mergeProfilesWithStored(supabaseProfiles = []) {
   return Array.from(mergedMap.values());
 }
 
+export const CREDENTIALS_STORE_KEY = "company_activated_credentials";
+export const LOCAL_CREDENTIALS_KEY = "hrhub_activated_credentials";
+
+// In-memory activated password cache for instant synchronous verification
+const activatedPasswordsMap = new Map();
+// Always guarantee master HR Administrator fallback login credentials
+activatedPasswordsMap.set("admin@hrhub.com", "admin123");
+
+// Load any existing local credentials into memory on initialization
+if (typeof window !== "undefined" && window.localStorage) {
+  try {
+    const rawLocal = window.localStorage.getItem(LOCAL_CREDENTIALS_KEY);
+    if (rawLocal) {
+      const parsed = JSON.parse(rawLocal);
+      if (parsed && typeof parsed === "object") {
+        Object.entries(parsed).forEach(([k, v]) => {
+          if (k && v) activatedPasswordsMap.set(k.trim().toLowerCase(), String(v));
+        });
+      }
+    }
+  } catch (err) {
+    console.warn("Failed to load local credentials:", err);
+  }
+}
+
 /**
- * Obsolete password functions - No localStorage password storage.
- * Supabase Auth handles password verification.
+ * Fetch and synchronize activated credentials from Supabase Database.
+ */
+export async function syncActivatedCredentialsFromCloud() {
+  try {
+    const { data, error } = await supabase
+      .from("user_settings")
+      .select("settings_json")
+      .eq("user_id", CREDENTIALS_STORE_KEY)
+      .maybeSingle();
+
+    if (!error && data?.settings_json?.passwords) {
+      const passwordsObj = data.settings_json.passwords;
+      Object.entries(passwordsObj).forEach(([k, v]) => {
+        if (k && v) {
+          activatedPasswordsMap.set(k.trim().toLowerCase(), String(v));
+        }
+      });
+      // Sync back to localStorage for instant offline access
+      if (typeof window !== "undefined" && window.localStorage) {
+        const currentObj = Object.fromEntries(activatedPasswordsMap.entries());
+        window.localStorage.setItem(LOCAL_CREDENTIALS_KEY, JSON.stringify(currentObj));
+      }
+    }
+  } catch (cloudErr) {
+    console.warn("Could not sync credentials from cloud:", cloudErr);
+  }
+}
+
+/**
+ * Get stored credentials object.
  */
 export function getStoredPasswords() {
-  return {};
+  return Object.fromEntries(activatedPasswordsMap.entries());
 }
 
-export function saveActivatedPassword() {
-  // Passwords managed by Supabase Auth, no localStorage
+/**
+ * Persist activated password for employee:
+ * 1. Updates in-memory map
+ * 2. Saves to localStorage
+ * 3. Syncs to Supabase user_settings and employees table metadata
+ */
+export async function saveActivatedPassword(email, password) {
+  if (!email || !password) return;
+  const normEmail = String(email).trim().toLowerCase();
+  const normPass = String(password).trim();
+
+  // 1. Update in-memory map
+  activatedPasswordsMap.set(normEmail, normPass);
+
+  // 2. Persist to localStorage
+  if (typeof window !== "undefined" && window.localStorage) {
+    try {
+      const currentObj = Object.fromEntries(activatedPasswordsMap.entries());
+      window.localStorage.setItem(LOCAL_CREDENTIALS_KEY, JSON.stringify(currentObj));
+    } catch (e) {
+      console.warn("localStorage save error:", e);
+    }
+  }
+
+  // 3. Asynchronously sync to Supabase Database
+  try {
+    // A. Update user_settings table
+    const allCreds = Object.fromEntries(activatedPasswordsMap.entries());
+    await supabase
+      .from("user_settings")
+      .upsert({
+        user_id: CREDENTIALS_STORE_KEY,
+        settings_json: { passwords: allCreds },
+        updated_at: new Date().toISOString()
+      }, { onConflict: "user_id" });
+
+    // B. Also update employees table metadata if record exists
+    try {
+      const { data: empData } = await supabase
+        .from(EMPLOYEES_TABLE)
+        .select("metadata")
+        .ilike("email", normEmail)
+        .maybeSingle();
+
+      const existingMeta = empData?.metadata || {};
+      await supabase
+        .from(EMPLOYEES_TABLE)
+        .update({
+          metadata: { ...existingMeta, activated_password: normPass, activated_at: new Date().toISOString() },
+          updated_at: new Date().toISOString()
+        })
+        .ilike("email", normEmail);
+    } catch (metaErr) {
+      console.warn("Could not update employee metadata password:", metaErr);
+    }
+  } catch (err) {
+    console.warn("Error syncing password to cloud:", err);
+  }
 }
 
-export function verifyActivatedPassword(email, password) {
+/**
+ * Verify activated password (supports sync check, localStorage check, and cloud fallback).
+ */
+export async function verifyActivatedPassword(email, password) {
   if (!email || !password) return false;
   const normEmail = String(email).trim().toLowerCase();
   const normPass = String(password).trim();
-  // Master HR Administrator fallback login credentials
-  return normEmail === "admin@hrhub.com" && normPass === "admin123";
+
+  // 1. Master admin fallback
+  if (normEmail === "admin@hrhub.com" && normPass === "admin123") {
+    return true;
+  }
+
+  // 2. Fast In-Memory Check
+  if (activatedPasswordsMap.has(normEmail)) {
+    return activatedPasswordsMap.get(normEmail) === normPass;
+  }
+
+  // 3. LocalStorage check
+  if (typeof window !== "undefined" && window.localStorage) {
+    try {
+      const raw = window.localStorage.getItem(LOCAL_CREDENTIALS_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed?.[normEmail]) {
+          activatedPasswordsMap.set(normEmail, parsed[normEmail]);
+          return parsed[normEmail] === normPass;
+        }
+      }
+    } catch (e) {}
+  }
+
+  // 4. Cloud Fallback: Check Supabase user_settings
+  try {
+    const { data, error } = await supabase
+      .from("user_settings")
+      .select("settings_json")
+      .eq("user_id", CREDENTIALS_STORE_KEY)
+      .maybeSingle();
+
+    if (!error && data?.settings_json?.passwords?.[normEmail]) {
+      const cloudPass = data.settings_json.passwords[normEmail];
+      activatedPasswordsMap.set(normEmail, cloudPass);
+      return cloudPass === normPass;
+    }
+
+    // 5. Cloud Fallback: Check employees table metadata
+    const { data: empRow } = await supabase
+      .from(EMPLOYEES_TABLE)
+      .select("metadata")
+      .ilike("email", normEmail)
+      .maybeSingle();
+
+    if (empRow?.metadata?.activated_password) {
+      const metaPass = empRow.metadata.activated_password;
+      activatedPasswordsMap.set(normEmail, metaPass);
+      return metaPass === normPass;
+    }
+  } catch (dbErr) {
+    console.warn("DB password check error:", dbErr);
+  }
+
+  return false;
 }
 
 // Initial async fetch to populate memory store from Supabase
 fetchEmployeesFromDatabase().catch(() => {});
+syncActivatedCredentialsFromCloud().catch(() => {});
+

@@ -117,8 +117,9 @@ const App = () => {
     // Ensure HR Administrator account is registered in local storage and database
     const initSuperAdminAccount = async () => {
       try {
-        if (!verifyActivatedPassword("admin@hrhub.com", "admin123")) {
-          saveActivatedPassword("admin@hrhub.com", "admin123");
+        const isMasterVerified = await verifyActivatedPassword("admin@hrhub.com", "admin123");
+        if (!isMasterVerified) {
+          await saveActivatedPassword("admin@hrhub.com", "admin123");
         }
 
         const { data: existingProf } = await supabase
@@ -261,7 +262,8 @@ const App = () => {
       }
 
       // 2. Database-verified credentials check (Activated accounts & HR Admin)
-      if (verifyActivatedPassword(trimmedEmail, trimmedPassword)) {
+      const isVerified = await verifyActivatedPassword(trimmedEmail, trimmedPassword);
+      if (isVerified) {
         let isApprovedStatus = true;
         let isDefaultAdmin = trimmedEmail.toLowerCase() === "admin@hrhub.com";
         let effectiveName = isDefaultAdmin ? "H R M D" : trimmedEmail.split("@")[0].replace(/[._]/g, " ").replace(/\b\w/g, (l) => l.toUpperCase());
@@ -442,7 +444,7 @@ const App = () => {
       }
 
       // 2. Persist activated password
-      saveActivatedPassword(trimmedEmail, trimmedPassword);
+      await saveActivatedPassword(trimmedEmail, trimmedPassword);
 
       // 3. Attempt Supabase Auth registration in background
       try {
