@@ -1666,7 +1666,7 @@ ${compLegal}
 HR Contact: ${HR_OFFICIAL_EMAIL}`;
   };
 
-  const generateCompanyEmailHtml = (targetComp = distributionCompany) => {
+  const generateCompanyEmailHtml = (targetComp = distributionCompany, preferredPaper = paperSize) => {
     const comp = targetComp || distributionCompany;
     const addrLines = formatAddressLines(escapeHtml(comp.address || ""));
     const addressHtml = addrLines.length > 1
@@ -1674,8 +1674,24 @@ HR Contact: ${HR_OFFICIAL_EMAIL}`;
       : addrLines[0];
     const compMemoRef = getCompanySpecificMemoRef(comp.code, memoRef);
     const compLegal = comp.legalName || comp.name;
+    const metrics = getMemoFitMetrics(memoContent, preferredPaper);
     const effectiveSigSize = Number(signatorySize) || 52;
     const effectiveAppSize = Number(approverSize) || 52;
+
+    // Exact email paper sheet height mirroring the selected bond paper size (width: 680px)
+    let emailMinHeightPx = 962; // Standard A4 (210 x 297 mm)
+    let emailPadding = "26px 34px 20px 34px";
+
+    if (metrics.isShort) {
+      emailMinHeightPx = 880; // Short Bond / Letter (8.5 x 11 in)
+      emailPadding = "24px 34px 20px 34px";
+    } else if (metrics.effectivePaper === "legal14") {
+      emailMinHeightPx = 1120; // US Legal (8.5 x 14 in)
+      emailPadding = "18px 34px 16px 34px";
+    } else if (metrics.isLegal) {
+      emailMinHeightPx = 1040; // Long Bond / Folio (8.5 x 13 in)
+      emailPadding = "20px 34px 16px 34px";
+    }
 
     // Category badge color accents
     let catBadgeBg = "#d1fae5";
@@ -1695,28 +1711,30 @@ HR Contact: ${HR_OFFICIAL_EMAIL}`;
       catBadgeBorder = "#fde68a";
     }
 
-    return `<div style="background-color: #f1f5f9; padding: 24px 12px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased;">
-  <!-- Exactly mirrors the Official Executive Memorandum White Paper Document -->
-  <div style="max-width: 720px; width: 100%; margin: 0 auto; background-color: #ffffff; border: 1px solid #cbd5e1; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08); padding: 32px 36px 26px 36px; box-sizing: border-box; position: relative; color: #0f172a;">
-    
-    <!-- Centered Company Watermark Layer -->
-    <div style="position: absolute; top: 48%; left: 50%; transform: translate(-50%, -50%); width: ${watermarkSize || 280}px; height: ${watermarkSize || 280}px; pointer-events: none; z-index: 0; user-select: none; opacity: ${Math.max(0.10, (watermarkOpacity || 12) / 100)}; text-align: center;">
-      <img src="${companyLogoDataMap[comp.id] || comp.logoUrl}" style="max-width: 100%; max-height: 100%; object-fit: contain; filter: grayscale(12%); display: inline-block;" alt="${escapeHtml(comp.name)} Watermark" />
-    </div>
+    // Safe Background Watermark: Applied directly as CSS background-image on the paper sheet container.
+    // This prevents email clients (like Gmail / Outlook) from stripping position:absolute and pushing the watermark to the top!
+    const watermarkUrl = fadedWatermarkMap[comp.id] || companyLogoDataMap[comp.id] || comp.logoUrl;
+    const watermarkBgStyle = watermarkUrl
+      ? `background-image: url('${watermarkUrl}'); background-repeat: no-repeat; background-position: center 48%; background-size: ${Math.round((watermarkSize || 280) * 0.95)}px auto;`
+      : "";
 
-    <!-- Foreground Official Memorandum Content -->
-    <div style="position: relative; z-index: 10; width: 100%;">
+    return `<div style="background-color: #f1f5f9; padding: 24px 10px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased;">
+  <!-- Exactly mirrors the Official Executive Memorandum White Paper Document for: ${metrics.paperLabel} -->
+  <div style="max-width: 680px; width: 100%; min-height: ${emailMinHeightPx}px; margin: 0 auto; background-color: #ffffff; ${watermarkBgStyle} border: 1px solid #cbd5e1; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08); padding: ${emailPadding}; box-sizing: border-box; display: flex; flex-direction: column; justify-content: space-between; position: relative; color: #0f172a;">
+    
+    <!-- Top & Body Section (Flush Top) -->
+    <div style="width: 100%;">
       
       <!-- 1. Corporate Letterhead Table (Left Logo, Center Info, Right Emblem) -->
       <table style="width: 100%; border-collapse: collapse; margin-bottom: 2px;">
         <tr>
           <td style="width: 72px; vertical-align: middle; text-align: left;">
             ${(companyLogoDataMap[comp.id] || comp.logoUrl) ? `
-              <img src="${companyLogoDataMap[comp.id] || comp.logoUrl}" style="max-height: 52px; max-width: 70px; display: block; object-fit: contain;" alt="${escapeHtml(comp.name)} Logo">
+              <img src="${companyLogoDataMap[comp.id] || comp.logoUrl}" style="max-height: ${metrics.logoMaxHeight || '52px'}; max-width: 70px; display: block; object-fit: contain;" alt="${escapeHtml(comp.name)} Logo">
             ` : ""}
           </td>
           <td style="vertical-align: middle; text-align: center; padding: 0 10px;">
-            <h1 style="font-size: 14pt; font-weight: 900; color: #020617; text-transform: uppercase; margin: 0; letter-spacing: 0.3px; line-height: 1.15; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+            <h1 style="font-size: ${metrics.letterheadTitleSize || '14pt'}; font-weight: 900; color: #020617; text-transform: uppercase; margin: 0; letter-spacing: 0.3px; line-height: 1.15; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
               ${escapeHtml(compLegal)}
             </h1>
             ${comp.tagline ? `<div style="font-size: 7.5pt; color: #047857; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 1px;">${escapeHtml(comp.tagline)}</div>` : ""}
@@ -1725,7 +1743,7 @@ HR Contact: ${HR_OFFICIAL_EMAIL}`;
           </td>
           <td style="width: 72px; vertical-align: middle; text-align: right;">
             ${(groupEmblemDataUrl || comp.rightLogoUrl || CORPORATE_GROUP_EMBLEM) ? `
-              <img src="${groupEmblemDataUrl || comp.rightLogoUrl || CORPORATE_GROUP_EMBLEM}" style="max-height: 50px; max-width: 68px; display: inline-block; object-fit: contain; border-radius: 4px;" alt="Corporate Group Emblem">
+              <img src="${groupEmblemDataUrl || comp.rightLogoUrl || CORPORATE_GROUP_EMBLEM}" style="max-height: ${metrics.logoMaxHeight || '50px'}; max-width: 68px; display: inline-block; object-fit: contain; border-radius: 4px;" alt="Corporate Group Emblem">
             ` : ""}
           </td>
         </tr>
@@ -1735,8 +1753,8 @@ HR Contact: ${HR_OFFICIAL_EMAIL}`;
       <div style="border-bottom: 2px solid #0f172a; margin: 3px 0 5px 0;"></div>
 
       <!-- 2. Prominent MEMORANDUM Title Banner with Ref No & Classification -->
-      <div style="border-top: 2px solid #0f172a; border-bottom: 2px solid #0f172a; padding: 4px 4px; margin: 3px 0 5px 0; text-align: center;">
-        <h2 style="font-size: 14pt; font-weight: 900; letter-spacing: 0.35em; color: #020617; text-transform: uppercase; margin: 0; line-height: 1; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+      <div style="border-top: 2px solid #0f172a; border-bottom: 2px solid #0f172a; padding: ${metrics.bannerPadding || '4px 4px'}; margin: 3px 0 5px 0; text-align: center;">
+        <h2 style="font-size: ${metrics.bannerTitleSize || '14pt'}; font-weight: 900; letter-spacing: 0.35em; color: #020617; text-transform: uppercase; margin: 0; line-height: 1; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
           MEMORANDUM
         </h2>
         <table style="width: 100%; border-collapse: collapse; margin-top: 3px; padding-top: 3px; border-top: 1px solid #e2e8f0; font-size: 8pt; font-weight: 700;">
@@ -1754,7 +1772,7 @@ HR Contact: ${HR_OFFICIAL_EMAIL}`;
       </div>
 
       <!-- 3. Official HR Memo Header Grid (Step 4 Format) - Standard 12pt -->
-      <div style="padding: 2px 0; font-size: 12pt; line-height: 1.45;">
+      <div style="padding: ${metrics.headerPadding || '2px 0'}; font-size: 12pt; line-height: 1.45;">
         <table style="width: 100%; border-collapse: collapse;">
           <tr>
             <td style="width: 90px; font-size: 12pt; font-weight: 900; color: #0f172a; text-transform: uppercase; padding: 2px 0;">TO:</td>
@@ -1779,7 +1797,7 @@ HR Contact: ${HR_OFFICIAL_EMAIL}`;
       <div style="border-bottom: 2px solid #0f172a; margin: 3px 0 6px 0;"></div>
 
       <!-- 4. Directives Body Content with Bullet/Numbered Lists -->
-      <div class="memo-directives-content" style="font-family: ${directivesFontFamily}; font-size: ${directivesFontSize}px; line-height: 1.58; color: #0f172a; font-weight: 400; text-align: justify; padding: 4px 0 16px 0;">
+      <div class="memo-directives-content" style="font-family: ${directivesFontFamily}; font-size: ${directivesFontSize}px; line-height: ${metrics.bodyLineHeight}; color: #0f172a; font-weight: 400; text-align: justify; padding: ${metrics.directivesPadding || '4px 0 16px 0'};">
         <style>
           .memo-directives-content ol { list-style-type: decimal !important; margin: 6px 0 !important; padding-left: 24px !important; }
           .memo-directives-content ul { list-style-type: disc !important; margin: 6px 0 !important; padding-left: 24px !important; }
@@ -1789,7 +1807,7 @@ ${renderMemoDirectivesHtml(memoContent)}
       </div>
 
       <!-- 5. Signatory Sign-off Block -->
-      <div style="margin-top: 18px; padding-top: 2px;">
+      <div style="margin-top: ${metrics.sigMarginTop || '18px'}; padding-top: 2px;">
         <table style="width: 100%; border-collapse: collapse; font-size: 9pt;">
           <tr>
             <td style="width: ${signatoryLayout === "dual" ? "50%" : "auto"}; max-width: ${signatoryLayout === "dual" ? "none" : "320px"}; vertical-align: top; text-align: left; padding-right: 18px;">
@@ -1818,24 +1836,24 @@ ${renderMemoDirectivesHtml(memoContent)}
           </tr>
         </table>
       </div>
-
-      <!-- 6. Bottom Section: Official Division Footer (Guaranteed Visible at Bottom Edge) -->
-      <div style="margin-top: 26px; padding-top: 4px; padding-bottom: 1px; width: 100%;">
-        <div style="border-top: 1px solid #cbd5e1; padding-top: 2.5px;">
-          <table style="width: 100%; border-collapse: collapse; font-size: 6.8pt; font-weight: 500; color: #475569; text-transform: uppercase; letter-spacing: 0.8px;">
-            <tr>
-              <td style="text-align: left; font-weight: 500;">HUMAN RESOURCES &amp; ADMINISTRATION</td>
-              <td style="text-align: center; font-weight: 600; color: #0f172a; letter-spacing: 1.2px;">STRICT COMPLIANCE MANDATED</td>
-              <td style="text-align: right; font-weight: 500;">${comp.code} • OFFICIAL TRANSMISSION</td>
-            </tr>
-          </table>
-        </div>
-        <div style="text-align: center; font-size: 5.8pt; color: #64748b; font-weight: 400; text-transform: uppercase; letter-spacing: 1.8px; margin-top: 1px;">
-          CORPORATE EXECUTIVE RECORD • CONFIDENTIAL TRANSMISSION
-        </div>
-      </div>
-
     </div>
+
+    <!-- 6. Bottom Section: Official Division Footer (Guaranteed Visible at Bottom Edge of Bond Paper Sheet) -->
+    <div style="margin-top: 26px; padding-top: 4px; padding-bottom: 1px; width: 100%;">
+      <div style="border-top: 1px solid #cbd5e1; padding-top: 2.5px;">
+        <table style="width: 100%; border-collapse: collapse; font-size: 6.8pt; font-weight: 500; color: #475569; text-transform: uppercase; letter-spacing: 0.8px;">
+          <tr>
+            <td style="text-align: left; font-weight: 500;">HUMAN RESOURCES &amp; ADMINISTRATION</td>
+            <td style="text-align: center; font-weight: 600; color: #0f172a; letter-spacing: 1.2px;">STRICT COMPLIANCE MANDATED</td>
+            <td style="text-align: right; font-weight: 500;">${comp.code} • OFFICIAL TRANSMISSION</td>
+          </tr>
+        </table>
+      </div>
+      <div style="text-align: center; font-size: 5.8pt; color: #64748b; font-weight: 400; text-transform: uppercase; letter-spacing: 1.8px; margin-top: 1px;">
+        CORPORATE EXECUTIVE RECORD • CONFIDENTIAL TRANSMISSION
+      </div>
+    </div>
+
   </div>
 </div>`;
   };
@@ -2161,7 +2179,7 @@ ${renderMemoDirectivesHtml(memoContent)}
 
     setIsSendingDirect(true);
     setDirectSendStatus(null);
-    const metrics = getMemoFitMetrics(memoContent);
+    const metrics = getMemoFitMetrics(memoContent, paperSize);
 
     // Build segregated packages for active companies that have recipients
     const dispatchesPayload = companyDispatches
@@ -2176,8 +2194,8 @@ ${renderMemoDirectivesHtml(memoContent)}
           memoRef: d.memoRef,
           recipients: d.recipients,
           subject: `[OFFICIAL MEMO] ${d.memoRef}: ${memoSubject} - ${d.companyName}`,
-          htmlBody: generateCompanyEmailHtml(comp),
-          pdfHtml: generateCompanyPrintHtml(comp),
+          htmlBody: generateCompanyEmailHtml(comp, paperSize),
+          pdfHtml: generateCompanyPrintHtml(comp, paperSize),
           body: generateEmailBody(comp),
           senderEmail: HR_OFFICIAL_EMAIL,
           isLongPaper: metrics.isLongPaper,
