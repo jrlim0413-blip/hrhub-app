@@ -235,15 +235,28 @@ const App = () => {
           return;
         }
 
-        const name = authData.user.email
-          ? authData.user.email.split("@")[0].replace(/[._]/g, " ").replace(/\b\w/g, (l) => l.toUpperCase())
-          : "User";
+        let empRole = trimmedEmail.toLowerCase() === "admin@hrhub.com" ? "HR Administrator" : "Team Member";
+        let empCompany = "Simpal Group of Companies";
+        let empName = name;
+        try {
+          const { data: empInfo } = await supabase
+            .from("employees")
+            .select("*")
+            .ilike("email", trimmedEmail)
+            .maybeSingle();
+          if (empInfo) {
+            if (empInfo.role) empRole = empInfo.role;
+            if (empInfo.company) empCompany = empInfo.company;
+            if (empInfo.name) empName = empInfo.name;
+          }
+        } catch {}
 
         const userObj = {
           id: authData.user.id,
           email: authData.user.email,
-          name,
-          role: "HR Administrator",
+          name: empName,
+          role: empRole,
+          company: empCompany,
           is_approved: profile ? profile.is_approved : true,
           source: "supabase"
         };
@@ -447,14 +460,89 @@ const App = () => {
       await saveActivatedPassword(trimmedEmail, trimmedPassword);
 
       // 3. Attempt Supabase Auth registration in background
+      let authUserId = null;
       try {
-        await supabase.auth.signUp({
+        const { data: signUpData } = await supabase.auth.signUp({
           email: trimmedEmail,
           password: trimmedPassword
         });
+        if (signUpData?.user?.id) {
+          authUserId = signUpData.user.id;
+        }
       } catch (authErr) {
         console.info("Supabase signUp note:", authErr);
       }
+
+      // 4. Automatically Add or Update in Supabase 'profiles' table
+      const isUuid = (str) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str || "");
+      let targetProfileId = authUserId;
+      if (!targetProfileId && isUuid(effectiveProfile.id)) {
+        targetProfileId = effectiveProfile.id;
+      }
+      if (!targetProfileId) {
+        if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+          targetProfileId = crypto.randomUUID();
+        } else {
+          targetProfileId = "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+            const r = (Math.random() * 16) | 0;
+            const v = c === "x" ? r : (r & 0x3) | 0x8;
+            return v.toString(16);
+          });
+        }
+      }
+
+      try {
+        const { data: existingProf } = await supabase
+          .from("profiles")
+          .select("id")
+          .ilike("email", trimmedEmail)
+          .maybeSingle();
+
+        if (existingProf?.id) {
+          await supabase
+            .from("profiles")
+            .update({ is_approved: true })
+            .eq("id", existingProf.id);
+        } else {
+          await supabase
+            .from("profiles")
+            .insert({
+              id: targetProfileId,
+              email: trimmedEmail,
+              is_approved: true,
+              created_at: new Date().toISOString()
+            });
+        }
+      } catch (profSyncErr) {
+        console.warn("Profiles auto-add sync notice:", profSyncErr);
+      }
+
+      // 5. Automatically ensure employee record is marked as approved and activated
+      try {
+        await supabase
+          .from("employees")
+          .update({
+            is_approved: true,
+            metadata: {
+              ...(effectiveProfile.metadata || {}),
+              activated: true,
+              activated_password: trimmedPassword,
+              activated_at: new Date().toISOString()
+            },
+            updated_at: new Date().toISOString()
+          })
+          .ilike("email", trimmedEmail);
+      } catch (empSyncErr) {
+        console.warn("Employees table activation sync notice:", empSyncErr);
+      }
+
+      // 6. Update in-memory employee record
+      await saveStoredEmployee({
+        ...effectiveProfile,
+        id: targetProfileId || effectiveProfile.id,
+        email: trimmedEmail,
+        is_approved: true
+      });
 
       const name = effectiveProfile.name || trimmedEmail.split("@")[0].replace(/[._]/g, " ").replace(/\b\w/g, (l) => l.toUpperCase());
       const actUser = {

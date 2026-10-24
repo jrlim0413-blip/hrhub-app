@@ -238,16 +238,41 @@ export default function EmployeeDirectoryPanel({
         onUpdateProfile(null, newRecord);
       }
 
-      // 3. Sync database approval in background if profile already registered in Supabase
+      // 3. Automatically insert or update in Supabase 'profiles' table
       try {
-        await supabase
+        const { data: existingProf } = await supabase
           .from("profiles")
-          .update({
-            is_approved: Boolean(newEmployee.isApproved)
-          })
-          .ilike("email", trimmedEmail);
+          .select("id")
+          .ilike("email", trimmedEmail)
+          .maybeSingle();
+
+        if (existingProf?.id) {
+          await supabase
+            .from("profiles")
+            .update({
+              is_approved: Boolean(newEmployee.isApproved)
+            })
+            .eq("id", existingProf.id);
+        } else {
+          const genUuid = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+            ? crypto.randomUUID()
+            : "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+                const r = (Math.random() * 16) | 0;
+                const v = c === "x" ? r : (r & 0x3) | 0x8;
+                return v.toString(16);
+              });
+
+          await supabase
+            .from("profiles")
+            .insert({
+              id: genUuid,
+              email: trimmedEmail,
+              is_approved: Boolean(newEmployee.isApproved),
+              created_at: new Date().toISOString()
+            });
+        }
       } catch (insertError) {
-        console.warn("Direct db sync note:", insertError);
+        console.warn("Direct profiles db sync note:", insertError);
       }
 
       setNotice({
