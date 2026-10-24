@@ -4,7 +4,15 @@
 -- Run this in the Supabase Dashboard -> SQL Editor
 -- ==============================================================================
 
--- 1. Alisin ang strict foreign key constraint sa profiles table
+-- 1. Siguraduhing existing ang mga kinakailangang columns
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS name TEXT;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS company TEXT DEFAULT 'Simpal Group of Companies';
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'Team Member';
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS is_approved BOOLEAN DEFAULT TRUE;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW());
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW());
+
+-- 2. Alisin ang strict foreign key constraint sa profiles table
 -- Dahil dito, hindi na magba-block ang Supabase kapag nag-insert ng pre-registered personnel
 ALTER TABLE public.profiles DROP CONSTRAINT IF EXISTS profiles_id_fkey;
 

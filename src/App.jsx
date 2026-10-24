@@ -4,7 +4,8 @@ import Dashboard from "./page/Dashboard";
 import {
   getStoredEmployees,
   saveActivatedPassword,
-  verifyActivatedPassword
+  verifyActivatedPassword,
+  saveStoredEmployee
 } from "./lib/employeeStorage";
 import {
   Users, ChevronDown, Globe, ArrowRight, LayoutDashboard, MessageSquare,
