@@ -188,7 +188,7 @@ export const COMPANIES = [
   },
   {
     id: "glowing_fortune",
-    name: "Glowing Fortune",
+    name: "Glowing Fortune OPC",
     legalName: "GLOWING FORTUNE ENTERTAINMENT CORP.",
     tagline: "Hospitality, Leisure & Gaming Services",
     category: "Gaming & Hospitality Enterprise",
@@ -204,7 +204,7 @@ export const COMPANIES = [
     badgeBg: "bg-emerald-100 text-emerald-800 border-emerald-300",
     defaultSignatory: "JEVINCE JAYE S. JUBAY, CHRP",
     defaultSignatoryTitle: "HRMD Manager",
-    defaultSignatoryCompany: "Glowing Fortune",
+    defaultSignatoryCompany: "Glowing Fortune OPC",
     defaultTo: "ALL HOSPITALITY, BRANCH & OPERATIONS PERSONNEL",
     defaultFrom: "HUMAN RESOURCES DEPARTMENT",
     approverName: "CHARMIE JEAN M. SIMPAL",
@@ -1316,7 +1316,7 @@ export default function MemoGeneratorPanel({
     return activeCompanies.map((comp) => {
       const matchingEmployees = allEmployees.filter((emp) => matchEmployeeToCompany(emp, comp));
       const compEmailSet = new Set();
-      
+
       matchingEmployees.forEach((emp) => {
         // Must be a valid work email address from pre-registered employees
         const workEmail = (emp.email || emp.work_email || emp.workEmail || "").trim();
@@ -1483,7 +1483,7 @@ export default function MemoGeneratorPanel({
       await saveUserSettings(currentUser, {
         signatory: { signature: null }
       });
-    } catch {}
+    } catch { }
   };
 
   const handleUploadApproverSignature = (event) =>
@@ -1495,7 +1495,7 @@ export default function MemoGeneratorPanel({
       await saveUserSettings(currentUser, {
         approver: { signature: null }
       });
-    } catch {}
+    } catch { }
   };
 
   // Save Memo to Records / Database Archive (Supabase 'saved_memos' table per account)
@@ -2732,9 +2732,8 @@ ${renderMemoDirectivesHtml(memoContent)}
             setColorMenuOpen(false);
             setClausesMenuOpen(false);
           }}
-          className={`px-2 py-1.5 rounded-lg border text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs ${
-            highlightMenuOpen ? "bg-amber-100 border-amber-300 text-amber-950" : "bg-white border-slate-200 hover:bg-slate-100 text-slate-800"
-          }`}
+          className={`px-2 py-1.5 rounded-lg border text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs ${highlightMenuOpen ? "bg-amber-100 border-amber-300 text-amber-950" : "bg-white border-slate-200 hover:bg-slate-100 text-slate-800"
+            }`}
           title="Highlight Text with Color"
         >
           <Highlighter size={14} className="text-amber-500" />
@@ -2802,9 +2801,8 @@ ${renderMemoDirectivesHtml(memoContent)}
             setHighlightMenuOpen(false);
             setClausesMenuOpen(false);
           }}
-          className={`px-2 py-1.5 rounded-lg border text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs ${
-            colorMenuOpen ? "bg-rose-50 border-rose-300 text-rose-950" : "bg-white border-slate-200 hover:bg-slate-100 text-slate-800"
-          }`}
+          className={`px-2 py-1.5 rounded-lg border text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs ${colorMenuOpen ? "bg-rose-50 border-rose-300 text-rose-950" : "bg-white border-slate-200 hover:bg-slate-100 text-slate-800"
+            }`}
           title="Text Color"
         >
           <Palette size={14} className="text-rose-600" />
@@ -2874,9 +2872,8 @@ ${renderMemoDirectivesHtml(memoContent)}
             setColorMenuOpen(false);
             setClausesMenuOpen(false);
           }}
-          className={`px-2.5 py-1.5 rounded-lg border text-xs font-black transition flex items-center gap-1.5 cursor-pointer shadow-2xs ${
-            shapesMenuOpen ? "bg-indigo-100 border-indigo-300 text-indigo-950" : "bg-white border-slate-200 hover:bg-slate-100 text-indigo-800"
-          }`}
+          className={`px-2.5 py-1.5 rounded-lg border text-xs font-black transition flex items-center gap-1.5 cursor-pointer shadow-2xs ${shapesMenuOpen ? "bg-indigo-100 border-indigo-300 text-indigo-950" : "bg-white border-slate-200 hover:bg-slate-100 text-indigo-800"
+            }`}
           title="Shapes, Official Badges & Callout Shape Boxes"
         >
           <Shapes size={14} className="text-indigo-600" />
@@ -3118,9 +3115,8 @@ ${renderMemoDirectivesHtml(memoContent)}
             setHighlightMenuOpen(false);
             setColorMenuOpen(false);
           }}
-          className={`px-2 py-1.5 rounded-lg border text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs ${
-            clausesMenuOpen ? "bg-emerald-100 border-emerald-300 text-emerald-950" : "bg-white border-slate-200 hover:bg-slate-100 text-emerald-800"
-          }`}
+          className={`px-2 py-1.5 rounded-lg border text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs ${clausesMenuOpen ? "bg-emerald-100 border-emerald-300 text-emerald-950" : "bg-white border-slate-200 hover:bg-slate-100 text-emerald-800"
+            }`}
           title="Insert Standard HR Policy Directives"
         >
           <Bookmark size={13} className="text-emerald-600" />
@@ -3193,9 +3189,8 @@ ${renderMemoDirectivesHtml(memoContent)}
         <div className="w-full rounded-xl border border-slate-200/90 bg-white px-3.5 py-2.5 shadow-xs flex flex-col md:flex-row md:items-center md:justify-between gap-2.5">
           {/* Left: Entity Identifier, Code, and Status Badges */}
           <div className="flex items-center gap-2 flex-wrap">
-            <span className={`h-5 w-5 rounded-md flex items-center justify-center text-[10.5px] font-black shrink-0 ${
-              isIncluded ? "bg-slate-900 text-white" : "bg-slate-400 text-white"
-            }`}>
+            <span className={`h-5 w-5 rounded-md flex items-center justify-center text-[10.5px] font-black shrink-0 ${isIncluded ? "bg-slate-900 text-white" : "bg-slate-400 text-white"
+              }`}>
               {index + 1}
             </span>
             <span className="text-slate-900 font-extrabold uppercase tracking-wide text-xs sm:text-[13px]">
@@ -3204,11 +3199,10 @@ ${renderMemoDirectivesHtml(memoContent)}
             <span className="text-[10px] font-mono font-bold text-slate-700 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded">
               {compMemoRef}
             </span>
-            <span className={`text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded-full border ${
-              isIncluded
+            <span className={`text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded-full border ${isIncluded
                 ? "bg-emerald-50 text-emerald-800 border-emerald-200"
                 : "bg-rose-50 text-rose-700 border-rose-200"
-            }`}>
+              }`}>
               {isIncluded ? "✓ Included" : "✕ Excluded"}
             </span>
             <span className="text-[10px] font-semibold text-slate-600 bg-slate-50 border border-slate-200 px-2 py-0.5 rounded-full inline-flex items-center gap-1">
@@ -3271,11 +3265,10 @@ ${renderMemoDirectivesHtml(memoContent)}
             <button
               type="button"
               onClick={() => toggleCompanyInclusion(company.id)}
-              className={`inline-flex items-center gap-1 rounded-lg font-bold px-2.5 py-1.5 text-xs transition cursor-pointer border ${
-                isIncluded
+              className={`inline-flex items-center gap-1 rounded-lg font-bold px-2.5 py-1.5 text-xs transition cursor-pointer border ${isIncluded
                   ? "border-slate-200 bg-white hover:bg-rose-50 hover:border-rose-300 text-slate-600 hover:text-rose-700 shadow-2xs"
                   : "border-emerald-600 bg-emerald-600 hover:bg-emerald-500 text-white shadow-xs"
-              }`}
+                }`}
               title={isIncluded ? `Exclude ${company.name} from memo distribution` : `Include ${company.name} in memo distribution`}
             >
               {isIncluded ? (
@@ -3314,11 +3307,9 @@ ${renderMemoDirectivesHtml(memoContent)}
             aspectRatio: metrics.aspectRatioCss,
             minHeight: `${metrics.previewMinHeightPx}px`
           }}
-          className={`relative w-full bg-white border border-slate-300 rounded-sm shadow-xl ${
-            metrics.isLegal ? "px-5 py-3 sm:px-8 sm:py-3.5" : "px-5 py-4 sm:px-8 sm:py-5"
-          } overflow-hidden select-none transition-all duration-150 flex flex-col justify-between ${
-            !isIncluded ? "opacity-40 grayscale-[25%] pointer-events-none" : ""
-          }`}
+          className={`relative w-full bg-white border border-slate-300 rounded-sm shadow-xl ${metrics.isLegal ? "px-5 py-3 sm:px-8 sm:py-3.5" : "px-5 py-4 sm:px-8 sm:py-5"
+            } overflow-hidden select-none transition-all duration-150 flex flex-col justify-between ${!isIncluded ? "opacity-40 grayscale-[25%] pointer-events-none" : ""
+            }`}
         >
           {/* Watermark Layer */}
           <div
@@ -3688,22 +3679,20 @@ ${renderMemoDirectivesHtml(memoContent)}
                 key={item.step}
                 type="button"
                 onClick={() => setCurrentStep(item.step)}
-                className={`flex items-center gap-3 p-3 rounded-2xl border text-left transition cursor-pointer ${
-                  isActive
+                className={`flex items-center gap-3 p-3 rounded-2xl border text-left transition cursor-pointer ${isActive
                     ? "bg-emerald-600 text-white border-emerald-600 shadow-md shadow-emerald-600/20 ring-2 ring-emerald-400/40"
                     : isCompleted
-                    ? "bg-white border-emerald-300 text-slate-900 hover:border-emerald-500 hover:bg-emerald-50/50"
-                    : "bg-white border-slate-200 text-slate-500 hover:border-emerald-300 hover:bg-emerald-50/20"
-                }`}
+                      ? "bg-white border-emerald-300 text-slate-900 hover:border-emerald-500 hover:bg-emerald-50/50"
+                      : "bg-white border-slate-200 text-slate-500 hover:border-emerald-300 hover:bg-emerald-50/20"
+                  }`}
               >
                 <div
-                  className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl font-black text-xs transition ${
-                    isActive
+                  className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl font-black text-xs transition ${isActive
                       ? "bg-white text-emerald-800 shadow-xs"
                       : isCompleted
-                      ? "bg-emerald-100 text-emerald-700 border border-emerald-300"
-                      : "bg-slate-100 text-slate-600"
-                  }`}
+                        ? "bg-emerald-100 text-emerald-700 border border-emerald-300"
+                        : "bg-slate-100 text-slate-600"
+                    }`}
                 >
                   {isCompleted ? <Check size={16} className="stroke-[3]" /> : item.step}
                 </div>
@@ -3813,9 +3802,8 @@ ${renderMemoDirectivesHtml(memoContent)}
                       onChange={(event) => updateLetterheadField("legalName", event.target.value)}
                       aria-invalid={isLetterheadHeadingInvalid || undefined}
                       aria-describedby={isLetterheadHeadingInvalid ? "letterhead-heading-error" : undefined}
-                      className={`w-full rounded-xl border bg-white px-3.5 py-2.5 text-xs font-bold text-slate-900 focus:border-emerald-500 focus:outline-none ${
-                        isLetterheadHeadingInvalid ? "border-rose-300" : "border-slate-200"
-                      }`}
+                      className={`w-full rounded-xl border bg-white px-3.5 py-2.5 text-xs font-bold text-slate-900 focus:border-emerald-500 focus:outline-none ${isLetterheadHeadingInvalid ? "border-rose-300" : "border-slate-200"
+                        }`}
                     />
                     {isLetterheadHeadingInvalid && (
                       <p id="letterhead-heading-error" className="text-[11px] font-medium text-rose-700">
@@ -4116,11 +4104,10 @@ ${renderMemoDirectivesHtml(memoContent)}
                   <button
                     type="button"
                     onClick={() => setIsSourceMode(!isSourceMode)}
-                    className={`inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1.5 rounded-lg transition cursor-pointer border ${
-                      isSourceMode
+                    className={`inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1.5 rounded-lg transition cursor-pointer border ${isSourceMode
                         ? "bg-slate-900 text-emerald-400 border-slate-800 shadow-xs"
                         : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
-                    }`}
+                      }`}
                     title="Toggle between Live WYSIWYG Sheet and HTML Source Code"
                   >
                     <Code size={13} />
@@ -4250,22 +4237,20 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                 <button
                   type="button"
                   onClick={() => setSignatoryLayout("dual")}
-                  className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${
-                    signatoryLayout === "dual"
+                  className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${signatoryLayout === "dual"
                       ? "bg-emerald-600 text-white shadow-xs"
                       : "text-slate-600 hover:text-slate-900"
-                  }`}
+                    }`}
                 >
                   Dual Signatory (HRMD + CEO)
                 </button>
                 <button
                   type="button"
                   onClick={() => setSignatoryLayout("single")}
-                  className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${
-                    signatoryLayout === "single"
+                  className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${signatoryLayout === "single"
                       ? "bg-emerald-600 text-white shadow-xs"
                       : "text-slate-600 hover:text-slate-900"
-                  }`}
+                    }`}
                 >
                   Single Signatory (HRMD Only)
                 </button>
@@ -4923,11 +4908,10 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                       key={comp.id}
                       type="button"
                       onClick={() => toggleCompanyInclusion(comp.id)}
-                      className={`relative flex flex-col items-center text-center p-3 rounded-xl border-2 transition cursor-pointer ${
-                        isIncluded
+                      className={`relative flex flex-col items-center text-center p-3 rounded-xl border-2 transition cursor-pointer ${isIncluded
                           ? "bg-emerald-50/70 border-emerald-500 shadow-2xs"
                           : "bg-slate-50/80 border-slate-200 opacity-60 hover:opacity-90"
-                      }`}
+                        }`}
                     >
                       {/* Checkbox Status Icon */}
                       <div className="absolute top-2 right-2">
@@ -4950,11 +4934,10 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                       </span>
 
                       <span
-                        className={`mt-2 text-[9px] font-black uppercase px-2 py-0.5 rounded-full border ${
-                          isIncluded
+                        className={`mt-2 text-[9px] font-black uppercase px-2 py-0.5 rounded-full border ${isIncluded
                             ? "bg-emerald-100 text-emerald-800 border-emerald-300"
                             : "bg-rose-50 text-rose-700 border-rose-200"
-                        }`}
+                          }`}
                       >
                         {isIncluded ? "✓ Included" : "✕ Excluded"}
                       </span>
@@ -4984,11 +4967,10 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                         const el = document.getElementById(`memo-sheet-${company.id}`);
                         if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
                       }}
-                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[11px] font-bold transition cursor-pointer ${
-                        isIncluded
+                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[11px] font-bold transition cursor-pointer ${isIncluded
                           ? "bg-emerald-50/80 hover:bg-emerald-100 text-emerald-900 border-emerald-200"
                           : "bg-slate-100 text-slate-500 border-slate-200 opacity-60"
-                      }`}
+                        }`}
                       title={`Jump to ${company.name}`}
                     >
                       <span className={`h-2 w-2 rounded-full ${isIncluded ? "bg-emerald-500" : "bg-slate-400"}`}></span>
@@ -5035,11 +5017,10 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                         setEmailModalOpen(true);
                       }
                     }}
-                    className={`inline-flex items-center gap-2 rounded-xl font-bold px-3.5 py-2 text-xs transition cursor-pointer ${
-                      totalCompanyRecipients === 0
+                    className={`inline-flex items-center gap-2 rounded-xl font-bold px-3.5 py-2 text-xs transition cursor-pointer ${totalCompanyRecipients === 0
                         ? "border border-amber-200 bg-amber-50 hover:bg-amber-100 text-amber-900 shadow-2xs"
                         : "bg-emerald-700 hover:bg-emerald-600 text-white shadow-xs"
-                    }`}
+                      }`}
                     title={
                       totalCompanyRecipients === 0
                         ? "No pre-registered employee work emails are linked. Click for details."
@@ -5087,11 +5068,10 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                     <button
                       type="button"
                       onClick={() => setPaperSize("auto")}
-                      className={`px-2.5 py-1 rounded-md cursor-pointer transition ${
-                        paperSize === "auto"
+                      className={`px-2.5 py-1 rounded-md cursor-pointer transition ${paperSize === "auto"
                           ? "bg-slate-900 text-white shadow-2xs font-bold"
                           : "text-slate-600 hover:text-slate-900 font-medium"
-                      }`}
+                        }`}
                       title="Auto-detect Short, A4 or Long/Legal based on directives length"
                     >
                       Auto
@@ -5099,11 +5079,10 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                     <button
                       type="button"
                       onClick={() => setPaperSize("short")}
-                      className={`px-2.5 py-1 rounded-md cursor-pointer transition ${
-                        paperSize === "short"
+                      className={`px-2.5 py-1 rounded-md cursor-pointer transition ${paperSize === "short"
                           ? "bg-slate-900 text-white shadow-2xs font-bold"
                           : "text-slate-600 hover:text-slate-900 font-medium"
-                      }`}
+                        }`}
                       title="Philippine Short Bond Paper / US Letter (8.5 x 11 in / 215.9 x 279.4 mm)"
                     >
                       Short (8.5×11)
@@ -5111,11 +5090,10 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                     <button
                       type="button"
                       onClick={() => setPaperSize("a4")}
-                      className={`px-2.5 py-1 rounded-md cursor-pointer transition ${
-                        paperSize === "a4"
+                      className={`px-2.5 py-1 rounded-md cursor-pointer transition ${paperSize === "a4"
                           ? "bg-slate-900 text-white shadow-2xs font-bold"
                           : "text-slate-600 hover:text-slate-900 font-medium"
-                      }`}
+                        }`}
                       title="Standard A4 Paper (210 x 297 mm)"
                     >
                       A4
@@ -5123,11 +5101,10 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                     <button
                       type="button"
                       onClick={() => setPaperSize("legal13")}
-                      className={`px-2.5 py-1 rounded-md cursor-pointer transition ${
-                        paperSize === "legal13"
+                      className={`px-2.5 py-1 rounded-md cursor-pointer transition ${paperSize === "legal13"
                           ? "bg-slate-900 text-white shadow-2xs font-bold"
                           : "text-slate-600 hover:text-slate-900 font-medium"
-                      }`}
+                        }`}
                       title="Philippine Long Bond Paper / Folio (8.5 x 13 in)"
                     >
                       Long (8.5×13)
@@ -5135,11 +5112,10 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                     <button
                       type="button"
                       onClick={() => setPaperSize("legal14")}
-                      className={`px-2.5 py-1 rounded-md cursor-pointer transition ${
-                        paperSize === "legal14"
+                      className={`px-2.5 py-1 rounded-md cursor-pointer transition ${paperSize === "legal14"
                           ? "bg-slate-900 text-white shadow-2xs font-bold"
                           : "text-slate-600 hover:text-slate-900 font-medium"
-                      }`}
+                        }`}
                       title="US Legal Paper (8.5 x 14 in)"
                     >
                       Legal (8.5×14)
@@ -5388,11 +5364,10 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                     <button
                       type="button"
                       onClick={() => setPreviewViewMode("slide")}
-                      className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md cursor-pointer transition ${
-                        previewViewMode === "slide"
+                      className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md cursor-pointer transition ${previewViewMode === "slide"
                           ? "bg-slate-900 text-white font-bold shadow-2xs"
                           : "text-slate-600 hover:text-slate-900 font-medium"
-                      }`}
+                        }`}
                       title="Slide View (Focus 1 memo at a time, flip with Left / Right arrows)"
                     >
                       <FileText size={13} />
@@ -5401,11 +5376,10 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                     <button
                       type="button"
                       onClick={() => setPreviewViewMode("scroll")}
-                      className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md cursor-pointer transition ${
-                        previewViewMode === "scroll"
+                      className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md cursor-pointer transition ${previewViewMode === "scroll"
                           ? "bg-slate-900 text-white font-bold shadow-2xs"
                           : "text-slate-600 hover:text-slate-900 font-medium"
-                      }`}
+                        }`}
                       title="Continuous Scroll View (Show all sheets vertically)"
                     >
                       <LayoutGrid size={13} />
@@ -5433,16 +5407,14 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                           if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
                         }
                       }}
-                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs transition cursor-pointer shrink-0 ${
-                        isSelected
+                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs transition cursor-pointer shrink-0 ${isSelected
                           ? "bg-slate-900 text-white border-slate-900 font-bold shadow-xs"
                           : "bg-white hover:bg-slate-50 text-slate-700 border-slate-200 font-medium"
-                      }`}
+                        }`}
                       title={`Jump to ${comp.name}`}
                     >
-                      <span className={`h-4 w-4 rounded-full flex items-center justify-center text-[9px] font-black ${
-                        isSelected ? "bg-white text-slate-900" : "bg-slate-100 text-slate-700 border border-slate-200"
-                      }`}>
+                      <span className={`h-4 w-4 rounded-full flex items-center justify-center text-[9px] font-black ${isSelected ? "bg-white text-slate-900" : "bg-slate-100 text-slate-700 border border-slate-200"
+                        }`}>
                         {idx + 1}
                       </span>
                       <span>{comp.code}</span>
@@ -5495,11 +5467,10 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                           if (!isCenter) setPreviewEntityIndex(index);
                         }}
                         style={{ width: "min(760px, 86vw)" }}
-                        className={`shrink-0 relative transition-all duration-500 ease-out origin-center flex flex-col items-center ${
-                          isCenter
+                        className={`shrink-0 relative transition-all duration-500 ease-out origin-center flex flex-col items-center ${isCenter
                             ? "scale-100 opacity-100 z-20 pointer-events-auto shadow-2xl ring-1 ring-slate-900/10 rounded-2xl"
                             : "scale-[0.84] sm:scale-[0.88] opacity-40 hover:opacity-75 z-10 cursor-pointer pointer-events-auto filter brightness-[0.97] hover:scale-[0.86] sm:hover:scale-[0.90]"
-                        }`}
+                          }`}
                       >
                         {!isCenter && (
                           <div
@@ -5527,11 +5498,10 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                         key={comp.id}
                         type="button"
                         onClick={() => setPreviewEntityIndex(idx)}
-                        className={`h-2 rounded-full transition-all duration-300 cursor-pointer ${
-                          isActive
+                        className={`h-2 rounded-full transition-all duration-300 cursor-pointer ${isActive
                             ? "w-8 sm:w-10 bg-slate-900 shadow-xs"
                             : "w-3 sm:w-4 bg-slate-300 hover:bg-slate-400"
-                        }`}
+                          }`}
                         title={`Go to ${comp.name} (${comp.code})`}
                       />
                     );
@@ -5656,11 +5626,10 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                 {companyDispatches.map((dispatch) => (
                   <div
                     key={dispatch.companyId}
-                    className={`rounded-2xl border p-3.5 space-y-2 transition ${
-                      dispatch.recipients.length > 0
+                    className={`rounded-2xl border p-3.5 space-y-2 transition ${dispatch.recipients.length > 0
                         ? "border-slate-200 bg-slate-50/80 hover:border-slate-300"
                         : "border-rose-200 bg-rose-50/40"
-                    }`}
+                      }`}
                   >
                     <div className="flex items-center justify-between flex-wrap gap-2">
                       <div className="flex items-center gap-2 min-w-0">
@@ -5672,11 +5641,10 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                           {dispatch.memoRef}
                         </span>
                       </div>
-                      <span className={`font-mono font-bold text-[11px] px-2.5 py-0.5 rounded-full border ${
-                        dispatch.recipients.length > 0
+                      <span className={`font-mono font-bold text-[11px] px-2.5 py-0.5 rounded-full border ${dispatch.recipients.length > 0
                           ? "text-emerald-700 bg-emerald-100/70 border-emerald-200"
                           : "text-rose-700 bg-rose-100/80 border-rose-300"
-                      }`}>
+                        }`}>
                         {dispatch.recipients.length > 0
                           ? `${dispatch.recipients.length} Recipient${dispatch.recipients.length === 1 ? "" : "s"}`
                           : "0 Work Emails (Blocked)"}
@@ -5778,11 +5746,10 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
             {/* Direct Send Status Feedback */}
             {directSendStatus && (
               <div
-                className={`rounded-2xl p-3 text-xs flex items-center gap-2 border ${
-                  directSendStatus.type === "success"
+                className={`rounded-2xl p-3 text-xs flex items-center gap-2 border ${directSendStatus.type === "success"
                     ? "bg-emerald-50 text-emerald-800 border-emerald-300"
                     : "bg-rose-50 text-rose-800 border-rose-300"
-                }`}
+                  }`}
               >
                 {directSendStatus.type === "success" ? (
                   <CheckCircle2 size={16} className="shrink-0 text-emerald-600" />
@@ -5804,11 +5771,10 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                   handleSendDirect();
                 }
               }}
-              className={`w-full inline-flex items-center justify-center gap-2 rounded-2xl px-6 py-3.5 text-xs font-black text-white shadow-lg transition cursor-pointer ${
-                totalCompanyRecipients === 0
+              className={`w-full inline-flex items-center justify-center gap-2 rounded-2xl px-6 py-3.5 text-xs font-black text-white shadow-lg transition cursor-pointer ${totalCompanyRecipients === 0
                   ? "bg-amber-600 hover:bg-amber-500 shadow-amber-700/20"
                   : "bg-[#008559] hover:bg-[#00704a] shadow-emerald-700/20"
-              }`}
+                }`}
             >
               {isSendingDirect ? (
                 <>
@@ -5899,7 +5865,7 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                   <span>Reason for Dispatch Restriction:</span>
                 </h5>
                 <p className="text-[12px] leading-relaxed text-slate-800 font-medium">
-                  The corporate dispatch system strictly adheres to confidentiality and security policies. 
+                  The corporate dispatch system strictly adheres to confidentiality and security policies.
                   Memos can only be dispatched to verified <strong>Work Email Addresses</strong> of personnel registered under the <strong>Employee Directory (Pre-Register Employee)</strong>.
                 </p>
                 <p className="text-[11.5px] text-amber-900 font-bold bg-white/80 border border-amber-200 rounded-xl p-2.5">
@@ -6329,13 +6295,12 @@ function doGet(e) {
       {imageCopyToast && (
         <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 px-4 py-3 rounded-2xl bg-slate-950 text-white shadow-2xl border border-slate-800 animate-in fade-in slide-in-from-bottom-3 duration-200">
           <div
-            className={`p-1.5 rounded-xl shrink-0 ${
-              imageCopyToast.type === "success"
+            className={`p-1.5 rounded-xl shrink-0 ${imageCopyToast.type === "success"
                 ? "bg-emerald-500/20 text-emerald-400"
                 : imageCopyToast.type === "download" || imageCopyToast.type === "fallback"
-                ? "bg-sky-500/20 text-sky-400"
-                : "bg-rose-500/20 text-rose-400"
-            }`}
+                  ? "bg-sky-500/20 text-sky-400"
+                  : "bg-rose-500/20 text-rose-400"
+              }`}
           >
             {imageCopyToast.type === "success" ? (
               <Check size={18} />
