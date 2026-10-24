@@ -270,11 +270,25 @@ const App = () => {
         let effectiveId = `act-${Date.now()}`;
 
         try {
-          const { data: dbProf } = await supabase
-            .from("profiles")
-            .select("*")
-            .ilike("email", trimmedEmail)
-            .maybeSingle();
+          // Check dedicated employees table first, then profiles
+          let dbProf = null;
+          try {
+            const { data: emp } = await supabase
+              .from("employees")
+              .select("*")
+              .ilike("email", trimmedEmail)
+              .maybeSingle();
+            if (emp) dbProf = emp;
+          } catch {}
+
+          if (!dbProf) {
+            const { data: prof } = await supabase
+              .from("profiles")
+              .select("*")
+              .ilike("email", trimmedEmail)
+              .maybeSingle();
+            if (prof) dbProf = prof;
+          }
 
           if (dbProf) {
             if (typeof dbProf.is_approved === "boolean") isApprovedStatus = dbProf.is_approved;
@@ -327,12 +341,25 @@ const App = () => {
       }
 
 
-      // If password check failed, check if the email exists in profiles or stored directory to provide helpful guidance
-      const { data: matchedProfile } = await supabase
-        .from("profiles")
-        .select("*")
-        .ilike("email", trimmedEmail)
-        .maybeSingle();
+      // If password check failed, check if the email exists in employees or profiles to provide helpful guidance
+      let matchedProfile = null;
+      try {
+        const { data: empRecord } = await supabase
+          .from("employees")
+          .select("*")
+          .ilike("email", trimmedEmail)
+          .maybeSingle();
+        if (empRecord) matchedProfile = empRecord;
+      } catch {}
+
+      if (!matchedProfile) {
+        const { data: profRecord } = await supabase
+          .from("profiles")
+          .select("*")
+          .ilike("email", trimmedEmail)
+          .maybeSingle();
+        if (profRecord) matchedProfile = profRecord;
+      }
 
       const storedEmployees = getStoredEmployees();
       const localExists = storedEmployees.some((e) => (e.email || "").toLowerCase() === trimmedEmail.toLowerCase());
@@ -376,12 +403,25 @@ const App = () => {
     setIsSubmittingAuth(true);
 
     try {
-      // 1. Check if email exists in the company directory (Supabase profiles OR stored employee registry)
-      const { data: matchedProfile } = await supabase
-        .from("profiles")
-        .select("*")
-        .ilike("email", trimmedEmail)
-        .maybeSingle();
+      // 1. Check if email exists in the company directory (Supabase employees OR profiles)
+      let matchedProfile = null;
+      try {
+        const { data: empRecord } = await supabase
+          .from("employees")
+          .select("*")
+          .ilike("email", trimmedEmail)
+          .maybeSingle();
+        if (empRecord) matchedProfile = empRecord;
+      } catch {}
+
+      if (!matchedProfile) {
+        const { data: profRecord } = await supabase
+          .from("profiles")
+          .select("*")
+          .ilike("email", trimmedEmail)
+          .maybeSingle();
+        if (profRecord) matchedProfile = profRecord;
+      }
 
       const storedEmployees = getStoredEmployees();
       const localMatched = storedEmployees.find(

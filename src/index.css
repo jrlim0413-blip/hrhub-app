@@ -360,4 +360,30 @@ summary {
 
 .memo-live-editor:focus {
   outline: none;
+}
+
+/* Directives Lists (Numbered & Bullet Lists) Styling Override for Tailwind Reset */
+.memo-live-editor ol,
+.memo-directives-content ol,
+.memo-print-sheet ol {
+  list-style-type: decimal !important;
+  margin: 6px 0 !important;
+  padding-left: 26px !important;
+}
+
+.memo-live-editor ul,
+.memo-directives-content ul,
+.memo-print-sheet ul {
+  list-style-type: disc !important;
+  margin: 6px 0 !important;
+  padding-left: 26px !important;
+}
+
+.memo-live-editor li,
+.memo-directives-content li,
+.memo-print-sheet li {
+  display: list-item !important;
+  list-style: inherit !important;
+  margin-bottom: 3px !important;
+  line-height: inherit !important;
 }

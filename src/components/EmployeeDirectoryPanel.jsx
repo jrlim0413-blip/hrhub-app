@@ -131,9 +131,9 @@ export default function EmployeeDirectoryPanel({
     const targetEmail = (profile.email || "").trim().toLowerCase();
     if (!targetEmail) return;
 
-    // 1. Save to persistent storage immediately
-    updateStoredEmployeeApproval(targetEmail, newApprovedState);
-    saveStoredEmployee({
+    // 1. Save directly to Supabase Database
+    await updateStoredEmployeeApproval(targetEmail, newApprovedState);
+    await saveStoredEmployee({
       ...profile,
       email: targetEmail,
       is_approved: newApprovedState
@@ -144,7 +144,7 @@ export default function EmployeeDirectoryPanel({
       onUpdateProfile(profile.id, { is_approved: newApprovedState, email: targetEmail });
     }
 
-    // 3. Sync to Supabase Database
+    // 3. Sync to Supabase Profiles if row exists
     try {
       if (profile.id && !String(profile.id).startsWith("prof-") && !String(profile.id).startsWith("db-") && !String(profile.id).startsWith("emp-")) {
         const { error: idErr } = await supabase
@@ -163,8 +163,6 @@ export default function EmployeeDirectoryPanel({
       if (emailErr) {
         console.warn("Supabase update by email notice:", emailErr.message || emailErr);
       }
-
-
     } catch (err) {
       console.warn("Approval toggle db sync error:", err);
     }
@@ -184,16 +182,16 @@ export default function EmployeeDirectoryPanel({
     );
     if (!confirmDelete) return;
 
-    // 1. Delete from local persistent storage
-    if (profile.email) deleteStoredEmployee(profile.email);
-    if (profile.id) deleteStoredEmployee(profile.id);
+    // 1. Delete from Supabase Database
+    if (profile.email) await deleteStoredEmployee(profile.email);
+    if (profile.id) await deleteStoredEmployee(profile.id);
 
     // 2. Notify parent dashboard
     if (onDeleteProfile) {
       onDeleteProfile(profile.id, profile.email);
     }
 
-    // 3. Delete from Supabase
+    // 3. Delete from Supabase Profiles
     try {
       if (profile.id && !String(profile.id).startsWith("prof-") && !String(profile.id).startsWith("db-") && !String(profile.id).startsWith("emp-")) {
         await supabase.from("profiles").delete().eq("id", profile.id);
@@ -223,7 +221,7 @@ export default function EmployeeDirectoryPanel({
 
     try {
       const newRecord = {
-        id: `prof-${Date.now()}`,
+        id: `emp-${Date.now()}`,
         email: trimmedEmail,
         is_approved: Boolean(newEmployee.isApproved),
         name: newEmployee.name.trim() || trimmedEmail.split("@")[0].replace(/[._]/g, " ").replace(/\b\w/g, l => l.toUpperCase()),
@@ -232,8 +230,8 @@ export default function EmployeeDirectoryPanel({
         created_at: new Date().toISOString()
       };
 
-      // 1. Save to persistent storage immediately
-      saveStoredEmployee(newRecord);
+      // 1. Save directly to Supabase Database
+      await saveStoredEmployee(newRecord);
 
       // 2. Update UI state immediately
       if (onUpdateProfile) {

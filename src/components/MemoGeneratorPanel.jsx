@@ -11,10 +11,10 @@ import {
   Upload, Image, CheckSquare, Square, XCircle, Code, ShieldCheck, Key,
   Camera, Download, Bold, Italic, Underline, Strikethrough, Highlighter,
   List, ListOrdered, Shapes, Minus, Palette, Heading, Type, Eraser,
-  ALargeSmall, CaseUpper
+  ALargeSmall, CaseUpper, Undo2, Redo2
 } from "lucide-react";
 import { processSignatureToTransparentPng } from "../lib/signatureImageProcessor";
-import { mergeProfilesWithStored, getStoredEmployees } from "../lib/employeeStorage";
+import { mergeProfilesWithStored } from "../lib/employeeStorage";
 import {
   getUserAccountKey,
   getUserSettings,
@@ -466,6 +466,57 @@ export function renderMemoDirectivesHtml(content) {
   html = html.replace(/==(.*?)==/g, '<mark style="background-color: #fef08a; color: #713f12; padding: 1px 5px; border-radius: 3px; font-weight: 600;">$1</mark>');
   // Markdown strikethrough ~~text~~ -> <s>$1</s>
   html = html.replace(/~~(.*?)~~/g, "<s>$1</s>");
+
+  // If content has markdown numbered lists ("1. " or "1) ") or bullets ("- ", "* ", "• ")
+  // and is not already wrapped in <ol> or <ul>, convert to clean HTML lists
+  if (!html.includes("<ol") && !html.includes("<ul")) {
+    const lines = html.split(/\r?\n/);
+    let inOl = false;
+    let inUl = false;
+    const processed = [];
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const olMatch = line.match(/^\s*(\d+)[\.\)]\s+(.*)$/);
+      const ulMatch = line.match(/^\s*[\-\*\•]\s+(.*)$/);
+
+      if (olMatch) {
+        if (inUl) {
+          processed.push("</ul>");
+          inUl = false;
+        }
+        if (!inOl) {
+          processed.push('<ol style="list-style-type: decimal; padding-left: 24px; margin: 6px 0;">');
+          inOl = true;
+        }
+        processed.push(`<li style="margin-bottom: 3px;">${olMatch[2]}</li>`);
+      } else if (ulMatch) {
+        if (inOl) {
+          processed.push("</ol>");
+          inOl = false;
+        }
+        if (!inUl) {
+          processed.push('<ul style="list-style-type: disc; padding-left: 24px; margin: 6px 0;">');
+          inUl = true;
+        }
+        processed.push(`<li style="margin-bottom: 3px;">${ulMatch[1]}</li>`);
+      } else {
+        if (inOl) {
+          processed.push("</ol>");
+          inOl = false;
+        }
+        if (inUl) {
+          processed.push("</ul>");
+          inUl = false;
+        }
+        processed.push(line);
+      }
+    }
+    if (inOl) processed.push("</ol>");
+    if (inUl) processed.push("</ul>");
+    html = processed.join("\n");
+  }
+
   return html;
 }
 
@@ -718,12 +769,76 @@ export default function MemoGeneratorPanel({
     setMemoContent(editor.innerHTML);
   };
 
+  const handleUndo = () => {
+    const editor = getActiveEditor();
+    if (!editor) return;
+    editor.focus();
+    document.execCommand("undo", false, null);
+    setMemoContent(editor.innerHTML);
+  };
+
+  const handleRedo = () => {
+    const editor = getActiveEditor();
+    if (!editor) return;
+    editor.focus();
+    document.execCommand("redo", false, null);
+    setMemoContent(editor.innerHTML);
+  };
+
   const handleEditorKeyDown = (e) => {
+    // Undo shortcut: Ctrl+Z / Cmd+Z (or Redo if Shift is held: Ctrl+Shift+Z)
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
+      e.preventDefault();
+      if (e.shiftKey) {
+        handleRedo();
+      } else {
+        handleUndo();
+      }
+      return;
+    }
+
+    // Redo shortcut: Ctrl+Y / Cmd+Y
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "y") {
+      e.preventDefault();
+      handleRedo();
+      return;
+    }
+
     if (e.key === "Tab") {
       e.preventDefault();
       document.execCommand("insertHTML", false, "&nbsp;&nbsp;&nbsp;&nbsp;");
       const editor = getActiveEditor();
       if (editor) setMemoContent(editor.innerHTML);
+      return;
+    }
+
+    // Auto-detect list prefix when pressing Space at the beginning of a line (e.g. "1. " or "- ")
+    if (e.key === " ") {
+      const sel = window.getSelection();
+      if (sel && sel.isCollapsed && sel.anchorNode) {
+        const textNode = sel.anchorNode;
+        if (textNode.nodeType === Node.TEXT_NODE) {
+          const textBeforeCursor = textNode.textContent.slice(0, sel.anchorOffset).trim();
+          // Check for "1." or "1)"
+          if (/^(\d+)[\.\)]$/.test(textBeforeCursor)) {
+            e.preventDefault();
+            textNode.textContent = textNode.textContent.slice(sel.anchorOffset);
+            document.execCommand("insertOrderedList", false, null);
+            const editor = getActiveEditor();
+            if (editor) setMemoContent(editor.innerHTML);
+            return;
+          }
+          // Check for "-", "*", "•"
+          if (/^[\-\*\•]$/.test(textBeforeCursor)) {
+            e.preventDefault();
+            textNode.textContent = textNode.textContent.slice(sel.anchorOffset);
+            document.execCommand("insertUnorderedList", false, null);
+            const editor = getActiveEditor();
+            if (editor) setMemoContent(editor.innerHTML);
+            return;
+          }
+        }
+      }
     }
   };
 
@@ -1771,15 +1886,20 @@ ${renderMemoDirectivesHtml(memoContent).replace(/\n/g, "<br>")}
     const isLegal13 = effectivePaper === "legal13" || effectivePaper === "legal" || effectivePaper === "long";
     const isLegal = isLegal13 || isLegal14;
 
-    // Standard print page margins: 4mm top/bottom (sagad sa margin), 8mm left/right
-    const pageMargin = "4mm 8mm 4mm 8mm";
+    // Dynamically tuned print page margins:
+    // On Long Bond (8.5 × 13 in) and Legal (8.5 × 14 in), the top margin is reduced (from 8-10mm down to 3.5mm)
+    // so the header sits higher and the bottom division footer is 100% visible and not cut off on printouts.
+    // Standard sizes (A4 / Short) maintain safe 8mm top margin to avoid physical printer top-roller clipping.
+    const topMarginMm = isLegal ? 3.5 : 8;
+    const bottomMarginMm = isLegal ? 5.5 : 7;
+    const pageMargin = `${topMarginMm}mm 6mm ${bottomMarginMm}mm 6mm`;
 
-    // Exact physical dimensions and printable heights (paper height minus 8mm margins - safety buffer)
+    // Exact physical dimensions and printable heights (paper height minus top & bottom margins)
     let paperSizeCss = "A4 portrait";
     let paperLabel = "A4 (210 × 297 mm)";
     let paperBadgeLabel = "A4 (210×297)";
-    let sheetHeightMm = 286; // 297mm - 8mm - 3mm buffer
-    let sheetWidthMm = 194;  // 210mm - 16mm
+    let sheetHeightMm = 281; // 297mm - 8mm - 7mm - 1mm buffer
+    let sheetWidthMm = 198;  // 210mm - 12mm
     let aspectRatioCss = "210 / 297";
     let previewMinHeightPx = 990;
 
@@ -1787,24 +1907,24 @@ ${renderMemoDirectivesHtml(memoContent).replace(/\n/g, "<br>")}
       paperSizeCss = "8.5in 11in";
       paperLabel = "Short Bond (8.5 × 11 in / Letter)";
       paperBadgeLabel = "Short (8.5×11)";
-      sheetHeightMm = 267;
-      sheetWidthMm = 199.9;
+      sheetHeightMm = 263; // 279.4mm - 8mm - 7mm - 1.4mm buffer
+      sheetWidthMm = 203.9;
       aspectRatioCss = "8.5 / 11";
       previewMinHeightPx = 920;
     } else if (isLegal14) {
       paperSizeCss = "8.5in 14in";
       paperLabel = "Legal (8.5 × 14 in)";
       paperBadgeLabel = "Legal (8.5×14)";
-      sheetHeightMm = 344;
-      sheetWidthMm = 199.9;
+      sheetHeightMm = 345; // 355.6mm - 3.5mm - 5.5mm - 1.6mm buffer
+      sheetWidthMm = 203.9;
       aspectRatioCss = "8.5 / 14";
       previewMinHeightPx = 1180;
     } else if (isLegal) {
       paperSizeCss = "8.5in 13in";
       paperLabel = "Long Bond (8.5 × 13 in / Folio)";
       paperBadgeLabel = "Long (8.5×13)";
-      sheetHeightMm = 319;
-      sheetWidthMm = 199.9;
+      sheetHeightMm = 320; // 330.2mm - 3.5mm - 5.5mm - 1.2mm buffer
+      sheetWidthMm = 203.9;
       aspectRatioCss = "8.5 / 13";
       previewMinHeightPx = 1090;
     }
@@ -1836,7 +1956,7 @@ ${renderMemoDirectivesHtml(memoContent).replace(/\n/g, "<br>")}
       }
     }
 
-    // CRITICAL: Strictly respect user's configured directivesFontSize without auto-downscaling
+    // CRITICAL: Strictly respect user's configured directivesFontSize and signature sizes without auto-downscaling
     const directivesFontSizePx = Number(directivesFontSize) || 13.3;
     let directivesLineHeight = "1.6";
     let directivesPadding = "4px 0";
@@ -1846,8 +1966,8 @@ ${renderMemoDirectivesHtml(memoContent).replace(/\n/g, "<br>")}
     let logoMaxHeight = "54px";
     let letterheadTitleSize = "13.5pt";
     let headerPadding = "2.5px 0";
-    let effectiveSignatorySize = signatorySize;
-    let effectiveApproverSize = approverSize;
+    const effectiveSignatorySize = Number(signatorySize) || 52;
+    const effectiveApproverSize = Number(approverSize) || 52;
 
     if (isUltraCompact) {
       directivesLineHeight = isShort ? "1.26" : "1.30";
@@ -1858,8 +1978,6 @@ ${renderMemoDirectivesHtml(memoContent).replace(/\n/g, "<br>")}
       logoMaxHeight = isShort ? "38px" : "44px";
       letterheadTitleSize = isShort ? "11.5pt" : "12pt";
       headerPadding = "1px 0";
-      effectiveSignatorySize = Math.min(signatorySize, isShort ? 32 : 36);
-      effectiveApproverSize = Math.min(approverSize, isShort ? 32 : 36);
     } else if (isCompact) {
       directivesLineHeight = isShort ? "1.38" : "1.44";
       directivesPadding = "3px 0";
@@ -1869,8 +1987,6 @@ ${renderMemoDirectivesHtml(memoContent).replace(/\n/g, "<br>")}
       logoMaxHeight = isShort ? "46px" : "50px";
       letterheadTitleSize = isShort ? "12.5pt" : "13pt";
       headerPadding = "2px 0";
-      effectiveSignatorySize = Math.min(signatorySize, isShort ? 40 : 44);
-      effectiveApproverSize = Math.min(approverSize, isShort ? 40 : 44);
     } else {
       directivesLineHeight = isShort ? "1.52" : isLegal ? "1.65" : "1.58";
       sigMarginTop = isShort ? "18px" : isLegal ? "28px" : "22px";
@@ -1915,11 +2031,12 @@ ${renderMemoDirectivesHtml(memoContent).replace(/\n/g, "<br>")}
       : addrLines[0];
     const compMemoRef = getCompanySpecificMemoRef(comp.code, memoRef);
     const compLegal = comp.legalName || comp.name;
-    const accentColor = comp.accentColor || "#059669";
     const metrics = getMemoFitMetrics(memoContent, preferredPaper);
+    const effectiveSigSize = Number(signatorySize) || 52;
+    const effectiveAppSize = Number(approverSize) || 52;
 
     return `
-      <div class="memo-print-sheet" style="position: relative; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; width: 100%; height: ${metrics.sheetHeightMm}mm; min-height: ${metrics.sheetHeightMm}mm; max-height: ${metrics.sheetHeightMm}mm; box-sizing: border-box; overflow: hidden; display: flex; flex-direction: column; justify-content: space-between; padding: 0 2mm; margin: 0; background: #ffffff; color: #0f172a;">
+      <div class="memo-print-sheet" style="position: relative; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; width: 100%; height: ${metrics.sheetHeightMm}mm; max-height: ${metrics.sheetHeightMm}mm; box-sizing: border-box; overflow: hidden; display: flex; flex-direction: column; justify-content: space-between; padding: ${metrics.isLegal ? '0 1mm 1.5mm 1mm' : '0 1mm 2mm 1mm'}; margin: 0; background: #ffffff; color: #0f172a;">
         
         <!-- ================= COMPANY-SPECIFIC EXECUTIVE WATERMARK LAYER ================= -->
         <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: ${watermarkSize}px; height: ${watermarkSize}px; pointer-events: none; z-index: 0; user-select: none; display: flex; align-items: center; justify-content: center; opacity: ${watermarkOpacity / 100};">
@@ -1932,44 +2049,44 @@ ${renderMemoDirectivesHtml(memoContent).replace(/\n/g, "<br>")}
         </div>` : ""}
 
         <!-- Foreground Official Content (Flush top, flexible middle, sagad sa pinaka-baba footer) -->
-        <div style="position: relative; z-index: 10; display: flex; flex-direction: column; justify-content: space-between; flex: 1; height: 100%;">
+        <div style="position: relative; z-index: 10; display: flex; flex-direction: column; justify-content: space-between; flex: 1; height: 100%; min-height: 100%; width: 100%;">
           
           <!-- Top Section: Letterhead + Memorandum Title Banner + Header Grid + Directives (Step 4 Format) -->
-          <div style="display: flex; flex-direction: column;">
+          <div style="display: flex; flex-direction: column; margin-top: 0; padding-top: 0;">
             
             <!-- Corporate Letterhead (Left Logo, Center Details, Right Emblem) -->
             <table style="width: 100%; border-collapse: collapse; margin-bottom: 2px;">
               <tr>
                 <td style="width: 72px; vertical-align: middle; text-align: left;">
                   ${(companyLogoDataMap[comp.id] || comp.logoUrl) ? `
-                    <img src="${companyLogoDataMap[comp.id] || comp.logoUrl}" style="max-height: 56px; max-width: 70px; display: block; object-fit: contain;" alt="${escapeHtml(comp.name)} Logo">
+                    <img src="${companyLogoDataMap[comp.id] || comp.logoUrl}" style="max-height: ${metrics.logoMaxHeight || '52px'}; max-width: 70px; display: block; object-fit: contain;" alt="${escapeHtml(comp.name)} Logo">
                   ` : ""}
                 </td>
                 <td style="vertical-align: middle; text-align: center; padding: 0 10px;">
-                  <h1 style="font-size: 14pt; font-weight: 900; color: #020617; text-transform: uppercase; margin: 0; letter-spacing: 0.3px; line-height: 1.15; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+                  <h1 style="font-size: ${metrics.letterheadTitleSize || '14pt'}; font-weight: 900; color: #020617; text-transform: uppercase; margin: 0; letter-spacing: 0.3px; line-height: 1.15; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
                     ${escapeHtml(compLegal)}
                   </h1>
-                  ${comp.tagline ? `<div style="font-size: 8pt; color: #047857; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 2px;">${escapeHtml(comp.tagline)}</div>` : ""}
-                  <div style="font-size: 8pt; color: #334155; font-weight: 600; text-transform: uppercase; margin-top: 2px; line-height: 1.3;">${addressHtml}</div>
-                  <div style="font-size: 7.5pt; color: #64748b; font-weight: 500; margin-top: 1px;">${escapeHtml(comp.contact || "")}</div>
+                  ${comp.tagline ? `<div style="font-size: 7.5pt; color: #047857; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 1px;">${escapeHtml(comp.tagline)}</div>` : ""}
+                  <div style="font-size: 7.5pt; color: #334155; font-weight: 600; text-transform: uppercase; margin-top: 1px; line-height: 1.25;">${addressHtml}</div>
+                  <div style="font-size: 7pt; color: #64748b; font-weight: 500; margin-top: 0.5px;">${escapeHtml(comp.contact || "")}</div>
                 </td>
                 <td style="width: 72px; vertical-align: middle; text-align: right;">
                   ${(groupEmblemDataUrl || comp.rightLogoUrl || CORPORATE_GROUP_EMBLEM) ? `
-                    <img src="${groupEmblemDataUrl || comp.rightLogoUrl || CORPORATE_GROUP_EMBLEM}" style="max-height: 54px; max-width: 68px; display: inline-block; object-fit: contain; border-radius: 4px;" alt="Corporate Group Emblem">
+                    <img src="${groupEmblemDataUrl || comp.rightLogoUrl || CORPORATE_GROUP_EMBLEM}" style="max-height: ${metrics.logoMaxHeight || '50px'}; max-width: 68px; display: inline-block; object-fit: contain; border-radius: 4px;" alt="Corporate Group Emblem">
                   ` : ""}
                 </td>
               </tr>
             </table>
 
             <!-- Top Letterhead Divider Line -->
-            <div style="border-bottom: 2px solid #0f172a; margin: 4px 0 6px 0;"></div>
+            <div style="border-bottom: 2px solid #0f172a; margin: 3px 0 5px 0;"></div>
 
             <!-- Prominent MEMORANDUM Title Banner with Ref No & Classification -->
-            <div style="border-top: 2px solid #0f172a; border-bottom: 2px solid #0f172a; padding: 6px 4px; margin: 4px 0 6px 0; text-align: center;">
-              <h2 style="font-size: 14.5pt; font-weight: 900; letter-spacing: 0.35em; color: #020617; text-transform: uppercase; margin: 0; line-height: 1; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+            <div style="border-top: 2px solid #0f172a; border-bottom: 2px solid #0f172a; padding: ${metrics.bannerPadding || '4px 4px'}; margin: 3px 0 5px 0; text-align: center;">
+              <h2 style="font-size: ${metrics.bannerTitleSize || '14pt'}; font-weight: 900; letter-spacing: 0.35em; color: #020617; text-transform: uppercase; margin: 0; line-height: 1; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
                 MEMORANDUM
               </h2>
-              <div style="display: flex; justify-content: space-between; align-items: center; font-size: 8pt; font-weight: 700; padding-top: 4px; margin-top: 4px; border-top: 1px solid #e2e8f0;">
+              <div style="display: flex; justify-content: space-between; align-items: center; font-size: 8pt; font-weight: 700; padding-top: 3px; margin-top: 3px; border-top: 1px solid #e2e8f0;">
                 <span style="color: #334155;">
                   REF NO: <strong style="color: #020617; font-family: monospace; font-weight: 900;">${compMemoRef}</strong>
                 </span>
@@ -1979,76 +2096,76 @@ ${renderMemoDirectivesHtml(memoContent).replace(/\n/g, "<br>")}
               </div>
             </div>
 
-            <!-- Official HR Memo Header Grid (Step 4 Format) -->
-            <div style="padding: 4px 0; font-size: 8.5pt; line-height: 1.5;">
+            <!-- Official HR Memo Header Grid (Step 4 Format) - Standard 12pt -->
+            <div style="padding: ${metrics.headerPadding || '2px 0'}; font-size: 12pt; line-height: 1.45;">
               <table style="width: 100%; border-collapse: collapse;">
                 <tr>
-                  <td style="width: 75px; font-weight: 900; color: #0f172a; text-transform: uppercase; padding: 2px 0;">TO:</td>
-                  <td style="font-weight: 800; color: #020617; text-transform: uppercase; letter-spacing: 0.2px; padding: 2px 0;">${memoTo}</td>
+                  <td style="width: 90px; font-size: 12pt; font-weight: 900; color: #0f172a; text-transform: uppercase; padding: 2px 0;">TO:</td>
+                  <td style="font-size: 12pt; font-weight: 800; color: #020617; text-transform: uppercase; letter-spacing: 0.2px; padding: 2px 0;">${memoTo}</td>
                 </tr>
                 <tr>
-                  <td style="width: 75px; font-weight: 900; color: #0f172a; text-transform: uppercase; padding: 2px 0;">FROM:</td>
-                  <td style="font-weight: 800; color: #020617; text-transform: uppercase; letter-spacing: 0.2px; padding: 2px 0;">${memoFrom}</td>
+                  <td style="width: 90px; font-size: 12pt; font-weight: 900; color: #0f172a; text-transform: uppercase; padding: 2px 0;">FROM:</td>
+                  <td style="font-size: 12pt; font-weight: 800; color: #020617; text-transform: uppercase; letter-spacing: 0.2px; padding: 2px 0;">${memoFrom}</td>
                 </tr>
                 <tr>
-                  <td style="width: 75px; font-weight: 900; color: #0f172a; text-transform: uppercase; padding: 2px 0;">DATE:</td>
-                  <td style="font-weight: 800; color: #020617; text-transform: uppercase; letter-spacing: 0.2px; padding: 2px 0;">${memoDate}</td>
+                  <td style="width: 90px; font-size: 12pt; font-weight: 900; color: #0f172a; text-transform: uppercase; padding: 2px 0;">DATE:</td>
+                  <td style="font-size: 12pt; font-weight: 800; color: #020617; text-transform: uppercase; letter-spacing: 0.2px; padding: 2px 0;">${memoDate}</td>
                 </tr>
                 <tr>
-                  <td style="width: 75px; font-weight: 900; color: #0f172a; text-transform: uppercase; padding: 2px 0;">SUBJECT:</td>
-                  <td style="font-weight: 900; color: #020617; text-transform: uppercase; letter-spacing: -0.2px; padding: 2px 0;">${memoSubject}</td>
+                  <td style="width: 90px; font-size: 12pt; font-weight: 900; color: #0f172a; text-transform: uppercase; padding: 2px 0;">SUBJECT:</td>
+                  <td style="font-size: 12pt; font-weight: 900; color: #020617; text-transform: uppercase; letter-spacing: -0.2px; padding: 2px 0;">${memoSubject}</td>
                 </tr>
               </table>
             </div>
 
             <!-- Solid Divider between Header and Directives -->
-            <div style="border-bottom: 2px solid #0f172a; margin: 4px 0 8px 0;"></div>
+            <div style="border-bottom: 2px solid #0f172a; margin: 3px 0 6px 0;"></div>
 
             <!-- Directives Body Content -->
-            <div style="font-family: ${directivesFontFamily}; font-size: ${directivesFontSize}px; line-height: ${metrics.bodyLineHeight}; color: #0f172a; font-weight: 400; text-align: justify; white-space: pre-wrap; padding: 6px 0;">
+            <div class="memo-directives-content" style="font-family: ${directivesFontFamily}; font-size: ${directivesFontSize}px; line-height: ${metrics.bodyLineHeight}; color: #0f172a; font-weight: 400; text-align: justify; white-space: pre-wrap; padding: ${metrics.directivesPadding || '4px 0'};">
 ${renderMemoDirectivesHtml(memoContent)}
             </div>
 
-            <!-- Signatory Sign-off Block: ~4 line spaces after body directives -->
-            <div style="margin-top: ${metrics.sigMarginTop}; padding-top: 4px; page-break-inside: avoid; break-inside: avoid;">
-              <table style="width: 100%; border-collapse: collapse; font-size: 9.5pt;">
+            <!-- Signatory Sign-off Block -->
+            <div style="margin-top: ${metrics.sigMarginTop}; padding-top: 2px; page-break-inside: avoid; break-inside: avoid;">
+              <table style="width: 100%; border-collapse: collapse; font-size: 9pt;">
                 <tr>
                   <td style="width: ${signatoryLayout === "dual" ? "50%" : "auto"}; max-width: ${signatoryLayout === "dual" ? "none" : "320px"}; vertical-align: top; text-align: left; padding-right: 18px;">
-                    <p style="margin: 0 0 2px 0; color: #475569; font-size: 8pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">${signatoryLabel?.trim() ? escapeHtml(signatoryLabel.trim()) : "ISSUED BY:"}</p>
-                    <div style="height: ${Math.max(56, signatorySize + 8)}px; display: flex; align-items: flex-end;">
+                    ${signatoryLabel?.trim() ? `<p style="margin: 0 0 1px 0; color: #475569; font-size: 7.5pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">${escapeHtml(signatoryLabel.trim())}</p>` : ""}
+                    <div style="height: ${Math.max(48, effectiveSigSize + 6)}px; display: flex; align-items: flex-end;">
                       ${signatorySignature ? `
-                        <img src="${signatorySignature}" style="height: ${signatorySize}px; max-height: ${signatorySize}px; max-width: ${Math.round(signatorySize * 3.5)}px; display: block; margin-left: ${signatoryOffsetX}px; margin-bottom: ${signatoryOffsetY}px; position: relative; z-index: 2; object-fit: contain; object-position: bottom left;" alt="Signatory Signature">
-                      ` : '<div style="height: 30px; margin-bottom: 2px;"></div>'}
+                        <img src="${signatorySignature}" style="height: ${effectiveSigSize}px; max-height: ${effectiveSigSize}px; max-width: ${Math.round(effectiveSigSize * 3.5)}px; display: block; margin-left: ${signatoryOffsetX}px; margin-bottom: ${signatoryOffsetY}px; position: relative; z-index: 2; object-fit: contain; object-position: bottom left;" alt="Signatory Signature">
+                      ` : '<div style="height: 24px; margin-bottom: 2px;"></div>'}
                     </div>
-                    <p style="margin: 0; font-weight: 900; color: #020617; font-size: 10pt; text-transform: uppercase; letter-spacing: 0.2px; position: relative; z-index: 1;">${escapeHtml(signatoryName)}</p>
-                    <p style="margin: 1px 0 0 0; color: #334155; font-size: 8.5pt; font-weight: 700;">${escapeHtml(signatoryTitle)}</p>
-                    <p style="margin: 1px 0 0 0; color: #64748b; font-weight: 600; font-size: 8pt;">${escapeHtml(getSignatoryAffiliation(comp))}</p>
+                    <p style="margin: 0; font-weight: 900; color: #020617; font-size: 9.5pt; text-transform: uppercase; letter-spacing: 0.2px; position: relative; z-index: 1;">${escapeHtml(signatoryName)}</p>
+                    <p style="margin: 1px 0 0 0; color: #334155; font-size: 8pt; font-weight: 700;">${escapeHtml(signatoryTitle)}</p>
+                    <p style="margin: 1px 0 0 0; color: #64748b; font-weight: 600; font-size: 7.5pt;">${escapeHtml(getSignatoryAffiliation(comp))}</p>
                   </td>
                   ${signatoryLayout === "dual" ? `
                   <td style="width: 50%; vertical-align: top; text-align: left; padding-left: 18px;">
-                    <p style="margin: 0 0 2px 0; color: #475569; font-size: 8pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">${approverLabel?.trim() ? escapeHtml(approverLabel.trim()) : "APPROVED BY:"}</p>
-                    <div style="height: ${Math.max(56, approverSize + 8)}px; display: flex; align-items: flex-end;">
+                    ${approverLabel?.trim() ? `<p style="margin: 0 0 1px 0; color: #475569; font-size: 7.5pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">${escapeHtml(approverLabel.trim())}</p>` : ""}
+                    <div style="height: ${Math.max(48, effectiveAppSize + 6)}px; display: flex; align-items: flex-end;">
                       ${approverSignature ? `
-                        <img src="${approverSignature}" style="height: ${approverSize}px; max-height: ${approverSize}px; max-width: ${Math.round(approverSize * 3.5)}px; display: block; margin-left: ${approverOffsetX}px; margin-bottom: ${approverOffsetY}px; position: relative; z-index: 2; object-fit: contain; object-position: bottom left;" alt="Approver Signature">
-                      ` : '<div style="height: 30px; margin-bottom: 2px;"></div>'}
+                        <img src="${approverSignature}" style="height: ${effectiveAppSize}px; max-height: ${effectiveAppSize}px; max-width: ${Math.round(effectiveAppSize * 3.5)}px; display: block; margin-left: ${approverOffsetX}px; margin-bottom: ${approverOffsetY}px; position: relative; z-index: 2; object-fit: contain; object-position: bottom left;" alt="Approver Signature">
+                      ` : '<div style="height: 24px; margin-bottom: 2px;"></div>'}
                     </div>
-                    <p style="margin: 0; font-weight: 900; color: #020617; font-size: 10pt; text-transform: uppercase; letter-spacing: 0.2px; position: relative; z-index: 1;">${escapeHtml(approverName)}</p>
-                    <p style="margin: 1px 0 0 0; color: #334155; font-size: 8.5pt; font-weight: 700;">${escapeHtml(approverTitle)}</p>
-                    <p style="margin: 1px 0 0 0; color: #64748b; font-weight: 600; font-size: 8pt;">${escapeHtml(compLegal)}</p>
+                    <p style="margin: 0; font-weight: 900; color: #020617; font-size: 9.5pt; text-transform: uppercase; letter-spacing: 0.2px; position: relative; z-index: 1;">${escapeHtml(approverName)}</p>
+                    <p style="margin: 1px 0 0 0; color: #334155; font-size: 8pt; font-weight: 700;">${escapeHtml(approverTitle)}</p>
+                    <p style="margin: 1px 0 0 0; color: #64748b; font-weight: 600; font-size: 7.5pt;">${escapeHtml(compLegal)}</p>
                   </td>` : ""}
                 </tr>
               </table>
             </div>
           </div>
 
-          <!-- Bottom Section: Official Division Footer (SAGAD SA BOTTOM MARGIN) - Thin, Crisp & Professional -->
-          <div style="margin-top: auto; padding-top: 5px; padding-bottom: 0; margin-bottom: 0; flex-shrink: 0;">
-            <div style="border-top: 1px solid #cbd5e1; padding-top: 3.5px; display: flex; justify-content: space-between; align-items: center; font-size: 6.8pt; font-weight: 500; color: #475569; text-transform: uppercase; letter-spacing: 0.8px;">
+          <!-- Bottom Section: Official Division Footer (Guaranteed Visible at Bottom Edge) -->
+          <div style="margin-top: auto; padding-top: 3px; padding-bottom: 1px; margin-bottom: 0; flex-shrink: 0; width: 100%;">
+            <div style="border-top: 1px solid #cbd5e1; padding-top: 2.5px; display: flex; justify-content: space-between; align-items: center; font-size: 6.8pt; font-weight: 500; color: #475569; text-transform: uppercase; letter-spacing: 0.8px;">
               <span style="font-weight: 500;">HUMAN RESOURCES &amp; ADMINISTRATION</span>
               <span style="font-weight: 600; color: #0f172a; letter-spacing: 1.2px;">STRICT COMPLIANCE MANDATED</span>
               <span style="font-weight: 500;">${comp.code} • OFFICIAL TRANSMISSION</span>
             </div>
-            <div style="text-align: center; font-size: 5.8pt; color: #64748b; font-weight: 400; text-transform: uppercase; letter-spacing: 1.8px; margin-top: 1.5px;">
+            <div style="text-align: center; font-size: 5.8pt; color: #64748b; font-weight: 400; text-transform: uppercase; letter-spacing: 1.8px; margin-top: 1px;">
               CORPORATE EXECUTIVE RECORD • CONFIDENTIAL TRANSMISSION
             </div>
           </div>
@@ -2095,7 +2212,7 @@ ${renderMemoDirectivesHtml(memoContent)}
     if (dispatchesPayload.length === 0) {
       setDirectSendStatus({
         type: "error",
-        message: "Walang pre-registered employee work email na naka-link para sa mga aktibong kumpanya. Naka-block ang pag-dispatch."
+        message: "No pre-registered employee work emails are linked for active companies. Dispatch is restricted."
       });
       setIsSendingDirect(false);
       setUnlinkedNoticeModalOpen(true);
@@ -2169,9 +2286,20 @@ ${renderMemoDirectivesHtml(memoContent)}
 
     const metrics = getMemoFitMetrics(memoContent, paperSize);
 
-    const companiesToPrint = targetCompany && targetCompany !== "all"
-      ? [typeof targetCompany === "string" ? (companies.find((company) => company.id === targetCompany) || companies[0]) : targetCompany]
-      : activeCompanies;
+    // Strictly respect Final Memo Distribution selections
+    let companiesToPrint = [];
+    if (targetCompany && targetCompany !== "all") {
+      const single = typeof targetCompany === "string"
+        ? (companies.find((company) => company.id === targetCompany) || distributionCompany)
+        : targetCompany;
+      companiesToPrint = [single];
+    } else {
+      // Print All: Filter strictly by active / included companies in Final Memo Distribution
+      companiesToPrint = companies.filter((comp) => includedCompanyIds.includes(comp.id));
+      if (companiesToPrint.length === 0) {
+        companiesToPrint = [distributionCompany];
+      }
+    }
 
     const sheetsHtml = companiesToPrint.map((comp) => {
       return generateCompanyPrintHtml(comp, paperSize);
@@ -2185,7 +2313,7 @@ ${renderMemoDirectivesHtml(memoContent)}
   <style>
     @page {
       size: ${metrics.paperSizeCss};
-      margin: 4mm 8mm 4mm 8mm;
+      margin: ${metrics.pageMargin};
     }
     * {
       box-sizing: border-box;
@@ -2202,7 +2330,8 @@ ${renderMemoDirectivesHtml(memoContent)}
       padding: 0;
       margin: 0;
       width: 100%;
-      height: 100%;
+      height: auto;
+      overflow: visible;
     }
     .memo-print-sheet {
       width: 100%;
@@ -2215,31 +2344,53 @@ ${renderMemoDirectivesHtml(memoContent)}
       display: flex;
       flex-direction: column;
       justify-content: space-between;
+      page-break-before: always;
+      break-before: page;
       page-break-inside: avoid;
       break-inside: avoid;
       page-break-after: always;
       break-after: page;
-      padding: 0 2mm;
+      padding: ${metrics.isLegal ? '0 1mm 1.5mm 1mm' : '0 1mm 2mm 1mm'};
       margin: 0;
       background: #ffffff;
     }
-    .memo-print-sheet:last-child,
-    .memo-print-sheet:last-of-type {
+    .memo-print-sheet:first-child {
+      page-break-before: avoid !important;
+      break-before: avoid !important;
+    }
+    .memo-print-sheet:last-child {
       page-break-after: avoid !important;
       break-after: avoid !important;
+    }
+    ol {
+      list-style-type: decimal !important;
+      margin: 5px 0 !important;
+      padding-left: 24px !important;
+    }
+    ul {
+      list-style-type: disc !important;
+      margin: 5px 0 !important;
+      padding-left: 24px !important;
+    }
+    li {
+      display: list-item !important;
+      list-style: inherit !important;
+      margin-bottom: 3px !important;
     }
     @media print {
       @page {
         size: ${metrics.paperSizeCss};
-        margin: 4mm 8mm 4mm 8mm;
+        margin: ${metrics.pageMargin};
       }
       html, body {
         width: 100% !important;
-        height: 100% !important;
+        height: auto !important;
+        min-height: auto !important;
+        max-height: none !important;
         margin: 0 !important;
         padding: 0 !important;
         background: #ffffff !important;
-        overflow: hidden !important;
+        overflow: visible !important;
       }
       .memo-print-sheet {
         width: 100% !important;
@@ -2248,18 +2399,39 @@ ${renderMemoDirectivesHtml(memoContent)}
         max-height: ${metrics.sheetHeightMm}mm !important;
         box-sizing: border-box !important;
         margin: 0 !important;
-        padding: 0 2mm !important;
+        padding: ${metrics.isLegal ? '0 1mm 1.5mm 1mm !important' : '0 1mm 2mm 1mm !important'};
         display: flex !important;
         flex-direction: column !important;
         justify-content: space-between !important;
+        position: relative !important;
+        page-break-before: always !important;
+        break-before: page !important;
         page-break-inside: avoid !important;
         break-inside: avoid !important;
         page-break-after: always !important;
         break-after: page !important;
         overflow: hidden !important;
       }
-      .memo-print-sheet:last-child,
-      .memo-print-sheet:last-of-type {
+      ol {
+        list-style-type: decimal !important;
+        margin: 5px 0 !important;
+        padding-left: 24px !important;
+      }
+      ul {
+        list-style-type: disc !important;
+        margin: 5px 0 !important;
+        padding-left: 24px !important;
+      }
+      li {
+        display: list-item !important;
+        list-style: inherit !important;
+        margin-bottom: 3px !important;
+      }
+      .memo-print-sheet:first-child {
+        page-break-before: avoid !important;
+        break-before: avoid !important;
+      }
+      .memo-print-sheet:last-child {
         page-break-after: avoid !important;
         break-after: avoid !important;
       }
@@ -2439,6 +2611,28 @@ ${renderMemoDirectivesHtml(memoContent)}
   // Render Directives Formatting Toolbar for both Step 2 and Full-Screen Editor
   const renderDirectivesToolbar = () => (
     <div className="memo-toolbar-menu-container flex flex-wrap items-center gap-1.5 p-2 bg-slate-50 border border-slate-200 rounded-xl relative select-none z-30">
+      {/* 0. History: Undo / Redo */}
+      <div className="flex items-center gap-1">
+        <button
+          type="button"
+          onClick={handleUndo}
+          className="p-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 text-slate-700 hover:text-slate-950 transition flex items-center justify-center cursor-pointer shadow-2xs"
+          title="Undo (Ctrl+Z)"
+        >
+          <Undo2 size={14} />
+        </button>
+        <button
+          type="button"
+          onClick={handleRedo}
+          className="p-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 text-slate-700 hover:text-slate-950 transition flex items-center justify-center cursor-pointer shadow-2xs"
+          title="Redo (Ctrl+Y or Ctrl+Shift+Z)"
+        >
+          <Redo2 size={14} />
+        </button>
+      </div>
+
+      <div className="h-5 w-px bg-slate-300 mx-0.5" />
+
       {/* 1. Font Style (Family) Selector */}
       <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-lg px-2 py-1 shadow-2xs">
         <Type size={13} className="text-slate-500 shrink-0" />
@@ -2842,18 +3036,20 @@ ${renderMemoDirectivesHtml(memoContent)}
         <button
           type="button"
           onClick={() => executeCommand("insertOrderedList")}
-          className="p-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 text-slate-800 transition flex items-center justify-center cursor-pointer shadow-2xs"
+          className="px-2 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-emerald-50 hover:text-emerald-850 hover:border-emerald-300 text-slate-800 font-bold text-xs transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
           title="Numbered List (1. 2. 3.)"
         >
-          <ListOrdered size={14} />
+          <ListOrdered size={14} className="text-emerald-600" />
+          <span className="text-[11px] hidden sm:inline">1. Numbers</span>
         </button>
         <button
           type="button"
           onClick={() => executeCommand("insertUnorderedList")}
-          className="p-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 text-slate-800 transition flex items-center justify-center cursor-pointer shadow-2xs"
+          className="px-2 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-emerald-50 hover:text-emerald-850 hover:border-emerald-300 text-slate-800 font-bold text-xs transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
           title="Bullet List (• • •)"
         >
-          <List size={14} />
+          <List size={14} className="text-emerald-600" />
+          <span className="text-[11px] hidden sm:inline">• Bullets</span>
         </button>
       </div>
 
@@ -3118,7 +3314,9 @@ ${renderMemoDirectivesHtml(memoContent)}
             aspectRatio: metrics.aspectRatioCss,
             minHeight: `${metrics.previewMinHeightPx}px`
           }}
-          className={`relative w-full bg-white border border-slate-300 rounded-sm shadow-xl px-5 py-4 sm:px-8 sm:py-5 overflow-hidden select-none transition-all duration-150 flex flex-col justify-between ${
+          className={`relative w-full bg-white border border-slate-300 rounded-sm shadow-xl ${
+            metrics.isLegal ? "px-5 py-3 sm:px-8 sm:py-3.5" : "px-5 py-4 sm:px-8 sm:py-5"
+          } overflow-hidden select-none transition-all duration-150 flex flex-col justify-between ${
             !isIncluded ? "opacity-40 grayscale-[25%] pointer-events-none" : ""
           }`}
         >
@@ -3206,20 +3404,20 @@ ${renderMemoDirectivesHtml(memoContent)}
               {/* Official HR Memo Header Grid - Standard 12pt (12px) */}
               <div className="space-y-1 text-xs py-1.5">
                 <div className="grid grid-cols-[90px_1fr] items-baseline">
-                  <span className="font-black text-[12px] text-slate-900 uppercase">TO:</span>
-                  <span className="font-extrabold text-slate-950 uppercase text-[12px] tracking-wide">{memoTo}</span>
+                  <span className="font-black text-[12pt] text-slate-900 uppercase">TO:</span>
+                  <span className="font-extrabold text-slate-950 uppercase text-[12pt] tracking-wide">{memoTo}</span>
                 </div>
                 <div className="grid grid-cols-[90px_1fr] items-baseline">
-                  <span className="font-black text-[12px] text-slate-900 uppercase">FROM:</span>
-                  <span className="font-extrabold text-slate-950 uppercase text-[12px] tracking-wide">{memoFrom}</span>
+                  <span className="font-black text-[12pt] text-slate-900 uppercase">FROM:</span>
+                  <span className="font-extrabold text-slate-950 uppercase text-[12pt] tracking-wide">{memoFrom}</span>
                 </div>
                 <div className="grid grid-cols-[90px_1fr] items-baseline">
-                  <span className="font-black text-[12px] text-slate-900 uppercase">DATE:</span>
-                  <span className="font-extrabold text-slate-950 uppercase text-[12px] tracking-wide">{memoDate}</span>
+                  <span className="font-black text-[12pt] text-slate-900 uppercase">DATE:</span>
+                  <span className="font-extrabold text-slate-950 uppercase text-[12pt] tracking-wide">{memoDate}</span>
                 </div>
                 <div className="grid grid-cols-[90px_1fr] items-baseline">
-                  <span className="font-black text-[12px] text-slate-900 uppercase">SUBJECT:</span>
-                  <span className="font-black text-slate-950 uppercase text-[12px] tracking-tight">{memoSubject}</span>
+                  <span className="font-black text-[12pt] text-slate-900 uppercase">SUBJECT:</span>
+                  <span className="font-black text-slate-950 uppercase text-[12pt] tracking-tight">{memoSubject}</span>
                 </div>
               </div>
 
@@ -3234,7 +3432,7 @@ ${renderMemoDirectivesHtml(memoContent)}
                     fontSize: `${metrics.directivesFontSizePx}px`,
                     lineHeight: metrics.directivesLineHeight
                   }}
-                  className="pt-1.5 text-slate-900 font-normal whitespace-pre-wrap text-justify"
+                  className="memo-directives-content pt-1.5 text-slate-900 font-normal whitespace-pre-wrap text-justify"
                   dangerouslySetInnerHTML={{
                     __html: renderMemoDirectivesHtml(memoContent)
                   }}
@@ -3247,9 +3445,11 @@ ${renderMemoDirectivesHtml(memoContent)}
                   <div className="grid grid-cols-2 gap-8 items-start">
                     {/* Left: Issued By */}
                     <div>
-                      <p className="text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-0.5">
-                        {signatoryLabel?.trim() ? signatoryLabel.trim() : "Issued By:"}
-                      </p>
+                      {signatoryLabel?.trim() ? (
+                        <p className="text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-0.5">
+                          {signatoryLabel.trim()}
+                        </p>
+                      ) : null}
                       <div
                         className="flex items-end"
                         style={{ height: `${Math.max(64, signatorySize + 10)}px` }}
@@ -3286,9 +3486,11 @@ ${renderMemoDirectivesHtml(memoContent)}
 
                     {/* Right: Approved By */}
                     <div>
-                      <p className="text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-0.5">
-                        {approverLabel?.trim() ? approverLabel.trim() : "Approved By:"}
-                      </p>
+                      {approverLabel?.trim() ? (
+                        <p className="text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-0.5">
+                          {approverLabel.trim()}
+                        </p>
+                      ) : null}
                       <div
                         className="flex items-end"
                         style={{ height: `${Math.max(64, approverSize + 10)}px` }}
@@ -3326,9 +3528,11 @@ ${renderMemoDirectivesHtml(memoContent)}
                 ) : (
                   <div className="flex justify-start">
                     <div className="min-w-[200px] max-w-[280px] text-left">
-                      <p className="text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-0.5">
-                        {signatoryLabel?.trim() ? signatoryLabel.trim() : "Issued By:"}
-                      </p>
+                      {signatoryLabel?.trim() ? (
+                        <p className="text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-0.5">
+                          {signatoryLabel.trim()}
+                        </p>
+                      ) : null}
                       <div
                         className="flex items-end"
                         style={{ height: `${Math.max(64, signatorySize + 10)}px` }}
@@ -4174,7 +4378,7 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                     <div className="flex items-center justify-between">
                       <span className="text-[10px] font-black text-slate-700 uppercase tracking-wide flex items-center gap-1">
                         <span>Signature Alignment &amp; Size</span>
-                        <span className="text-[9px] font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200">Urong / Lakihan</span>
+                        <span className="text-[9px] font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200">Position &amp; Scale</span>
                       </span>
                       <button
                         type="button"
@@ -4254,33 +4458,33 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                         type="button"
                         onClick={() => setSignatoryOffsetX((prev) => Math.max(-50, prev - 6))}
                         className="px-2 py-1 rounded-md bg-white border border-slate-300 hover:border-emerald-500 hover:text-emerald-700 text-[10px] font-bold text-slate-700 transition cursor-pointer shadow-2xs"
-                        title="Urong pakaliwa"
+                        title="Nudge left"
                       >
-                        ← Urong Left
+                        ← Left
                       </button>
                       <button
                         type="button"
                         onClick={() => setSignatoryOffsetX((prev) => Math.min(250, prev + 6))}
                         className="px-2 py-1 rounded-md bg-white border border-slate-300 hover:border-emerald-500 hover:text-emerald-700 text-[10px] font-bold text-slate-700 transition cursor-pointer shadow-2xs"
-                        title="Urong pakanan"
+                        title="Nudge right"
                       >
-                        Urong Right →
+                        Right →
                       </button>
                       <button
                         type="button"
                         onClick={() => setSignatorySize((prev) => Math.max(28, prev - 4))}
                         className="px-2 py-1 rounded-md bg-white border border-slate-300 hover:border-emerald-500 hover:text-emerald-700 text-[10px] font-bold text-slate-700 transition cursor-pointer shadow-2xs"
-                        title="Paliitin ang size"
+                        title="Decrease size"
                       >
-                        - Paliitin
+                        - Decrease
                       </button>
                       <button
                         type="button"
                         onClick={() => setSignatorySize((prev) => Math.min(160, prev + 4))}
                         className="px-2 py-1 rounded-md bg-white border border-slate-300 hover:border-emerald-500 hover:text-emerald-700 text-[10px] font-bold text-slate-700 transition cursor-pointer shadow-2xs"
-                        title="Palakihin ang size"
+                        title="Increase size"
                       >
-                        + Palakihin
+                        + Increase
                       </button>
                       <button
                         type="button"
@@ -4446,7 +4650,7 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                     <div className="flex items-center justify-between">
                       <span className="text-[10px] font-black text-slate-700 uppercase tracking-wide flex items-center gap-1">
                         <span>Approver Signature Alignment &amp; Size</span>
-                        <span className="text-[9px] font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200">Urong / Lakihan</span>
+                        <span className="text-[9px] font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200">Position &amp; Scale</span>
                       </span>
                       <button
                         type="button"
@@ -4526,33 +4730,33 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                         type="button"
                         onClick={() => setApproverOffsetX((prev) => Math.max(-50, prev - 6))}
                         className="px-2 py-1 rounded-md bg-white border border-slate-300 hover:border-emerald-500 hover:text-emerald-700 text-[10px] font-bold text-slate-700 transition cursor-pointer shadow-2xs"
-                        title="Urong pakaliwa"
+                        title="Nudge left"
                       >
-                        ← Urong Left
+                        ← Left
                       </button>
                       <button
                         type="button"
                         onClick={() => setApproverOffsetX((prev) => Math.min(250, prev + 6))}
                         className="px-2 py-1 rounded-md bg-white border border-slate-300 hover:border-emerald-500 hover:text-emerald-700 text-[10px] font-bold text-slate-700 transition cursor-pointer shadow-2xs"
-                        title="Urong pakanan"
+                        title="Nudge right"
                       >
-                        Urong Right →
+                        Right →
                       </button>
                       <button
                         type="button"
                         onClick={() => setApproverSize((prev) => Math.max(28, prev - 4))}
                         className="px-2 py-1 rounded-md bg-white border border-slate-300 hover:border-emerald-500 hover:text-emerald-700 text-[10px] font-bold text-slate-700 transition cursor-pointer shadow-2xs"
-                        title="Paliitin ang size"
+                        title="Decrease size"
                       >
-                        - Paliitin
+                        - Decrease
                       </button>
                       <button
                         type="button"
                         onClick={() => setApproverSize((prev) => Math.min(160, prev + 4))}
                         className="px-2 py-1 rounded-md bg-white border border-slate-300 hover:border-emerald-500 hover:text-emerald-700 text-[10px] font-bold text-slate-700 transition cursor-pointer shadow-2xs"
-                        title="Palakihin ang size"
+                        title="Increase size"
                       >
-                        + Palakihin
+                        + Increase
                       </button>
                       <button
                         type="button"
@@ -4838,7 +5042,7 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                     }`}
                     title={
                       totalCompanyRecipients === 0
-                        ? "Walang pre-registered employee work email na naka-link. I-click para sa detalye."
+                        ? "No pre-registered employee work emails are linked. Click for details."
                         : "Send via Email to pre-registered employee recipients"
                     }
                   >
@@ -5008,7 +5212,7 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                       type="button"
                       onClick={() => setSignatoryOffsetX((prev) => Math.max(-50, prev - 4))}
                       className="px-2 py-0.5 rounded bg-slate-50 hover:bg-slate-100 border border-slate-300 font-bold text-[10.5px] text-slate-800 transition cursor-pointer"
-                      title="Urong pakaliwa (-4px)"
+                      title="Nudge left (-4px)"
                     >
                       ← Left
                     </button>
@@ -5019,7 +5223,7 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                       type="button"
                       onClick={() => setSignatoryOffsetX((prev) => Math.min(250, prev + 4))}
                       className="px-2 py-0.5 rounded bg-slate-50 hover:bg-slate-100 border border-slate-300 font-bold text-[10.5px] text-slate-800 transition cursor-pointer"
-                      title="Urong pakanan (+4px)"
+                      title="Nudge right (+4px)"
                     >
                       Right →
                     </button>
@@ -5032,9 +5236,9 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                       type="button"
                       onClick={() => setSignatorySize((prev) => Math.max(28, prev - 4))}
                       className="px-2 py-0.5 rounded bg-slate-50 hover:bg-slate-100 border border-slate-300 font-bold text-[10.5px] text-slate-800 transition cursor-pointer"
-                      title="Paliitin ang signature size (-4px)"
+                      title="Decrease signature size (-4px)"
                     >
-                      - Paliitin
+                      - Decrease
                     </button>
                     <span className="font-mono font-black text-[11px] text-slate-900 w-10 text-center">
                       {signatorySize}px
@@ -5043,9 +5247,9 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                       type="button"
                       onClick={() => setSignatorySize((prev) => Math.min(160, prev + 4))}
                       className="px-2 py-0.5 rounded bg-slate-50 hover:bg-slate-100 border border-slate-300 font-bold text-[10.5px] text-slate-800 transition cursor-pointer"
-                      title="Palakihin ang signature size (+4px)"
+                      title="Increase signature size (+4px)"
                     >
-                      + Palakihin
+                      + Increase
                     </button>
                   </div>
 
@@ -5056,7 +5260,7 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                       type="button"
                       onClick={() => setSignatoryOffsetY((prev) => Math.max(-50, prev - 2))}
                       className="px-1.5 py-0.5 rounded bg-slate-50 hover:bg-slate-100 border border-slate-300 font-bold text-[10px] text-slate-800 transition cursor-pointer"
-                      title="Pababa"
+                      title="Move down"
                     >
                       ↓
                     </button>
@@ -5067,7 +5271,7 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                       type="button"
                       onClick={() => setSignatoryOffsetY((prev) => Math.min(30, prev + 2))}
                       className="px-1.5 py-0.5 rounded bg-slate-50 hover:bg-slate-100 border border-slate-300 font-bold text-[10px] text-slate-800 transition cursor-pointer"
-                      title="Pataas"
+                      title="Move up"
                     >
                       ↑
                     </button>
@@ -5614,7 +5818,7 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
               ) : totalCompanyRecipients === 0 ? (
                 <>
                   <AlertCircle size={16} />
-                  <span>Hindi Maipapadala: Walang Pre-Registered Work Email (I-click para sa detalye)</span>
+                  <span>Cannot Dispatch: No Pre-Registered Work Email Found (Click for details)</span>
                 </>
               ) : (
                 <>

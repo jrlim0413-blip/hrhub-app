@@ -22,7 +22,7 @@ import AiAssistantGirlWidget from "../components/AiAssistantGirlWidget";
 import MondayStyleSidebar from "../components/MondayStyleSidebar";
 import HomeWorkspaceView from "../components/HomeWorkspaceView";
 import TeamChatMessengerModal from "../components/TeamChatMessengerModal";
-import { mergeProfilesWithStored, deleteStoredEmployee } from "../lib/employeeStorage";
+import { mergeProfilesWithStored, deleteStoredEmployee, fetchEmployeesFromDatabase } from "../lib/employeeStorage";
 import {
   getChatThreadKey,
   getStoredChatMap,
@@ -652,10 +652,11 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
     }
   };
 
-  // Fetch profiles from database
+  // Fetch profiles and employee directory from Supabase database
   const fetchProfiles = async () => {
     try {
       setLoadingProfiles(true);
+      await fetchEmployeesFromDatabase();
       const { data, error } = await supabase
         .from("profiles")
         .select("*")
@@ -775,6 +776,9 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
         fetchMemos();
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, () => {
+        fetchProfiles();
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "employees" }, () => {
         fetchProfiles();
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "chat_messages" }, async () => {
