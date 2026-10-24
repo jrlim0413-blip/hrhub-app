@@ -1668,18 +1668,23 @@ HR Contact: ${HR_OFFICIAL_EMAIL}`;
 
   const generateCompanyEmailHtml = (targetComp = distributionCompany) => {
     const comp = targetComp || distributionCompany;
+    const addrLines = formatAddressLines(escapeHtml(comp.address || ""));
+    const addressHtml = addrLines.length > 1
+      ? `${addrLines[0]}<br>${addrLines[1]}`
+      : addrLines[0];
     const compMemoRef = getCompanySpecificMemoRef(comp.code, memoRef);
     const compLegal = comp.legalName || comp.name;
-    const accentColor = comp.accentColor || "#059669";
+    const effectiveSigSize = Number(signatorySize) || 52;
+    const effectiveAppSize = Number(approverSize) || 52;
 
     // Category badge color accents
-    let catBadgeBg = "#ecfdf5";
+    let catBadgeBg = "#d1fae5";
     let catBadgeColor = "#065f46";
-    let catBadgeBorder = "#a7f3d0";
+    let catBadgeBorder = "#6ee7b7";
     if (memoCategory === "Mandatory Compliance") {
-      catBadgeBg = "#fef2f2";
-      catBadgeColor = "#991b1b";
-      catBadgeBorder = "#fecaca";
+      catBadgeBg = "#d1fae5";
+      catBadgeColor = "#065f46";
+      catBadgeBorder = "#6ee7b7";
     } else if (memoCategory === "Executive Order") {
       catBadgeBg = "#eff6ff";
       catBadgeColor = "#1e40af";
@@ -1690,176 +1695,147 @@ HR Contact: ${HR_OFFICIAL_EMAIL}`;
       catBadgeBorder = "#fde68a";
     }
 
-    return `<div style="background-color: #f1f5f9; padding: 32px 12px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased;">
-  <div style="max-width: 680px; margin: 0 auto; background-color: #ffffff; border-radius: 20px; overflow: hidden; box-shadow: 0 20px 40px -15px rgba(15, 23, 42, 0.12), 0 0 0 1px rgba(226, 232, 240, 0.9); position: relative;">
+    return `<div style="background-color: #f1f5f9; padding: 24px 12px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased;">
+  <!-- Exactly mirrors the Official Executive Memorandum White Paper Document -->
+  <div style="max-width: 720px; width: 100%; margin: 0 auto; background-color: #ffffff; border: 1px solid #cbd5e1; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08); padding: 32px 36px 26px 36px; box-sizing: border-box; position: relative; color: #0f172a;">
     
-    <!-- Top Modern Gradient Header Accent -->
-    <div style="height: 7px; background: linear-gradient(90deg, ${accentColor} 0%, #0d9488 40%, #0284c7 80%, #6366f1 100%);"></div>
+    <!-- Centered Company Watermark Layer -->
+    <div style="position: absolute; top: 48%; left: 50%; transform: translate(-50%, -50%); width: ${watermarkSize || 280}px; height: ${watermarkSize || 280}px; pointer-events: none; z-index: 0; user-select: none; opacity: ${Math.max(0.10, (watermarkOpacity || 12) / 100)}; text-align: center;">
+      <img src="${companyLogoDataMap[comp.id] || comp.logoUrl}" style="max-width: 100%; max-height: 100%; object-fit: contain; filter: grayscale(12%); display: inline-block;" alt="${escapeHtml(comp.name)} Watermark" />
+    </div>
 
-    <!-- Executive Letterhead Banner with Left Company Logo & Right Corporate Group Emblem -->
-    <div style="padding: 24px 30px 18px 30px; background: linear-gradient(180deg, #ffffff 0%, #fbfcfd 100%); border-bottom: 1px solid #f1f5f9;">
-      <table style="width: 100%; border-collapse: collapse;">
+    <!-- Foreground Official Memorandum Content -->
+    <div style="position: relative; z-index: 10; width: 100%;">
+      
+      <!-- 1. Corporate Letterhead Table (Left Logo, Center Info, Right Emblem) -->
+      <table style="width: 100%; border-collapse: collapse; margin-bottom: 2px;">
         <tr>
-          <!-- Left: Company Logo -->
-          <td style="width: 75px; vertical-align: middle; text-align: center; padding-right: 12px;">
+          <td style="width: 72px; vertical-align: middle; text-align: left;">
             ${(companyLogoDataMap[comp.id] || comp.logoUrl) ? `
-              <img src="${companyLogoDataMap[comp.id] || comp.logoUrl}" style="max-height: 64px; max-width: 75px; display: block; margin: 0 auto; object-fit: contain;" alt="${escapeHtml(comp.name)} Logo">
+              <img src="${companyLogoDataMap[comp.id] || comp.logoUrl}" style="max-height: 52px; max-width: 70px; display: block; object-fit: contain;" alt="${escapeHtml(comp.name)} Logo">
             ` : ""}
           </td>
-
-          <!-- Center: Corporate Entity Details -->
-          <td style="vertical-align: middle; text-align: center; padding: 0 4px;">
-            <div style="margin-bottom: 6px;">
-              <span style="display: inline-block; font-size: 8.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 1.5px; color: ${accentColor}; background: #f0fdf4; border: 1px solid #bbf7d0; padding: 2px 10px; border-radius: 9999px;">
-                ★ OFFICIAL HR ADMINISTRATIVE TRANSMISSION ★
-              </span>
-            </div>
-            <h1 style="margin: 0; color: #0f172a; font-size: 18px; font-weight: 900; letter-spacing: 0.5px; text-transform: uppercase; line-height: 1.2;">
+          <td style="vertical-align: middle; text-align: center; padding: 0 10px;">
+            <h1 style="font-size: 14pt; font-weight: 900; color: #020617; text-transform: uppercase; margin: 0; letter-spacing: 0.3px; line-height: 1.15; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
               ${escapeHtml(compLegal)}
             </h1>
-            ${comp.tagline ? `<p style="margin: 2px 0 0 0; color: ${accentColor}; font-size: 10.5px; font-weight: 700; letter-spacing: 0.3px;">${escapeHtml(comp.tagline)}</p>` : ""}
-            <p style="margin: 4px 0 0 0; color: #64748b; font-size: 10px; line-height: 1.35;">${escapeHtml(comp.address || "")}</p>
-            <p style="margin: 2px 0 0 0; color: #94a3b8; font-size: 9.5px; font-family: monospace;">${escapeHtml(comp.contact || "")}</p>
+            ${comp.tagline ? `<div style="font-size: 7.5pt; color: #047857; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 1px;">${escapeHtml(comp.tagline)}</div>` : ""}
+            <div style="font-size: 7.5pt; color: #334155; font-weight: 600; text-transform: uppercase; margin-top: 1px; line-height: 1.25;">${addressHtml}</div>
+            <div style="font-size: 7pt; color: #64748b; font-weight: 500; margin-top: 0.5px;">${escapeHtml(comp.contact || "")}</div>
           </td>
-
-          <!-- Right: Corporate Group Emblem -->
-          <td style="width: 75px; vertical-align: middle; text-align: center; padding-left: 12px;">
+          <td style="width: 72px; vertical-align: middle; text-align: right;">
             ${(groupEmblemDataUrl || comp.rightLogoUrl || CORPORATE_GROUP_EMBLEM) ? `
-              <img src="${groupEmblemDataUrl || comp.rightLogoUrl || CORPORATE_GROUP_EMBLEM}" style="max-height: 58px; max-width: 68px; display: block; margin: 0 auto; object-fit: contain; border-radius: 4px;" alt="Corporate Emblem">
+              <img src="${groupEmblemDataUrl || comp.rightLogoUrl || CORPORATE_GROUP_EMBLEM}" style="max-height: 50px; max-width: 68px; display: inline-block; object-fit: contain; border-radius: 4px;" alt="Corporate Group Emblem">
             ` : ""}
           </td>
         </tr>
       </table>
-    </div>
 
-    <!-- Sleek Memorandum Ribbon -->
-    <div style="background: #0f172a; color: #ffffff; padding: 12px 36px; border-top: 1px solid rgba(255,255,255,0.1);">
-      <table style="width: 100%; border-collapse: collapse;">
-        <tr>
-          <td style="font-size: 14px; font-weight: 900; letter-spacing: 3px; color: #ffffff; text-transform: uppercase; vertical-align: middle;">
-            MEMORANDUM
-          </td>
-          <td style="text-align: right; vertical-align: middle;">
-            <span style="background: rgba(16, 185, 129, 0.15); border: 1px solid #10b981; padding: 4px 12px; border-radius: 8px; font-family: monospace; font-size: 11.5px; font-weight: 800; color: #6ee7b7; letter-spacing: 0.5px;">
-              REF: ${compMemoRef}
-            </span>
-          </td>
-        </tr>
-      </table>
-    </div>
+      <!-- Top Letterhead Divider Line -->
+      <div style="border-bottom: 2px solid #0f172a; margin: 3px 0 5px 0;"></div>
 
-    <!-- Metadata Matrix (Executive Summary Grid) -->
-    <div style="padding: 24px 36px 14px 36px;">
-      <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 14px; padding: 16px 20px; box-shadow: inset 0 1px 3px rgba(0,0,0,0.02);">
-        <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+      <!-- 2. Prominent MEMORANDUM Title Banner with Ref No & Classification -->
+      <div style="border-top: 2px solid #0f172a; border-bottom: 2px solid #0f172a; padding: 4px 4px; margin: 3px 0 5px 0; text-align: center;">
+        <h2 style="font-size: 14pt; font-weight: 900; letter-spacing: 0.35em; color: #020617; text-transform: uppercase; margin: 0; line-height: 1; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+          MEMORANDUM
+        </h2>
+        <table style="width: 100%; border-collapse: collapse; margin-top: 3px; padding-top: 3px; border-top: 1px solid #e2e8f0; font-size: 8pt; font-weight: 700;">
           <tr>
-            <td style="padding: 6px 0; color: #64748b; font-weight: 800; width: 90px; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.5px;">DATE:</td>
-            <td style="padding: 6px 0; color: #0f172a; font-weight: 800; font-size: 12.5px;">${memoDate}</td>
-            <td style="padding: 6px 0; color: #64748b; font-weight: 800; width: 110px; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.5px;">CLASSIFICATION:</td>
-            <td style="padding: 6px 0;">
-              <span style="background: ${catBadgeBg}; color: ${catBadgeColor}; border: 1px solid ${catBadgeBorder}; font-size: 10px; font-weight: 800; padding: 3px 9px; border-radius: 6px; text-transform: uppercase;">
+            <td style="text-align: left; color: #334155;">
+              REF NO: <strong style="color: #020617; font-family: monospace; font-weight: 900;">${compMemoRef}</strong>
+            </td>
+            <td style="text-align: right;">
+              <span style="display: inline-block; padding: 1px 10px; border-radius: 9999px; font-size: 7.5pt; font-weight: 900; text-transform: uppercase; letter-spacing: 0.5px; background: ${catBadgeBg}; color: ${catBadgeColor}; border: 1px solid ${catBadgeBorder};">
                 ${memoCategory}
               </span>
             </td>
           </tr>
+        </table>
+      </div>
+
+      <!-- 3. Official HR Memo Header Grid (Step 4 Format) - Standard 12pt -->
+      <div style="padding: 2px 0; font-size: 12pt; line-height: 1.45;">
+        <table style="width: 100%; border-collapse: collapse;">
           <tr>
-            <td style="padding: 6px 0; color: #64748b; font-weight: 800; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.5px;">TO:</td>
-            <td colspan="3" style="padding: 6px 0; color: #0f172a; font-weight: 800; font-size: 12.5px; letter-spacing: 0.2px;">${memoTo}</td>
+            <td style="width: 90px; font-size: 12pt; font-weight: 900; color: #0f172a; text-transform: uppercase; padding: 2px 0;">TO:</td>
+            <td style="font-size: 12pt; font-weight: 800; color: #020617; text-transform: uppercase; letter-spacing: 0.2px; padding: 2px 0;">${memoTo}</td>
           </tr>
           <tr>
-            <td style="padding: 6px 0; color: #64748b; font-weight: 800; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.5px;">FROM:</td>
-            <td colspan="3" style="padding: 6px 0; color: #0f172a; font-weight: 800; font-size: 12.5px;">
-              ${memoFrom} <span style="font-weight: 600; color: #64748b; font-size: 11px;">(${HR_OFFICIAL_EMAIL})</span>
-            </td>
+            <td style="width: 90px; font-size: 12pt; font-weight: 900; color: #0f172a; text-transform: uppercase; padding: 2px 0;">FROM:</td>
+            <td style="font-size: 12pt; font-weight: 800; color: #020617; text-transform: uppercase; letter-spacing: 0.2px; padding: 2px 0;">${memoFrom}</td>
           </tr>
           <tr>
-            <td colspan="4" style="padding: 10px 0 2px 0; border-top: 1px dashed #cbd5e1;">
-              <div style="display: table; width: 100%;">
-                <span style="display: table-cell; color: #64748b; font-weight: 800; font-size: 10.5px; text-transform: uppercase; width: 90px; vertical-align: top; padding-top: 2px;">SUBJECT:</span>
-                <span style="display: table-cell; color: ${accentColor}; font-size: 13.5px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.3px; line-height: 1.4;">
-                  ${memoSubject}
-                </span>
-              </div>
-            </td>
+            <td style="width: 90px; font-size: 12pt; font-weight: 900; color: #0f172a; text-transform: uppercase; padding: 2px 0;">DATE:</td>
+            <td style="font-size: 12pt; font-weight: 800; color: #020617; text-transform: uppercase; letter-spacing: 0.2px; padding: 2px 0;">${memoDate}</td>
+          </tr>
+          <tr>
+            <td style="width: 90px; font-size: 12pt; font-weight: 900; color: #0f172a; text-transform: uppercase; padding: 2px 0;">SUBJECT:</td>
+            <td style="font-size: 12pt; font-weight: 900; color: #020617; text-transform: uppercase; letter-spacing: -0.2px; padding: 2px 0;">${memoSubject}</td>
           </tr>
         </table>
       </div>
-    </div>
 
-    <!-- Directives / Body Content with Company Logo Watermark Backdrop (Safe for all email clients) -->
-    <div style="padding: 10px 36px 20px 36px;">
-      <div style="background-color: #ffffff; ${fadedWatermarkMap[comp.id] ? `background-image: url('${fadedWatermarkMap[comp.id]}'); background-repeat: no-repeat; background-position: center center; background-size: 280px auto;` : ''} border-left: 4px solid ${accentColor}; padding: 22px 24px; border-radius: 0 12px 12px 0; border: 1px solid #e2e8f0; border-left: 4px solid ${accentColor}; box-shadow: 0 2px 8px rgba(0,0,0,0.02);">
-        <p style="margin: 0 0 12px 0; font-size: 11px; font-weight: 900; text-transform: uppercase; letter-spacing: 1px; color: #64748b;">
-          OFFICIAL DIRECTIVES &amp; PROVISIONS:
-        </p>
-        <div style="color: #0f172a; font-size: ${directivesFontSize}px; line-height: 1.8; text-align: justify; white-space: pre-wrap; font-family: ${directivesFontFamily};">
-${renderMemoDirectivesHtml(memoContent).replace(/\n/g, "<br>")}
+      <!-- Solid Divider between Header and Directives -->
+      <div style="border-bottom: 2px solid #0f172a; margin: 3px 0 6px 0;"></div>
+
+      <!-- 4. Directives Body Content with Bullet/Numbered Lists -->
+      <div class="memo-directives-content" style="font-family: ${directivesFontFamily}; font-size: ${directivesFontSize}px; line-height: 1.58; color: #0f172a; font-weight: 400; text-align: justify; padding: 4px 0 16px 0;">
+        <style>
+          .memo-directives-content ol { list-style-type: decimal !important; margin: 6px 0 !important; padding-left: 24px !important; }
+          .memo-directives-content ul { list-style-type: disc !important; margin: 6px 0 !important; padding-left: 24px !important; }
+          .memo-directives-content li { display: list-item !important; margin-bottom: 4px !important; }
+        </style>
+${renderMemoDirectivesHtml(memoContent)}
+      </div>
+
+      <!-- 5. Signatory Sign-off Block -->
+      <div style="margin-top: 18px; padding-top: 2px;">
+        <table style="width: 100%; border-collapse: collapse; font-size: 9pt;">
+          <tr>
+            <td style="width: ${signatoryLayout === "dual" ? "50%" : "auto"}; max-width: ${signatoryLayout === "dual" ? "none" : "320px"}; vertical-align: top; text-align: left; padding-right: 18px;">
+              ${signatoryLabel?.trim() ? `<p style="margin: 0 0 1px 0; color: #475569; font-size: 7.5pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">${escapeHtml(signatoryLabel.trim())}</p>` : ""}
+              <div style="height: ${Math.max(48, effectiveSigSize + 6)}px; display: flex; align-items: flex-end;">
+                ${signatorySignature ? `
+                  <img src="${signatorySignature}" style="height: ${effectiveSigSize}px; max-height: ${effectiveSigSize}px; max-width: ${Math.round(effectiveSigSize * 3.5)}px; display: block; margin-left: ${signatoryOffsetX}px; margin-bottom: ${signatoryOffsetY}px; position: relative; z-index: 2; object-fit: contain; object-position: bottom left;" alt="Signatory Signature">
+                ` : '<div style="height: 24px; margin-bottom: 2px;"></div>'}
+              </div>
+              <p style="margin: 0; font-weight: 900; color: #020617; font-size: 9.5pt; text-transform: uppercase; letter-spacing: 0.2px; position: relative; z-index: 1;">${escapeHtml(signatoryName)}</p>
+              <p style="margin: 1px 0 0 0; color: #334155; font-size: 8pt; font-weight: 700;">${escapeHtml(signatoryTitle)}</p>
+              <p style="margin: 1px 0 0 0; color: #64748b; font-weight: 600; font-size: 7.5pt;">${escapeHtml(getSignatoryAffiliation(comp))}</p>
+            </td>
+            ${signatoryLayout === "dual" ? `
+            <td style="width: 50%; vertical-align: top; text-align: left; padding-left: 18px;">
+              ${approverLabel?.trim() ? `<p style="margin: 0 0 1px 0; color: #475569; font-size: 7.5pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">${escapeHtml(approverLabel.trim())}</p>` : ""}
+              <div style="height: ${Math.max(48, effectiveAppSize + 6)}px; display: flex; align-items: flex-end;">
+                ${approverSignature ? `
+                  <img src="${approverSignature}" style="height: ${effectiveAppSize}px; max-height: ${effectiveAppSize}px; max-width: ${Math.round(effectiveAppSize * 3.5)}px; display: block; margin-left: ${approverOffsetX}px; margin-bottom: ${approverOffsetY}px; position: relative; z-index: 2; object-fit: contain; object-position: bottom left;" alt="Approver Signature">
+                ` : '<div style="height: 24px; margin-bottom: 2px;"></div>'}
+              </div>
+              <p style="margin: 0; font-weight: 900; color: #020617; font-size: 9.5pt; text-transform: uppercase; letter-spacing: 0.2px; position: relative; z-index: 1;">${escapeHtml(approverName)}</p>
+              <p style="margin: 1px 0 0 0; color: #334155; font-size: 8pt; font-weight: 700;">${escapeHtml(approverTitle)}</p>
+              <p style="margin: 1px 0 0 0; color: #64748b; font-weight: 600; font-size: 7.5pt;">${escapeHtml(compLegal)}</p>
+            </td>` : ""}
+          </tr>
+        </table>
+      </div>
+
+      <!-- 6. Bottom Section: Official Division Footer (Guaranteed Visible at Bottom Edge) -->
+      <div style="margin-top: 26px; padding-top: 4px; padding-bottom: 1px; width: 100%;">
+        <div style="border-top: 1px solid #cbd5e1; padding-top: 2.5px;">
+          <table style="width: 100%; border-collapse: collapse; font-size: 6.8pt; font-weight: 500; color: #475569; text-transform: uppercase; letter-spacing: 0.8px;">
+            <tr>
+              <td style="text-align: left; font-weight: 500;">HUMAN RESOURCES &amp; ADMINISTRATION</td>
+              <td style="text-align: center; font-weight: 600; color: #0f172a; letter-spacing: 1.2px;">STRICT COMPLIANCE MANDATED</td>
+              <td style="text-align: right; font-weight: 500;">${comp.code} • OFFICIAL TRANSMISSION</td>
+            </tr>
+          </table>
+        </div>
+        <div style="text-align: center; font-size: 5.8pt; color: #64748b; font-weight: 400; text-transform: uppercase; letter-spacing: 1.8px; margin-top: 1px;">
+          CORPORATE EXECUTIVE RECORD • CONFIDENTIAL TRANSMISSION
         </div>
       </div>
-    </div>
 
-    <!-- Attached PDF Callout Card -->
-    <div style="margin: 0 36px 20px 36px; background: linear-gradient(135deg, #ecfdf5 0%, #f0fdf4 100%); border: 1.5px solid #a7f3d0; border-radius: 12px; padding: 12px 18px; box-shadow: 0 2px 8px rgba(16,185,129,0.06);">
-      <table style="width: 100%; border-collapse: collapse;">
-        <tr>
-          <td style="width: 32px; vertical-align: middle; font-size: 22px;">📄</td>
-          <td style="vertical-align: middle;">
-            <p style="margin: 0; font-size: 12px; font-weight: 900; color: #064e3b; letter-spacing: 0.2px;">
-              Official PDF Memorandum Document Attached
-            </p>
-            <p style="margin: 2px 0 0 0; font-size: 10.5px; color: #047857;">
-              Attached File: <strong style="font-family: monospace; color: #065f46;">${compMemoRef} - ${comp.name}.pdf</strong> • Includes Official Corporate Watermark &amp; E-Signatures
-            </p>
-          </td>
-        </tr>
-      </table>
     </div>
-
-    <!-- Signatories & Executive Verification Block -->
-    <div style="padding: 22px 36px 26px 36px; border-top: 1px solid #f1f5f9; background: #fafbfc;">
-      <table style="width: 100%; border-collapse: collapse;">
-        <tr>
-          <td style="width: 50%; vertical-align: top; padding-right: 18px;">
-            ${signatoryLabel?.trim() ? `<p style="margin: 0 0 4px 0; color: #64748b; font-size: 9.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.8px;">${signatoryLabel.trim()}</p>` : ""}
-            <div style="height: ${Math.max(52, signatorySize + 6)}px; display: flex; align-items: flex-end;">
-              ${signatorySignature ? `<img src="${signatorySignature}" style="height: ${signatorySize}px; max-height: ${signatorySize}px; max-width: ${Math.round(signatorySize * 3.5)}px; display: block; margin-left: ${signatoryOffsetX}px; margin-bottom: ${signatoryOffsetY}px; position: relative; z-index: 2; object-fit: contain; object-position: bottom left;" alt="Signatory Signature">` : '<div style="height: 38px; margin-bottom: 2px;"></div>'}
-            </div>
-            <p style="margin: 0; font-weight: 900; color: #0f172a; font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.2px; position: relative; z-index: 1;">${signatoryName}</p>
-            <p style="margin: 2px 0 0 0; color: #475569; font-size: 11px; font-weight: 600;">${signatoryTitle}</p>
-            <p style="margin: 1px 0 0 0; color: ${accentColor}; font-size: 10px; font-weight: 700;">${getSignatoryAffiliation(comp)}</p>
-          </td>
-          ${signatoryLayout === "dual" ? `
-          <td style="width: 50%; vertical-align: top; padding-left: 18px;">
-            ${approverLabel?.trim() ? `<p style="margin: 0 0 4px 0; color: #64748b; font-size: 9.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.8px;">${approverLabel.trim()}</p>` : ""}
-            <div style="height: ${Math.max(52, approverSize + 6)}px; display: flex; align-items: flex-end;">
-              ${approverSignature ? `<img src="${approverSignature}" style="height: ${approverSize}px; max-height: ${approverSize}px; max-width: ${Math.round(approverSize * 3.5)}px; display: block; margin-left: ${approverOffsetX}px; margin-bottom: ${approverOffsetY}px; position: relative; z-index: 2; object-fit: contain; object-position: bottom left;" alt="Approver Signature">` : '<div style="height: 38px; margin-bottom: 2px;"></div>'}
-            </div>
-            <p style="margin: 0; font-weight: 900; color: #0f172a; font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.2px; position: relative; z-index: 1;">${approverName}</p>
-            <p style="margin: 2px 0 0 0; color: #475569; font-size: 11px; font-weight: 600;">${approverTitle}</p>
-            <p style="margin: 1px 0 0 0; color: #64748b; font-size: 10px; font-weight: 700;">${compLegal}</p>
-          </td>` : ""}
-        </tr>
-      </table>
-    </div>
-
-    <!-- Official Security & Support Footer -->
-    <div style="background-color: #090d16; color: #94a3b8; padding: 20px 36px; text-align: center; font-size: 9.5px; line-height: 1.6; border-top: 1px solid rgba(255,255,255,0.08);">
-      <div style="display: inline-block; margin-bottom: 6px;">
-        <span style="background: rgba(255,255,255,0.08); color: #e2e8f0; font-weight: 800; font-size: 9px; padding: 2px 10px; border-radius: 4px; text-transform: uppercase; letter-spacing: 1px;">
-          HR MANAGEMENT &amp; CORPORATE GOVERNANCE DIVISION
-        </span>
-      </div>
-      <p style="margin: 4px 0 0 0; color: #cbd5e1; font-weight: 600;">
-        Official administrative notice issued on behalf of <strong>${comp.name}</strong>.
-      </p>
-      <p style="margin: 4px 0 0 0; color: #64748b; font-size: 9px;">
-        Strict compliance mandated for all concerned personnel • HR Inquiries &amp; Submissions: <a href="mailto:${HR_OFFICIAL_EMAIL}" style="color: #34d399; text-decoration: none; font-weight: bold;">${HR_OFFICIAL_EMAIL}</a>
-      </p>
-      <p style="margin: 6px 0 0 0; color: #475569; font-size: 8.5px; font-family: monospace;">
-        CONFIDENTIALITY NOTICE: This transmission is intended solely for the designated addressee(s).
-      </p>
-    </div>
-
   </div>
 </div>`;
   };
