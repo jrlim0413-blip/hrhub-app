@@ -203,7 +203,7 @@ export default function EmployeeDirectoryPanel({
     return { total, onlineCount, approvedCount, pendingCount, myHandledCount };
   }, [managedProfiles, onlineEmails, currentEmail, currentProfile]);
 
-  // Pre-Registration Permission Check (Restricted strictly to HR Administrator / system_admin by default, dynamically overridable in RBAC matrix)
+  // Pre-Registration & Profiling Permission Check (Bukas sa Branch HR via comm_add_employee at Head Office)
   const canPreRegister = useMemo(() => {
     const curEmail = (currentEmail || "").toLowerCase().trim();
     const userObj = {
@@ -213,8 +213,10 @@ export default function EmployeeDirectoryPanel({
     };
 
     return (
+      isUserFeatureAllowed(userObj, "comm_add_employee", matrixData) ||
       isUserFeatureAllowed(userObj, "pre_register_employee", matrixData) ||
-      isUserTabAllowed(userObj, "employee_pre_registration", matrixData)
+      isUserTabAllowed(userObj, "employee_pre_registration", matrixData) ||
+      isUserFeatureAllowed(userObj, "comm_manage_profiles", matrixData)
     );
   }, [currentEmail, currentProfile, matrixData]);
 
@@ -340,7 +342,7 @@ export default function EmployeeDirectoryPanel({
 
     setNotice({
       type: "success",
-      message: `${targetEmail} is now ${newApprovedState ? "APPROVED" : "SUSPENDED"}.`
+      message: `${targetEmail} ay ${newApprovedState ? "APRUBADO NA" : "PINIGILAN / SUSPENDIDO"}.`
     });
     setTimeout(() => setNotice(null), 4000);
   };
@@ -362,6 +364,24 @@ export default function EmployeeDirectoryPanel({
       is_approved: typeof profile.is_approved === "boolean" ? profile.is_approved : true
     });
     setIsEditModalOpen(true);
+  };
+
+  // Open Add / Pre-Registration Modal with Branch HR default pre-fill
+  const handleOpenAddModal = () => {
+    const defBranch = currentProfile?.branch || DEFAULT_BRANCH_MAP[currentProfile?.company] || "Head Office (Mandaue)";
+    const defHR = currentProfile?.name || currentEmail || "H R M D (Head Office)";
+    const defComp = currentProfile?.company || "Simpal Group of Companies";
+
+    setNewEmployee({
+      email: "",
+      name: "",
+      company: defComp,
+      role: "Team Member",
+      branch: defBranch,
+      assigned_hr: defHR,
+      isApproved: true
+    });
+    setIsAddModalOpen(true);
   };
 
   // Submit Edit Employee Form
@@ -435,7 +455,7 @@ export default function EmployeeDirectoryPanel({
 
       setNotice({
         type: "success",
-        message: `Successfully updated ${updatedRecord.name} (Assigned to: ${updatedRecord.assigned_hr || "Unassigned"}).`
+        message: `Matagumpay na nabago ang impormasyon ni ${updatedRecord.name} (Nakatalaga kay: ${updatedRecord.assigned_hr || "Walang nakatalaga"}).`
       });
       setIsEditModalOpen(false);
       setEditingEmployee(null);
@@ -444,7 +464,7 @@ export default function EmployeeDirectoryPanel({
       console.error("Edit profile error:", err);
       setNotice({
         type: "warning",
-        message: `Updated local profile for ${targetEmail}.`
+        message: `Na-update ang lokal na talaan para kay ${targetEmail}.`
       });
       setIsEditModalOpen(false);
     } finally {
@@ -455,9 +475,9 @@ export default function EmployeeDirectoryPanel({
 
   // Delete employee handler
   const handleDeleteEmployee = async (profile) => {
-    const targetEmail = profile.email || "this employee";
+    const targetEmail = profile.email || "ang kawaning ito";
     const confirmDelete = window.confirm(
-      `Are you sure you want to remove ${targetEmail} from the Employee Directory?\n\nThis will remove their profile and access permissions.`
+      `Sigurado ka ba na nais mong alisin si ${targetEmail} mula sa Direktoryo ng mga Kawani?\n\nMawawala ang kanilang profile at mga pahintulot sa pag-access.`
     );
     if (!confirmDelete) return;
 
@@ -483,7 +503,7 @@ export default function EmployeeDirectoryPanel({
 
     setNotice({
       type: "success",
-      message: `Successfully removed ${targetEmail} from directory.`
+      message: `Matagumpay na naalis si ${targetEmail} mula sa direktoryo.`
     });
     setTimeout(() => setNotice(null), 4000);
 
@@ -496,7 +516,7 @@ export default function EmployeeDirectoryPanel({
     if (!canPreRegister) {
       setNotice({
         type: "warning",
-        message: "Access Restricted: Only HR Administrator or authorized accounts in the Role Permission Matrix can pre-register employees."
+        message: "Limitadong Access: Tanging ang HR Administrator o mga awtorisadong account sa Role Permission Matrix ang maaaring mag-profile at magrehistro ng mga kawani."
       });
       return;
     }
@@ -544,7 +564,7 @@ export default function EmployeeDirectoryPanel({
 
       setNotice({
         type: "success",
-        message: `Successfully pre-registered ${trimmedEmail}! They can now use First-Time Setup to create their password.`
+        message: `Matagumpay na na-profile at nairehistro si ${trimmedEmail}! Maaari na nilang gamitin ang First-Time Setup upang magtakda ng kanilang password.`
       });
       setIsAddModalOpen(false);
       setNewEmployee({
@@ -561,7 +581,7 @@ export default function EmployeeDirectoryPanel({
       console.warn("Pre-register add notice:", err);
       setNotice({
         type: "success",
-        message: `Pre-registered ${trimmedEmail} in active personnel registry.`
+        message: `Naitala si ${trimmedEmail} sa aktibong rehistro ng mga kawani.`
       });
       setIsAddModalOpen(false);
     } finally {
@@ -571,7 +591,7 @@ export default function EmployeeDirectoryPanel({
   };
 
   const copyActivationInstructions = (email, id) => {
-    const text = `Hi! You have been registered in the HrHub portal. Please go to http://localhost:5173, click "First-Time Setup", and enter your email (${email}) to create your personal password.`;
+    const text = `Magandang araw! Ikaw ay naitalaga na sa HrHub portal. Mangyaring pumunta sa http://localhost:5173, pindutin ang "First-Time Setup", at ipasok ang iyong email (${email}) upang makapagtakda ng iyong sariling password.`;
     navigator.clipboard?.writeText(text);
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 2500);
@@ -603,11 +623,11 @@ export default function EmployeeDirectoryPanel({
             <span className="p-2 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200">
               <Users size={18} />
             </span>
-            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-600">Personnel & Diversified HR Management</span>
+            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-600">Pangangasiwa ng mga Kawani at Sangay ng HR</span>
           </div>
-          <h2 className="mt-1 text-2xl font-black text-slate-900 tracking-tight">Employee Directory</h2>
+          <h2 className="mt-1 text-2xl font-black text-slate-900 tracking-tight">Direktoryo ng mga Kawani</h2>
           <p className="mt-0.5 text-xs text-slate-500 max-w-xl">
-            Centralized personnel registry across Simpal Group subsidiaries. Diversify HR handling, update employee assignments, manage access approvals, and monitor real-time presence.
+            Sentralisadong talaan ng mga kawani sa lahat ng subsidiary ng Simpal Group. Pamamahala sa pagtatalaga ng HR, pag-apruba ng access, at pagsusubaybay sa aktibong presensya.
           </p>
         </div>
 
@@ -615,7 +635,7 @@ export default function EmployeeDirectoryPanel({
           <button
             type="button"
             onClick={onRefresh}
-            title="Refresh Directory"
+            title="I-refresh ang Direktoryo"
             className="p-2.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-600 hover:text-slate-900 transition cursor-pointer"
           >
             <RefreshCw size={15} className={loading ? "animate-spin text-emerald-600" : ""} />
@@ -625,22 +645,22 @@ export default function EmployeeDirectoryPanel({
             <button
               type="button"
               onClick={onOpenPermissions}
-              title="Configure Role & Permissions Matrix"
+              title="Isaayos ang Matris ng Permisyon"
               className="inline-flex items-center gap-1.5 px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 hover:text-slate-900 text-xs font-bold transition cursor-pointer"
             >
               <Sliders size={14} className="text-emerald-600" />
-              <span>Permissions Matrix</span>
+              <span>Matris ng Permisyon</span>
             </button>
           )}
 
           {canPreRegister && (
             <button
               type="button"
-              onClick={() => setIsAddModalOpen(true)}
+              onClick={handleOpenAddModal}
               className="inline-flex items-center gap-2 bg-slate-900 hover:bg-slate-800 text-emerald-400 px-4 py-2.5 rounded-xl font-bold text-xs shadow-md shadow-slate-900/15 transition cursor-pointer"
             >
               <UserPlus size={15} />
-              <span>Pre-Register Employee</span>
+              <span>Mag-profile ng Bagong Kawani</span>
             </button>
           )}
         </div>
@@ -650,13 +670,13 @@ export default function EmployeeDirectoryPanel({
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white border border-slate-200/90 rounded-2xl p-4 shadow-xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-500">Total Personnel</span>
+            <span className="text-xs font-bold text-slate-500">Kabuuang Kawani</span>
             <span className="p-2 rounded-xl bg-slate-100 text-slate-700">
               <Users size={16} />
             </span>
           </div>
           <p className="mt-2 text-2xl font-black text-slate-900">{stats.total}</p>
-          <p className="text-[10px] text-slate-400 mt-0.5">Enrolled across subsidiaries</p>
+          <p className="text-[10px] text-slate-400 mt-0.5">Nakatala sa lahat ng subsidiary</p>
         </div>
 
         <div
@@ -672,7 +692,7 @@ export default function EmployeeDirectoryPanel({
         >
           <div className="flex items-center justify-between">
             <span className={`text-xs font-bold ${selectedHRFilter === "my-handled" || selectedFilter === "my-handled" ? "text-emerald-100" : "text-emerald-700"}`}>
-              Hawak Ko (My Assigned)
+              Hawak Ko (Aking Sangay)
             </span>
             <span className={`p-2 rounded-xl ${selectedHRFilter === "my-handled" || selectedFilter === "my-handled" ? "bg-emerald-600 text-white" : "bg-emerald-50 text-emerald-700"}`}>
               <UserCheck size={16} />
@@ -685,17 +705,17 @@ export default function EmployeeDirectoryPanel({
             <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
               selectedHRFilter === "my-handled" || selectedFilter === "my-handled" ? "bg-emerald-600 text-emerald-100" : "bg-emerald-100 text-emerald-800"
             }`}>
-              {selectedHRFilter === "my-handled" ? "Filtered" : "Click to view"}
+              {selectedHRFilter === "my-handled" ? "Naka-filter" : "Pindutin para tingnan"}
             </span>
           </div>
           <p className={`text-[10px] mt-0.5 ${selectedHRFilter === "my-handled" || selectedFilter === "my-handled" ? "text-emerald-100" : "text-slate-400"}`}>
-            Assigned to your HR portfolio
+            Nakatalaga sa iyong pamamahala ng HR
           </p>
         </div>
 
         <div className="bg-white border border-slate-200/90 rounded-2xl p-4 shadow-xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-500">Active Online</span>
+            <span className="text-xs font-bold text-slate-500">Aktibo / Naka-online</span>
             <span className="p-2 rounded-xl bg-emerald-50 text-emerald-700">
               <Sparkles size={16} />
             </span>
@@ -707,7 +727,7 @@ export default function EmployeeDirectoryPanel({
               <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
             </span>
           </div>
-          <p className="text-[10px] text-slate-400 mt-0.5">Real-time active connections</p>
+          <p className="text-[10px] text-slate-400 mt-0.5">Kasalukuyang naka-konekta sa sistema</p>
         </div>
 
         <div className={`border rounded-2xl p-4 shadow-xs transition ${
@@ -717,7 +737,7 @@ export default function EmployeeDirectoryPanel({
         }`}>
           <div className="flex items-center justify-between">
             <span className={`text-xs font-bold ${stats.pendingCount > 0 ? "text-amber-900" : "text-slate-500"}`}>
-              Pending Review
+              Naghihintay ng Pag-apruba
             </span>
             <span className={`p-2 rounded-xl ${stats.pendingCount > 0 ? "bg-amber-100 text-amber-800" : "bg-slate-100 text-slate-700"}`}>
               <Clock size={16} />
@@ -727,7 +747,7 @@ export default function EmployeeDirectoryPanel({
             {stats.pendingCount}
           </p>
           <p className="text-[10px] text-slate-400 mt-0.5">
-            {stats.pendingCount > 0 ? "Requires administrator sign-off" : "All accounts verified"}
+            {stats.pendingCount > 0 ? "Kailangan ng pagsusuri ng tagapangasiwa" : "Lahat ng account ay kumpirmado na"}
           </p>
         </div>
       </div>
@@ -743,7 +763,7 @@ export default function EmployeeDirectoryPanel({
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search by name, email, company, role, branch, or assigned HR..."
+                placeholder="Maghanap ayon sa pangalan, email, kumpanya, posisyon, sangay, o tagapangasiwang HR..."
                 className="w-full border-0 bg-transparent text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none"
               />
               {searchQuery && (
@@ -766,10 +786,10 @@ export default function EmployeeDirectoryPanel({
                     : "bg-slate-50 border-slate-200 text-slate-700"
                 }`}
               >
-                <option value="all">👥 All HR Handlers</option>
-                <option value="my-handled">✨ Hawak Ko (Assigned to Me)</option>
-                <option value="unassigned">⚠️ Unassigned Personnel</option>
-                <optgroup label="Designated HR Handlers">
+                <option value="all">👥 Lahat ng Tagapangasiwang HR</option>
+                <option value="my-handled">✨ Hawak Ko (Nakatalaga sa Akin)</option>
+                <option value="unassigned">⚠️ Walang Nakatalagang HR</option>
+                <optgroup label="Mga Itinalagang Opisyal ng HR">
                   {availableHRHandlers.map((hr) => (
                     <option key={hr} value={hr}>{hr}</option>
                   ))}
@@ -783,7 +803,7 @@ export default function EmployeeDirectoryPanel({
               onChange={(e) => setSelectedSubsidiary(e.target.value)}
               className="text-xs font-semibold bg-slate-50 border border-slate-200 text-slate-700 rounded-xl px-3 py-2.5 focus:outline-none focus:border-emerald-500 cursor-pointer"
             >
-              <option value="all">🏢 All Subsidiaries</option>
+              <option value="all">🏢 Lahat ng Kumpanya</option>
               {SUBSIDIARIES.map((sub) => (
                 <option key={sub} value={sub}>{sub}</option>
               ))}
@@ -795,7 +815,7 @@ export default function EmployeeDirectoryPanel({
               onChange={(e) => setSelectedBranchFilter(e.target.value)}
               className="text-xs font-semibold bg-slate-50 border border-slate-200 text-slate-700 rounded-xl px-3 py-2.5 focus:outline-none focus:border-emerald-500 cursor-pointer"
             >
-              <option value="all">📍 All Branches / Stations</option>
+              <option value="all">📍 Lahat ng Sangay / Estasyon</option>
               {BRANCH_PRESETS.map((br) => (
                 <option key={br} value={br}>{br}</option>
               ))}
@@ -810,7 +830,7 @@ export default function EmployeeDirectoryPanel({
                   viewMode === "grid" ? "bg-white text-slate-900 shadow-xs" : "text-slate-500 hover:text-slate-800"
                 }`}
               >
-                Cards
+                Mga Tarheta
               </button>
               <button
                 type="button"
@@ -819,7 +839,7 @@ export default function EmployeeDirectoryPanel({
                   viewMode === "table" ? "bg-white text-slate-900 shadow-xs" : "text-slate-500 hover:text-slate-800"
                 }`}
               >
-                Table
+                Talahanayan
               </button>
             </div>
           </div>
@@ -829,11 +849,11 @@ export default function EmployeeDirectoryPanel({
         <div className="flex items-center justify-between gap-2 overflow-x-auto pt-1 border-t border-slate-100 text-xs">
           <div className="flex items-center gap-2">
             {[
-              { id: "all", label: `All Personnel (${stats.total})` },
+              { id: "all", label: `Lahat ng Kawani (${stats.total})` },
               { id: "my-handled", label: `Hawak Ko (${stats.myHandledCount})`, highlight: true },
-              { id: "online", label: `Active Online (${stats.onlineCount})` },
-              { id: "approved", label: `Approved (${stats.approvedCount})` },
-              { id: "pending", label: `Pending Review (${stats.pendingCount})` }
+              { id: "online", label: `Naka-online (${stats.onlineCount})` },
+              { id: "approved", label: `Aprubado (${stats.approvedCount})` },
+              { id: "pending", label: `Naghihintay (${stats.pendingCount})` }
             ].map((tab) => (
               <button
                 key={tab.id}
@@ -869,7 +889,7 @@ export default function EmployeeDirectoryPanel({
               }}
               className="text-xs font-bold text-rose-600 hover:text-rose-700 hover:underline shrink-0 cursor-pointer"
             >
-              Reset Filters
+              I-reset ang mga Filter
             </button>
           )}
         </div>
@@ -881,13 +901,13 @@ export default function EmployeeDirectoryPanel({
           <div className="w-12 h-12 rounded-2xl bg-slate-100 text-slate-400 mx-auto flex items-center justify-center">
             <Users size={24} />
           </div>
-          <h4 className="text-base font-bold text-slate-800">No personnel found</h4>
+          <h4 className="text-base font-bold text-slate-800">Walang Natagpuang Kawani</h4>
           <p className="text-xs text-slate-500 max-w-sm mx-auto">
             {searchQuery
-              ? `No matches for "${searchQuery}". Try adjusting your search query or HR filters.`
+              ? `Walang tumutugma sa "${searchQuery}". Subukang baguhin ang iyong paghahanap o filter.`
               : selectedHRFilter === "my-handled"
-              ? "You do not have any employees assigned to your HR portfolio yet. Use the Edit button on an employee card to assign them to your handling."
-              : "No employees registered under this filter yet."}
+              ? "Wala ka pang hawak na kawani sa iyong pamamahala ng HR. Gamitin ang Baguhin na buton sa tarheta ng kawani upang italaga sila sa iyo."
+              : "Walang nakatalang kawani sa ilalim ng filter na ito."}
           </p>
           <button
             type="button"
@@ -900,7 +920,7 @@ export default function EmployeeDirectoryPanel({
             }}
             className="text-xs font-bold text-emerald-600 hover:underline cursor-pointer"
           >
-            Clear all filters
+            Alisin ang lahat ng filter
           </button>
         </div>
       ) : viewMode === "grid" ? (
@@ -911,11 +931,11 @@ export default function EmployeeDirectoryPanel({
             const isCurrentUser = Boolean(currentEmail && email === currentEmail);
             const isOnline = isCurrentUser || onlineEmails.has(email);
             const initials = prof.email ? prof.email.slice(0, 2).toUpperCase() : "HR";
-            const displayName = prof.name || (prof.email ? prof.email.split("@")[0].replace(/[._]/g, " ").replace(/\b\w/g, (l) => l.toUpperCase()) : "Employee");
+            const displayName = prof.name || (prof.email ? prof.email.split("@")[0].replace(/[._]/g, " ").replace(/\b\w/g, (l) => l.toUpperCase()) : "Kawani");
             const company = prof.company || "Simpal Group of Companies";
             const role = prof.role || "Team Member";
             const branch = prof.branch || DEFAULT_BRANCH_MAP[company] || "Head Office";
-            const assignedHR = prof.assigned_hr || "Unassigned HR";
+            const assignedHR = prof.assigned_hr || "Walang Nakatalagang HR";
             const isHandledByMe = checkIsHandledByMe(prof);
 
             return (
@@ -959,7 +979,7 @@ export default function EmployeeDirectoryPanel({
                         {isOnline ? (
                           <span className="inline-flex items-center gap-1 text-[9px] font-black px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
                             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                            {isCurrentUser ? "Active (You)" : "Active Now"}
+                            {isCurrentUser ? "Aktibo (Ikaw)" : "Aktibo Ngayon"}
                           </span>
                         ) : (
                           <span className="inline-flex items-center gap-1 text-[9px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 border border-slate-200">
@@ -970,11 +990,11 @@ export default function EmployeeDirectoryPanel({
 
                         {prof.is_approved ? (
                           <span className="inline-flex items-center gap-1 text-[9px] font-bold text-emerald-700 bg-emerald-50/60 px-2 py-0.5 rounded-full border border-emerald-200/60">
-                            <ShieldCheck size={10} className="text-emerald-600" /> Approved
+                            <ShieldCheck size={10} className="text-emerald-600" /> Aprubado
                           </span>
                         ) : (
                           <span className="inline-flex items-center gap-1 text-[9px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
-                            <Clock size={10} className="text-amber-600" /> Pending
+                            <Clock size={10} className="text-amber-600" /> Naghihintay
                           </span>
                         )}
                       </div>
@@ -987,7 +1007,7 @@ export default function EmployeeDirectoryPanel({
                       {displayName}
                       {isCurrentUser && (
                         <span className="text-[8px] font-black uppercase text-emerald-700 bg-emerald-100 px-1 py-0.2 rounded border border-emerald-200">
-                          You
+                          Ikaw
                         </span>
                       )}
                     </h4>
@@ -1037,11 +1057,11 @@ export default function EmployeeDirectoryPanel({
                     >
                       {prof.is_approved ? (
                         <>
-                          <ShieldAlert size={13} className="text-slate-500" /> Revoke
+                          <ShieldAlert size={13} className="text-slate-500" /> Bawiin
                         </>
                       ) : (
                         <>
-                          <CheckCircle2 size={13} /> Approve
+                          <CheckCircle2 size={13} /> Aprubahan
                         </>
                       )}
                     </button>
@@ -1051,7 +1071,7 @@ export default function EmployeeDirectoryPanel({
                     <button
                       type="button"
                       onClick={() => handleOpenEdit(prof)}
-                      title="Edit Employee Details & HR Allocation"
+                      title="Baguhin ang Impormasyon ng Kawani at Nakatalagang HR"
                       className="p-1.5 rounded-xl border border-slate-200 bg-white text-slate-600 hover:text-emerald-700 hover:border-emerald-300 hover:bg-emerald-50/50 transition cursor-pointer"
                     >
                       <Edit3 size={14} />
@@ -1061,7 +1081,7 @@ export default function EmployeeDirectoryPanel({
                   <button
                     type="button"
                     onClick={() => copyActivationInstructions(prof.email, prof.id)}
-                    title="Copy First-Time Setup Instructions"
+                    title="Kopyahin ang Tagubilin sa Unang Pag-setup"
                     className="p-1.5 rounded-xl border border-slate-200 text-slate-500 hover:text-emerald-700 hover:border-emerald-200 hover:bg-emerald-50/50 transition cursor-pointer"
                   >
                     {copiedId === prof.id ? <Check size={14} className="text-emerald-600" /> : <Copy size={14} />}
@@ -1071,7 +1091,7 @@ export default function EmployeeDirectoryPanel({
                     <button
                       type="button"
                       onClick={() => handleDeleteEmployee(prof)}
-                      title="Remove from Directory"
+                      title="Alisin sa Direktoryo"
                       className="p-1.5 rounded-xl border border-slate-200 text-slate-400 hover:text-rose-600 hover:border-rose-200 hover:bg-rose-50 transition cursor-pointer"
                     >
                       <Trash2 size={14} />
@@ -1089,12 +1109,12 @@ export default function EmployeeDirectoryPanel({
             <table className="w-full text-left text-xs border-collapse">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200 text-[10px] font-black uppercase tracking-wider text-slate-400">
-                  <th className="py-3 px-4">Employee</th>
-                  <th className="py-3 px-4">Organization & Branch</th>
-                  <th className="py-3 px-4">Role</th>
+                  <th className="py-3 px-4">Kawani</th>
+                  <th className="py-3 px-4">Kumpanya at Sangay</th>
+                  <th className="py-3 px-4">Tungkulin / Posisyon</th>
                   <th className="py-3 px-4">Hawak na HR</th>
-                  <th className="py-3 px-4">Status</th>
-                  <th className="py-3 px-4 text-right">Actions</th>
+                  <th className="py-3 px-4">Katayuan</th>
+                  <th className="py-3 px-4 text-right">Mga Aksyon</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-slate-700">
@@ -1103,9 +1123,9 @@ export default function EmployeeDirectoryPanel({
                   const isCurrentUser = Boolean(currentEmail && email === currentEmail);
                   const isOnline = isCurrentUser || onlineEmails.has(email);
                   const initials = prof.email ? prof.email.slice(0, 2).toUpperCase() : "HR";
-                  const displayName = prof.name || (prof.email ? prof.email.split("@")[0].replace(/[._]/g, " ").replace(/\b\w/g, (l) => l.toUpperCase()) : "Employee");
+                  const displayName = prof.name || (prof.email ? prof.email.split("@")[0].replace(/[._]/g, " ").replace(/\b\w/g, (l) => l.toUpperCase()) : "Kawani");
                   const branch = prof.branch || DEFAULT_BRANCH_MAP[prof.company] || "Head Office";
-                  const assignedHR = prof.assigned_hr || "Unassigned";
+                  const assignedHR = prof.assigned_hr || "Walang Nakatalaga";
                   const isHandledByMe = checkIsHandledByMe(prof);
 
                   return (
@@ -1122,7 +1142,7 @@ export default function EmployeeDirectoryPanel({
                               {displayName}
                               {isCurrentUser && (
                                 <span className="text-[8px] font-black uppercase text-emerald-700 bg-emerald-50 px-1 rounded border border-emerald-200">
-                                  You
+                                  Ikaw
                                 </span>
                               )}
                               {isHandledByMe && (
@@ -1154,7 +1174,7 @@ export default function EmployeeDirectoryPanel({
                           {isOnline ? (
                             <span className="inline-flex items-center gap-1 text-[9px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
                               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                              Active
+                              Aktibo
                             </span>
                           ) : (
                             <span className="inline-flex items-center gap-1 text-[9px] font-medium text-slate-500 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-full">
@@ -1165,11 +1185,11 @@ export default function EmployeeDirectoryPanel({
 
                           {prof.is_approved ? (
                             <span className="inline-flex items-center gap-1 text-[9px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                              <ShieldCheck size={10} className="text-emerald-600" /> Approved
+                              <ShieldCheck size={10} className="text-emerald-600" /> Aprubado
                             </span>
                           ) : (
                             <span className="inline-flex items-center gap-1 text-[9px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
-                              <Clock size={10} className="text-amber-600" /> Pending
+                              <Clock size={10} className="text-amber-600" /> Naghihintay
                             </span>
                           )}
                         </div>
@@ -1186,14 +1206,14 @@ export default function EmployeeDirectoryPanel({
                                   : "bg-emerald-600 hover:bg-emerald-500 text-white"
                               }`}
                             >
-                              {prof.is_approved ? "Revoke" : "Approve"}
+                              {prof.is_approved ? "Bawiin" : "Aprubahan"}
                             </button>
                           )}
                           {canManageProfiles && (
                             <button
                               type="button"
                               onClick={() => handleOpenEdit(prof)}
-                              title="Edit employee details"
+                              title="Baguhin ang impormasyon ng kawani"
                               className="p-1 rounded-lg border border-slate-200 text-slate-500 hover:text-emerald-700 hover:bg-emerald-50 transition cursor-pointer"
                             >
                               <Edit3 size={13} />
@@ -1202,7 +1222,7 @@ export default function EmployeeDirectoryPanel({
                           <button
                             type="button"
                             onClick={() => copyActivationInstructions(prof.email, prof.id)}
-                            title="Copy setup message"
+                            title="Kopyahin ang tagubilin sa setup"
                             className="p-1 rounded-lg border border-slate-200 text-slate-400 hover:text-slate-700 transition cursor-pointer"
                           >
                             {copiedId === prof.id ? <Check size={13} className="text-emerald-600" /> : <Copy size={13} />}
@@ -1211,7 +1231,7 @@ export default function EmployeeDirectoryPanel({
                             <button
                               type="button"
                               onClick={() => handleDeleteEmployee(prof)}
-                              title="Remove employee"
+                              title="Alisin ang kawani"
                               className="p-1 rounded-lg border border-slate-200 text-slate-400 hover:text-rose-600 hover:border-rose-200 hover:bg-rose-50 transition cursor-pointer"
                             >
                               <Trash2 size={13} />
@@ -1235,9 +1255,9 @@ export default function EmployeeDirectoryPanel({
             <div className="p-6 border-b border-slate-100 flex items-center justify-between">
               <div>
                 <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-emerald-600">
-                  <UserCog size={13} /> Edit Personnel & HR Assignment
+                  <UserCog size={13} /> Pagbabago ng Kawani at Nakatalagang HR
                 </div>
-                <h3 className="text-xl font-black text-slate-900 mt-0.5">Update Employee Details</h3>
+                <h3 className="text-xl font-black text-slate-900 mt-0.5">Baguhin ang Impormasyon ng Kawani</h3>
               </div>
               <button
                 type="button"
@@ -1266,19 +1286,19 @@ export default function EmployeeDirectoryPanel({
                     ? "bg-emerald-50 text-emerald-700 border-emerald-200"
                     : "bg-amber-50 text-amber-700 border-amber-200"
                 }`}>
-                  {editingEmployee.is_approved ? "Approved" : "Pending"}
+                  {editingEmployee.is_approved ? "Aprubado" : "Naghihintay"}
                 </span>
               </div>
 
               {/* Full Name */}
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-700">Full Name</label>
+                <label className="text-xs font-bold text-slate-700">Buong Pangalan</label>
                 <input
                   type="text"
                   required
                   value={editingEmployee.name}
                   onChange={(e) => setEditingEmployee({ ...editingEmployee, name: e.target.value })}
-                  placeholder="e.g. Juan Dela Cruz"
+                  placeholder="hal. Juan Dela Cruz"
                   className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-xs text-slate-800 placeholder:text-slate-400 focus:border-emerald-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-100 transition"
                 />
               </div>
@@ -1286,7 +1306,7 @@ export default function EmployeeDirectoryPanel({
               {/* Company & Branch */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-700">Company Entity</label>
+                  <label className="text-xs font-bold text-slate-700">Kumpanya</label>
                   <select
                     value={editingEmployee.company}
                     onChange={(e) => {
@@ -1306,7 +1326,7 @@ export default function EmployeeDirectoryPanel({
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-700">Branch / Location</label>
+                  <label className="text-xs font-bold text-slate-700">Sangay / Lokasyon</label>
                   <select
                     value={editingEmployee.branch}
                     onChange={(e) => setEditingEmployee({ ...editingEmployee, branch: e.target.value })}
@@ -1322,7 +1342,7 @@ export default function EmployeeDirectoryPanel({
               {/* Position & Role */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-700">Designation / Role</label>
+                  <label className="text-xs font-bold text-slate-700">Tungkulin / Posisyon</label>
                   <select
                     value={editingEmployee.role}
                     onChange={(e) => setEditingEmployee({ ...editingEmployee, role: e.target.value })}
@@ -1335,12 +1355,12 @@ export default function EmployeeDirectoryPanel({
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-700">Contact Number</label>
+                  <label className="text-xs font-bold text-slate-700">Numero ng Telepono / Selpon</label>
                   <input
                     type="text"
                     value={editingEmployee.phone || ""}
                     onChange={(e) => setEditingEmployee({ ...editingEmployee, phone: e.target.value })}
-                    placeholder="e.g. +63 917 123 4567"
+                    placeholder="hal. +63 917 123 4567"
                     className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-xs text-slate-800 placeholder:text-slate-400 focus:border-emerald-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-100 transition"
                   />
                 </div>
@@ -1351,7 +1371,7 @@ export default function EmployeeDirectoryPanel({
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
                     <UserCheck size={13} className="text-emerald-600" />
-                    Assigned HR Handler (Sino ang may hawak)
+                    Itinalagang Opisyal ng HR (Sino ang may hawak)
                   </label>
                   {currentProfile?.name && (
                     <button
@@ -1359,7 +1379,7 @@ export default function EmployeeDirectoryPanel({
                       onClick={() => setEditingEmployee({ ...editingEmployee, assigned_hr: currentProfile.name })}
                       className="text-[10px] font-bold text-emerald-600 hover:text-emerald-700 hover:underline cursor-pointer"
                     >
-                      Assign to Me ({currentProfile.name})
+                      Italaga sa Akin ({currentProfile.name})
                     </button>
                   )}
                 </div>
@@ -1369,14 +1389,14 @@ export default function EmployeeDirectoryPanel({
                     onChange={(e) => setEditingEmployee({ ...editingEmployee, assigned_hr: e.target.value })}
                     className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs text-slate-800 focus:border-emerald-500 focus:bg-white focus:outline-none cursor-pointer font-medium"
                   >
-                    <option value="">-- Pumili ng Assigned HR Officer / Unit --</option>
+                    <option value="">-- Pumili ng Itinalagang Opisyal ng HR --</option>
                     {availableHRHandlers.map((hr) => (
                       <option key={hr} value={hr}>{hr}</option>
                     ))}
                   </select>
                 </div>
                 <p className="text-[10px] text-slate-400">
-                  Ang empleyadong ito ay direktang mapapasailalim sa responsibilidad ng napiling HR para sa update at monitoring.
+                  Ang kawaning ito ay direktang mapapasailalim sa pamamahala ng napiling HR para sa pag-update at pagsusubaybay.
                 </p>
               </div>
 
@@ -1390,8 +1410,8 @@ export default function EmployeeDirectoryPanel({
                   className="mt-0.5 h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
                 />
                 <label htmlFor="editApproveCheckbox" className="text-xs text-slate-700 font-medium cursor-pointer">
-                  <strong className="block font-bold text-slate-900">Approved Access Permissions</strong>
-                  Payagan ang empleyadong ito na makapag-login at makagamit ng HrHub dashboard.
+                  <strong className="block font-bold text-slate-900">Aprubadong Pahintulot sa Access</strong>
+                  Pahintulutan ang kawaning ito na makapag-login at magamit ang HrHub dashboard.
                 </label>
               </div>
 
@@ -1405,7 +1425,7 @@ export default function EmployeeDirectoryPanel({
                   }}
                   className="px-4 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50 transition cursor-pointer"
                 >
-                  Cancel
+                  Kanselahin
                 </button>
                 <button
                   type="submit"
@@ -1414,11 +1434,11 @@ export default function EmployeeDirectoryPanel({
                 >
                   {isSubmittingEdit ? (
                     <>
-                      <RefreshCw size={14} className="animate-spin" /> Saving Changes...
+                      <RefreshCw size={14} className="animate-spin" /> Sine-save ang mga Pagbabago...
                     </>
                   ) : (
                     <>
-                      <CheckCircle2 size={14} /> Save Profile Changes
+                      <CheckCircle2 size={14} /> I-save ang mga Pagbabago
                     </>
                   )}
                 </button>
@@ -1428,16 +1448,16 @@ export default function EmployeeDirectoryPanel({
         </div>
       )}
 
-      {/* Pre-Register Modal (Exact existing pre-registration system preserved) */}
+      {/* Pre-Register / Profiling Modal */}
       {isAddModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-sm p-4">
           <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto animate-in fade-in zoom-in-95">
             <div className="p-6 border-b border-slate-100 flex items-center justify-between">
               <div>
                 <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-emerald-600">
-                  <UserPlus size={13} /> New Personnel Registration
+                  <UserPlus size={13} /> Pag-profile ng Bagong Kawani
                 </div>
-                <h3 className="text-xl font-black text-slate-900 mt-0.5">Pre-Register Employee</h3>
+                <h3 className="text-xl font-black text-slate-900 mt-0.5">Mag-profile at Magrehistro ng Kawani</h3>
               </div>
               <button
                 type="button"
@@ -1450,7 +1470,7 @@ export default function EmployeeDirectoryPanel({
 
             <form onSubmit={handleAddEmployeeSubmit} className="p-6 space-y-4">
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-700">Work Email Address *</label>
+                <label className="text-xs font-bold text-slate-700">Email Address sa Trabaho *</label>
                 <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-xs focus-within:border-emerald-500 focus-within:bg-white focus-within:ring-2 focus-within:ring-emerald-100 transition">
                   <Mail size={15} className="text-slate-400 shrink-0" />
                   <input
@@ -1458,26 +1478,26 @@ export default function EmployeeDirectoryPanel({
                     required
                     value={newEmployee.email}
                     onChange={(e) => setNewEmployee({ ...newEmployee, email: e.target.value })}
-                    placeholder="e.g. employee@simpalgroup.com"
+                    placeholder="hal. kawani@simpalgroup.com"
                     className="w-full border-0 bg-transparent text-slate-800 placeholder:text-slate-400 focus:outline-none"
                   />
                 </div>
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-700">Full Name</label>
+                <label className="text-xs font-bold text-slate-700">Buong Pangalan</label>
                 <input
                   type="text"
                   value={newEmployee.name}
                   onChange={(e) => setNewEmployee({ ...newEmployee, name: e.target.value })}
-                  placeholder="e.g. Juan Dela Cruz"
+                  placeholder="hal. Juan Dela Cruz"
                   className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-xs text-slate-800 placeholder:text-slate-400 focus:border-emerald-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-100 transition"
                 />
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-700">Company Entity</label>
+                  <label className="text-xs font-bold text-slate-700">Kumpanya</label>
                   <select
                     value={newEmployee.company}
                     onChange={(e) => {
@@ -1497,7 +1517,7 @@ export default function EmployeeDirectoryPanel({
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-700">Role / Designation</label>
+                  <label className="text-xs font-bold text-slate-700">Tungkulin / Posisyon</label>
                   <select
                     value={newEmployee.role}
                     onChange={(e) => setNewEmployee({ ...newEmployee, role: e.target.value })}
@@ -1510,10 +1530,10 @@ export default function EmployeeDirectoryPanel({
                 </div>
               </div>
 
-              {/* Optional Branch & Assigned HR to seamlessly support diversification */}
+              {/* Branch & Assigned HR seamlessly pre-filled */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-700">Branch / Location</label>
+                  <label className="text-xs font-bold text-slate-700">Sangay / Lokasyon</label>
                   <select
                     value={newEmployee.branch || DEFAULT_BRANCH_MAP[newEmployee.company] || "Head Office (Mandaue)"}
                     onChange={(e) => setNewEmployee({ ...newEmployee, branch: e.target.value })}
@@ -1526,7 +1546,7 @@ export default function EmployeeDirectoryPanel({
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-700">Assigned HR</label>
+                  <label className="text-xs font-bold text-slate-700">Itinalagang Opisyal ng HR</label>
                   <select
                     value={newEmployee.assigned_hr || currentProfile?.name || currentEmail || "H R M D (Head Office)"}
                     onChange={(e) => setNewEmployee({ ...newEmployee, assigned_hr: e.target.value })}
@@ -1548,8 +1568,8 @@ export default function EmployeeDirectoryPanel({
                   className="mt-0.5 h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
                 />
                 <label htmlFor="approveCheckbox" className="text-xs text-emerald-950 font-medium cursor-pointer">
-                  <strong className="block font-bold">Approve Immediately</strong>
-                  Permit this employee to activate their account and access the dashboard right away.
+                  <strong className="block font-bold">Aprubahan Agad ang Account</strong>
+                  Pahintulutan ang kawaning ito na i-aktiba ang kanilang account at makapag-login agad sa dashboard.
                 </label>
               </div>
 
@@ -1559,7 +1579,7 @@ export default function EmployeeDirectoryPanel({
                   onClick={() => setIsAddModalOpen(false)}
                   className="px-4 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50 transition cursor-pointer"
                 >
-                  Cancel
+                  Kanselahin
                 </button>
                 <button
                   type="submit"
@@ -1568,11 +1588,11 @@ export default function EmployeeDirectoryPanel({
                 >
                   {isSubmittingAdd ? (
                     <>
-                      <RefreshCw size={14} className="animate-spin" /> Registering...
+                      <RefreshCw size={14} className="animate-spin" /> Inirerehistro...
                     </>
                   ) : (
                     <>
-                      <UserPlus size={14} /> Complete Pre-Registration
+                      <UserPlus size={14} /> Kumpletuhin ang Pag-profile
                     </>
                   )}
                 </button>

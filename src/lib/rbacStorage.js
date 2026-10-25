@@ -151,6 +151,13 @@ export const IN_TAB_FEATURES_CONFIG = [
     description: "Authority to edit employee designations, diversify HR handler assignments, approve onboarding requests, and decommission profiles."
   },
   {
+    id: "comm_add_employee",
+    label: "Mag-profile / Magrehistro ng Bagong Kawani (Employee Profiling)",
+    parentTab: "communication",
+    belongsToLabel: "Enterprise Communication & Employee Portal",
+    description: "Nagbibigay-daan sa Branch HR at Administrator na mag-profile at magrehistro ng bagong kawani nang direkta mula sa Direktoryo ng mga Kawani sa Communications."
+  },
+  {
     id: "comm_attendance",
     label: "Access Shift Rosters & Attendance Overview",
     parentTab: "communication",
@@ -348,6 +355,7 @@ export const FACTORY_ROLE_TIER_PERMISSIONS = {
     comm_post_bulletin: true,
     comm_directory: true,
     comm_manage_profiles: true,
+    comm_add_employee: true,
     comm_attendance: true,
     comm_policies: true,
     schedule_corporate_meetings: true,
@@ -389,6 +397,7 @@ export const FACTORY_ROLE_TIER_PERMISSIONS = {
     comm_post_bulletin: true,
     comm_directory: true,
     comm_manage_profiles: true,
+    comm_add_employee: true,
     comm_attendance: true,
     comm_policies: true,
     schedule_corporate_meetings: true,
@@ -430,6 +439,7 @@ export const FACTORY_ROLE_TIER_PERMISSIONS = {
     comm_post_bulletin: false,
     comm_directory: true,
     comm_manage_profiles: false,
+    comm_add_employee: false,
     comm_attendance: true,
     comm_policies: true,
     schedule_corporate_meetings: false,
@@ -471,6 +481,7 @@ export const FACTORY_ROLE_TIER_PERMISSIONS = {
     comm_post_bulletin: false,
     comm_directory: true,
     comm_manage_profiles: false,
+    comm_add_employee: false,
     comm_attendance: false,
     comm_policies: true,
     schedule_corporate_meetings: false,
