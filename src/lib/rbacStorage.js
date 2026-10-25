@@ -505,26 +505,27 @@ export function classifyEmployeeRoleTier(employee) {
   const role = (employee?.role || "").toLowerCase().trim();
   const company = (employee?.company || "").toLowerCase().trim();
 
-  // 1. System Administrator / HR Administrator
+  // 1. System Administrator / Head Office Executive
   if (
     email === "admin@hrhub.com" ||
     email === "jay@simpalgroup.com" ||
-    email === "efilfonimda@gmail.com" ||
-    role === "hr administrator" ||
-    role.includes("administrator") ||
-    role.includes("executive") ||
-    role.includes("super")
+    role === "super administrator" ||
+    role === "executive" ||
+    role.includes("super admin")
   ) {
     return "system_admin";
   }
 
-  // 2. HR & Compliance Administrator
+  // 2. Branch HR & Compliance Administrator
   if (
     role.includes("hr") ||
     role.includes("compliance") ||
     role.includes("people") ||
+    role.includes("specialist") ||
+    role.includes("administrator") ||
     email.includes("quennie") ||
-    email.includes("remark")
+    email.includes("remark") ||
+    email.includes("efilfonimda")
   ) {
     return "hr_admin";
   }
@@ -752,6 +753,8 @@ export function toggleCapability(type, targetId, capId, nextValue) {
 
   data.lastSyncedAt = new Date().toISOString();
   saveRbacMatrixData(data);
+  // Instantly auto-sync to cloud so changes take effect globally across all workstations
+  syncMatrixToCloud().catch((err) => console.debug("[rbacStorage] Auto-sync notice:", err?.message));
   return data;
 }
 
@@ -778,38 +781,42 @@ export async function syncMatrixToCloud() {
 /**
  * Verify whether a logged-in user is authorized to view a specific workspace tab
  */
-export function isUserTabAllowed(user, tabKey) {
+export function isUserTabAllowed(user, tabKey, passedMatrix = null) {
   if (!user) return true;
 
   const email = (user.email || "").toLowerCase().trim();
-  if (email === "admin@hrhub.com" || email === "jay@simpalgroup.com") return true;
+  const matrix = passedMatrix || getRbacMatrixData();
 
-  const matrix = getRbacMatrixData();
-  const roleTier = classifyEmployeeRoleTier(user);
+  // Safety protection: ensure master administrator can access permission matrix to avoid lockouts
+  if (tabKey === "permission_matrix" && (email === "admin@hrhub.com" || email === "jay@simpalgroup.com")) {
+    return true;
+  }
 
-  // Check account override first
-  if (matrix.accountOverrides?.[email] && typeof matrix.accountOverrides[email][tabKey] === "boolean") {
+  // 1. Check account override first (individual account policy set by Head Office)
+  if (matrix?.accountOverrides?.[email] && typeof matrix.accountOverrides[email][tabKey] === "boolean") {
     return matrix.accountOverrides[email][tabKey];
   }
 
+  // 2. Fall back to user's assigned role tier
+  const roleTier = classifyEmployeeRoleTier(user);
   return getEffectiveCapability("role", roleTier, tabKey, matrix);
 }
 
 /**
  * Verify whether a logged-in user is authorized to perform a specific in-tab feature
  */
-export function isUserFeatureAllowed(user, featureKey) {
+export function isUserFeatureAllowed(user, featureKey, passedMatrix = null) {
   if (!user) return true;
 
   const email = (user.email || "").toLowerCase().trim();
-  if (email === "admin@hrhub.com" || email === "jay@simpalgroup.com") return true;
+  const matrix = passedMatrix || getRbacMatrixData();
 
-  const matrix = getRbacMatrixData();
-  const roleTier = classifyEmployeeRoleTier(user);
-
-  if (matrix.accountOverrides?.[email] && typeof matrix.accountOverrides[email][featureKey] === "boolean") {
+  // 1. Check account override first
+  if (matrix?.accountOverrides?.[email] && typeof matrix.accountOverrides[email][featureKey] === "boolean") {
     return matrix.accountOverrides[email][featureKey];
   }
 
+  // 2. Fall back to user's assigned role tier
+  const roleTier = classifyEmployeeRoleTier(user);
   return getEffectiveCapability("role", roleTier, featureKey, matrix);
 }

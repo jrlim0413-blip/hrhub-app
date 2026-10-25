@@ -30,7 +30,9 @@ import TeamChatMessengerModal from "../components/TeamChatMessengerModal";
 import {
   isUserTabAllowed,
   isUserFeatureAllowed,
-  getRbacMatrixData
+  getRbacMatrixData,
+  loadRbacMatrixFromCloud,
+  saveRbacMatrixData
 } from "../lib/rbacStorage";
 import { mergeProfilesWithStored, deleteStoredEmployee, fetchEmployeesFromDatabase } from "../lib/employeeStorage";
 import {
@@ -434,27 +436,57 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
   // Enterprise RBAC Capabilities State for Head Office Governance
   const [matrixData, setMatrixData] = useState(() => getRbacMatrixData());
   useEffect(() => {
+    // 1. Initial async sync from cloud database
+    loadRbacMatrixFromCloud().then((cloudData) => {
+      if (cloudData) setMatrixData(cloudData);
+    });
+
+    // 2. Listen to local window events
     const handleRbacUpdate = (e) => {
       if (e.detail) {
         setMatrixData(e.detail);
       }
     };
     window.addEventListener("hrhub_rbac_updated", handleRbacUpdate);
-    return () => window.removeEventListener("hrhub_rbac_updated", handleRbacUpdate);
+
+    // 3. Listen to Supabase Realtime for instant multi-device matrix synchronization
+    let channel = null;
+    if (supabase) {
+      channel = supabase
+        .channel("realtime_rbac_sync_dashboard")
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "user_settings" },
+          (payload) => {
+            if (payload?.new?.user_id === "hrhub_rbac_matrix_master" && payload?.new?.settings_json) {
+              saveRbacMatrixData(payload.new.settings_json);
+              setMatrixData(payload.new.settings_json);
+            }
+          }
+        )
+        .subscribe();
+    }
+
+    return () => {
+      window.removeEventListener("hrhub_rbac_updated", handleRbacUpdate);
+      if (channel && supabase) {
+        supabase.removeChannel(channel);
+      }
+    };
   }, []);
 
-  const currentUserObj = {
+  const currentUserObj = useMemo(() => ({
     email: (currentUser?.email || profileEmail || "").toLowerCase().trim(),
     role: profileRole || currentUser?.role || "Team Member",
     company: profileCompany || currentUser?.company || "Simpal Group of Companies"
-  };
+  }), [currentUser, profileEmail, profileRole, profileCompany]);
 
-  const isCommWorkspaceAllowed = isUserTabAllowed(currentUserObj, "communication");
-  const canViewBulletin = isUserFeatureAllowed(currentUserObj, "comm_bulletin");
-  const canPostBulletin = isUserFeatureAllowed(currentUserObj, "comm_post_bulletin");
-  const canViewDirectory = isUserFeatureAllowed(currentUserObj, "comm_directory");
-  const canViewAttendance = isUserFeatureAllowed(currentUserObj, "comm_attendance");
-  const canViewPolicies = isUserFeatureAllowed(currentUserObj, "comm_policies");
+  const isCommWorkspaceAllowed = isUserTabAllowed(currentUserObj, "communication", matrixData);
+  const canViewBulletin = isUserFeatureAllowed(currentUserObj, "comm_bulletin", matrixData);
+  const canPostBulletin = isUserFeatureAllowed(currentUserObj, "comm_post_bulletin", matrixData);
+  const canViewDirectory = isUserFeatureAllowed(currentUserObj, "comm_directory", matrixData);
+  const canViewAttendance = isUserFeatureAllowed(currentUserObj, "comm_attendance", matrixData);
+  const canViewPolicies = isUserFeatureAllowed(currentUserObj, "comm_policies", matrixData);
 
   // Automatically select the first authorized sub-tab if active sub-tab is restricted
   useEffect(() => {

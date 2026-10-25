@@ -206,8 +206,6 @@ export default function EmployeeDirectoryPanel({
   // Pre-Registration Permission Check (Restricted strictly to HR Administrator / system_admin by default, dynamically overridable in RBAC matrix)
   const canPreRegister = useMemo(() => {
     const curEmail = (currentEmail || "").toLowerCase().trim();
-    if (curEmail === "admin@hrhub.com" || curEmail === "jay@simpalgroup.com") return true;
-
     const userObj = {
       email: curEmail,
       role: currentProfile?.role || "Team Member",
@@ -215,16 +213,14 @@ export default function EmployeeDirectoryPanel({
     };
 
     return (
-      isUserFeatureAllowed(userObj, "pre_register_employee") ||
-      isUserTabAllowed(userObj, "employee_pre_registration")
+      isUserFeatureAllowed(userObj, "pre_register_employee", matrixData) ||
+      isUserTabAllowed(userObj, "employee_pre_registration", matrixData)
     );
   }, [currentEmail, currentProfile, matrixData]);
 
   // Profile Administration Permission Check (Edit, Approve, Decommission)
   const canManageProfiles = useMemo(() => {
     const curEmail = (currentEmail || "").toLowerCase().trim();
-    if (curEmail === "admin@hrhub.com" || curEmail === "jay@simpalgroup.com") return true;
-
     const userObj = {
       email: curEmail,
       role: currentProfile?.role || "Team Member",
@@ -232,8 +228,8 @@ export default function EmployeeDirectoryPanel({
     };
 
     return (
-      isUserFeatureAllowed(userObj, "comm_manage_profiles") ||
-      isUserFeatureAllowed(userObj, "provision_employee_records")
+      isUserFeatureAllowed(userObj, "comm_manage_profiles", matrixData) ||
+      isUserFeatureAllowed(userObj, "provision_employee_records", matrixData)
     );
   }, [currentEmail, currentProfile, matrixData]);
 
