@@ -1,6 +1,57 @@
 import { supabase } from "./supabase";
 
 const LOCAL_STORAGE_KEY = "hrhub_incident_reports_v1";
+const CLOUD_BACKUP_KEY = "master_incident_reports_hub";
+
+// Broadcast channel for instantaneous cross-tab synchronization
+let liveBroadcastChannel = null;
+try {
+  if (typeof window !== "undefined" && window.BroadcastChannel) {
+    liveBroadcastChannel = new BroadcastChannel("hrhub_incident_reports_live_sync");
+  }
+} catch (e) {
+  // Ignore fallback
+}
+
+/**
+ * Subscribe to live report broadcasts across browser tabs
+ */
+export function subscribeToLiveReports(onUpdate) {
+  if (liveBroadcastChannel) {
+    const handleMsg = (e) => {
+      if (e.data?.reports && Array.isArray(e.data.reports)) {
+        onUpdate(e.data.reports, e.data.action, e.data.target);
+      }
+    };
+    liveBroadcastChannel.addEventListener("message", handleMsg);
+    return () => liveBroadcastChannel.removeEventListener("message", handleMsg);
+  }
+  return () => {};
+}
+
+/**
+ * Normalizes an incident report row from Supabase
+ */
+export function normalizeIncidentReport(d) {
+  if (!d) return null;
+  return {
+    ...d,
+    id: d.id,
+    caseNumber: d.case_number || d.caseNumber || d.id,
+    senderCompany: d.sender_company || d.senderCompany || d.company || "5A Royal Gaming OPC",
+    company: d.company || d.sender_company || d.senderCompany || "5A Royal Gaming OPC",
+    receiverCompany: d.receiver_company || d.receiverCompany || "Simpal Group of Companies",
+    senderHrName: d.sender_hr_name || d.senderHrName || d.reporting_hr_name || "Branch HR",
+    receiverHrName: d.receiver_hr_name || d.receiverHrName || "JEVINCE JAYE S. JUBAY, CHRP",
+    dateOfIncident: d.date_of_incident || d.dateOfIncident,
+    dateReported: d.date_reported || d.dateReported,
+    reportingHrName: d.reporting_hr_name || d.reportingHrName,
+    reportingHrTitle: d.reporting_hr_title || d.reportingHrTitle,
+    employeeName: d.employee_name || d.employeeName,
+    employeePosition: d.employee_position || d.employeePosition,
+    activityLog: Array.isArray(d.activity_log) ? d.activity_log : (d.activityLog || [])
+  };
+}
 
 /**
  * Looks up the assigned HR personnel for a given company from the Employee Directory profiles
@@ -39,7 +90,7 @@ export function lookupAssignedHrForCompany(companyName, profiles = []) {
     };
   }
 
-  // Sensible defaults based on known entity assignments
+  // Known entity assignments
   if (norm.includes("5a") || norm.includes("royal")) {
     return {
       name: "Ms. Quennie R. Capuyan",
@@ -110,8 +161,8 @@ function getLocalReports() {
     }
     const parsed = JSON.parse(raw);
     if (Array.isArray(parsed)) {
-      // Purge old mock records (like IR-2026-09-001)
-      const clean = parsed.filter((r) => r.id !== "IR-2026-09-001");
+      // Purge old mock records
+      const clean = parsed.filter((r) => r.id !== "IR-2026-09-001" && !r.isSample && !r.isMock);
       if (clean.length !== parsed.length) {
         localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(clean));
       }
@@ -133,56 +184,56 @@ function saveLocalReports(reports) {
 }
 
 /**
- * Fetch all incident reports (Supabase first, fallback to LocalStorage)
+ * Fetch all incident reports (Dedicated Supabase table first, followed by Cloud user_settings backup)
  */
 export async function fetchIncidentReports() {
   try {
     if (supabase) {
-      const { data, error } = await supabase
+      // 1. Check dedicated Supabase table 'incident_reports'
+      const { data: dedicatedData, error: dedicatedErr } = await supabase
         .from("incident_reports")
         .select("*")
         .order("created_at", { ascending: false });
 
-      if (!error && Array.isArray(data) && data.length > 0) {
-        // Normalize fields if needed
-        const normalized = data.map((d) => ({
-          ...d,
-          caseNumber: d.case_number || d.caseNumber || d.id,
-          senderCompany: d.sender_company || d.senderCompany || d.company,
-          senderHrName: d.sender_hr_name || d.senderHrName || d.reporting_hr_name,
-          receiverCompany: d.receiver_company || d.receiverCompany || "Simpal Group of Companies",
-          receiverHrName: d.receiver_hr_name || d.receiverHrName || "JEVINCE JAYE S. JUBAY, CHRP",
-          dateOfIncident: d.date_of_incident || d.dateOfIncident,
-          dateReported: d.date_reported || d.dateReported,
-          reportingHrName: d.reporting_hr_name || d.reportingHrName,
-          reportingHrTitle: d.reporting_hr_title || d.reportingHrTitle,
-          employeeName: d.employee_name || d.employeeName,
-          employeePosition: d.employee_position || d.employeePosition,
-          activityLog: Array.isArray(d.activity_log) ? d.activity_log : (d.activityLog || [])
-        }));
+      if (!dedicatedErr && Array.isArray(dedicatedData) && dedicatedData.length > 0) {
+        const normalized = dedicatedData.map(normalizeIncidentReport);
+        saveLocalReports(normalized);
+        return normalized;
+      }
+
+      // 2. Guaranteed Cloud Fallback: Query 'user_settings' for master incident reports
+      const { data: cloudBackup, error: backupErr } = await supabase
+        .from("user_settings")
+        .select("settings_json")
+        .eq("user_id", CLOUD_BACKUP_KEY)
+        .maybeSingle();
+
+      if (!backupErr && cloudBackup?.settings_json?.reports && Array.isArray(cloudBackup.settings_json.reports)) {
+        const normalized = cloudBackup.settings_json.reports.map(normalizeIncidentReport);
         saveLocalReports(normalized);
         return normalized;
       }
     }
   } catch (err) {
-    console.debug("[incidentReportStorage] Supabase query fallback to local:", err?.message);
+    console.debug("[incidentReportStorage] Cloud query notice:", err?.message);
   }
 
   return getLocalReports();
 }
 
 /**
- * Save or update an incident report
+ * Save or update an incident report with multi-destination persistence and live broadcast
  */
 export async function saveIncidentReport(report) {
   const current = getLocalReports();
   const nowIso = new Date().toISOString();
-  
+
   const updatedReport = {
     ...report,
     id: report.id || `IR-${Date.now().toString().slice(-6)}`,
     caseNumber: report.caseNumber || report.id || `IR-${Date.now().toString().slice(-6)}`,
     senderCompany: report.senderCompany || report.company || "5A Royal Gaming OPC",
+    company: report.company || report.senderCompany || "5A Royal Gaming OPC",
     receiverCompany: report.receiverCompany || "Simpal Group of Companies",
     updatedAt: nowIso,
     createdAt: report.createdAt || nowIso
@@ -199,9 +250,23 @@ export async function saveIncidentReport(report) {
 
   saveLocalReports(updatedList);
 
-  // Attempt sync with Supabase (non-blocking)
-  try {
-    if (supabase) {
+  // Broadcast instantly to all other open tabs on this browser
+  if (liveBroadcastChannel) {
+    try {
+      liveBroadcastChannel.postMessage({
+        reports: updatedList,
+        action: "UPSERT",
+        target: updatedReport
+      });
+    } catch (e) {
+      // Ignore broadcast error
+    }
+  }
+
+  // Cloud Persistence (both dedicated table & guaranteed user_settings backup)
+  if (supabase) {
+    // Destination A: Dedicated 'incident_reports' table
+    try {
       await supabase.from("incident_reports").upsert({
         id: updatedReport.id,
         case_number: updatedReport.caseNumber,
@@ -213,6 +278,8 @@ export async function saveIncidentReport(report) {
         employee_name: updatedReport.employeeName,
         employee_position: updatedReport.employeePosition,
         company: updatedReport.company || updatedReport.senderCompany,
+        sender_company: updatedReport.senderCompany || updatedReport.company,
+        receiver_company: updatedReport.receiverCompany || "Simpal Group of Companies",
         branch: updatedReport.branch,
         incident_category: updatedReport.incidentCategory,
         cash_shortage_amount: updatedReport.cashShortageAmount,
@@ -224,9 +291,23 @@ export async function saveIncidentReport(report) {
         created_at: updatedReport.createdAt,
         updated_at: updatedReport.updatedAt
       });
+    } catch (errA) {
+      console.debug("[incidentReportStorage] Supabase table upsert notice:", errA?.message);
     }
-  } catch (err) {
-    console.debug("[incidentReportStorage] Supabase upsert failed silently:", err?.message);
+
+    // Destination B: Guaranteed backup in 'user_settings'
+    try {
+      await supabase.from("user_settings").upsert({
+        user_id: CLOUD_BACKUP_KEY,
+        settings_json: {
+          reports: updatedList,
+          lastUpdated: nowIso
+        },
+        updated_at: nowIso
+      }, { onConflict: "user_id" });
+    } catch (errB) {
+      console.debug("[incidentReportStorage] Supabase backup upsert notice:", errB?.message);
+    }
   }
 
   return updatedReport;
@@ -240,12 +321,28 @@ export async function deleteIncidentReport(id) {
   const filtered = current.filter((r) => r.id !== id);
   saveLocalReports(filtered);
 
-  try {
-    if (supabase) {
+  if (liveBroadcastChannel) {
+    liveBroadcastChannel.postMessage({ reports: filtered, action: "DELETE", targetId: id });
+  }
+
+  if (supabase) {
+    try {
       await supabase.from("incident_reports").delete().eq("id", id);
+    } catch (err) {
+      console.debug("[incidentReportStorage] Supabase delete warning:", err?.message);
     }
-  } catch (err) {
-    console.debug("[incidentReportStorage] Supabase delete warning:", err?.message);
+    try {
+      await supabase.from("user_settings").upsert({
+        user_id: CLOUD_BACKUP_KEY,
+        settings_json: {
+          reports: filtered,
+          lastUpdated: new Date().toISOString()
+        },
+        updated_at: new Date().toISOString()
+      }, { onConflict: "user_id" });
+    } catch (err) {
+      // Ignore
+    }
   }
 
   return filtered;
@@ -256,12 +353,30 @@ export async function deleteIncidentReport(id) {
  */
 export async function clearAllIncidentReports() {
   saveLocalReports([]);
-  try {
-    if (supabase) {
-      await supabase.from("incident_reports").delete().neq("id", "keep_schema_intact");
-    }
-  } catch (err) {
-    console.debug("[incidentReportStorage] Supabase clear warning:", err?.message);
+
+  if (liveBroadcastChannel) {
+    liveBroadcastChannel.postMessage({ reports: [], action: "CLEAR" });
   }
+
+  if (supabase) {
+    try {
+      await supabase.from("incident_reports").delete().neq("id", "keep_schema_intact");
+    } catch (err) {
+      console.debug("[incidentReportStorage] Supabase clear warning:", err?.message);
+    }
+    try {
+      await supabase.from("user_settings").upsert({
+        user_id: CLOUD_BACKUP_KEY,
+        settings_json: {
+          reports: [],
+          lastUpdated: new Date().toISOString()
+        },
+        updated_at: new Date().toISOString()
+      }, { onConflict: "user_id" });
+    } catch (err) {
+      // Ignore
+    }
+  }
+
   return [];
 }

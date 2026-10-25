@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import {
   ShieldAlert,
   FileText,
@@ -32,16 +32,19 @@ import {
   SendHorizontal,
   Info,
   Scale,
-  Trash2
+  Trash2,
+  RefreshCw
 } from "lucide-react";
 import {
   fetchIncidentReports,
   saveIncidentReport,
   deleteIncidentReport,
   clearAllIncidentReports,
+  subscribeToLiveReports,
   lookupAssignedHrForCompany,
   lookupSgcCentralHr
 } from "../lib/incidentReportStorage";
+import { supabase } from "../lib/supabase";
 import {
   resolveUserHrRole,
   ROLE_PERMISSION_MATRIX,
@@ -153,17 +156,79 @@ export default function IncidentReportPanel({
     }));
   };
 
-  // Load records
-  const loadRecords = async () => {
-    setLoading(true);
-    const data = await fetchIncidentReports();
-    setReports(data);
-    setLoading(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [lastSyncedTime, setLastSyncedTime] = useState("");
+  const prevPendingCountRef = useRef(null);
+
+  // Load records (with optional silent background mode)
+  const loadRecords = async (isSilent = false) => {
+    if (!isSilent) setIsRefreshing(true);
+    try {
+      const data = await fetchIncidentReports();
+      setReports(data);
+      setLastSyncedTime(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
+
+      // Voice notification for Head Office when incoming report arrives
+      const incomingCount = data.filter((r) => r.status === "SUBMITTED_TO_CENTRAL_HR").length;
+      if (effectiveRole.isHeadOffice && prevPendingCountRef.current !== null) {
+        if (incomingCount > prevPendingCountRef.current) {
+          playAiVoiceAnnouncement("New Incident Report incoming from branch HR! Awaiting Notice to Explain evaluation.");
+        }
+      }
+      prevPendingCountRef.current = incomingCount;
+    } catch (err) {
+      console.warn("Failed to load incident reports:", err);
+    } finally {
+      if (!isSilent) {
+        setLoading(false);
+        setIsRefreshing(false);
+      }
+    }
   };
 
+  // Real-time synchronization: Supabase postgres_changes + BroadcastChannel + Auto-polling
   useEffect(() => {
-    loadRecords();
-  }, []);
+    loadRecords(false);
+
+    // 1. Cross-tab instant broadcast listener
+    const unsubBroadcast = subscribeToLiveReports((liveList) => {
+      setReports(liveList);
+      setLastSyncedTime(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
+    });
+
+    // 2. Supabase Realtime channel subscription
+    let realtimeChannel = null;
+    try {
+      if (supabase) {
+        realtimeChannel = supabase
+          .channel("realtime-incident-reports-desk")
+          .on("postgres_changes", { event: "*", schema: "public", table: "incident_reports" }, () => {
+            loadRecords(true);
+          })
+          .on("postgres_changes", { event: "*", schema: "public", table: "user_settings" }, (payload) => {
+            if (payload.new?.user_id === "master_incident_reports_hub") {
+              loadRecords(true);
+            }
+          })
+          .subscribe();
+      }
+    } catch (realtimeErr) {
+      console.debug("Realtime channel subscription notice:", realtimeErr?.message);
+    }
+
+    // 3. Resilient background auto-polling (every 3.5 seconds)
+    const pollInterval = setInterval(() => {
+      loadRecords(true);
+    }, 3500);
+
+    return () => {
+      clearInterval(pollInterval);
+      unsubBroadcast();
+      if (realtimeChannel && supabase) {
+        supabase.removeChannel(realtimeChannel);
+      }
+    };
+  }, [effectiveRole.isHeadOffice]);
 
   // Voice toggle handler
   const handleToggleVoice = () => {
@@ -553,6 +618,17 @@ export default function IncidentReportPanel({
               <span>Transmit IR ➔ Head Office</span>
             </button>
           )}
+
+          <button
+            type="button"
+            onClick={() => loadRecords(false)}
+            disabled={isRefreshing}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 transition cursor-pointer shadow-2xs disabled:opacity-50"
+            title={`Realtime Feed Live. Last synchronized: ${lastSyncedTime || "just now"}`}
+          >
+            <RefreshCw size={13} className={isRefreshing ? "animate-spin text-emerald-600" : "text-slate-500"} />
+            <span className="hidden sm:inline">{isRefreshing ? "Syncing..." : "Sync Cloud"}</span>
+          </button>
 
           <button
             type="button"

@@ -85,14 +85,17 @@ export function resolveUserHrRole(user, profiles = []) {
 
   // Head Office checks:
   // Accounts whose company is explicitly "Simpal Group of Companies" / SGC Head Office,
-  // or admin accounts (admin@hrhub.com, jay@simpalgroup.com, hrmd)
+  // or executive admin accounts (admin@hrhub.com, jay@simpalgroup.com, efilfonimda@gmail.com, hrmd)
   const isHeadOffice =
-    normCompany.includes("simpal group") ||
-    normCompany === "sgc" ||
+    (normCompany.includes("simpal") && !normCompany.includes("construction")) ||
+    normCompany.includes("sgc") ||
     normCompany.includes("head office") ||
     email === "admin@hrhub.com" ||
     email === "jay@simpalgroup.com" ||
-    email.includes("hrmd");
+    email === "efilfonimda@gmail.com" ||
+    email.includes("hrmd") ||
+    (registeredRole || "").toLowerCase().includes("head office") ||
+    (registeredRole || "").toLowerCase().includes("hrmd");
 
   const roleType = isHeadOffice
     ? HR_ROLE_TYPES.HEAD_OFFICE_HRMD
