@@ -104,6 +104,7 @@ export default function IncidentReportPanel({
   const [isPermissionMatrixOpen, setIsPermissionMatrixOpen] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isIrViewerOpen, setIsIrViewerOpen] = useState(false);
+  const [irPaperFormat, setIrPaperFormat] = useState("A4"); // "A4" (Standard) | "LONG" (Long)
   const [isNteViewerOpen, setIsNteViewerOpen] = useState(false);
   const [isNteDraftModalOpen, setIsNteDraftModalOpen] = useState(false);
   const [isExplanationModalOpen, setIsExplanationModalOpen] = useState(false);
@@ -1274,9 +1275,15 @@ export default function IncidentReportPanel({
     setIsIrViewerOpen(true);
   };
 
-  // Print Document Trigger: Dedicated Long Bond Paper (8.5in x 13in) Printing
+  // Print Document Trigger: Dynamically supports Standard (A4) and Long paper formats in 1 page
   const handlePrintDocument = () => {
-    const styleId = "long-bond-paper-print-style";
+    const isA4 = irPaperFormat === "A4";
+    const pageSize = isA4 ? "A4 portrait" : "8.5in 13in portrait";
+    const paperWidth = isA4 ? "210mm" : "8.5in";
+    const paperHeight = isA4 ? "297mm" : "13in";
+    const printPadding = isA4 ? "7mm 9mm 6mm 9mm" : "9mm 11mm 7mm 11mm";
+
+    const styleId = "dynamic-bond-paper-print-style";
     let styleEl = document.getElementById(styleId);
     if (!styleEl) {
       styleEl = document.createElement("style");
@@ -1285,14 +1292,14 @@ export default function IncidentReportPanel({
     }
     styleEl.innerHTML = `
       @page {
-        size: 8.5in 13in portrait !important;
+        size: ${pageSize} !important;
         margin: 0 !important;
       }
       @media print {
         html, body {
-          width: 8.5in !important;
-          height: 13in !important;
-          max-height: 13in !important;
+          width: ${paperWidth} !important;
+          height: ${paperHeight} !important;
+          max-height: ${paperHeight} !important;
           margin: 0 !important;
           padding: 0 !important;
           background: #ffffff !important;
@@ -1316,13 +1323,13 @@ export default function IncidentReportPanel({
           position: fixed !important;
           left: 0 !important;
           top: 0 !important;
-          width: 8.5in !important;
-          height: 13in !important;
-          max-width: 8.5in !important;
-          max-height: 13in !important;
+          width: ${paperWidth} !important;
+          height: ${paperHeight} !important;
+          max-width: ${paperWidth} !important;
+          max-height: ${paperHeight} !important;
           box-sizing: border-box !important;
           margin: 0 !important;
-          padding: 10mm 12mm 8mm 12mm !important;
+          padding: ${printPadding} !important;
           background: #ffffff !important;
           border: none !important;
           box-shadow: none !important;
@@ -1331,6 +1338,8 @@ export default function IncidentReportPanel({
           overflow: hidden !important;
           page-break-inside: avoid !important;
           break-inside: avoid !important;
+          page-break-after: avoid !important;
+          break-after: avoid !important;
           z-index: 999999 !important;
         }
       }
@@ -3073,15 +3082,38 @@ export default function IncidentReportPanel({
         <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-sm flex items-start justify-center p-2 sm:p-4 md:p-6 overflow-y-auto">
           <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-4xl w-full h-[90vh] sm:h-[92vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200 my-auto">
             {/* Modal Controls Bar - COMPLETELY HIDDEN WHEN PRINTING */}
-            <div className="px-5 py-3 border-b border-slate-200 bg-slate-100 flex items-center justify-between shrink-0 no-print">
+            <div className="px-5 py-3 border-b border-slate-200 bg-slate-100 flex flex-wrap items-center justify-between gap-3 shrink-0 no-print">
               <div className="flex items-center gap-2.5">
                 <span className="font-mono text-xs font-bold bg-white px-2 py-0.5 rounded border border-slate-300 text-slate-800">
                   {selectedReport.caseNumber}
                 </span>
                 <span className="text-xs font-bold text-slate-700">Official Incident Report Form</span>
-                <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100 border border-emerald-300 px-2.5 py-0.5 rounded-full hidden sm:inline-flex items-center gap-1">
-                  📄 Philippine Long Bond Paper (8.5" × 13")
-                </span>
+
+                {/* Seamless Format Toggle (Standard A4 default / Long option) */}
+                <div className="flex items-center bg-slate-200/90 p-0.5 rounded-lg text-xs font-semibold ml-1">
+                  <button
+                    type="button"
+                    onClick={() => setIrPaperFormat("A4")}
+                    className={`px-2.5 py-1 rounded-md transition cursor-pointer ${
+                      irPaperFormat === "A4"
+                        ? "bg-white text-slate-900 shadow-xs font-bold"
+                        : "text-slate-600 hover:text-slate-900"
+                    }`}
+                  >
+                    Standard
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIrPaperFormat("LONG")}
+                    className={`px-2.5 py-1 rounded-md transition cursor-pointer ${
+                      irPaperFormat === "LONG"
+                        ? "bg-white text-slate-900 shadow-xs font-bold"
+                        : "text-slate-600 hover:text-slate-900"
+                    }`}
+                  >
+                    Long
+                  </button>
+                </div>
               </div>
 
               <div className="flex items-center gap-2">
@@ -3106,7 +3138,7 @@ export default function IncidentReportPanel({
                   className="px-4 py-1.5 rounded-lg text-xs font-bold bg-[#8cb84a] hover:bg-[#7ea741] text-white transition cursor-pointer inline-flex items-center gap-1.5 shadow-sm active:scale-95"
                 >
                   <Printer size={15} />
-                  <span>Print Bond Paper (Long)</span>
+                  <span>Print Document</span>
                 </button>
 
                 <button
@@ -3120,13 +3152,17 @@ export default function IncidentReportPanel({
             </div>
 
             {/* Authentic Printable Document Container */}
-            <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-8 pb-32 sm:pb-44 bg-slate-300/60 flex justify-center custom-scrollbar">
+            <div className="flex-1 min-h-0 overflow-y-auto p-3 sm:p-6 pb-24 sm:pb-36 bg-slate-300/60 flex justify-center custom-scrollbar">
               <div 
                 id="printable-incident-report-sheet"
-                className="bg-white w-full max-w-[816px] min-h-[1248px] p-6 sm:p-10 shadow-2xl border border-slate-300 rounded-xs text-slate-900 font-sans relative flex flex-col justify-between"
+                className={`bg-white w-full shadow-2xl border border-slate-300 rounded-xs text-slate-900 font-sans relative flex flex-col justify-between transition-all duration-150 ${
+                  irPaperFormat === "A4"
+                    ? "max-w-[794px] min-h-[1123px] p-5 sm:p-7"
+                    : "max-w-[816px] min-h-[1248px] p-6 sm:p-9"
+                }`}
               >
                 {/* Top Right Corner Geometric Diagonal Stripes */}
-                <div className="absolute top-0 right-0 w-36 h-28 pointer-events-none overflow-hidden">
+                <div className="absolute top-0 right-0 w-32 h-24 pointer-events-none overflow-hidden">
                   <svg className="w-full h-full" viewBox="0 0 144 112" fill="none">
                     <polygon points="60,0 144,0 144,84" fill="#0f2b48" />
                     <polygon points="38,0 52,0 144,72 144,84" fill="#c81e1e" />
@@ -3134,57 +3170,57 @@ export default function IncidentReportPanel({
                   </svg>
                 </div>
 
-                <div className="space-y-5 relative z-10">
+                <div className="space-y-2.5 sm:space-y-3 relative z-10">
                   {/* ============================================================== */}
                   {/* HEADER SECTION: LOGO + TITLE + REPORT NO / DATE FILED BOX      */}
                   {/* ============================================================== */}
-                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-slate-200">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-2.5 border-b border-slate-200">
                     {/* Left: Company Logo & Branding */}
                     <div className="flex items-center gap-3">
                       {/* Official Lucky Betplay Sun Logo */}
                       <img
                         src="/logos/lucky_betplay_sun.png"
                         alt="Lucky Betplay Corporation Logo"
-                        className="w-16 h-16 sm:w-20 sm:h-20 object-contain shrink-0"
+                        className="w-14 h-14 sm:w-16 sm:h-16 object-contain shrink-0"
                       />
 
                       <div>
-                        <h2 className="text-lg sm:text-xl font-black tracking-tight text-[#c81e1e] uppercase leading-none">
+                        <h2 className="text-base sm:text-lg font-black tracking-tight text-[#c81e1e] uppercase leading-none">
                           {selectedReport.senderCompany || selectedReport.company || "LUCKY BETPLAY"}
                         </h2>
-                        <div className="flex items-center gap-1.5 mt-1">
-                          <div className="w-3.5 h-0.5 bg-[#0f2b48]" />
+                        <div className="flex items-center gap-1 mt-1">
+                          <div className="w-3 h-0.5 bg-[#0f2b48]" />
                           <span className="text-[9px] font-black uppercase tracking-[0.22em] text-[#0f2b48]">
                             CORPORATION
                           </span>
-                          <div className="w-3.5 h-0.5 bg-[#0f2b48]" />
+                          <div className="w-3 h-0.5 bg-[#0f2b48]" />
                         </div>
                       </div>
                     </div>
 
                     {/* Center: Main Title Block */}
-                    <div className="border-l-2 border-[#0f2b48] pl-4 sm:pl-5 my-auto">
-                      <h1 className="text-xl sm:text-2xl font-black uppercase tracking-wider text-[#0f2b48] leading-none">
+                    <div className="border-l-2 border-[#0f2b48] pl-3 sm:pl-4 my-auto">
+                      <h1 className="text-lg sm:text-xl font-black uppercase tracking-wider text-[#0f2b48] leading-none">
                         INCIDENT REPORT
                       </h1>
-                      <div className="text-[11px] sm:text-xs font-semibold uppercase tracking-[0.25em] text-slate-600 mt-0.5">
+                      <div className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-[0.25em] text-slate-600 mt-0.5">
                         EMPLOYEE VIOLATION
                       </div>
-                      <p className="text-[10px] italic text-slate-500 mt-0.5">
+                      <p className="text-[9px] sm:text-[10px] italic text-slate-500 mt-0.5">
                         A safe and respectful workplace is everyone's responsibility.
                       </p>
                     </div>
 
                     {/* Right: Report No. & Date Filed Box */}
-                    <div className="bg-[#f0f4f9] border border-[#d2e0ee] rounded-md p-2.5 min-w-[180px] text-xs font-semibold text-slate-800 space-y-1.5 shrink-0 self-start sm:self-center">
+                    <div className="bg-[#f0f4f9] border border-[#d2e0ee] rounded-md p-2 min-w-[170px] text-[11px] font-semibold text-slate-800 space-y-1 shrink-0 self-start sm:self-center">
                       <div className="flex items-center gap-1.5">
-                        <span className="text-[10px] uppercase font-bold text-slate-500 min-w-[70px]">Report No. :</span>
+                        <span className="text-[9px] uppercase font-bold text-slate-500 min-w-[65px]">Report No. :</span>
                         <span className="font-mono font-bold text-[#0f2b48] border-b border-slate-300 flex-1 pb-0.5">
                           {selectedReport.caseNumber}
                         </span>
                       </div>
                       <div className="flex items-center gap-1.5">
-                        <span className="text-[10px] uppercase font-bold text-slate-500 min-w-[70px]">Date Filed :</span>
+                        <span className="text-[9px] uppercase font-bold text-slate-500 min-w-[65px]">Date Filed :</span>
                         <span className="font-semibold text-slate-800 border-b border-slate-300 flex-1 pb-0.5">
                           {selectedReport.dateReported || selectedReport.createdAt?.slice(0, 10)}
                         </span>
@@ -3196,29 +3232,29 @@ export default function IncidentReportPanel({
                   {/* 1. EMPLOYEE INFORMATION                                        */}
                   {/* ============================================================== */}
                   <div className="space-y-0">
-                    <div className="bg-[#153459] text-white px-3.5 py-1.5 rounded-t-md font-black text-xs uppercase tracking-wider flex items-center gap-2">
-                      <User size={14} className="text-white" />
+                    <div className="bg-[#153459] text-white px-3 py-1 rounded-t-md font-black text-[11px] uppercase tracking-wider flex items-center gap-1.5">
+                      <User size={13} className="text-white" />
                       <span>EMPLOYEE INFORMATION</span>
                     </div>
 
-                    <div className="bg-[#f4f7fb] border border-t-0 border-[#d0dbe7] rounded-b-md p-3.5 sm:p-4 text-xs">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2.5">
+                    <div className="bg-[#f4f7fb] border border-t-0 border-[#d0dbe7] rounded-b-md p-2.5 sm:p-3 text-[11px]">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-1.5">
                         {/* Left Column */}
-                        <div className="space-y-2">
+                        <div className="space-y-1.5">
                           <div className="flex items-center gap-2">
-                            <span className="text-[11px] font-semibold text-slate-700 min-w-[85px]">Full Name :</span>
+                            <span className="text-[10px] font-semibold text-slate-700 min-w-[80px]">Full Name :</span>
                             <span className="font-bold text-slate-900 border-b border-slate-300 flex-1 pb-0.5">
                               {selectedReport.employeeName}
                             </span>
                           </div>
                           <div className="flex items-center gap-2">
-                            <span className="text-[11px] font-semibold text-slate-700 min-w-[85px]">Employee ID :</span>
+                            <span className="text-[10px] font-semibold text-slate-700 min-w-[80px]">Employee ID :</span>
                             <span className="font-semibold text-slate-900 border-b border-slate-300 flex-1 pb-0.5">
                               {selectedReport.employeeId || "—"}
                             </span>
                           </div>
                           <div className="flex items-center gap-2">
-                            <span className="text-[11px] font-semibold text-slate-700 min-w-[85px]">Position :</span>
+                            <span className="text-[10px] font-semibold text-slate-700 min-w-[80px]">Position :</span>
                             <span className="font-semibold text-slate-900 border-b border-slate-300 flex-1 pb-0.5">
                               {selectedReport.employeePosition || "Cashier"}
                             </span>
@@ -3226,15 +3262,15 @@ export default function IncidentReportPanel({
                         </div>
 
                         {/* Right Column */}
-                        <div className="space-y-2">
+                        <div className="space-y-1.5">
                           <div className="flex items-center gap-2">
-                            <span className="text-[11px] font-semibold text-slate-700 min-w-[115px]">Department / Unit :</span>
+                            <span className="text-[10px] font-semibold text-slate-700 min-w-[105px]">Department / Unit :</span>
                             <span className="font-semibold text-slate-900 border-b border-slate-300 flex-1 pb-0.5">
                               {selectedReport.department || "Finance & Operations"}
                             </span>
                           </div>
                           <div className="flex items-center gap-2">
-                            <span className="text-[11px] font-semibold text-slate-700 min-w-[115px]">Area / Branch :</span>
+                            <span className="text-[10px] font-semibold text-slate-700 min-w-[105px]">Area / Branch :</span>
                             <span className="font-semibold text-slate-900 border-b border-slate-300 flex-1 pb-0.5 truncate">
                               {selectedReport.branch || selectedReport.branchLocation || "Tacurong Branch"}
                             </span>
@@ -3248,50 +3284,50 @@ export default function IncidentReportPanel({
                   {/* 2. INCIDENT DETAILS                                            */}
                   {/* ============================================================== */}
                   <div className="space-y-0">
-                    <div className="bg-[#153459] text-white px-3.5 py-1.5 rounded-t-md font-black text-xs uppercase tracking-wider flex items-center gap-2">
-                      <FileText size={14} className="text-white" />
+                    <div className="bg-[#153459] text-white px-3 py-1 rounded-t-md font-black text-[11px] uppercase tracking-wider flex items-center gap-1.5">
+                      <FileText size={13} className="text-white" />
                       <span>INCIDENT DETAILS</span>
                     </div>
 
-                    <div className="bg-[#f4f7fb] border border-t-0 border-[#d0dbe7] rounded-b-md p-3.5 sm:p-4 text-xs space-y-3.5">
+                    <div className="bg-[#f4f7fb] border border-t-0 border-[#d0dbe7] rounded-b-md p-2.5 sm:p-3 text-[11px] space-y-2">
                       {/* Row 1: Date, Time, Location */}
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                        <div className="flex items-center gap-2">
-                          <Calendar size={14} className="text-[#153459] shrink-0" />
-                          <span className="text-[11px] font-semibold text-slate-700">Date of Incident :</span>
-                          <span className="font-semibold text-slate-900 border-b border-slate-300 flex-1 pb-0.5">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div className="flex items-center gap-1.5">
+                          <Calendar size={13} className="text-[#153459] shrink-0" />
+                          <span className="text-[10px] font-semibold text-slate-700">Date of Incident :</span>
+                          <span className="font-semibold text-slate-900 border-b border-slate-300 flex-1 pb-0.5 text-[11px]">
                             {selectedReport.dateOfIncident || selectedReport.auditDates || "—"}
                           </span>
                         </div>
 
-                        <div className="flex items-center gap-2">
-                          <Clock size={14} className="text-[#153459] shrink-0" />
-                          <span className="text-[11px] font-semibold text-slate-700">Time of Incident :</span>
-                          <span className="font-semibold text-slate-900 border-b border-slate-300 flex-1 pb-0.5">
+                        <div className="flex items-center gap-1.5">
+                          <Clock size={13} className="text-[#153459] shrink-0" />
+                          <span className="text-[10px] font-semibold text-slate-700">Time of Incident :</span>
+                          <span className="font-semibold text-slate-900 border-b border-slate-300 flex-1 pb-0.5 text-[11px]">
                             {selectedReport.incidentTime || "16:30 PM"}
                           </span>
                         </div>
 
-                        <div className="flex items-center gap-2">
-                          <MapPin size={14} className="text-[#153459] shrink-0" />
-                          <span className="text-[11px] font-semibold text-slate-700">Location :</span>
-                          <span className="font-semibold text-slate-900 border-b border-slate-300 flex-1 pb-0.5 truncate">
+                        <div className="flex items-center gap-1.5">
+                          <MapPin size={13} className="text-[#153459] shrink-0" />
+                          <span className="text-[10px] font-semibold text-slate-700">Location :</span>
+                          <span className="font-semibold text-slate-900 border-b border-slate-300 flex-1 pb-0.5 truncate text-[11px]">
                             {selectedReport.location || selectedReport.branch || "Tacurong Branch"}
                           </span>
                         </div>
                       </div>
 
                       {/* Row 2: Factual Description of the Incident */}
-                      <div className="space-y-1.5">
-                        <div className="flex items-center gap-2 text-[11px] font-bold text-slate-800">
-                          <FileText size={13} className="text-[#153459]" />
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-1.5 text-[10.5px] font-bold text-slate-800">
+                          <FileText size={12} className="text-[#153459]" />
                           <span>Factual Description of the Incident:</span>
                         </div>
                         <div
-                          className="w-full p-2.5 text-xs text-slate-900 leading-[26px] min-h-[90px] whitespace-pre-wrap rounded-sm"
+                          className="w-full p-2 text-xs text-slate-900 leading-[20px] min-h-[58px] whitespace-pre-wrap rounded-xs"
                           style={{
-                            backgroundImage: "linear-gradient(to bottom, transparent 25px, #d1d5db 26px)",
-                            backgroundSize: "100% 26px"
+                            backgroundImage: "linear-gradient(to bottom, transparent 19px, #d1d5db 20px)",
+                            backgroundSize: "100% 20px"
                           }}
                         >
                           {selectedReport.factualDescription || selectedReport.specificFindings || selectedReport.fullIncidentNarrative || "During surprise drawer reconciliation audit, a physical cash shortage was uncovered. The personnel on duty could not produce balancing vouchers or valid justification for the discrepancy."}
@@ -3299,16 +3335,16 @@ export default function IncidentReportPanel({
                       </div>
 
                       {/* Row 3: Witnesses (if any) */}
-                      <div className="space-y-1.5 pt-1">
-                        <div className="flex items-center gap-2 text-[11px] font-bold text-slate-800">
-                          <Users size={13} className="text-[#153459]" />
+                      <div className="space-y-1 pt-0.5">
+                        <div className="flex items-center gap-1.5 text-[10.5px] font-bold text-slate-800">
+                          <Users size={12} className="text-[#153459]" />
                           <span>Witnesses (if any):</span>
                         </div>
                         <div
-                          className="w-full p-2.5 text-xs text-slate-900 leading-[26px] min-h-[55px] whitespace-pre-wrap rounded-sm"
+                          className="w-full p-2 text-xs text-slate-900 leading-[19px] min-h-[38px] whitespace-pre-wrap rounded-xs"
                           style={{
-                            backgroundImage: "linear-gradient(to bottom, transparent 25px, #d1d5db 26px)",
-                            backgroundSize: "100% 26px"
+                            backgroundImage: "linear-gradient(to bottom, transparent 18px, #d1d5db 19px)",
+                            backgroundSize: "100% 19px"
                           }}
                         >
                           {selectedReport.witnesses || "None reported / Attached to internal audit file."}
@@ -3323,22 +3359,22 @@ export default function IncidentReportPanel({
                   <div className="space-y-0">
                     <div className="flex items-center">
                       <div
-                        className="bg-[#c81e1e] text-white px-4 py-1.5 font-black text-xs uppercase tracking-wider flex items-center gap-2 rounded-t-md"
-                        style={{ clipPath: "polygon(0 0, 100% 0, 92% 100%, 0 100%)", paddingRight: "28px" }}
+                        className="bg-[#c81e1e] text-white px-3.5 py-1 font-black text-[11px] uppercase tracking-wider flex items-center gap-1.5 rounded-t-md"
+                        style={{ clipPath: "polygon(0 0, 100% 0, 92% 100%, 0 100%)", paddingRight: "24px" }}
                       >
-                        <AlertTriangle size={14} className="text-white shrink-0" />
+                        <AlertTriangle size={13} className="text-white shrink-0" />
                         <span>VIOLATION</span>
                       </div>
                     </div>
 
-                    <div className="bg-[#fef2f2] border border-[#fecaca] rounded-b-md p-3.5 sm:p-4 text-xs space-y-3">
-                      <p className="text-[11px] italic font-semibold text-slate-700">
+                    <div className="bg-[#fef2f2] border border-[#fecaca] rounded-b-md p-2.5 sm:p-3 text-[10.5px] space-y-2">
+                      <p className="text-[10px] italic font-semibold text-slate-700">
                         Please indicate the specific policy, rule, or standard that was violated.
                       </p>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 pt-1">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 pt-0.5">
                         {/* Column 1 */}
-                        <div className="space-y-2">
+                        <div className="space-y-1.5">
                           {[
                             "Company Policies and Procedures",
                             "STL Operations and Draw Process",
@@ -3349,9 +3385,9 @@ export default function IncidentReportPanel({
                               ? selectedReport.violations.includes(item)
                               : true;
                             return (
-                              <div key={item} className="flex items-center gap-2.5 text-[11px] text-slate-800 font-medium">
-                                <div className={`w-4 h-4 rounded-xs border-2 flex items-center justify-center shrink-0 ${isChecked ? "bg-[#153459] border-[#153459] text-white" : "bg-white border-slate-400"}`}>
-                                  {isChecked && <Check size={12} strokeWidth={3} />}
+                              <div key={item} className="flex items-center gap-2 text-[10.5px] text-slate-800 font-medium">
+                                <div className={`w-3.5 h-3.5 rounded-xs border-2 flex items-center justify-center shrink-0 ${isChecked ? "bg-[#153459] border-[#153459] text-white" : "bg-white border-slate-400"}`}>
+                                  {isChecked && <Check size={11} strokeWidth={3} />}
                                 </div>
                                 <span>{item}</span>
                               </div>
@@ -3360,7 +3396,7 @@ export default function IncidentReportPanel({
                         </div>
 
                         {/* Column 2 */}
-                        <div className="space-y-2">
+                        <div className="space-y-1.5">
                           {[
                             "Cash Handling / Collection",
                             "Data Privacy / Confidentiality",
@@ -3371,9 +3407,9 @@ export default function IncidentReportPanel({
                               ? selectedReport.violations.includes(item)
                               : true;
                             return (
-                              <div key={item} className="flex items-center gap-2.5 text-[11px] text-slate-800 font-medium">
-                                <div className={`w-4 h-4 rounded-xs border-2 flex items-center justify-center shrink-0 ${isChecked ? "bg-[#153459] border-[#153459] text-white" : "bg-white border-slate-400"}`}>
-                                  {isChecked && <Check size={12} strokeWidth={3} />}
+                              <div key={item} className="flex items-center gap-2 text-[10.5px] text-slate-800 font-medium">
+                                <div className={`w-3.5 h-3.5 rounded-xs border-2 flex items-center justify-center shrink-0 ${isChecked ? "bg-[#153459] border-[#153459] text-white" : "bg-white border-slate-400"}`}>
+                                  {isChecked && <Check size={11} strokeWidth={3} />}
                                 </div>
                                 <span>{item}</span>
                               </div>
@@ -3382,24 +3418,24 @@ export default function IncidentReportPanel({
                         </div>
 
                         {/* Column 3: Other & Remarks */}
-                        <div className="space-y-2.5 border-t md:border-t-0 md:border-l border-rose-200 pt-2 md:pt-0 md:pl-4">
-                          <div className="flex items-center gap-2 text-[11px]">
-                            <div className={`w-4 h-4 rounded-xs border-2 flex items-center justify-center shrink-0 ${selectedReport.otherViolation ? "bg-[#153459] border-[#153459] text-white" : "bg-white border-slate-400"}`}>
-                              {selectedReport.otherViolation && <Check size={12} strokeWidth={3} />}
+                        <div className="space-y-2 border-t md:border-t-0 md:border-l border-rose-200 pt-1.5 md:pt-0 md:pl-3">
+                          <div className="flex items-center gap-2 text-[10.5px]">
+                            <div className={`w-3.5 h-3.5 rounded-xs border-2 flex items-center justify-center shrink-0 ${selectedReport.otherViolation ? "bg-[#153459] border-[#153459] text-white" : "bg-white border-slate-400"}`}>
+                              {selectedReport.otherViolation && <Check size={11} strokeWidth={3} />}
                             </div>
                             <span className="font-semibold text-slate-700 whitespace-nowrap">Other (please specify)</span>
                           </div>
-                          <div className="border-b border-slate-300 pb-0.5 text-xs text-slate-900 font-semibold min-h-[18px]">
+                          <div className="border-b border-slate-300 pb-0.5 text-[11px] text-slate-900 font-semibold min-h-[16px]">
                             {selectedReport.otherViolation || ""}
                           </div>
 
-                          <div className="pt-1">
-                            <div className="text-[10px] font-bold text-slate-700 mb-1">Remarks (if any):</div>
+                          <div className="pt-0.5">
+                            <div className="text-[9.5px] font-bold text-slate-700 mb-0.5">Remarks (if any):</div>
                             <div
-                              className="w-full p-1.5 text-xs text-slate-800 leading-[24px] min-h-[48px] whitespace-pre-wrap"
+                              className="w-full p-1.5 text-xs text-slate-800 leading-[18px] min-h-[36px] whitespace-pre-wrap"
                               style={{
-                                backgroundImage: "linear-gradient(to bottom, transparent 23px, #cbd5e1 24px)",
-                                backgroundSize: "100% 24px"
+                                backgroundImage: "linear-gradient(to bottom, transparent 17px, #cbd5e1 18px)",
+                                backgroundSize: "100% 18px"
                               }}
                             >
                               {selectedReport.violationRemarks || (selectedReport.cashShortageAmount ? `Incurred unaccounted cash shortage of PHP ${selectedReport.cashShortageAmount}.` : "")}
@@ -3414,15 +3450,15 @@ export default function IncidentReportPanel({
                   {/* 4. ATTACHMENTS / EVIDENCE                                      */}
                   {/* ============================================================== */}
                   <div className="space-y-0">
-                    <div className="bg-[#153459] text-white px-3.5 py-1.5 rounded-t-md font-black text-xs uppercase tracking-wider flex items-center gap-2">
-                      <Paperclip size={14} className="text-white" />
+                    <div className="bg-[#153459] text-white px-3 py-1 rounded-t-md font-black text-[11px] uppercase tracking-wider flex items-center gap-1.5">
+                      <Paperclip size={13} className="text-white" />
                       <span>ATTACHMENTS / EVIDENCE</span>
                     </div>
 
-                    <div className="bg-[#f4f7fb] border border-t-0 border-[#d0dbe7] rounded-b-md p-3.5 sm:p-4 text-xs">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="bg-[#f4f7fb] border border-t-0 border-[#d0dbe7] rounded-b-md p-2.5 sm:p-3 text-[10.5px]">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         {/* Column 1 */}
-                        <div className="space-y-2">
+                        <div className="space-y-1.5">
                           {[
                             "Photos (if any)",
                             "Reports / Logs",
@@ -3432,9 +3468,9 @@ export default function IncidentReportPanel({
                               ? selectedReport.attachments.includes(item)
                               : true;
                             return (
-                              <div key={item} className="flex items-center gap-2.5 text-[11px] text-slate-800 font-medium">
-                                <div className={`w-4 h-4 rounded-xs border-2 flex items-center justify-center shrink-0 ${isChecked ? "bg-[#153459] border-[#153459] text-white" : "bg-white border-slate-400"}`}>
-                                  {isChecked && <Check size={12} strokeWidth={3} />}
+                              <div key={item} className="flex items-center gap-2 text-[10.5px] text-slate-800 font-medium">
+                                <div className={`w-3.5 h-3.5 rounded-xs border-2 flex items-center justify-center shrink-0 ${isChecked ? "bg-[#153459] border-[#153459] text-white" : "bg-white border-slate-400"}`}>
+                                  {isChecked && <Check size={11} strokeWidth={3} />}
                                 </div>
                                 <span>{item}</span>
                               </div>
@@ -3443,18 +3479,18 @@ export default function IncidentReportPanel({
                         </div>
 
                         {/* Column 2 */}
-                        <div className="space-y-2">
-                          <div className="flex items-center gap-2 text-[11px]">
-                            <div className={`w-4 h-4 rounded-xs border-2 flex items-center justify-center shrink-0 ${selectedReport.otherAttachments ? "bg-[#153459] border-[#153459] text-white" : "bg-white border-slate-400"}`}>
-                              {selectedReport.otherAttachments && <Check size={12} strokeWidth={3} />}
+                        <div className="space-y-1.5">
+                          <div className="flex items-center gap-2 text-[10.5px]">
+                            <div className={`w-3.5 h-3.5 rounded-xs border-2 flex items-center justify-center shrink-0 ${selectedReport.otherAttachments ? "bg-[#153459] border-[#153459] text-white" : "bg-white border-slate-400"}`}>
+                              {selectedReport.otherAttachments && <Check size={11} strokeWidth={3} />}
                             </div>
                             <span className="font-semibold text-slate-700">Other (please specify)</span>
                           </div>
                           <div
-                            className="w-full p-1.5 text-xs text-slate-800 leading-[24px] min-h-[48px] whitespace-pre-wrap"
+                            className="w-full p-1.5 text-xs text-slate-800 leading-[18px] min-h-[32px] whitespace-pre-wrap"
                             style={{
-                              backgroundImage: "linear-gradient(to bottom, transparent 23px, #cbd5e1 24px)",
-                              backgroundSize: "100% 24px"
+                              backgroundImage: "linear-gradient(to bottom, transparent 17px, #cbd5e1 18px)",
+                              backgroundSize: "100% 18px"
                             }}
                           >
                             {selectedReport.otherAttachments || selectedReport.additionalNotes || "Attached physical audit reconciliation count discrepancy sheet."}
@@ -3467,87 +3503,87 @@ export default function IncidentReportPanel({
                   {/* ============================================================== */}
                   {/* 5. SIGNATURES / ENDORSEMENTS (Prepared By, Reviewed, Approved) */}
                   {/* ============================================================== */}
-                  <div className="bg-[#f4f7fb] border border-[#d0dbe7] rounded-md p-4 text-xs">
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                  <div className="bg-[#f4f7fb] border border-[#d0dbe7] rounded-md p-2.5 sm:p-3 text-xs">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
                       {/* 1. Prepared by */}
-                      <div className="space-y-2">
-                        <span className="text-[11px] font-bold text-slate-800 block">Prepared by:</span>
-                        <div className="h-16 flex items-center justify-center border-b border-slate-300 pb-1">
+                      <div className="space-y-1.5">
+                        <span className="text-[10.5px] font-bold text-slate-800 block">Prepared by:</span>
+                        <div className="h-11 flex items-center justify-center border-b border-slate-300 pb-0.5">
                           {selectedReport.preparerSignature ? (
                             <img
                               src={selectedReport.preparerSignature}
                               alt="Preparer E-Sig"
-                              className="max-h-14 object-contain"
+                              className="max-h-10 object-contain"
                             />
                           ) : (
-                            <span className="text-[11px] text-slate-400 italic">(Signed on file)</span>
+                            <span className="text-[10px] text-slate-400 italic">(Signed on file)</span>
                           )}
                         </div>
                         <div className="text-center pt-0.5">
-                          <div className="text-[11px] font-extrabold text-slate-900 uppercase">
+                          <div className="text-[10.5px] font-extrabold text-slate-900 uppercase">
                             {selectedReport.preparerName || selectedReport.senderHrName}
                           </div>
-                          <div className="text-[10px] text-slate-500 font-medium">
+                          <div className="text-[9.5px] text-slate-500 font-medium">
                             Name / Position ({selectedReport.preparerTitle || "Branch HR"})
                           </div>
                         </div>
-                        <div className="flex items-center gap-1.5 pt-1 border-t border-slate-200 text-[10px]">
+                        <div className="flex items-center gap-1.5 pt-0.5 border-t border-slate-200 text-[9.5px]">
                           <span className="text-slate-500 font-semibold">Date:</span>
                           <span className="text-slate-900 font-medium">{selectedReport.dateReported || selectedReport.createdAt?.slice(0, 10)}</span>
                         </div>
                       </div>
 
                       {/* 2. Reviewed by */}
-                      <div className="space-y-2">
-                        <span className="text-[11px] font-bold text-slate-800 block">Reviewed by:</span>
-                        <div className="h-16 flex items-center justify-center border-b border-slate-300 pb-1">
+                      <div className="space-y-1.5">
+                        <span className="text-[10.5px] font-bold text-slate-800 block">Reviewed by:</span>
+                        <div className="h-11 flex items-center justify-center border-b border-slate-300 pb-0.5">
                           {selectedReport.operationsManagerSignature ? (
                             <img
                               src={selectedReport.operationsManagerSignature}
                               alt="Manager E-Sig"
-                              className="max-h-14 object-contain"
+                              className="max-h-10 object-contain"
                             />
                           ) : (
-                            <span className="text-[11px] text-slate-400 italic">(Signed on file)</span>
+                            <span className="text-[10px] text-slate-400 italic">(Signed on file)</span>
                           )}
                         </div>
                         <div className="text-center pt-0.5">
-                          <div className="text-[11px] font-extrabold text-slate-900 uppercase">
+                          <div className="text-[10.5px] font-extrabold text-slate-900 uppercase">
                             {selectedReport.operationsManagerName || "Operations Manager"}
                           </div>
-                          <div className="text-[10px] text-slate-500 font-medium">
+                          <div className="text-[9.5px] text-slate-500 font-medium">
                             Name / Position ({selectedReport.operationsManagerTitle || "Area Operations Manager"})
                           </div>
                         </div>
-                        <div className="flex items-center gap-1.5 pt-1 border-t border-slate-200 text-[10px]">
+                        <div className="flex items-center gap-1.5 pt-0.5 border-t border-slate-200 text-[9.5px]">
                           <span className="text-slate-500 font-semibold">Date:</span>
                           <span className="text-slate-900 font-medium">{selectedReport.dateReported || selectedReport.createdAt?.slice(0, 10)}</span>
                         </div>
                       </div>
 
                       {/* 3. Approved by */}
-                      <div className="space-y-2">
-                        <span className="text-[11px] font-bold text-slate-800 block">Approved by:</span>
-                        <div className="h-16 flex items-center justify-center border-b border-slate-300 pb-1">
+                      <div className="space-y-1.5">
+                        <span className="text-[10.5px] font-bold text-slate-800 block">Approved by:</span>
+                        <div className="h-11 flex items-center justify-center border-b border-slate-300 pb-0.5">
                           {selectedReport.approvedBySignature ? (
                             <img
                               src={selectedReport.approvedBySignature}
                               alt="Approver E-Sig"
-                              className="max-h-14 object-contain"
+                              className="max-h-10 object-contain"
                             />
                           ) : (
-                            <span className="text-[11px] text-slate-400 italic">(Simpal Group of Companies HRMD)</span>
+                            <span className="text-[10px] text-slate-400 italic">(Simpal Group of Companies HRMD)</span>
                           )}
                         </div>
                         <div className="text-center pt-0.5">
-                          <div className="text-[11px] font-extrabold text-slate-900 uppercase">
+                          <div className="text-[10.5px] font-extrabold text-slate-900 uppercase">
                             {selectedReport.approvedByName || selectedReport.receiverHrName || "JEVINCE JAYE S. JUBAY, CHRP"}
                           </div>
-                          <div className="text-[10px] text-slate-500 font-medium">
+                          <div className="text-[9.5px] text-slate-500 font-medium">
                             Name / Position ({selectedReport.approvedByTitle || "HRMD Manager"})
                           </div>
                         </div>
-                        <div className="flex items-center gap-1.5 pt-1 border-t border-slate-200 text-[10px]">
+                        <div className="flex items-center gap-1.5 pt-0.5 border-t border-slate-200 text-[9.5px]">
                           <span className="text-slate-500 font-semibold">Date:</span>
                           <span className="text-slate-900 font-medium">{selectedReport.reportReceivedDate || selectedReport.dateReported || selectedReport.createdAt?.slice(0, 10)}</span>
                         </div>
@@ -3557,16 +3593,16 @@ export default function IncidentReportPanel({
 
                   {/* RESPONDENT ACKNOWLEDGMENT (Only shown if signed conformed) */}
                   {Boolean(selectedReport.respondentSignature) && (
-                    <div className="p-4 rounded-xl bg-white border border-slate-300 shadow-2xs space-y-2">
-                      <div className="flex items-center justify-between text-[11px]">
+                    <div className="p-2.5 sm:p-3 rounded-xl bg-white border border-slate-300 shadow-2xs space-y-1.5">
+                      <div className="flex items-center justify-between text-[10.5px]">
                         <span className="font-extrabold uppercase text-slate-800">Respondent Conforme (Signed Receipt)</span>
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">Officially Signed</span>
+                        <span className="px-2 py-0.5 rounded text-[9.5px] font-bold bg-emerald-100 text-emerald-800">Officially Signed</span>
                       </div>
-                      <div className="flex items-center gap-4">
-                        <img src={selectedReport.respondentSignature} alt="Respondent Signature" className="max-h-12 object-contain" />
+                      <div className="flex items-center gap-3">
+                        <img src={selectedReport.respondentSignature} alt="Respondent Signature" className="max-h-10 object-contain" />
                         <div className="text-xs">
-                          <strong className="text-slate-900 block">{selectedReport.respondentSignedName || selectedReport.employeeName}</strong>
-                          <span className="text-[10px] text-slate-500">{selectedReport.respondentSignedAt || "Signed receipt"}</span>
+                          <strong className="text-slate-900 block text-[11px]">{selectedReport.respondentSignedName || selectedReport.employeeName}</strong>
+                          <span className="text-[9.5px] text-slate-500">{selectedReport.respondentSignedAt || "Signed receipt"}</span>
                         </div>
                       </div>
                     </div>
@@ -3576,15 +3612,15 @@ export default function IncidentReportPanel({
                 {/* ============================================================== */}
                 {/* FOOTER: CONFIDENTIAL + GEOMETRIC ACCENT STRIPES               */}
                 {/* ============================================================== */}
-                <div className="relative pt-6 pb-2 mt-4 border-t border-slate-200">
-                  <div className="flex items-center justify-center gap-3 text-[10px] font-black uppercase tracking-[0.25em] text-slate-500">
-                    <div className="w-16 h-px bg-slate-400" />
+                <div className="relative pt-2.5 pb-1 mt-2 border-t border-slate-200">
+                  <div className="flex items-center justify-center gap-3 text-[9px] font-black uppercase tracking-[0.25em] text-slate-500">
+                    <div className="w-14 h-px bg-slate-400" />
                     <span>CONFIDENTIAL — INTERNAL USE ONLY</span>
-                    <div className="w-16 h-px bg-slate-400" />
+                    <div className="w-14 h-px bg-slate-400" />
                   </div>
 
                   {/* Bottom Right Corner Geometric Stripes */}
-                  <div className="absolute bottom-0 right-0 w-36 h-20 pointer-events-none overflow-hidden">
+                  <div className="absolute bottom-0 right-0 w-28 h-16 pointer-events-none overflow-hidden">
                     <svg className="w-full h-full" viewBox="0 0 144 80" fill="none">
                       <polygon points="144,0 144,80 60,80" fill="#0f2b48" />
                       <polygon points="144,12 144,24 52,80 38,80" fill="#c81e1e" />
