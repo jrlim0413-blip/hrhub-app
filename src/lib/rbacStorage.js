@@ -48,6 +48,13 @@ export const STANDARD_ROLE_TIERS = [
 // Authentic Workspace Tabs matching the entire HR Hub project
 export const WORKSPACE_TABS_CONFIG = [
   {
+    id: "communication",
+    label: "Enterprise Communication & Employee Portal",
+    code: "WORKSPACE TAB: COMMUNICATION • ACCESS_PORTAL",
+    description: "Company-wide announcements bulletin, employee directory, shift rosters, and compliance handbooks.",
+    sidebarTabId: "communication"
+  },
+  {
     id: "overview",
     label: "Executive Operations Dashboard & Strategic KPIs",
     code: "WORKSPACE TAB: OVERVIEW • VIEW_EXECUTIVE_DASHBOARD",
@@ -114,6 +121,50 @@ export const WORKSPACE_TABS_CONFIG = [
 
 // Authentic In-Tab Features matching operations and tools inside workspaces
 export const IN_TAB_FEATURES_CONFIG = [
+  // 0. Enterprise Communication & Employee Portal Features
+  {
+    id: "comm_bulletin",
+    label: "Access Company Bulletin & Announcements Feed",
+    parentTab: "communication",
+    belongsToLabel: "Enterprise Communication & Employee Portal",
+    description: "Allows viewing company-wide official announcements, memorandums, celebrations, and bulletin posts."
+  },
+  {
+    id: "comm_post_bulletin",
+    label: "Publish & Broadcast Bulletin Announcements",
+    parentTab: "communication",
+    belongsToLabel: "Enterprise Communication & Employee Portal",
+    description: "Authority to draft and publish company-wide announcements, official memos, and event notices to the live bulletin feed."
+  },
+  {
+    id: "comm_directory",
+    label: "Access Enterprise Employee Directory",
+    parentTab: "communication",
+    belongsToLabel: "Enterprise Communication & Employee Portal",
+    description: "Allows viewing registered team members, branch assignments, online availability status, and colleague contact info."
+  },
+  {
+    id: "comm_manage_profiles",
+    label: "Administer Directory Profiles & Approval Status",
+    parentTab: "communication",
+    belongsToLabel: "Enterprise Communication & Employee Portal",
+    description: "Authority to edit employee designations, diversify HR handler assignments, approve onboarding requests, and decommission profiles."
+  },
+  {
+    id: "comm_attendance",
+    label: "Access Shift Rosters & Attendance Overview",
+    parentTab: "communication",
+    belongsToLabel: "Enterprise Communication & Employee Portal",
+    description: "Allows viewing work shifts, branch attendance schedules, and on-duty personnel rosters."
+  },
+  {
+    id: "comm_policies",
+    label: "Access Corporate Policies & Compliance Handbooks",
+    parentTab: "communication",
+    belongsToLabel: "Enterprise Communication & Employee Portal",
+    description: "Allows viewing company code of conduct, labor compliance standards, safety guidelines, and employee handbook documents."
+  },
+
   // 1. Executive Operations Dashboard Features
   {
     id: "schedule_corporate_meetings",
@@ -282,6 +333,7 @@ export const IN_TAB_FEATURES_CONFIG = [
 export const FACTORY_ROLE_TIER_PERMISSIONS = {
   system_admin: {
     // Tabs
+    communication: true,
     overview: true,
     sops: true,
     incident_reports: true,
@@ -292,6 +344,12 @@ export const FACTORY_ROLE_TIER_PERMISSIONS = {
     supervisors_attendance: true,
     permission_matrix: true,
     // Features
+    comm_bulletin: true,
+    comm_post_bulletin: true,
+    comm_directory: true,
+    comm_manage_profiles: true,
+    comm_attendance: true,
+    comm_policies: true,
     schedule_corporate_meetings: true,
     manage_sop_tasks: true,
     access_weather_radar: true,
@@ -316,6 +374,7 @@ export const FACTORY_ROLE_TIER_PERMISSIONS = {
   },
   hr_admin: {
     // Tabs
+    communication: true,
     overview: true,
     sops: true,
     incident_reports: true,
@@ -326,6 +385,12 @@ export const FACTORY_ROLE_TIER_PERMISSIONS = {
     supervisors_attendance: true,
     permission_matrix: false,
     // Features
+    comm_bulletin: true,
+    comm_post_bulletin: true,
+    comm_directory: true,
+    comm_manage_profiles: true,
+    comm_attendance: true,
+    comm_policies: true,
     schedule_corporate_meetings: true,
     manage_sop_tasks: false,
     access_weather_radar: true,
@@ -350,6 +415,7 @@ export const FACTORY_ROLE_TIER_PERMISSIONS = {
   },
   operations_supervisor: {
     // Tabs
+    communication: true,
     overview: true,
     sops: true,
     incident_reports: true,
@@ -360,6 +426,12 @@ export const FACTORY_ROLE_TIER_PERMISSIONS = {
     supervisors_attendance: true,
     permission_matrix: false,
     // Features
+    comm_bulletin: true,
+    comm_post_bulletin: false,
+    comm_directory: true,
+    comm_manage_profiles: false,
+    comm_attendance: true,
+    comm_policies: true,
     schedule_corporate_meetings: false,
     manage_sop_tasks: true,
     access_weather_radar: true,
@@ -384,6 +456,7 @@ export const FACTORY_ROLE_TIER_PERMISSIONS = {
   },
   finance_cashier: {
     // Tabs
+    communication: true,
     overview: true,
     sops: false,
     incident_reports: true,
@@ -394,6 +467,12 @@ export const FACTORY_ROLE_TIER_PERMISSIONS = {
     supervisors_attendance: false,
     permission_matrix: false,
     // Features
+    comm_bulletin: true,
+    comm_post_bulletin: false,
+    comm_directory: true,
+    comm_manage_profiles: false,
+    comm_attendance: false,
+    comm_policies: true,
     schedule_corporate_meetings: false,
     manage_sop_tasks: false,
     access_weather_radar: false,
@@ -557,8 +636,21 @@ export async function loadRbacMatrixFromCloud() {
         .maybeSingle();
 
       if (!error && data?.settings_json?.roleTiers) {
-        saveRbacMatrixData(data.settings_json);
-        return data.settings_json;
+        const cloudData = data.settings_json;
+        // Backfill any newly added capability keys from factory defaults
+        Object.keys(FACTORY_ROLE_TIER_PERMISSIONS).forEach((tierId) => {
+          if (!cloudData.roleTiers[tierId]) {
+            cloudData.roleTiers[tierId] = { ...FACTORY_ROLE_TIER_PERMISSIONS[tierId] };
+          } else {
+            Object.keys(FACTORY_ROLE_TIER_PERMISSIONS[tierId]).forEach((capKey) => {
+              if (typeof cloudData.roleTiers[tierId][capKey] === "undefined") {
+                cloudData.roleTiers[tierId][capKey] = FACTORY_ROLE_TIER_PERMISSIONS[tierId][capKey];
+              }
+            });
+          }
+        });
+        saveRbacMatrixData(cloudData);
+        return cloudData;
       }
     }
   } catch (err) {

@@ -220,6 +220,23 @@ export default function EmployeeDirectoryPanel({
     );
   }, [currentEmail, currentProfile, matrixData]);
 
+  // Profile Administration Permission Check (Edit, Approve, Decommission)
+  const canManageProfiles = useMemo(() => {
+    const curEmail = (currentEmail || "").toLowerCase().trim();
+    if (curEmail === "admin@hrhub.com" || curEmail === "jay@simpalgroup.com") return true;
+
+    const userObj = {
+      email: curEmail,
+      role: currentProfile?.role || "Team Member",
+      company: currentProfile?.company || "Simpal Group of Companies"
+    };
+
+    return (
+      isUserFeatureAllowed(userObj, "comm_manage_profiles") ||
+      isUserFeatureAllowed(userObj, "provision_employee_records")
+    );
+  }, [currentEmail, currentProfile, matrixData]);
+
   // Filtered & Sorted profiles
   const filteredProfiles = useMemo(() => {
     return managedProfiles.filter((p) => {
@@ -1012,34 +1029,38 @@ export default function EmployeeDirectoryPanel({
 
                 {/* Card Action Buttons */}
                 <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => handleToggleApproval(prof)}
-                    className={`flex-1 py-1.5 px-2 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
-                      prof.is_approved
-                        ? "bg-slate-100 hover:bg-slate-200/80 text-slate-700"
-                        : "bg-emerald-600 hover:bg-emerald-500 text-white shadow-xs shadow-emerald-600/20"
-                    }`}
-                  >
-                    {prof.is_approved ? (
-                      <>
-                        <ShieldAlert size={13} className="text-slate-500" /> Revoke
-                      </>
-                    ) : (
-                      <>
-                        <CheckCircle2 size={13} /> Approve
-                      </>
-                    )}
-                  </button>
+                  {canManageProfiles && (
+                    <button
+                      type="button"
+                      onClick={() => handleToggleApproval(prof)}
+                      className={`flex-1 py-1.5 px-2 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                        prof.is_approved
+                          ? "bg-slate-100 hover:bg-slate-200/80 text-slate-700"
+                          : "bg-emerald-600 hover:bg-emerald-500 text-white shadow-xs shadow-emerald-600/20"
+                      }`}
+                    >
+                      {prof.is_approved ? (
+                        <>
+                          <ShieldAlert size={13} className="text-slate-500" /> Revoke
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle2 size={13} /> Approve
+                        </>
+                      )}
+                    </button>
+                  )}
 
-                  <button
-                    type="button"
-                    onClick={() => handleOpenEdit(prof)}
-                    title="Edit Employee Details & HR Allocation"
-                    className="p-1.5 rounded-xl border border-slate-200 bg-white text-slate-600 hover:text-emerald-700 hover:border-emerald-300 hover:bg-emerald-50/50 transition cursor-pointer"
-                  >
-                    <Edit3 size={14} />
-                  </button>
+                  {canManageProfiles && (
+                    <button
+                      type="button"
+                      onClick={() => handleOpenEdit(prof)}
+                      title="Edit Employee Details & HR Allocation"
+                      className="p-1.5 rounded-xl border border-slate-200 bg-white text-slate-600 hover:text-emerald-700 hover:border-emerald-300 hover:bg-emerald-50/50 transition cursor-pointer"
+                    >
+                      <Edit3 size={14} />
+                    </button>
+                  )}
 
                   <button
                     type="button"
@@ -1050,14 +1071,16 @@ export default function EmployeeDirectoryPanel({
                     {copiedId === prof.id ? <Check size={14} className="text-emerald-600" /> : <Copy size={14} />}
                   </button>
 
-                  <button
-                    type="button"
-                    onClick={() => handleDeleteEmployee(prof)}
-                    title="Remove from Directory"
-                    className="p-1.5 rounded-xl border border-slate-200 text-slate-400 hover:text-rose-600 hover:border-rose-200 hover:bg-rose-50 transition cursor-pointer"
-                  >
-                    <Trash2 size={14} />
-                  </button>
+                  {canManageProfiles && (
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteEmployee(prof)}
+                      title="Remove from Directory"
+                      className="p-1.5 rounded-xl border border-slate-200 text-slate-400 hover:text-rose-600 hover:border-rose-200 hover:bg-rose-50 transition cursor-pointer"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  )}
                 </div>
               </div>
             );
@@ -1157,25 +1180,29 @@ export default function EmployeeDirectoryPanel({
                       </td>
                       <td className="py-3 px-4 text-right">
                         <div className="flex items-center justify-end gap-1.5">
-                          <button
-                            type="button"
-                            onClick={() => handleToggleApproval(prof)}
-                            className={`px-2.5 py-1 rounded-xl text-[11px] font-bold transition cursor-pointer ${
-                              prof.is_approved
-                                ? "bg-slate-100 hover:bg-slate-200 text-slate-700"
-                                : "bg-emerald-600 hover:bg-emerald-500 text-white"
-                            }`}
-                          >
-                            {prof.is_approved ? "Revoke" : "Approve"}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleOpenEdit(prof)}
-                            title="Edit employee details"
-                            className="p-1 rounded-lg border border-slate-200 text-slate-500 hover:text-emerald-700 hover:bg-emerald-50 transition cursor-pointer"
-                          >
-                            <Edit3 size={13} />
-                          </button>
+                          {canManageProfiles && (
+                            <button
+                              type="button"
+                              onClick={() => handleToggleApproval(prof)}
+                              className={`px-2.5 py-1 rounded-xl text-[11px] font-bold transition cursor-pointer ${
+                                prof.is_approved
+                                  ? "bg-slate-100 hover:bg-slate-200 text-slate-700"
+                                  : "bg-emerald-600 hover:bg-emerald-500 text-white"
+                              }`}
+                            >
+                              {prof.is_approved ? "Revoke" : "Approve"}
+                            </button>
+                          )}
+                          {canManageProfiles && (
+                            <button
+                              type="button"
+                              onClick={() => handleOpenEdit(prof)}
+                              title="Edit employee details"
+                              className="p-1 rounded-lg border border-slate-200 text-slate-500 hover:text-emerald-700 hover:bg-emerald-50 transition cursor-pointer"
+                            >
+                              <Edit3 size={13} />
+                            </button>
+                          )}
                           <button
                             type="button"
                             onClick={() => copyActivationInstructions(prof.email, prof.id)}
@@ -1184,14 +1211,16 @@ export default function EmployeeDirectoryPanel({
                           >
                             {copiedId === prof.id ? <Check size={13} className="text-emerald-600" /> : <Copy size={13} />}
                           </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteEmployee(prof)}
-                            title="Remove employee"
-                            className="p-1 rounded-lg border border-slate-200 text-slate-400 hover:text-rose-600 hover:border-rose-200 hover:bg-rose-50 transition cursor-pointer"
-                          >
-                            <Trash2 size={13} />
-                          </button>
+                          {canManageProfiles && (
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteEmployee(prof)}
+                              title="Remove employee"
+                              className="p-1 rounded-lg border border-slate-200 text-slate-400 hover:text-rose-600 hover:border-rose-200 hover:bg-rose-50 transition cursor-pointer"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>

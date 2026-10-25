@@ -30,7 +30,8 @@ export default function WorkspaceSwitcher({
   setActiveTheme,
   themeOptions = [],
   onOpenProfile,
-  onOpenPassword
+  onOpenPassword,
+  isCommunicationAllowed = true
 }) {
   const containerRef = useRef(null);
 
@@ -101,20 +102,27 @@ export default function WorkspaceSwitcher({
           <div className="mt-2 space-y-1">
             {VIEW_OPTIONS.map(({ id, label, sublabel, icon: Icon }) => {
               const isSelected = activeView === id;
+              const isBlocked = id === "communication" && !isCommunicationAllowed;
+
               return (
                 <button
                   key={id}
                   type="button"
-                  onClick={() => handleSelect(id)}
-                  className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition cursor-pointer ${
-                    isSelected
-                      ? "bg-emerald-50 text-emerald-700 font-bold"
-                      : "text-slate-600 hover:bg-slate-50"
+                  disabled={isBlocked}
+                  onClick={() => !isBlocked && handleSelect(id)}
+                  className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition ${
+                    isBlocked
+                      ? "opacity-50 cursor-not-allowed bg-slate-50 text-slate-400"
+                      : isSelected
+                      ? "bg-emerald-50 text-emerald-700 font-bold cursor-pointer"
+                      : "text-slate-600 hover:bg-slate-50 cursor-pointer"
                   }`}
                 >
                   <span
                     className={`flex h-8 w-8 items-center justify-center rounded-lg ${
-                      isSelected
+                      isBlocked
+                        ? "bg-slate-200 text-slate-400"
+                        : isSelected
                         ? "bg-emerald-500 text-slate-950"
                         : "bg-slate-100 text-slate-500"
                     }`}
@@ -122,8 +130,17 @@ export default function WorkspaceSwitcher({
                     <Icon size={15} />
                   </span>
                   <span className="flex-1">
-                    <span className="block text-xs font-bold">{label}</span>
-                    <span className="block text-[10px] text-slate-400">{sublabel}</span>
+                    <span className="flex items-center gap-1.5 text-xs font-bold">
+                      {label}
+                      {isBlocked && (
+                        <span className="text-[9px] font-black uppercase text-rose-500 bg-rose-50 border border-rose-200 px-1.5 py-0.2 rounded">
+                          Restricted
+                        </span>
+                      )}
+                    </span>
+                    <span className="block text-[10px] text-slate-400">
+                      {isBlocked ? "Restricted by Head Office" : sublabel}
+                    </span>
                   </span>
                   {isSelected && (
                     <span className="h-2 w-2 rounded-full bg-emerald-500" />
