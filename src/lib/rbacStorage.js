@@ -152,10 +152,10 @@ export const IN_TAB_FEATURES_CONFIG = [
   },
   {
     id: "comm_add_employee",
-    label: "Mag-profile / Magrehistro ng Bagong Kawani (Employee Profiling)",
+    label: "Register & Profile New Employee (Employee Profiling)",
     parentTab: "communication",
     belongsToLabel: "Enterprise Communication & Employee Portal",
-    description: "Nagbibigay-daan sa Branch HR at Administrator na mag-profile at magrehistro ng bagong kawani nang direkta mula sa Direktoryo ng mga Kawani sa Communications."
+    description: "Allows Branch HR and Administrators to register and profile new employees directly within the Directory tab in Communications."
   },
   {
     id: "comm_attendance",
