@@ -755,10 +755,11 @@ export default function EmployeeDirectoryPanel({
 
       {/* Control Bar: Search, HR Diversification Filters, Subsidiary & View Mode */}
       <div className="bg-white border border-slate-200/90 rounded-2xl p-4 shadow-xs space-y-3">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+        {/* Row 1: Search & View Toggle */}
+        <div className="flex items-center justify-between gap-3">
           {/* Search Box */}
-          <div className="flex-1 min-w-[200px]">
-            <div className="flex items-center gap-2.5 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-800 focus-within:border-emerald-500 focus-within:bg-white focus-within:ring-2 focus-within:ring-emerald-100 transition">
+          <div className="flex-1">
+            <div className="flex items-center gap-2.5 rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2 text-xs text-slate-800 focus-within:border-emerald-500 focus-within:bg-white focus-within:ring-2 focus-within:ring-emerald-100 transition">
               <Search size={15} className="text-slate-400 shrink-0" />
               <input
                 type="text"
@@ -775,16 +776,41 @@ export default function EmployeeDirectoryPanel({
             </div>
           </div>
 
-          {/* HR Diversification Dropdown */}
+          {/* View Mode Toggle */}
+          <div className="flex rounded-xl border border-slate-200 bg-slate-100 p-0.5 shrink-0">
+            <button
+              type="button"
+              onClick={() => setViewMode("grid")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                viewMode === "grid" ? "bg-white text-slate-900 shadow-xs" : "text-slate-500 hover:text-slate-800"
+              }`}
+            >
+              Cards
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode("table")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                viewMode === "table" ? "bg-white text-slate-900 shadow-xs" : "text-slate-500 hover:text-slate-800"
+              }`}
+            >
+              Table
+            </button>
+          </div>
+        </div>
+
+        {/* Row 2: Filter Dropdowns & Status Pills */}
+        <div className="pt-2.5 border-t border-slate-100 flex flex-col lg:flex-row lg:items-center justify-between gap-2.5">
+          {/* HR Diversification & Location Dropdowns */}
           <div className="flex items-center gap-2 flex-wrap">
             <div className="relative">
               <select
                 value={selectedHRFilter}
                 onChange={(e) => setSelectedHRFilter(e.target.value)}
-                className={`text-xs font-semibold border rounded-xl px-2.5 py-2 focus:outline-none focus:border-emerald-500 cursor-pointer transition ${
+                className={`text-xs font-semibold border rounded-xl px-2.5 py-1.5 focus:outline-none focus:border-emerald-500 cursor-pointer transition ${
                   selectedHRFilter === "my-handled"
                     ? "bg-emerald-50 border-emerald-300 text-emerald-900 font-bold"
-                    : "bg-slate-50 border-slate-200 text-slate-700"
+                    : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100"
                 }`}
               >
                 <option value="all">👥 All HR</option>
@@ -802,7 +828,7 @@ export default function EmployeeDirectoryPanel({
             <select
               value={selectedSubsidiary}
               onChange={(e) => setSelectedSubsidiary(e.target.value)}
-              className="text-xs font-semibold bg-slate-50 border border-slate-200 text-slate-700 rounded-xl px-2.5 py-2 focus:outline-none focus:border-emerald-500 cursor-pointer"
+              className="text-xs font-semibold bg-slate-50 border border-slate-200 text-slate-700 hover:bg-slate-100 rounded-xl px-2.5 py-1.5 focus:outline-none focus:border-emerald-500 cursor-pointer"
             >
               <option value="all">🏢 All Companies</option>
               {SUBSIDIARIES.map((sub) => (
@@ -814,41 +840,17 @@ export default function EmployeeDirectoryPanel({
             <select
               value={selectedBranchFilter}
               onChange={(e) => setSelectedBranchFilter(e.target.value)}
-              className="text-xs font-semibold bg-slate-50 border border-slate-200 text-slate-700 rounded-xl px-2.5 py-2 focus:outline-none focus:border-emerald-500 cursor-pointer"
+              className="text-xs font-semibold bg-slate-50 border border-slate-200 text-slate-700 hover:bg-slate-100 rounded-xl px-2.5 py-1.5 focus:outline-none focus:border-emerald-500 cursor-pointer"
             >
               <option value="all">📍 All Branches</option>
               {BRANCH_PRESETS.map((br) => (
                 <option key={br} value={br}>{br}</option>
               ))}
             </select>
-
-            {/* View Mode Toggle */}
-            <div className="flex rounded-xl border border-slate-200 bg-slate-100 p-0.5 shrink-0">
-              <button
-                type="button"
-                onClick={() => setViewMode("grid")}
-                className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
-                  viewMode === "grid" ? "bg-white text-slate-900 shadow-xs" : "text-slate-500 hover:text-slate-800"
-                }`}
-              >
-                Cards
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewMode("table")}
-                className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
-                  viewMode === "table" ? "bg-white text-slate-900 shadow-xs" : "text-slate-500 hover:text-slate-800"
-                }`}
-              >
-                Table
-              </button>
-            </div>
           </div>
-        </div>
 
-        {/* Filter Pills */}
-        <div className="flex items-center justify-between gap-2 overflow-x-auto pt-1 border-t border-slate-100 text-xs">
-          <div className="flex items-center gap-2">
+          {/* Status Filter Pills */}
+          <div className="flex items-center gap-1.5 overflow-x-auto text-xs flex-wrap">
             {[
               { id: "all", label: `All (${stats.total})` },
               { id: "my-handled", label: `My Assigned (${stats.myHandledCount})`, highlight: true },
@@ -876,23 +878,23 @@ export default function EmployeeDirectoryPanel({
                 {tab.label}
               </button>
             ))}
-          </div>
 
-          {(selectedHRFilter !== "all" || selectedSubsidiary !== "all" || selectedBranchFilter !== "all" || searchQuery) && (
-            <button
-              type="button"
-              onClick={() => {
-                setSearchQuery("");
-                setSelectedFilter("all");
-                setSelectedSubsidiary("all");
-                setSelectedHRFilter("all");
-                setSelectedBranchFilter("all");
-              }}
-              className="text-xs font-bold text-rose-600 hover:text-rose-700 hover:underline shrink-0 cursor-pointer"
-            >
-              Reset Filters
-            </button>
-          )}
+            {(selectedHRFilter !== "all" || selectedSubsidiary !== "all" || selectedBranchFilter !== "all" || searchQuery) && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchQuery("");
+                  setSelectedFilter("all");
+                  setSelectedSubsidiary("all");
+                  setSelectedHRFilter("all");
+                  setSelectedBranchFilter("all");
+                }}
+                className="text-xs font-bold text-rose-600 hover:text-rose-700 hover:underline px-1.5 py-1 shrink-0 cursor-pointer"
+              >
+                Reset
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
