@@ -2,12 +2,120 @@ import { supabase } from "./supabase";
 
 const LOCAL_STORAGE_KEY = "hrhub_incident_reports_v1";
 
+/**
+ * Looks up the assigned HR personnel for a given company from the Employee Directory profiles
+ */
+export function lookupAssignedHrForCompany(companyName, profiles = []) {
+  if (!companyName) {
+    return {
+      name: "Ms. Quennie R. Capuyan",
+      title: "HR Admin",
+      email: "caquennie6@gmail.com",
+      company: "5A Royal Gaming OPC"
+    };
+  }
+
+  const norm = companyName.toLowerCase();
+
+  // Find user whose company matches and has an HR/Admin role
+  const match = profiles.find((p) => {
+    const pComp = (p.company || "").toLowerCase();
+    const pRole = (p.role || "").toLowerCase();
+    return (
+      (pComp.includes(norm) || norm.includes(pComp)) &&
+      (pRole.includes("hr") || pRole.includes("admin") || pRole.includes("manager"))
+    );
+  }) || profiles.find((p) => {
+    const pComp = (p.company || "").toLowerCase();
+    return pComp.includes(norm) || norm.includes(pComp);
+  });
+
+  if (match) {
+    return {
+      name: match.name || "Company HR Admin",
+      title: match.role || "HR Admin",
+      email: match.email || "",
+      company: match.company || companyName
+    };
+  }
+
+  // Sensible defaults based on known entity assignments
+  if (norm.includes("5a") || norm.includes("royal")) {
+    return {
+      name: "Ms. Quennie R. Capuyan",
+      title: "HR Admin",
+      email: "caquennie6@gmail.com",
+      company: "5A Royal Gaming OPC"
+    };
+  }
+  if (norm.includes("lucky") || norm.includes("betplay")) {
+    return {
+      name: "Remark Joy Gaviola",
+      title: "Compliance & HR Officer",
+      email: "remarkjoymark@gmail.com",
+      company: "Lucky Betplay Corporation"
+    };
+  }
+  if (norm.includes("simcon") || norm.includes("construction")) {
+    return {
+      name: "Engr. Site HR Lead",
+      title: "Site HR Supervisor",
+      email: "simcon.hr@simpalgroup.com",
+      company: "Simpal Construction (SIMCON)"
+    };
+  }
+
+  return {
+    name: "Area HR Admin",
+    title: "HR Administrator",
+    email: "",
+    company: companyName
+  };
+}
+
+/**
+ * Looks up the Central HRMD personnel assigned to Simpal Group of Companies (SGC - Receiver)
+ */
+export function lookupSgcCentralHr(profiles = []) {
+  const sgcHr = profiles.find((p) => {
+    const pComp = (p.company || "").toLowerCase();
+    const pRole = (p.role || "").toLowerCase();
+    return (
+      (pComp.includes("simpal") || pComp.includes("sgc")) &&
+      (pRole.includes("hr") || pRole.includes("admin") || pRole.includes("manager"))
+    );
+  }) || profiles.find((p) => {
+    const pName = (p.name || "").toLowerCase();
+    return pName.includes("hrmd") || pName.includes("jubay");
+  });
+
+  return {
+    name: sgcHr?.name || "JEVINCE JAYE S. JUBAY, CHRP",
+    title: sgcHr?.role || "HRMD Manager",
+    email: sgcHr?.email || "admin@hrhub.com",
+    company: "Simpal Group of Companies"
+  };
+}
+
 // Initial seed record matching the user's authentic official NTE document
 const DEFAULT_SEED_REPORTS = [
   {
     id: "IR-2026-09-001",
     caseNumber: "IR-2026-09-001",
-    status: "NTE_ISSUED", // Ready for Area HR to serve to employee
+    status: "NTE_ISSUED", // NTE Issued by SGC and returned to Area HR for serving
+    
+    // SENDER: The Originating Subsidiary Company & Assigned HR
+    senderCompany: "5A Royal Gaming OPC",
+    senderHrName: "Ms. Quennie R. Capuyan",
+    senderHrTitle: "HR Admin",
+    senderHrEmail: "caquennie6@gmail.com",
+    senderBranch: "Purok Daisy, New Isabela, Tacurong City, Sultan Kudarat",
+    
+    // RECEIVER: Simpal Group of Companies (SGC Central HRMD)
+    receiverCompany: "Simpal Group of Companies",
+    receiverHrName: "JEVINCE JAYE S. JUBAY, CHRP",
+    receiverHrTitle: "HRMD Manager",
+    receiverHrEmail: "admin@hrhub.com",
     
     // Incident Meta
     dateOfIncident: "2026-09-24",
@@ -42,14 +150,14 @@ const DEFAULT_SEED_REPORTS = [
     evidenceNotes: "Official Audit Count Sheet signed Sept 24, 2026; Daily Cashier Vault Reconciliation Logs; Branch fuel log slips.",
     
     // Central HR Routing & Official Receipt
-    reportReceivedBy: "JEVINCE JAYE S. JUBAY, CHRP",
+    reportReceivedBy: "JEVINCE JAYE S. JUBAY, CHRP (HRMD Manager - SGC)",
     reportReceivedDate: "September 28, 2026",
     assignedCentralHrName: "JEVINCE JAYE S. JUBAY, CHRP",
     assignedCentralHrTitle: "HRMD Manager",
-    assignedCentralHrCompany: "5A Royal Gaming OPC",
+    assignedCentralHrCompany: "Simpal Group of Companies",
     forwardedAt: "2026-09-28T08:30:00.000Z",
     
-    // NTE Document Details (Matches official format)
+    // NTE Document Details (Issued by SGC Central HRMD)
     nteSubject: "Notice to Explain",
     nteDate: "September 28, 2026",
     nteBodyParagraph1: "According to the incident report submitted by the HR Admin, Ms. Quennie R. Capuyan dated September 28, 2026, it was found that you have an outstanding cash shortage of PHP 12,102.00 during the audit conducted on September 24, 2026, by the CFO Admin Staff, Ms. Rollyn Beatrice Simpal and Ms. Hygiene Reusora.",
@@ -74,16 +182,16 @@ const DEFAULT_SEED_REPORTS = [
       {
         id: "act-1",
         timestamp: "2026-09-28T08:30:00.000Z",
-        action: "IR_SUBMITTED",
-        actor: "Ms. Quennie R. Capuyan (HR Admin)",
-        message: "Submitted Incident Report IR-2026-09-001 regarding cash shortage to Central HRMD."
+        action: "IR_TRANSMITTED_TO_SGC",
+        actor: "Ms. Quennie R. Capuyan (5A Royal Gaming HR)",
+        message: "Transmitted Incident Report IR-2026-09-001 regarding cash shortage to Simpal Group of Companies (SGC HRMD)."
       },
       {
         id: "act-2",
         timestamp: "2026-09-28T10:15:00.000Z",
-        action: "NTE_GENERATED_AND_RETURNED",
-        actor: "JEVINCE JAYE S. JUBAY, CHRP (HRMD Manager)",
-        message: "Generated official Notice to Explain citing Section 18 SOP violation & Article 297. Returned to Area HR for serving."
+        action: "NTE_ISSUED_BY_SGC",
+        actor: "JEVINCE JAYE S. JUBAY, CHRP (SGC HRMD Manager)",
+        message: "SGC HRMD reviewed the incident report and approved the official Notice to Explain. Returned to 5A Royal Gaming HR for serving."
       }
     ],
     createdAt: "2026-09-28T08:30:00.000Z",
@@ -131,6 +239,10 @@ export async function fetchIncidentReports() {
         const normalized = data.map((d) => ({
           ...d,
           caseNumber: d.case_number || d.caseNumber || d.id,
+          senderCompany: d.sender_company || d.senderCompany || d.company,
+          senderHrName: d.sender_hr_name || d.senderHrName || d.reporting_hr_name,
+          receiverCompany: d.receiver_company || d.receiverCompany || "Simpal Group of Companies",
+          receiverHrName: d.receiver_hr_name || d.receiverHrName || "JEVINCE JAYE S. JUBAY, CHRP",
           dateOfIncident: d.date_of_incident || d.dateOfIncident,
           dateReported: d.date_reported || d.dateReported,
           reportingHrName: d.reporting_hr_name || d.reportingHrName,
@@ -161,6 +273,8 @@ export async function saveIncidentReport(report) {
     ...report,
     id: report.id || `IR-${Date.now().toString().slice(-6)}`,
     caseNumber: report.caseNumber || report.id || `IR-${Date.now().toString().slice(-6)}`,
+    senderCompany: report.senderCompany || report.company || "5A Royal Gaming OPC",
+    receiverCompany: report.receiverCompany || "Simpal Group of Companies",
     updatedAt: nowIso,
     createdAt: report.createdAt || nowIso
   };
@@ -185,11 +299,11 @@ export async function saveIncidentReport(report) {
         status: updatedReport.status,
         date_of_incident: updatedReport.dateOfIncident,
         date_reported: updatedReport.dateReported,
-        reporting_hr_name: updatedReport.reportingHrName,
-        reporting_hr_title: updatedReport.reportingHrTitle,
+        reporting_hr_name: updatedReport.reportingHrName || updatedReport.senderHrName,
+        reporting_hr_title: updatedReport.reportingHrTitle || updatedReport.senderHrTitle,
         employee_name: updatedReport.employeeName,
         employee_position: updatedReport.employeePosition,
-        company: updatedReport.company,
+        company: updatedReport.company || updatedReport.senderCompany,
         branch: updatedReport.branch,
         incident_category: updatedReport.incidentCategory,
         cash_shortage_amount: updatedReport.cashShortageAmount,
