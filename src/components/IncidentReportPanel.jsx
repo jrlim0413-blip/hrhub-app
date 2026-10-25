@@ -306,8 +306,8 @@ export default function IncidentReportPanel({
       auditDates: new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }),
       auditedBy: "CFO Admin Staff, Ms. Rollyn Beatrice Simpal and Ms. Hygiene Reusora",
       cashShortageAmount: "",
-      specificFindings: "",
-      fullIncidentNarrative: "",
+      specificFindings: "During surprise drawer reconciliation audit, a physical cash shortage was uncovered. The personnel on duty could not produce balancing vouchers or valid justification for the discrepancy.",
+      fullIncidentNarrative: "During surprise drawer reconciliation audit, a physical cash shortage was uncovered. The personnel on duty could not produce balancing vouchers or valid justification for the discrepancy.",
       incidentCauses: "Non-observance of Cashier Standard Operating Procedures (SOPs), unauthorized credit extensions, and failure to reconcile daily cash float before shift closure.",
       followUpRecommendations: "Immediate transmittal to Simpal Group of Companies (SGC) Head Office HRMD for formal Notice to Explain (NTE) issuance under Article 297 Labor Code.",
       additionalNotes: "All physical cash count discrepancy sheets and borrower signed slips have been submitted and attached to the audit file.",
@@ -331,11 +331,28 @@ export default function IncidentReportPanel({
       year: "numeric"
     });
 
+    const findingsText =
+      irForm.specificFindings?.trim() ||
+      irForm.fullIncidentNarrative?.trim() ||
+      "During surprise drawer reconciliation audit, a physical cash shortage was uncovered. The personnel on duty could not produce balancing vouchers or valid justification for the discrepancy.";
+
     const newReport = {
       id: caseId,
       caseNumber: caseId,
       status: "SUBMITTED_TO_CENTRAL_HR", // Transmitted to Head Office (Simpal Group of Companies)
       ...irForm,
+      specificFindings: findingsText,
+      fullIncidentNarrative: findingsText,
+      specific_findings: findingsText,
+      full_incident_narrative: findingsText,
+      cashShortageAmount: irForm.cashShortageAmount || "0.00",
+      cash_shortage_amount: irForm.cashShortageAmount || "0.00",
+      incidentCauses: irForm.incidentCauses,
+      incident_causes: irForm.incidentCauses,
+      followUpRecommendations: irForm.followUpRecommendations,
+      follow_up_recommendations: irForm.followUpRecommendations,
+      additionalNotes: irForm.additionalNotes,
+      additional_notes: irForm.additionalNotes,
       senderCompany: irForm.company,
       senderHrName: irForm.reportingHrName,
       senderHrTitle: irForm.reportingHrTitle,
@@ -350,7 +367,7 @@ export default function IncidentReportPanel({
       nteSubject: "Notice to Explain",
       nteDate: dateFormatted,
       nteBodyParagraph1: `According to the incident report submitted by the ${irForm.reportingHrTitle}, ${irForm.reportingHrName} of ${irForm.company} dated ${dateFormatted}, it was found that you have an outstanding cash shortage of PHP ${irForm.cashShortageAmount || "0.00"} during the audit conducted on ${irForm.auditDates}, by the ${irForm.auditedBy}.`,
-      nteBodyParagraph2: irForm.specificFindings || "It was also noted that certain unauthorized advance transactions and shortages remained uncleared and were not immediately addressed at the time of the audit.",
+      nteBodyParagraph2: findingsText,
       nteBodyParagraph3: `These circumstances raise serious concerns regarding your cash handling, accountability, and compliance with Company SOPs. As the assigned ${irForm.employeePosition}, you are expected to strictly control company funds, follow established procedures, and promptly address shortages and irregular transactions. Failure to do so may compromise the Company's financial controls and accountability.`,
       nteDueProcessClause: "In line with due process, you are hereby requested to submit a written explanation within one (1) working day upon receipt of this memo. Given the above allegation, why you should not discipline and find liable for the following alleged violations of the Employees Code of Conduct.",
       codeOfConductSection: "Section 18. Offenses Related to Job Performance and Productivity.\n(a) Non-observance of Standard Operating Procedures. Willful or unintentional non-observance of standard operating procedures for direct or indirect personal gain is classified as serious offense and shall accordingly be meted penalties for serious offense.",
@@ -372,9 +389,11 @@ export default function IncidentReportPanel({
       ]
     };
 
-    await saveIncidentReport(newReport);
+    const saved = await saveIncidentReport(newReport);
     await loadRecords();
     setIsCreateModalOpen(false);
+    setSelectedReport(saved || newReport);
+    setIsViewerOpen(true);
 
     // AI Buddy Voice Announcement
     const announcement = `Transmitted! Incident report for ${irForm.employeeName} has been officially sent from ${irForm.company} to Simpal Group of Companies Head Office for Notice to Explain evaluation.`;
@@ -1040,6 +1059,18 @@ export default function IncidentReportPanel({
                           </span>
                         )}
                       </p>
+
+                      {/* Transmitted Incident Details Preview */}
+                      {(report.specificFindings || report.specific_findings || report.fullIncidentNarrative) && (
+                        <div className="mt-1.5 p-2 rounded-lg bg-slate-50 border border-slate-200/90 text-xs text-slate-700 leading-relaxed max-w-2xl">
+                          <span className="font-extrabold text-[10px] uppercase tracking-wider text-slate-500 block mb-0.5">
+                            INCIDENT DETAILS:
+                          </span>
+                          <p className="line-clamp-2 italic text-slate-800">
+                            "{report.specificFindings || report.specific_findings || report.fullIncidentNarrative}"
+                          </p>
+                        </div>
+                      )}
                     </div>
 
                     {/* Sender vs Receiver Routing Bar */}
@@ -1933,8 +1964,12 @@ export default function IncidentReportPanel({
                         <div className="text-[10px] font-black uppercase tracking-wider text-slate-700 mb-1">
                           INCIDENT DETAILS
                         </div>
-                        <div className="w-full flex-1 p-3.5 rounded-2xl bg-slate-100/80 border border-slate-200 text-xs text-slate-800 leading-relaxed text-justify min-h-[160px]">
-                          {selectedReport.specificFindings || selectedReport.fullIncidentNarrative}
+                        <div className="w-full flex-1 p-3.5 rounded-2xl bg-slate-100/80 border border-slate-200 text-xs text-slate-800 leading-relaxed text-justify min-h-[160px] whitespace-pre-wrap">
+                          {selectedReport.specificFindings ||
+                            selectedReport.specific_findings ||
+                            selectedReport.fullIncidentNarrative ||
+                            selectedReport.full_incident_narrative ||
+                            "During surprise drawer reconciliation audit, a physical cash shortage was uncovered. The personnel on duty could not produce balancing vouchers or valid justification for the discrepancy."}
                         </div>
                         <div className="text-[9px] text-slate-400 mt-1 italic">
                           How the incident occurred, factors leading to it, what took place. Be as specific as possible.
@@ -1948,8 +1983,10 @@ export default function IncidentReportPanel({
                         <div className="text-[10px] font-black uppercase tracking-wider text-slate-700 mb-1">
                           INCIDENT CAUSES
                         </div>
-                        <div className="w-full p-3 rounded-xl bg-slate-100/80 border border-slate-200 text-xs text-slate-800 leading-relaxed min-h-[70px]">
-                          {selectedReport.incidentCauses || "Non-observance of Cashier Standard Operating Procedures (SOPs) and unauthorized transactions."}
+                        <div className="w-full p-3 rounded-xl bg-slate-100/80 border border-slate-200 text-xs text-slate-800 leading-relaxed min-h-[70px] whitespace-pre-wrap">
+                          {selectedReport.incidentCauses ||
+                            selectedReport.incident_causes ||
+                            "Non-observance of Cashier Standard Operating Procedures (SOPs) and unauthorized transactions."}
                         </div>
                       </div>
 
@@ -1957,8 +1994,10 @@ export default function IncidentReportPanel({
                         <div className="text-[10px] font-black uppercase tracking-wider text-slate-700 mb-1">
                           FOLLOW UP RECOMMENDATIONS
                         </div>
-                        <div className="w-full p-3 rounded-xl bg-slate-100/80 border border-slate-200 text-xs text-slate-800 leading-relaxed min-h-[70px]">
-                          {selectedReport.followUpRecommendations || "Transmitted to Simpal Group of Companies (Head Office HRMD) for formal Notice to Explain (NTE) under Article 297 Labor Code."}
+                        <div className="w-full p-3 rounded-xl bg-slate-100/80 border border-slate-200 text-xs text-slate-800 leading-relaxed min-h-[70px] whitespace-pre-wrap">
+                          {selectedReport.followUpRecommendations ||
+                            selectedReport.follow_up_recommendations ||
+                            "Transmitted to Simpal Group of Companies (Head Office HRMD) for formal Notice to Explain (NTE) under Article 297 Labor Code."}
                         </div>
                       </div>
                     </div>
@@ -1968,8 +2007,11 @@ export default function IncidentReportPanel({
                       <div className="text-[10px] font-black uppercase tracking-wider text-slate-700 mb-1">
                         ADDITIONAL NOTES
                       </div>
-                      <div className="w-full p-3 rounded-xl bg-slate-100/80 border border-slate-200 text-xs text-slate-800 leading-relaxed min-h-[50px]">
-                        {selectedReport.additionalNotes || selectedReport.evidenceNotes || "All physical cash count discrepancy sheets and borrower signed slips have been submitted and attached to the audit file."}
+                      <div className="w-full p-3 rounded-xl bg-slate-100/80 border border-slate-200 text-xs text-slate-800 leading-relaxed min-h-[50px] whitespace-pre-wrap">
+                        {selectedReport.additionalNotes ||
+                          selectedReport.additional_notes ||
+                          selectedReport.evidenceNotes ||
+                          "All physical cash count discrepancy sheets and borrower signed slips have been submitted and attached to the audit file."}
                       </div>
                     </div>
                   </div>
@@ -2062,13 +2104,38 @@ export default function IncidentReportPanel({
                 <strong>Simpal Group of Companies (Head Office) Instruction:</strong> Review the incident details submitted by {selectedReport.senderCompany} HR ({selectedReport.senderHrName || selectedReport.reportingHrName}). Once issued, this official NTE will be legally stamped and returned to the originating company HR for formal serving to {selectedReport.employeeName}.
               </div>
 
+              {/* Transmitted Incident Details Reference Box */}
+              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 shadow-inner">
+                <div className="flex items-center justify-between gap-2 mb-1.5">
+                  <span className="text-[11px] font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                    <FileText size={14} className="text-[#8cb84a]" />
+                    <span>Transmitted Incident Details (from {selectedReport.senderCompany || selectedReport.company} HR)</span>
+                  </span>
+                  {selectedReport.cashShortageAmount && (
+                    <span className="px-2 py-0.5 rounded text-[11px] font-extrabold bg-rose-100 text-rose-800">
+                      Shortage: PHP {selectedReport.cashShortageAmount}
+                    </span>
+                  )}
+                </div>
+                <div className="p-3 bg-white rounded-lg border border-slate-200 text-xs text-slate-800 leading-relaxed whitespace-pre-wrap">
+                  {selectedReport.specificFindings ||
+                    selectedReport.specific_findings ||
+                    selectedReport.fullIncidentNarrative ||
+                    selectedReport.full_incident_narrative ||
+                    "During surprise drawer reconciliation audit, a physical cash shortage was uncovered. The personnel on duty could not produce balancing vouchers or valid justification for the discrepancy."}
+                </div>
+              </div>
+
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
                   1. Incident & Audit Findings Citation
                 </label>
                 <textarea
                   rows={3}
-                  defaultValue={selectedReport.nteBodyParagraph1}
+                  defaultValue={
+                    selectedReport.nteBodyParagraph1 ||
+                    `According to the incident report submitted by the ${selectedReport.reportingHrTitle || selectedReport.senderHrTitle || "HR Admin"}, ${selectedReport.reportingHrName || selectedReport.senderHrName || "Branch HR"} of ${selectedReport.senderCompany || selectedReport.company} dated ${selectedReport.dateReported || "today"}, it was found that you have an outstanding cash shortage of PHP ${selectedReport.cashShortageAmount || "0.00"} during the audit conducted on ${selectedReport.auditDates || "scheduled audit"}, by the ${selectedReport.auditedBy || "Internal Audit"}.`
+                  }
                   id="nte-para-1"
                   className="w-full p-2.5 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500 font-sans"
                 />
@@ -2080,7 +2147,14 @@ export default function IncidentReportPanel({
                 </label>
                 <textarea
                   rows={3}
-                  defaultValue={selectedReport.nteBodyParagraph2}
+                  defaultValue={
+                    selectedReport.nteBodyParagraph2 ||
+                    selectedReport.specificFindings ||
+                    selectedReport.specific_findings ||
+                    selectedReport.fullIncidentNarrative ||
+                    selectedReport.full_incident_narrative ||
+                    "It was also noted that certain unauthorized advance transactions and shortages remained uncleared and were not immediately addressed at the time of the audit."
+                  }
                   id="nte-para-2"
                   className="w-full p-2.5 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500 font-sans"
                 />
