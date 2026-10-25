@@ -6065,26 +6065,26 @@ function doPost(e) {
         }
       }
 
-      var recipientList = validRecipients.join(", ");
-      try {
-        GmailApp.sendEmail(recipientList, subject, plainBody, {
-          htmlBody: htmlBody,
-          attachments: attachments,
-          name: "HRHub Official Dispatch • " + companyName,
-          replyTo: item.senderEmail || "${HR_OFFICIAL_EMAIL}"
-        });
-      } catch (batchErr) {
-        for (var r = 0; r < validRecipients.length; r++) {
+      for (var r = 0; r < validRecipients.length; r++) {
+        var recipientEmail = validRecipients[r].trim();
+        var emailAttachments = [];
+        if (item.pdfHtml) {
           try {
-            GmailApp.sendEmail(validRecipients[r].trim(), subject, plainBody, {
-              htmlBody: htmlBody,
-              attachments: attachments,
-              name: "HRHub Official Dispatch • " + companyName,
-              replyTo: item.senderEmail || "${HR_OFFICIAL_EMAIL}"
-            });
-          } catch (sendErr) {
-            Logger.log("Send error for " + validRecipients[r] + ": " + sendErr);
-          }
+            var blob = Utilities.newBlob(item.pdfHtml, "text/html", memoRef + ".html")
+              .getAs("application/pdf")
+              .setName(memoRef + " - " + companyName + ".pdf");
+            emailAttachments.push(blob);
+          } catch (e) {}
+        }
+        try {
+          GmailApp.sendEmail(recipientEmail, subject, plainBody, {
+            htmlBody: htmlBody,
+            attachments: emailAttachments,
+            name: "HRHub Official Dispatch • " + companyName,
+            replyTo: item.senderEmail || "${HR_OFFICIAL_EMAIL}"
+          });
+        } catch (sendErr) {
+          Logger.log("Send error for " + recipientEmail + ": " + sendErr);
         }
       }
       results.push({ company: companyName, memoRef: memoRef, count: validRecipients.length });
