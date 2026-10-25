@@ -45,10 +45,7 @@ import {
   Video,
   ExternalLink,
   Users,
-  Save,
-  ZoomIn,
-  ZoomOut,
-  Maximize2
+  Save
 } from "lucide-react";
 import {
   fetchIncidentReports,
@@ -321,9 +318,6 @@ export default function IncidentReportPanel({
   const [defaultSignatories, setDefaultSignatories] = useState(null);
   const [isSavingDefaults, setIsSavingDefaults] = useState(false);
   const [defaultsSavedSuccess, setDefaultsSavedSuccess] = useState(false);
-
-  // Zoom scale state for Document Viewer (100% default, can be 85% Fit, 90%, 100%, 115%)
-  const [irDocumentZoom, setIrDocumentZoom] = useState(100);
 
   // Load default signatories on mount
   useEffect(() => {
@@ -1280,9 +1274,78 @@ export default function IncidentReportPanel({
     setIsIrViewerOpen(true);
   };
 
-  // Print Document Trigger
+  // Print Document Trigger: Dedicated Long Bond Paper (8.5in x 13in) Printing
   const handlePrintDocument = () => {
-    window.print();
+    const styleId = "long-bond-paper-print-style";
+    let styleEl = document.getElementById(styleId);
+    if (!styleEl) {
+      styleEl = document.createElement("style");
+      styleEl.id = styleId;
+      document.head.appendChild(styleEl);
+    }
+    styleEl.innerHTML = `
+      @page {
+        size: 8.5in 13in portrait !important;
+        margin: 0 !important;
+      }
+      @media print {
+        html, body {
+          width: 8.5in !important;
+          height: 13in !important;
+          max-height: 13in !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          background: #ffffff !important;
+          overflow: hidden !important;
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+        }
+        body * {
+          visibility: hidden !important;
+        }
+        .no-print,
+        .no-print * {
+          display: none !important;
+          visibility: hidden !important;
+        }
+        #printable-incident-report-sheet,
+        #printable-incident-report-sheet * {
+          visibility: visible !important;
+        }
+        #printable-incident-report-sheet {
+          position: fixed !important;
+          left: 0 !important;
+          top: 0 !important;
+          width: 8.5in !important;
+          height: 13in !important;
+          max-width: 8.5in !important;
+          max-height: 13in !important;
+          box-sizing: border-box !important;
+          margin: 0 !important;
+          padding: 10mm 12mm 8mm 12mm !important;
+          background: #ffffff !important;
+          border: none !important;
+          box-shadow: none !important;
+          border-radius: 0 !important;
+          transform: none !important;
+          overflow: hidden !important;
+          page-break-inside: avoid !important;
+          break-inside: avoid !important;
+          z-index: 999999 !important;
+        }
+      }
+    `;
+
+    document.body.classList.add("printing-incident-report");
+    setTimeout(() => {
+      window.print();
+      setTimeout(() => {
+        document.body.classList.remove("printing-incident-report");
+        if (styleEl) {
+          styleEl.remove();
+        }
+      }, 1000);
+    }, 150);
   };
 
   // Pending counts for live hero indicators
@@ -3009,52 +3072,19 @@ export default function IncidentReportPanel({
       {isIrViewerOpen && selectedReport && (
         <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-sm flex items-start justify-center p-2 sm:p-4 md:p-6 overflow-y-auto">
           <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-4xl w-full h-[90vh] sm:h-[92vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200 my-auto">
-            {/* Modal Controls Bar */}
+            {/* Modal Controls Bar - COMPLETELY HIDDEN WHEN PRINTING */}
             <div className="px-5 py-3 border-b border-slate-200 bg-slate-100 flex items-center justify-between shrink-0 no-print">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2.5">
                 <span className="font-mono text-xs font-bold bg-white px-2 py-0.5 rounded border border-slate-300 text-slate-800">
                   {selectedReport.caseNumber}
                 </span>
                 <span className="text-xs font-bold text-slate-700">Official Incident Report Form</span>
+                <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100 border border-emerald-300 px-2.5 py-0.5 rounded-full hidden sm:inline-flex items-center gap-1">
+                  📄 Philippine Long Bond Paper (8.5" × 13")
+                </span>
               </div>
 
               <div className="flex items-center gap-2">
-                {/* Zoom Scale Controls */}
-                <div className="hidden sm:flex items-center gap-1 bg-white border border-slate-300 rounded-lg px-2 py-1 text-xs shadow-2xs">
-                  <span className="text-[10px] font-bold text-slate-500 mr-1">Zoom:</span>
-                  <button
-                    type="button"
-                    onClick={() => setIrDocumentZoom((prev) => Math.max(70, prev - 10))}
-                    title="Zoom Out (-10%)"
-                    className="p-1 hover:bg-slate-100 rounded text-slate-700 transition cursor-pointer"
-                  >
-                    <ZoomOut size={13} />
-                  </button>
-                  <span className="font-mono font-bold text-[11px] text-slate-800 min-w-[34px] text-center">
-                    {irDocumentZoom}%
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setIrDocumentZoom((prev) => Math.min(130, prev + 10))}
-                    title="Zoom In (+10%)"
-                    className="p-1 hover:bg-slate-100 rounded text-slate-700 transition cursor-pointer"
-                  >
-                    <ZoomIn size={13} />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setIrDocumentZoom((prev) => (prev === 85 ? 100 : 85))}
-                    title={irDocumentZoom === 85 ? "Reset to 100%" : "Fit entire page height"}
-                    className={`ml-1.5 px-2 py-0.5 rounded text-[10px] font-bold transition cursor-pointer ${
-                      irDocumentZoom === 85
-                        ? "bg-[#0f2b48] text-white"
-                        : "bg-slate-100 text-slate-700 hover:bg-slate-200"
-                    }`}
-                  >
-                    {irDocumentZoom === 85 ? "100%" : "Fit Page"}
-                  </button>
-                </div>
-
                 {/* Voice speech */}
                 <button
                   type="button"
@@ -3073,10 +3103,10 @@ export default function IncidentReportPanel({
                 <button
                   type="button"
                   onClick={handlePrintDocument}
-                  className="px-3 py-1.5 rounded-lg text-xs font-bold bg-[#8cb84a] hover:bg-[#7ea741] text-white transition cursor-pointer inline-flex items-center gap-1.5 shadow-xs"
+                  className="px-4 py-1.5 rounded-lg text-xs font-bold bg-[#8cb84a] hover:bg-[#7ea741] text-white transition cursor-pointer inline-flex items-center gap-1.5 shadow-sm active:scale-95"
                 >
-                  <Printer size={14} />
-                  <span>Print IR Document</span>
+                  <Printer size={15} />
+                  <span>Print Bond Paper (Long)</span>
                 </button>
 
                 <button
@@ -3090,17 +3120,13 @@ export default function IncidentReportPanel({
             </div>
 
             {/* Authentic Printable Document Container */}
-            <div className="flex-1 min-h-0 overflow-y-auto p-3 sm:p-8 pb-36 sm:pb-48 bg-slate-200/80 flex justify-center custom-scrollbar">
+            <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-8 pb-32 sm:pb-44 bg-slate-300/60 flex justify-center custom-scrollbar">
               <div 
-                style={{
-                  transform: irDocumentZoom !== 100 ? `scale(${irDocumentZoom / 100})` : "none",
-                  transformOrigin: "top center",
-                  marginBottom: irDocumentZoom < 100 ? `-${(100 - irDocumentZoom) * 11}px` : "0"
-                }}
-                className="bg-white w-full max-w-[840px] p-6 sm:p-10 shadow-xl border border-slate-300 rounded-sm print:p-0 print:border-none print:shadow-none print:transform-none text-slate-900 font-sans relative flex flex-col transition-transform duration-150"
+                id="printable-incident-report-sheet"
+                className="bg-white w-full max-w-[816px] min-h-[1248px] p-6 sm:p-10 shadow-2xl border border-slate-300 rounded-xs text-slate-900 font-sans relative flex flex-col justify-between"
               >
                 {/* Top Right Corner Geometric Diagonal Stripes */}
-                <div className="absolute top-0 right-0 w-36 h-28 pointer-events-none overflow-hidden no-print">
+                <div className="absolute top-0 right-0 w-36 h-28 pointer-events-none overflow-hidden">
                   <svg className="w-full h-full" viewBox="0 0 144 112" fill="none">
                     <polygon points="60,0 144,0 144,84" fill="#0f2b48" />
                     <polygon points="38,0 52,0 144,72 144,84" fill="#c81e1e" />
@@ -3558,7 +3584,7 @@ export default function IncidentReportPanel({
                   </div>
 
                   {/* Bottom Right Corner Geometric Stripes */}
-                  <div className="absolute bottom-0 right-0 w-36 h-20 pointer-events-none overflow-hidden no-print">
+                  <div className="absolute bottom-0 right-0 w-36 h-20 pointer-events-none overflow-hidden">
                     <svg className="w-full h-full" viewBox="0 0 144 80" fill="none">
                       <polygon points="144,0 144,80 60,80" fill="#0f2b48" />
                       <polygon points="144,12 144,24 52,80 38,80" fill="#c81e1e" />

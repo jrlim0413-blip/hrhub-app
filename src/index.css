@@ -6,19 +6,22 @@ body {
 }
 
 @media print {
+  /* Global: completely suppress elements marked .no-print during any print operation */
+  .no-print,
+  .no-print * {
+    display: none !important;
+    visibility: hidden !important;
+  }
+
   tr, td, th, .cell-wrap {
     break-inside: avoid !important;
     page-break-inside: avoid !important;
     -webkit-column-break-inside: avoid !important;
   }
 
-  /* Strict A4 Portrait Paper */
-  @page {
-    size: A4 portrait;
-    margin: 0;
-  }
-
-  html, body {
+  /* Strict A4 Portrait Paper (Scoped to Agent ID Card printing) */
+  body.printing-agent-id-card html,
+  body.printing-agent-id-card {
     width: 210mm !important;
     height: 297mm !important;
     max-height: 297mm !important;
