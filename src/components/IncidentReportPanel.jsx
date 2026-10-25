@@ -34,7 +34,14 @@ import {
   Scale,
   Trash2,
   RefreshCw,
-  Sparkles
+  Mail,
+  PenTool,
+  CheckCheck,
+  FileSignature,
+  Paperclip,
+  AtSign,
+  MessageSquare,
+  Reply
 } from "lucide-react";
 import {
   fetchIncidentReports,
@@ -46,10 +53,14 @@ import {
   lookupSgcCentralHr
 } from "../lib/incidentReportStorage";
 import {
-  analyzeAndFormulateNte,
-  VIOLATION_PRESETS,
-  detectViolationCategory
-} from "../lib/nteLegalAnalyzer";
+  fetchInAppEmails,
+  sendInAppEmail,
+  markEmailAsRead,
+  deleteInAppEmail,
+  subscribeToLiveEmails,
+  generateIrEmailTemplate,
+  generateNteEmailTemplate
+} from "../lib/inAppEmailService";
 import { supabase } from "../lib/supabase";
 import {
   resolveUserHrRole,
@@ -99,8 +110,30 @@ export default function IncidentReportPanel({
   const [isNteDraftModalOpen, setIsNteDraftModalOpen] = useState(false);
   const [isExplanationModalOpen, setIsExplanationModalOpen] = useState(false);
   const [selectedReport, setSelectedReport] = useState(null);
-  const [selectedPresetId, setSelectedPresetId] = useState(null);
-  const [aiAnalysisResult, setAiAnalysisResult] = useState(null);
+
+  // In-App Email Dispatch & Mailbox states
+  const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
+  const [isEmailInboxOpen, setIsEmailInboxOpen] = useState(false);
+  const [inAppEmails, setInAppEmails] = useState([]);
+  const [activeEmailTab, setActiveEmailTab] = useState("INBOX"); // "INBOX" | "SENT"
+  const [selectedEmailMessage, setSelectedEmailMessage] = useState(null);
+  const [emailForm, setEmailForm] = useState({
+    to: "",
+    cc: "",
+    subject: "",
+    body: "",
+    relatedReportId: null,
+    emailType: "IR"
+  });
+
+  // Employee/Respondent Receipt & Digital Signature states
+  const [isSignReceiptModalOpen, setIsSignReceiptModalOpen] = useState(false);
+  const [signReportTarget, setSignReportTarget] = useState(null);
+  const [signMode, setSignMode] = useState("DRAW"); // "DRAW" | "TYPE"
+  const [typedSignature, setTypedSignature] = useState("");
+  const [signRemarks, setSignRemarks] = useState("I acknowledge receipt of this Incident Report and take notice of its contents.");
+  const sigCanvasRef = useRef(null);
+  const isDrawingRef = useRef(false);
 
   // Compute effective role & capabilities STRICTLY based on the logged-in account (currentUser)
   const effectiveRole = useMemo(() => {
@@ -238,6 +271,21 @@ export default function IncidentReportPanel({
     };
   }, [effectiveRole.isHeadOffice]);
 
+  // Load in-app emails and subscribe to live cross-tab / cloud updates
+  useEffect(() => {
+    fetchInAppEmails().then(setInAppEmails);
+    const unsubEmails = subscribeToLiveEmails((latest) => {
+      setInAppEmails(latest);
+    });
+    return () => {
+      if (unsubEmails) unsubEmails();
+    };
+  }, []);
+
+  const unreadEmailCount = useMemo(() => {
+    return inAppEmails.filter((m) => !m.read && m.direction === "INCOMING").length;
+  }, [inAppEmails]);
+
   // Voice toggle handler
   const handleToggleVoice = () => {
     const nextState = !voiceMutedState;
@@ -344,23 +392,14 @@ export default function IncidentReportPanel({
       irForm.fullIncidentNarrative?.trim() ||
       "During surprise drawer reconciliation audit, a physical cash shortage was uncovered. The personnel on duty could not produce balancing vouchers or valid justification for the discrepancy.";
 
-    // Intelligently analyze incident report to formulate tailored, non-generic legal NTE citations
-    const legalAnalysis = analyzeAndFormulateNte({
-      ...irForm,
-      caseNumber: caseId,
-      specificFindings: findingsText,
-      fullIncidentNarrative: findingsText,
-      incidentCauses: irForm.incidentCauses,
-      cashShortageAmount: irForm.cashShortageAmount,
-      employeePosition: irForm.employeePosition,
-      employeeName: irForm.employeeName,
-      branch: irForm.branch,
-      company: irForm.company,
-      senderCompany: irForm.company,
-      dateReported: irForm.dateReported,
-      auditDates: irForm.auditDates,
-      auditedBy: irForm.auditedBy
-    });
+    const defaultNteSubject = `NOTICE TO EXPLAIN (NTE) — RE: INCIDENT INVESTIGATION FOR ${irForm.employeeName.toUpperCase()}`;
+    const defaultNteBodyParagraph1 = `According to the incident report submitted by the ${irForm.reportingHrTitle || "Branch HR Admin"}, ${irForm.reportingHrName || "Branch HR"} of ${irForm.company} dated ${irForm.dateReported || dateFormatted}, an incident involving an unaccounted cash shortage of PHP ${irForm.cashShortageAmount || "0.00"} and deviation from standard operating procedures was uncovered during the audit conducted on ${irForm.auditDates || dateFormatted} by ${irForm.auditedBy || "Internal Audit"}.`;
+    const defaultNteBodyParagraph2 = findingsText;
+    const defaultNteBodyParagraph3 = `As the designated ${irForm.employeePosition || "Employee"}, you are tasked with strict adherence to cash handling, trust fidelity, and standard operating procedures (SOPs). Failure to properly balance company funds or observe operational guidelines impairs the legitimate trust reposed in you by the company.`;
+    const defaultCodeOfConduct = `Employees Code of Conduct — Offenses Involving Dishonesty, Cash Shortages & Gross Neglect of Duties:\n"Any employee who causes or incurs unaccounted shortages, unremitted collections, failure to balance assigned cash floats, or circumvents standard financial control mechanisms shall be subjected to formal administrative disciplinary action."`;
+    const defaultLaborCode = `Philippine Labor Code (PD 442), Article 297 [Termination by Employer - Just Causes]:\n(a) Serious Misconduct or willful disobedience in connection with work;\n(b) Gross and habitual neglect of duty;\n(c) Fraud or willful breach of trust reposed by the employer.`;
+    const defaultDueProcess = `In strict adherence to procedural due process guaranteed under Department of Labor and Employment (DOLE) Department Order No. 147-15, you are hereby given a period of FIVE (5) CALENDAR DAYS from your receipt hereof to submit a formal written explanation addressing the allegations enumerated above.`;
+    const defaultConclusion = `Failure on your part to submit your written explanation within the prescribed 5-day period shall be construed as a waiver of your right to be heard, and the Management shall evaluate the incident based on the evidence on record.`;
 
     const newReport = {
       id: caseId,
@@ -389,22 +428,21 @@ export default function IncidentReportPanel({
       companyEmail: DEFAULT_COMPANY_EMAIL,
       forwardedAt: new Date().toISOString(),
 
-      // Smart, Non-Generic Legal Citations derived from actual report data
-      nteSubject: legalAnalysis.nteSubject,
+      // Professional Structured NTE Defaults (Manual editable)
+      nteSubject: defaultNteSubject,
       nteDate: dateFormatted,
-      nteBodyParagraph1: legalAnalysis.nteBodyParagraph1,
-      nteBodyParagraph2: legalAnalysis.nteBodyParagraph2,
-      nteBodyParagraph3: legalAnalysis.nteBodyParagraph3,
-      nteDueProcessClause: legalAnalysis.nteDueProcessClause,
-      codeOfConductSection: legalAnalysis.codeOfConductSection,
-      laborCodeViolation: legalAnalysis.laborCodeViolation,
-      nteConclusion: legalAnalysis.nteConclusion,
-      violationPresetId: legalAnalysis.presetId,
-      violationSeverity: legalAnalysis.severity,
-      violationSummaryTitle: legalAnalysis.summaryTitle,
+      nteBodyParagraph1: defaultNteBodyParagraph1,
+      nteBodyParagraph2: defaultNteBodyParagraph2,
+      nteBodyParagraph3: defaultNteBodyParagraph3,
+      nteDueProcessClause: defaultDueProcess,
+      codeOfConductSection: defaultCodeOfConduct,
+      laborCodeViolation: defaultLaborCode,
+      nteConclusion: defaultConclusion,
+      violationSummaryTitle: "Cash Shortage, Unremitted Funds & Breach of Trust",
+      violationSeverity: "SERIOUS OFFENSE",
       nteSignatoryName: irForm.assignedCentralHrName,
       nteSignatoryTitle: irForm.assignedCentralHrTitle,
-      nteSignatoryCompany: irForm.company,
+      nteSignatoryCompany: "Simpal Group of Companies",
       nteFooterNote: `HR 201 File & Records ${new Date().getFullYear()}`,
 
       activityLog: [
@@ -413,7 +451,7 @@ export default function IncidentReportPanel({
           timestamp: new Date().toISOString(),
           action: "IR_TRANSMITTED_TO_HEAD_OFFICE",
           actor: `${irForm.reportingHrName} (${irForm.company} HR)`,
-          message: `Transmitted Incident Report ${caseId} for ${irForm.employeeName} to Simpal Group of Companies (Head Office HRMD). Legal Evaluation: [${legalAnalysis.summaryTitle}].`
+          message: `Transmitted Incident Report ${caseId} for ${irForm.employeeName} to Simpal Group of Companies (Head Office HRMD).`
         }
       ]
     };
@@ -422,58 +460,52 @@ export default function IncidentReportPanel({
     await loadRecords();
     setIsCreateModalOpen(false);
     setSelectedReport(saved || newReport);
-    setIsViewerOpen(true);
+    setIsIrViewerOpen(true);
 
-    // AI Buddy Voice Announcement
+    // AI Voice Announcement
     const announcement = `Transmitted! Incident report for ${irForm.employeeName} has been officially sent from ${irForm.company} to Simpal Group of Companies Head Office for Notice to Explain evaluation.`;
     playAiVoiceAnnouncement(announcement);
   };
 
   // Simpal Group of Companies (SGC HRMD) Evaluates & Issues NTE (Returns to Originating Company)
   const handleOpenDraftNte = (report) => {
-    // Intelligently analyze the incident details and derive non-generic Code of Conduct & Labor Code citations
-    const legalAnalysis = analyzeAndFormulateNte(report, report.violationPresetId || null);
-    setSelectedPresetId(legalAnalysis.presetId);
-    setAiAnalysisResult(legalAnalysis);
+    const findingsText =
+      report.specificFindings ||
+      report.specific_findings ||
+      report.fullIncidentNarrative ||
+      report.full_incident_narrative ||
+      "Cash discrepancy and procedural non-compliance noted during drawer audit.";
+
+    const defaultNteSubject = report.nteSubject || `NOTICE TO EXPLAIN (NTE) — RE: INCIDENT INVESTIGATION FOR ${(report.employeeName || "EMPLOYEE").toUpperCase()}`;
+    const defaultNteDate = report.nteDate || new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+    const defaultNteBodyParagraph1 = report.nteBodyParagraph1 || `According to the incident report submitted by the ${report.reportingHrTitle || report.senderHrTitle || "Branch HR Admin"}, ${report.reportingHrName || report.senderHrName || "Branch HR"} of ${report.senderCompany || report.company} dated ${report.dateReported || "recently"}, it was found that you have an outstanding cash shortage of PHP ${report.cashShortageAmount || "0.00"} during the audit conducted on ${report.auditDates || "scheduled audit"} by ${report.auditedBy || "Internal Audit"}.`;
+    const defaultNteBodyParagraph2 = report.nteBodyParagraph2 || findingsText;
+    const defaultNteBodyParagraph3 = report.nteBodyParagraph3 || `These circumstances raise serious concerns regarding your cash handling, accountability, and compliance with Company SOPs. As the assigned ${report.employeePosition || "Employee"}, you are expected to strictly safeguard company funds and follow established procedures.`;
+    const defaultCodeOfConduct = report.codeOfConductSection || `Employees Code of Conduct — Offenses Involving Dishonesty, Cash Shortages & Operational Lapses:\n"Any employee who causes or incurs unaccounted shortages, unremitted collections, failure to balance assigned cash floats, or circumvents standard financial control mechanisms shall be subjected to formal administrative disciplinary action."`;
+    const defaultLaborCode = report.laborCodeViolation || `Philippine Labor Code (PD 442) Art. 297 Just Causes:\n(a) Serious Misconduct or willful disobedience in connection with work;\n(b) Gross and habitual neglect of duty;\n(c) Fraud or willful breach of trust reposed by the employer.`;
+    const defaultDueProcess = report.nteDueProcessClause || "In line with procedural due process (DOLE Department Order No. 147-15), you are hereby requested to submit a written explanation within five (5) calendar days upon receipt of this memo, explaining why you should not be disciplined under company rules and the Labor Code.";
+    const defaultConclusion = report.nteConclusion || "Failure to submit your written explanation within the five-day period shall be deemed a waiver of your opportunity to present your side, and management will decide the case on the basis of available records.";
 
     const enrichedReport = {
       ...report,
-      nteSubject: report.nteSubject || legalAnalysis.nteSubject,
-      nteBodyParagraph1: report.nteBodyParagraph1 || legalAnalysis.nteBodyParagraph1,
-      nteBodyParagraph2: report.nteBodyParagraph2 || legalAnalysis.nteBodyParagraph2,
-      nteBodyParagraph3: report.nteBodyParagraph3 || legalAnalysis.nteBodyParagraph3,
-      codeOfConductSection: report.codeOfConductSection || legalAnalysis.codeOfConductSection,
-      laborCodeViolation: report.laborCodeViolation || legalAnalysis.laborCodeViolation,
-      nteDueProcessClause: report.nteDueProcessClause || legalAnalysis.nteDueProcessClause,
-      nteConclusion: report.nteConclusion || legalAnalysis.nteConclusion,
-      violationPresetId: legalAnalysis.presetId,
-      violationSeverity: legalAnalysis.severity,
-      violationSummaryTitle: legalAnalysis.summaryTitle
+      nteSubject: defaultNteSubject,
+      nteDate: defaultNteDate,
+      nteBodyParagraph1: defaultNteBodyParagraph1,
+      nteBodyParagraph2: defaultNteBodyParagraph2,
+      nteBodyParagraph3: defaultNteBodyParagraph3,
+      codeOfConductSection: defaultCodeOfConduct,
+      laborCodeViolation: defaultLaborCode,
+      nteDueProcessClause: defaultDueProcess,
+      nteConclusion: defaultConclusion,
+      violationSummaryTitle: report.violationSummaryTitle || "Cash Shortage, Unremitted Funds & Breach of Trust",
+      violationSeverity: report.violationSeverity || "SERIOUS OFFENSE",
+      nteSignatoryName: report.assignedCentralHrName || "JEVINCE JAYE S. JUBAY, CHRP",
+      nteSignatoryTitle: report.assignedCentralHrTitle || "HRMD Manager",
+      nteSignatoryCompany: "Simpal Group of Companies"
     };
 
     setSelectedReport(enrichedReport);
     setIsNteDraftModalOpen(true);
-  };
-
-  // Helper: SGC HRMD switches violation preset or triggers AI re-analysis
-  const handleApplyViolationPreset = (presetKey) => {
-    if (!selectedReport) return;
-    const newAnalysis = analyzeAndFormulateNte(selectedReport, presetKey);
-    setSelectedPresetId(newAnalysis.presetId);
-    setAiAnalysisResult(newAnalysis);
-
-    // Update DOM inputs dynamically if mounted
-    const p1 = document.getElementById("nte-para-1");
-    const p2 = document.getElementById("nte-para-2");
-    const p3 = document.getElementById("nte-para-3");
-    const coc = document.getElementById("nte-code-of-conduct");
-    const lc = document.getElementById("nte-labor-code");
-
-    if (p1) p1.value = newAnalysis.nteBodyParagraph1;
-    if (p2) p2.value = newAnalysis.nteBodyParagraph2;
-    if (p3) p3.value = newAnalysis.nteBodyParagraph3;
-    if (coc) coc.value = newAnalysis.codeOfConductSection;
-    if (lc) lc.value = newAnalysis.laborCodeViolation;
   };
 
   // Direct Simpal Group of Companies (Head Office) NTE Action
@@ -489,18 +521,6 @@ export default function IncidentReportPanel({
     const sgcHr = lookupSgcCentralHr(profiles);
     const dateFormatted = new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
     const directCaseNumber = `NTE-${new Date().getFullYear()}-${String(Date.now()).slice(-4)}`;
-
-    const legalAnalysis = analyzeAndFormulateNte({
-      employeeName: "MARIA KRISTINA SANTOS",
-      employeePosition: "Branch Cashier & Vault Custodian",
-      branchLocation: "Station 1",
-      company: "5A Royal Gaming OPC",
-      senderCompany: "5A Royal Gaming OPC",
-      cashShortageAmount: "12,500.00",
-      auditDates: dateFormatted,
-      auditedBy: `${sgcHr.name} (SGC Internal Audit)`,
-      specificFindings: "Cash shortage discrepancy of PHP 12,500.00 identified during surprise drawer reconciliation audit without supporting balancing chits."
-    });
 
     const directNteReport = {
       id: `nte-sgc-${Date.now()}`,
@@ -520,28 +540,206 @@ export default function IncidentReportPanel({
       auditDates: dateFormatted,
       auditedBy: `${sgcHr.name} (SGC Internal Audit)`,
       specificFindings: "Cash shortage discrepancy of PHP 12,500.00 identified during surprise drawer reconciliation audit without supporting balancing chits.",
-      nteSubject: legalAnalysis.nteSubject,
+      nteSubject: `NOTICE TO EXPLAIN (NTE) — RE: CASH SHORTAGE AUDIT FOR MARIA KRISTINA SANTOS`,
       nteDate: dateFormatted,
-      nteBodyParagraph1: legalAnalysis.nteBodyParagraph1,
-      nteBodyParagraph2: legalAnalysis.nteBodyParagraph2,
-      nteBodyParagraph3: legalAnalysis.nteBodyParagraph3,
-      nteDueProcessClause: legalAnalysis.nteDueProcessClause,
-      codeOfConductSection: legalAnalysis.codeOfConductSection,
-      laborCodeViolation: legalAnalysis.laborCodeViolation,
-      nteConclusion: legalAnalysis.nteConclusion,
-      violationPresetId: legalAnalysis.presetId,
-      violationSeverity: legalAnalysis.severity,
-      violationSummaryTitle: legalAnalysis.summaryTitle,
+      nteBodyParagraph1: `According to the incident report submitted by the Branch HR Admin, Ms. Quennie R. Capuyan of 5A Royal Gaming OPC dated ${dateFormatted}, an unaccounted cash shortage of PHP 12,500.00 was uncovered during internal audit.`,
+      nteBodyParagraph2: "Cash shortage discrepancy of PHP 12,500.00 identified during surprise drawer reconciliation audit without supporting balancing chits.",
+      nteBodyParagraph3: "As the assigned Branch Cashier & Vault Custodian, you are expected to strictly control company funds and follow established procedures.",
+      codeOfConductSection: `Employees Code of Conduct — Offenses Involving Dishonesty, Cash Shortages & Operational Lapses:\n"Any employee who causes or incurs unaccounted shortages, unremitted collections, failure to balance assigned cash floats, or circumvents standard financial control mechanisms shall be subjected to formal administrative disciplinary action."`,
+      laborCodeViolation: `Philippine Labor Code (PD 442) Art. 297 Just Causes:\n(a) Serious Misconduct;\n(b) Gross and habitual neglect of duty;\n(c) Fraud or willful breach of trust.`,
+      nteDueProcessClause: "In line with procedural due process (DOLE Department Order No. 147-15), you are hereby requested to submit a written explanation within five (5) calendar days upon receipt of this memo.",
+      nteConclusion: "Failure to submit your written explanation within the five-day period shall be deemed a waiver of your opportunity to present your side.",
+      violationSummaryTitle: "Cash Shortage, Unremitted Funds & Breach of Trust",
+      violationSeverity: "SERIOUS OFFENSE",
       nteSignatoryName: sgcHr.name,
       nteSignatoryTitle: sgcHr.title,
       nteSignatoryCompany: "Simpal Group of Companies",
       nteFooterNote: `Simpal Group HRMD 201 File & Records ${new Date().getFullYear()}`
     };
 
-    setSelectedPresetId(legalAnalysis.presetId);
-    setAiAnalysisResult(legalAnalysis);
     setSelectedReport(directNteReport);
     setIsNteDraftModalOpen(true);
+  };
+
+  // ---------------------------------------------------------------------------
+  // RESPONDENT / EMPLOYEE RECEIPT & DIGITAL SIGNATURE HANDLERS
+  // ---------------------------------------------------------------------------
+  const handleOpenSignModal = (report) => {
+    setSignReportTarget(report);
+    setTypedSignature(report.employeeName || "");
+    setSignRemarks(report.respondentRemarks || "I acknowledge receipt of this Incident Report and take notice of its contents.");
+    setSignMode("DRAW");
+    setIsSignReceiptModalOpen(true);
+    setTimeout(() => {
+      clearCanvas();
+    }, 150);
+  };
+
+  const startDrawing = (e) => {
+    const canvas = sigCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    const rect = canvas.getBoundingClientRect();
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    isDrawingRef.current = true;
+    ctx.beginPath();
+    ctx.moveTo(clientX - rect.left, clientY - rect.top);
+  };
+
+  const draw = (e) => {
+    if (!isDrawingRef.current) return;
+    const canvas = sigCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    const rect = canvas.getBoundingClientRect();
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    ctx.lineWidth = 2.5;
+    ctx.lineCap = "round";
+    ctx.strokeStyle = "#0f172a";
+    ctx.lineTo(clientX - rect.left, clientY - rect.top);
+    ctx.stroke();
+  };
+
+  const stopDrawing = () => {
+    isDrawingRef.current = false;
+  };
+
+  const clearCanvas = () => {
+    const canvas = sigCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+  };
+
+  const handleSaveRespondentSignature = async () => {
+    if (!signReportTarget) return;
+
+    let signatureDataUrl = "";
+    if (signMode === "DRAW") {
+      const canvas = sigCanvasRef.current;
+      if (canvas) {
+        signatureDataUrl = canvas.toDataURL("image/png");
+      }
+    } else {
+      // Create off-screen canvas to render stylish typed signature
+      const offscreen = document.createElement("canvas");
+      offscreen.width = 400;
+      offscreen.height = 100;
+      const ctx = offscreen.getContext("2d");
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, 400, 100);
+      ctx.font = "italic bold 28px 'Dancing Script', 'Brush Script MT', cursive, sans-serif";
+      ctx.fillStyle = "#0f172a";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(typedSignature || signReportTarget.employeeName, 200, 50);
+      signatureDataUrl = offscreen.toDataURL("image/png");
+    }
+
+    const timestampStr = new Date().toLocaleString("en-US", {
+      month: "long",
+      day: "numeric",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true
+    });
+
+    const updated = {
+      ...signReportTarget,
+      respondentSignature: signatureDataUrl,
+      respondentSignedAt: timestampStr,
+      respondentSignedName: signReportTarget.employeeName,
+      respondentRemarks: signRemarks,
+      activityLog: [
+        ...(signReportTarget.activityLog || []),
+        {
+          id: `act-sign-${Date.now()}`,
+          timestamp: new Date().toISOString(),
+          action: "IR_SIGNED_BY_RESPONDENT",
+          actor: `${signReportTarget.employeeName} (Respondent Employee)`,
+          message: `Official Incident Report received and digitally signed by respondent ${signReportTarget.employeeName} on ${timestampStr}. Remarks: "${signRemarks}"`
+        }
+      ]
+    };
+
+    await saveIncidentReport(updated);
+    await loadRecords();
+    if (selectedReport && selectedReport.id === updated.id) {
+      setSelectedReport(updated);
+    }
+
+    // Automatically send receipt notification email to In-App Mailbox
+    await sendInAppEmail({
+      to: signReportTarget.senderHrEmail || signReportTarget.companyEmail || "imsoroglohr@gmail.com",
+      cc: "sgc.hrmd@simpalgroup.com",
+      from: `${signReportTarget.employeeName} <${signReportTarget.employeeName.toLowerCase().replace(/\s+/g, '')}@employee.hrhub>`,
+      senderName: signReportTarget.employeeName,
+      senderCompany: signReportTarget.company,
+      subject: `CONFORME RECEIPT: Incident Report Signed - Case ${signReportTarget.caseNumber} (${signReportTarget.employeeName})`,
+      body: `This is to formally confirm that employee ${signReportTarget.employeeName} (${signReportTarget.employeePosition} - ${signReportTarget.company}) has formally received and signed the Incident Report on ${timestampStr}.\n\nRespondent Remarks:\n"${signRemarks}"\n\nDigital signature has been officially affixed to the case file records.`,
+      tag: "CONFORME",
+      relatedReportId: signReportTarget.id,
+      direction: "INCOMING"
+    });
+
+    const refreshedEmails = await fetchInAppEmails();
+    setInAppEmails(refreshedEmails);
+
+    setIsSignReceiptModalOpen(false);
+    playAiVoiceAnnouncement(`Incident Report receipt confirmed and digitally signed by ${signReportTarget.employeeName}. Conforme stamped onto official case file.`);
+  };
+
+  // ---------------------------------------------------------------------------
+  // IN-APP EMAIL DISPATCH HANDLERS
+  // ---------------------------------------------------------------------------
+  const handleOpenComposeEmail = (report, emailType = "IR") => {
+    const sgcHr = lookupSgcCentralHr(profiles);
+    const senderHr = lookupAssignedHrForCompany(report.company || report.senderCompany, profiles);
+
+    let template;
+    if (emailType === "NTE" || report.status === "NTE_ISSUED" || report.status === "SERVED_TO_EMPLOYEE") {
+      template = generateNteEmailTemplate(report, sgcHr, senderHr);
+    } else {
+      template = generateIrEmailTemplate(report, senderHr, sgcHr);
+    }
+
+    setEmailForm({
+      to: template.to,
+      cc: template.cc,
+      subject: template.subject,
+      body: template.body,
+      relatedReportId: report.id,
+      emailType: emailType
+    });
+    setIsEmailModalOpen(true);
+  };
+
+  const handleSendEmail = async () => {
+    if (!emailForm.to || !emailForm.subject) {
+      alert("Please provide recipient email and subject.");
+      return;
+    }
+
+    await sendInAppEmail({
+      to: emailForm.to,
+      cc: emailForm.cc,
+      from: `${effectiveRole.reportingName} <${currentUser?.email || "hr@simpalgroup.com"}>`,
+      senderName: effectiveRole.reportingName,
+      senderCompany: effectiveRole.company,
+      subject: emailForm.subject,
+      body: emailForm.body,
+      tag: emailForm.emailType === "NTE" ? "NTE" : "INCIDENT_REPORT",
+      relatedReportId: emailForm.relatedReportId,
+      direction: "OUTGOING"
+    });
+
+    const refreshed = await fetchInAppEmails();
+    setInAppEmails(refreshed);
+    setIsEmailModalOpen(false);
+    playAiVoiceAnnouncement(`Official memo dispatched to ${emailForm.to}. Recorded in system Mailbox.`);
   };
 
   // Purge test / mock data to start with pure live process
@@ -724,6 +922,21 @@ export default function IncidentReportPanel({
               <span>Transmit IR ➔ Head Office</span>
             </button>
           )}
+
+          <button
+            type="button"
+            onClick={() => setIsEmailInboxOpen(true)}
+            className="relative inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-xs transition cursor-pointer active:scale-98"
+            title="Open In-App Mailbox (Send & Receive memos directly within HR Hub)"
+          >
+            <Mail size={13} />
+            <span>In-App Mailbox</span>
+            {unreadEmailCount > 0 && (
+              <span className="px-1.5 py-0.2 rounded-full text-[10px] font-black bg-rose-500 text-white animate-bounce">
+                {unreadEmailCount}
+              </span>
+            )}
+          </button>
 
           <button
             type="button"
@@ -1209,6 +1422,40 @@ export default function IncidentReportPanel({
                     >
                       <FileText size={14} />
                       <span>View IR Form</span>
+                    </button>
+
+                    {/* Respondent / Employee Acknowledgment & Signature */}
+                    {report.respondentSignature ? (
+                      <button
+                        type="button"
+                        onClick={() => handleOpenSignModal(report)}
+                        className="px-3 py-2 rounded-xl text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-300 hover:bg-emerald-100 transition cursor-pointer inline-flex items-center gap-1.5 shadow-2xs"
+                        title="View or update respondent signed acknowledgment"
+                      >
+                        <CheckCheck size={14} className="text-emerald-600" />
+                        <span>IR Signed</span>
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => handleOpenSignModal(report)}
+                        className="px-3.5 py-2 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-600 text-slate-950 shadow-xs transition cursor-pointer inline-flex items-center gap-1.5 animate-pulse"
+                        title="Receive and sign Incident Report (affix digital signature)"
+                      >
+                        <FileSignature size={14} />
+                        <span>✍️ Receive & Sign IR</span>
+                      </button>
+                    )}
+
+                    {/* Integrated In-App Email Transmittal */}
+                    <button
+                      type="button"
+                      onClick={() => handleOpenComposeEmail(report, isNteIssued || isServed ? "NTE" : "IR")}
+                      className="px-3 py-2 rounded-xl text-xs font-bold bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 shadow-2xs transition cursor-pointer inline-flex items-center gap-1.5"
+                      title="Send official Incident Report or NTE via In-App Email (no need to open browser/Gmail)"
+                    >
+                      <Mail size={14} />
+                      <span>Email Memo</span>
                     </button>
 
                     {/* SGC Head Office HRMD ONLY: Evaluate & Issue NTE */}
@@ -2141,6 +2388,86 @@ export default function IncidentReportPanel({
                         <strong>Receiver:</strong> Simpal Group of Companies (Head Office HRMD)
                       </span>
                     </div>
+
+                    {/* 4. RESPONDENT (EMPLOYEE) ACKNOWLEDGMENT & SIGNATURE CONFORME */}
+                    <div className="p-4 rounded-2xl bg-white border-2 border-slate-300 shadow-xs space-y-3 mt-4">
+                      <div className="flex items-center justify-between flex-wrap gap-2">
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center font-bold">
+                            <FileSignature size={16} />
+                          </div>
+                          <div>
+                            <h4 className="text-xs font-black uppercase tracking-wider text-slate-900">
+                              RESPONDENT CONFORME & PROOF OF RECEIPT
+                            </h4>
+                            <p className="text-[10px] text-slate-500">
+                              Philippine Due Process Requirement • Employee Service & Signed Acknowledgment
+                            </p>
+                          </div>
+                        </div>
+
+                        {selectedReport.respondentSignature ? (
+                          <span className="px-2.5 py-1 rounded-md text-[10px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-300 inline-flex items-center gap-1">
+                            <CheckCheck size={12} className="text-emerald-700" />
+                            <span>OFFICIALLY SIGNED & RECEIVED</span>
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleOpenSignModal(selectedReport)}
+                            className="px-3 py-1.5 rounded-lg text-xs font-bold bg-amber-500 hover:bg-amber-600 text-slate-950 shadow-xs transition cursor-pointer inline-flex items-center gap-1.5"
+                          >
+                            <PenTool size={13} />
+                            <span>✍️ Affix Respondent Signature Now</span>
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-700 leading-relaxed italic">
+                        "I hereby acknowledge receipt of a copy of this Incident Report and take notice of the allegations, audit findings, and attachments. I understand that formal administrative proceedings will follow under company due process rules."
+                      </div>
+
+                      {selectedReport.respondentSignature ? (
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2 border-t border-slate-100 items-center">
+                          <div className="md:col-span-1 flex flex-col items-center justify-center p-2 rounded-xl bg-slate-50 border border-slate-200">
+                            <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold mb-1">Affixed Digital Signature</span>
+                            <img
+                              src={selectedReport.respondentSignature}
+                              alt="Respondent Signature"
+                              className="max-h-16 object-contain"
+                            />
+                          </div>
+                          <div className="md:col-span-2 space-y-1 text-xs">
+                            <div>
+                              <span className="text-[10px] uppercase font-bold text-slate-400 block">Respondent Name</span>
+                              <strong className="text-slate-900 font-extrabold">{selectedReport.respondentSignedName || selectedReport.employeeName}</strong>
+                            </div>
+                            <div>
+                              <span className="text-[10px] uppercase font-bold text-slate-400 block">Date & Time Received</span>
+                              <span className="text-slate-700 font-medium">{selectedReport.respondentSignedAt || "Recorded upon signing"}</span>
+                            </div>
+                            {selectedReport.respondentRemarks && (
+                              <div>
+                                <span className="text-[10px] uppercase font-bold text-slate-400 block">Remarks by Respondent</span>
+                                <span className="text-slate-600 italic">"{selectedReport.respondentRemarks}"</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-between gap-3 text-xs text-amber-900">
+                          <span>Awaiting physical or digital signature of respondent <strong>{selectedReport.employeeName}</strong>.</span>
+                          <button
+                            type="button"
+                            onClick={() => handleOpenSignModal(selectedReport)}
+                            className="px-3 py-1 rounded-lg text-xs font-bold bg-amber-600 text-white hover:bg-amber-700 transition cursor-pointer inline-flex items-center gap-1"
+                          >
+                            <PenTool size={12} />
+                            <span>Sign IR</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
 
@@ -2213,67 +2540,114 @@ export default function IncidentReportPanel({
                 </div>
               </div>
 
-              {/* AI Violation Classifier & Preset Selector Bar */}
-              <div className="p-4 rounded-xl bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200/90 shadow-xs space-y-3">
+              {/* Professional Manual Due Process & Legal Reference Suite */}
+              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 shadow-2xs space-y-3">
                 <div className="flex items-center justify-between flex-wrap gap-2">
                   <div className="flex items-center gap-2">
-                    <div className="w-7 h-7 rounded-lg bg-amber-500 text-white flex items-center justify-center shadow-xs">
-                      <Sparkles size={16} />
+                    <div className="w-8 h-8 rounded-lg bg-amber-600 text-white flex items-center justify-center font-bold">
+                      <Scale size={18} />
                     </div>
                     <div>
-                      <span className="text-[10px] font-black uppercase tracking-wider text-amber-800 block">
-                        AI LEGAL VIOLATION CLASSIFICATION
-                      </span>
-                      <h4 className="text-xs font-black text-slate-900">
-                        {aiAnalysisResult?.summaryTitle || selectedReport.violationSummaryTitle || "Cash Shortage, Unremitted Funds & Breach of Trust"}
+                      <h4 className="text-xs font-black uppercase tracking-wider text-slate-900">
+                        Human HR Due Process & Legal Citation Suite
                       </h4>
+                      <p className="text-[11px] text-slate-500">
+                        Full manual editorial control. Type your text freely or click quick reference chips to insert standard statutory clauses.
+                      </p>
                     </div>
                   </div>
+                  <span className="px-2.5 py-1 rounded-md text-[10px] font-extrabold bg-amber-100 text-amber-900 border border-amber-300">
+                    MANUAL DRAFTING
+                  </span>
+                </div>
 
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className="px-2.5 py-1 rounded-md text-[10px] font-extrabold bg-rose-600 text-white shadow-xs">
-                      {aiAnalysisResult?.severity || selectedReport.violationSeverity || "SERIOUS OFFENSE"}
-                    </span>
+                {/* Quick Insert Buttons for Code of Conduct */}
+                <div className="space-y-1.5 pt-2 border-t border-slate-200">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-600 block">
+                    Quick Reference: Insert Code of Conduct Grounds
+                  </span>
+                  <div className="flex flex-wrap gap-1.5">
                     <button
                       type="button"
                       onClick={() => {
-                        const detected = detectViolationCategory(selectedReport);
-                        handleApplyViolationPreset(detected.id);
-                        playAiVoiceAnnouncement(`Re-analyzed! The incident has been classified under ${detected.label}. Legal citations updated.`);
+                        const coc = document.getElementById("nte-code-of-conduct");
+                        if (coc) {
+                          coc.value = `Employees Code of Conduct — Offenses Involving Dishonesty, Cash Shortages & Fiduciary Trust:\n"Any employee who causes or incurs unaccounted shortages, unremitted collections, failure to balance assigned cash floats, or circumvents standard financial control mechanisms shall be subjected to formal administrative disciplinary action."`;
+                        }
                       }}
-                      className="px-2.5 py-1 rounded-md text-[11px] font-bold bg-white hover:bg-amber-100 text-amber-900 border border-amber-300 transition cursor-pointer inline-flex items-center gap-1 shadow-xs"
-                      title="Re-analyze incident findings using AI"
+                      className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-white hover:bg-amber-50 text-slate-700 border border-slate-200 hover:border-amber-400 transition cursor-pointer"
                     >
-                      <Sparkles size={12} className="text-amber-600" />
-                      <span>Auto-Classify with AI</span>
+                      + Dishonesty & Cash Shortage
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const coc = document.getElementById("nte-code-of-conduct");
+                        if (coc) {
+                          coc.value = `Employees Code of Conduct — Offenses Involving Negligence & Procedural Non-Compliance:\n"Gross or habitual failure to follow established Standard Operating Procedures (SOPs), cash-handling manuals, or daily drawer reconciliation policies."`;
+                        }
+                      }}
+                      className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-white hover:bg-amber-50 text-slate-700 border border-slate-200 hover:border-amber-400 transition cursor-pointer"
+                    >
+                      + SOP Lapses & Drawer Reconciliation
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const coc = document.getElementById("nte-code-of-conduct");
+                        if (coc) {
+                          coc.value = `Employees Code of Conduct — Offenses Involving Insubordination & Unauthorized Financial Acts:\n"Willful refusal to comply with audit directives, releasing unauthorized advances or IOUs, or concealing transactional records."`;
+                        }
+                      }}
+                      className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-white hover:bg-amber-50 text-slate-700 border border-slate-200 hover:border-amber-400 transition cursor-pointer"
+                    >
+                      + Insubordination & Unauthorized IOUs
                     </button>
                   </div>
                 </div>
 
-                {/* Quick Violation Category Switcher */}
-                <div className="pt-2 border-t border-amber-200/70">
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1.5">
-                    Select or Switch Violation Category (Under Philippine Labor Code & Code of Conduct):
-                  </label>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-1.5">
-                    {Object.values(VIOLATION_PRESETS).map((preset) => {
-                      const isSelected = (selectedPresetId || selectedReport.violationPresetId) === preset.id;
-                      return (
-                        <button
-                          key={preset.id}
-                          type="button"
-                          onClick={() => handleApplyViolationPreset(preset.id)}
-                          className={`text-left p-2 rounded-lg border text-[11px] font-semibold transition cursor-pointer flex items-start gap-1.5 ${
-                            isSelected
-                              ? "bg-amber-600 text-white border-amber-600 shadow-xs"
-                              : "bg-white text-slate-700 border-slate-200 hover:border-amber-400 hover:bg-amber-50/50"
-                          }`}
-                        >
-                          <span className={`w-1.5 h-1.5 rounded-full mt-1 shrink-0 ${isSelected ? "bg-white" : "bg-amber-500"}`} />
-                          <span className="leading-tight line-clamp-2">{preset.label}</span>
-                        </button>
-                      );
-                    })}
+                {/* Quick Insert Buttons for Labor Code */}
+                <div className="space-y-1.5 pt-2 border-t border-slate-200">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-600 block">
+                    Quick Reference: Insert Philippine Labor Code (PD 442 Art. 297) Grounds
+                  </span>
+                  <div className="flex flex-wrap gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const lc = document.getElementById("nte-labor-code");
+                        if (lc) {
+                          lc.value = `Philippine Labor Code (PD 442), Article 297(c) [Termination by Employer - Just Causes]:\n"Fraud or willful breach by the employee of the trust reposed in him by his employer or duly authorized representative."`;
+                        }
+                      }}
+                      className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-white hover:bg-amber-50 text-slate-700 border border-slate-200 hover:border-amber-400 transition cursor-pointer"
+                    >
+                      + Art. 297(c): Breach of Trust / Fraud
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const lc = document.getElementById("nte-labor-code");
+                        if (lc) {
+                          lc.value = `Philippine Labor Code (PD 442), Article 297(b) [Termination by Employer - Just Causes]:\n"Gross and habitual neglect by the employee of his duties."`;
+                        }
+                      }}
+                      className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-white hover:bg-amber-50 text-slate-700 border border-slate-200 hover:border-amber-400 transition cursor-pointer"
+                    >
+                      + Art. 297(b): Gross & Habitual Neglect
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const lc = document.getElementById("nte-labor-code");
+                        if (lc) {
+                          lc.value = `Philippine Labor Code (PD 442), Article 297(a) [Termination by Employer - Just Causes]:\n"Serious Misconduct or willful disobedience by the employee of the lawful orders of his employer or representative in connection with his work."`;
+                        }
+                      }}
+                      className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-white hover:bg-amber-50 text-slate-700 border border-slate-200 hover:border-amber-400 transition cursor-pointer"
+                    >
+                      + Art. 297(a): Serious Misconduct
+                    </button>
                   </div>
                 </div>
               </div>
@@ -2418,9 +2792,8 @@ export default function IncidentReportPanel({
                       codeOfConductSection: coc,
                       laborCodeViolation: lc,
                       nteDueProcessClause: dp,
-                      violationPresetId: selectedPresetId || selectedReport.violationPresetId,
-                      violationSeverity: aiAnalysisResult?.severity || selectedReport.violationSeverity,
-                      violationSummaryTitle: aiAnalysisResult?.summaryTitle || selectedReport.violationSummaryTitle,
+                      violationSummaryTitle: selectedReport.violationSummaryTitle || "Cash Shortage, Unremitted Funds & Breach of Trust",
+                      violationSeverity: selectedReport.violationSeverity || "SERIOUS OFFENSE",
                       nteSignatoryName: sigName,
                       nteSignatoryTitle: sigTitle
                     });
@@ -2690,6 +3063,528 @@ export default function IncidentReportPanel({
                   <Check size={14} />
                   <span>Transmit Explanation to Head Office SGC</span>
                 </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL 6: EMPLOYEE / RESPONDENT RECEIPT & DIGITAL SIGNATURE MODAL           */}
+      {/* ========================================================================= */}
+      {isSignReceiptModalOpen && signReportTarget && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-3 md:p-6 overflow-y-auto">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-xl w-full overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-amber-500 to-orange-500 text-white">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-sm text-white flex items-center justify-center font-bold">
+                  <FileSignature size={22} />
+                </div>
+                <div>
+                  <h2 className="text-base font-black text-white">
+                    Employee / Respondent Official Receipt & Conforme
+                  </h2>
+                  <p className="text-xs text-white/90">
+                    Case No: {signReportTarget.caseNumber} • Respondent: {signReportTarget.employeeName}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsSignReceiptModalOpen(false)}
+                className="p-1.5 rounded-lg text-white/80 hover:text-white hover:bg-white/20 transition cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              {/* Employee Case Context Card */}
+              <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs text-slate-700 space-y-1">
+                <div className="flex items-center justify-between font-bold text-slate-900">
+                  <span>{signReportTarget.employeeName}</span>
+                  <span className="text-amber-800 bg-amber-100 px-2 py-0.5 rounded text-[11px]">
+                    {signReportTarget.employeePosition}
+                  </span>
+                </div>
+                <div className="text-[11px] text-slate-500">
+                  Company: <strong>{signReportTarget.company || signReportTarget.senderCompany}</strong> • Branch: {signReportTarget.branch || "Branch Office"}
+                </div>
+              </div>
+
+              {/* Conforme Legal Declaration */}
+              <div className="p-3.5 rounded-2xl bg-amber-50/70 border border-amber-200 text-xs text-amber-950 leading-relaxed italic">
+                "I hereby acknowledge that I have formally received a complete copy of this Incident Report and take notice of the audit findings, shortage citations, and factual allegations. I understand that I am accorded the right to submit a written explanation under company due process rules."
+              </div>
+
+              {/* Signature Mode Selector */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs font-bold text-slate-700">
+                    Affix Respondent Signature:
+                  </label>
+                  <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-lg text-xs font-semibold">
+                    <button
+                      type="button"
+                      onClick={() => setSignMode("DRAW")}
+                      className={`px-2.5 py-1 rounded-md transition cursor-pointer ${
+                        signMode === "DRAW"
+                          ? "bg-white text-slate-900 shadow-xs font-bold"
+                          : "text-slate-500 hover:text-slate-800"
+                      }`}
+                    >
+                      Draw Signature
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSignMode("TYPE")}
+                      className={`px-2.5 py-1 rounded-md transition cursor-pointer ${
+                        signMode === "TYPE"
+                          ? "bg-white text-slate-900 shadow-xs font-bold"
+                          : "text-slate-500 hover:text-slate-800"
+                      }`}
+                    >
+                      Type Full Name
+                    </button>
+                  </div>
+                </div>
+
+                {signMode === "DRAW" ? (
+                  <div className="space-y-1.5">
+                    <div className="border-2 border-dashed border-slate-300 rounded-2xl bg-slate-50 relative overflow-hidden flex items-center justify-center">
+                      <canvas
+                        ref={sigCanvasRef}
+                        width={460}
+                        height={140}
+                        onMouseDown={startDrawing}
+                        onMouseMove={draw}
+                        onMouseUp={stopDrawing}
+                        onMouseLeave={stopDrawing}
+                        onTouchStart={startDrawing}
+                        onTouchMove={draw}
+                        onTouchEnd={stopDrawing}
+                        className="w-full h-[140px] bg-white cursor-crosshair touch-none"
+                      />
+                      <span className="absolute bottom-1.5 right-2 text-[10px] text-slate-400 pointer-events-none select-none">
+                        Sign inside box using mouse or finger
+                      </span>
+                    </div>
+                    <div className="flex justify-end">
+                      <button
+                        type="button"
+                        onClick={clearCanvas}
+                        className="text-[11px] font-bold text-slate-500 hover:text-rose-600 transition cursor-pointer"
+                      >
+                        Clear Signature
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <input
+                      type="text"
+                      value={typedSignature}
+                      onChange={(e) => setTypedSignature(e.target.value)}
+                      placeholder="Type respondent full legal name..."
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    />
+                    <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-center">
+                      <span className="text-[10px] text-slate-400 uppercase font-bold block mb-1">
+                        Signature Preview:
+                      </span>
+                      <span className="font-serif italic text-2xl text-slate-900 font-bold tracking-wide">
+                        {typedSignature || signReportTarget.employeeName}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Respondent Remarks Input */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Respondent Remarks upon Receipt (Optional):
+                </label>
+                <input
+                  type="text"
+                  value={signRemarks}
+                  onChange={(e) => setSignRemarks(e.target.value)}
+                  placeholder="e.g. Received original copy and noted audit contents."
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                />
+              </div>
+
+              {/* Action Buttons */}
+              <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setIsSignReceiptModalOpen(false)}
+                  className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveRespondentSignature}
+                  className="px-5 py-2.5 rounded-xl text-xs font-black bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white shadow-md shadow-orange-500/20 transition cursor-pointer inline-flex items-center gap-2 active:scale-98"
+                >
+                  <FileSignature size={15} />
+                  <span>Affix Signature & Acknowledge Receipt</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL 7: IN-APP EMAIL COMPOSE & TRANSMITTAL MODAL                          */}
+      {/* ========================================================================= */}
+      {isEmailModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-3 md:p-6 overflow-y-auto">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-2xl w-full overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-blue-600 text-white">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-sm text-white flex items-center justify-center font-bold">
+                  <Mail size={22} />
+                </div>
+                <div>
+                  <h2 className="text-base font-black text-white">
+                    Send Official Memo via In-App Email
+                  </h2>
+                  <p className="text-xs text-white/90">
+                    Direct in-system dispatch • Never leave HR Hub or open external browser tabs
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsEmailModalOpen(false)}
+                className="p-1.5 rounded-lg text-white/80 hover:text-white hover:bg-white/20 transition cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-3.5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1">
+                    To (Recipient Email):
+                  </label>
+                  <input
+                    type="email"
+                    value={emailForm.to}
+                    onChange={(e) => setEmailForm({ ...emailForm, to: e.target.value })}
+                    placeholder="employee@simpalgroup.com"
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1">
+                    CC (Central / Branch HR):
+                  </label>
+                  <input
+                    type="email"
+                    value={emailForm.cc}
+                    onChange={(e) => setEmailForm({ ...emailForm, cc: e.target.value })}
+                    placeholder="sgc.hrmd@simpalgroup.com"
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1">
+                  Memo Subject:
+                </label>
+                <input
+                  type="text"
+                  value={emailForm.subject}
+                  onChange={(e) => setEmailForm({ ...emailForm, subject: e.target.value })}
+                  placeholder="Official HR Transmittal Memo"
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 font-bold"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1">
+                  Official Memo Content:
+                </label>
+                <textarea
+                  rows={9}
+                  value={emailForm.body}
+                  onChange={(e) => setEmailForm({ ...emailForm, body: e.target.value })}
+                  className="w-full p-3 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono leading-relaxed"
+                />
+              </div>
+
+              <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
+                <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                  <Paperclip size={14} className="text-slate-400" />
+                  <span>Official HR Case Document automatically attached</span>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsEmailModalOpen(false)}
+                    className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSendEmail}
+                    className="px-5 py-2.5 rounded-xl text-xs font-black bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-600/20 transition cursor-pointer inline-flex items-center gap-2 active:scale-98"
+                  >
+                    <Send size={15} />
+                    <span>Send Official Memo</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL 8: IN-APP MAILBOX (INBOX & SENT ITEMS DESK)                           */}
+      {/* ========================================================================= */}
+      {isEmailInboxOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 md:p-6 overflow-y-auto">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-5xl w-full max-h-[92vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            {/* Mailbox Header */}
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-900 text-white shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center font-bold">
+                  <Mail size={22} />
+                </div>
+                <div>
+                  <h2 className="text-base font-black text-white">
+                    HR Hub In-App Mailbox & Official Communications
+                  </h2>
+                  <p className="text-xs text-slate-400">
+                    Live system dispatch • Dispatched memos, employee explanations, and signed receipt conformes
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsEmailInboxOpen(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Mailbox Tabs & Filter Bar */}
+            <div className="px-6 py-2.5 bg-slate-50 border-b border-slate-200 flex items-center justify-between gap-3 shrink-0 flex-wrap">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveEmailTab("INBOX");
+                    setSelectedEmailMessage(null);
+                  }}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-extrabold transition cursor-pointer inline-flex items-center gap-1.5 ${
+                    activeEmailTab === "INBOX"
+                      ? "bg-blue-600 text-white shadow-xs"
+                      : "bg-white text-slate-600 hover:bg-slate-200 border border-slate-200"
+                  }`}
+                >
+                  <Inbox size={14} />
+                  <span>Inbox</span>
+                  {unreadEmailCount > 0 && (
+                    <span className="px-1.5 py-0.2 rounded-full text-[10px] font-black bg-rose-500 text-white">
+                      {unreadEmailCount}
+                    </span>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveEmailTab("SENT");
+                    setSelectedEmailMessage(null);
+                  }}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-extrabold transition cursor-pointer inline-flex items-center gap-1.5 ${
+                    activeEmailTab === "SENT"
+                      ? "bg-blue-600 text-white shadow-xs"
+                      : "bg-white text-slate-600 hover:bg-slate-200 border border-slate-200"
+                  }`}
+                >
+                  <SendHorizontal size={14} />
+                  <span>Sent Items</span>
+                  <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-slate-200 text-slate-700">
+                    {inAppEmails.filter((e) => e.direction === "OUTGOING").length}
+                  </span>
+                </button>
+              </div>
+
+              <div className="text-xs text-slate-500">
+                Total recorded memos: <strong>{inAppEmails.length}</strong>
+              </div>
+            </div>
+
+            {/* Split Screen Mailbox Body */}
+            <div className="flex-1 grid grid-cols-1 md:grid-cols-12 overflow-hidden">
+              {/* Left Column: Email Thread List */}
+              <div className="md:col-span-5 border-r border-slate-200 overflow-y-auto p-3 space-y-2 bg-slate-50/50 custom-scrollbar">
+                {inAppEmails.filter((e) =>
+                  activeEmailTab === "INBOX"
+                    ? e.direction === "INCOMING"
+                    : e.direction === "OUTGOING"
+                ).length === 0 ? (
+                  <div className="p-8 text-center text-xs text-slate-400">
+                    <Inbox size={32} className="mx-auto mb-2 text-slate-300" />
+                    <span>No {activeEmailTab.toLowerCase()} messages in mailbox yet.</span>
+                  </div>
+                ) : (
+                  inAppEmails
+                    .filter((e) =>
+                      activeEmailTab === "INBOX"
+                        ? e.direction === "INCOMING"
+                        : e.direction === "OUTGOING"
+                    )
+                    .map((mail) => {
+                      const isSelected = selectedEmailMessage?.id === mail.id;
+                      return (
+                        <div
+                          key={mail.id}
+                          onClick={() => {
+                            setSelectedEmailMessage(mail);
+                            if (!mail.read) {
+                              markEmailAsRead(mail.id).then(() => {
+                                setInAppEmails((prev) =>
+                                  prev.map((m) => (m.id === mail.id ? { ...m, read: true } : m))
+                                );
+                              });
+                            }
+                          }}
+                          className={`p-3 rounded-2xl border transition cursor-pointer ${
+                            isSelected
+                              ? "bg-white border-blue-500 shadow-md ring-2 ring-blue-500/10"
+                              : !mail.read && mail.direction === "INCOMING"
+                              ? "bg-blue-50/70 border-blue-200 shadow-2xs font-bold"
+                              : "bg-white border-slate-200 hover:border-slate-300 shadow-2xs"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-1 mb-1">
+                            <span className="text-xs font-black text-slate-900 truncate">
+                              {mail.direction === "INCOMING" ? mail.senderName || mail.from : mail.to}
+                            </span>
+                            <span className="text-[10px] text-slate-400 whitespace-nowrap">
+                              {mail.date ? mail.date.split(",")[0] : "Recent"}
+                            </span>
+                          </div>
+
+                          <div className="text-xs text-slate-800 font-semibold truncate mb-1">
+                            {mail.subject}
+                          </div>
+
+                          <div className="text-[11px] text-slate-500 line-clamp-2 leading-relaxed">
+                            {mail.body}
+                          </div>
+
+                          <div className="mt-2 flex items-center justify-between pt-1 border-t border-slate-100">
+                            <span className="px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-slate-100 text-slate-700">
+                              {mail.tag || "MEMO"}
+                            </span>
+                            {!mail.read && mail.direction === "INCOMING" && (
+                              <span className="w-2 h-2 rounded-full bg-blue-600" />
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })
+                )}
+              </div>
+
+              {/* Right Column: Detailed Message Viewer */}
+              <div className="md:col-span-7 flex flex-col bg-white overflow-y-auto p-6 custom-scrollbar">
+                {selectedEmailMessage ? (
+                  <div className="space-y-4">
+                    <div className="pb-4 border-b border-slate-200 space-y-2">
+                      <div className="flex items-center justify-between flex-wrap gap-2">
+                        <span className="px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider bg-blue-100 text-blue-900">
+                          {selectedEmailMessage.tag || "OFFICIAL_MEMO"}
+                        </span>
+                        <span className="text-xs text-slate-400">
+                          {selectedEmailMessage.date}
+                        </span>
+                      </div>
+
+                      <h3 className="text-base font-black text-slate-900">
+                        {selectedEmailMessage.subject}
+                      </h3>
+
+                      <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs space-y-1 text-slate-700">
+                        <div>
+                          <strong>From:</strong> {selectedEmailMessage.from}
+                        </div>
+                        <div>
+                          <strong>To:</strong> {selectedEmailMessage.to}
+                        </div>
+                        {selectedEmailMessage.cc && (
+                          <div>
+                            <strong>CC:</strong> {selectedEmailMessage.cc}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Email Message Content */}
+                    <div className="p-4 rounded-2xl bg-white border border-slate-200 text-xs text-slate-800 leading-relaxed font-sans whitespace-pre-wrap">
+                      {selectedEmailMessage.body}
+                    </div>
+
+                    {/* Quick Reply Button */}
+                    <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          deleteInAppEmail(selectedEmailMessage.id).then((refreshed) => {
+                            setInAppEmails(refreshed);
+                            setSelectedEmailMessage(null);
+                          });
+                        }}
+                        className="px-3 py-1.5 rounded-xl text-xs font-bold text-rose-600 hover:bg-rose-50 transition cursor-pointer inline-flex items-center gap-1"
+                      >
+                        <Trash2 size={13} />
+                        <span>Delete Message</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEmailForm({
+                            to: selectedEmailMessage.direction === "INCOMING" ? selectedEmailMessage.from : selectedEmailMessage.to,
+                            cc: "sgc.hrmd@simpalgroup.com",
+                            subject: `RE: ${selectedEmailMessage.subject}`,
+                            body: `\n\n--- On ${selectedEmailMessage.date}, ${selectedEmailMessage.from} wrote:\n> ${selectedEmailMessage.body.slice(0, 150)}...`,
+                            relatedReportId: selectedEmailMessage.relatedReportId,
+                            emailType: "REPLY"
+                          });
+                          setIsEmailModalOpen(true);
+                        }}
+                        className="px-4 py-2 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white transition cursor-pointer inline-flex items-center gap-1.5 shadow-xs"
+                      >
+                        <Reply size={14} />
+                        <span>Quick Reply In-App</span>
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex-1 flex flex-col items-center justify-center text-center p-8 text-slate-400">
+                    <Mail size={48} className="text-slate-300 mb-3" />
+                    <h4 className="text-sm font-bold text-slate-700 mb-1">Select an email to view</h4>
+                    <p className="text-xs text-slate-400 max-w-sm">
+                      Read transmittal letters, employee written explanations, and official signed receipt conformes directly in this mailbox.
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
           </div>

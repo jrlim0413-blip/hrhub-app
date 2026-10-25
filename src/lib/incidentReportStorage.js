@@ -183,6 +183,11 @@ export function normalizeIncidentReport(d) {
     nteExplanationDeadlineDays,
     employeeExplanation,
     explanationReceivedAt,
+    respondentSignature: d.respondentSignature || d.respondent_signature || "",
+    respondentSignedAt: d.respondentSignedAt || d.respondent_signed_at || "",
+    respondentSignedName: d.respondentSignedName || d.respondent_signed_name || d.employee_name || d.employeeName || "",
+    respondentRemarks: d.respondentRemarks || d.respondent_remarks || "",
+    employeeEmail: d.employeeEmail || d.employee_email || "",
     activityLog: Array.isArray(d.activity_log) ? d.activity_log : (d.activityLog || [])
   };
 }
