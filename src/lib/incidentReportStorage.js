@@ -72,11 +72,45 @@ export function normalizeIncidentReport(d) {
   const incidentCategory = d.incidentCategory || d.incident_category || "Cash Shortage & Non-observance of SOPs";
   const incidentTime = d.incidentTime || d.incident_time || "16:30 PM";
   const policeNotified = d.policeNotified || d.police_notified || "NO";
-  const branch = d.branch || d.branchLocation || d.branch_location || "Tacurong Branch";
-  const auditDates = d.auditDates || d.audit_dates || "";
-  const auditedBy = d.auditedBy || d.audited_by || "CFO Admin Staff, Ms. Rollyn Beatrice Simpal and Ms. Hygiene Reusora";
-  const department = d.department || "Finance & Cashier Operations";
-  const phoneNumber = d.phoneNumber || d.phone_number || "+63 917 842 9102";
+  // Extract system metadata entry stored inside JSONB activity_log
+  const rawLogs = Array.isArray(d.activity_log)
+    ? d.activity_log
+    : Array.isArray(d.activityLog)
+    ? d.activityLog
+    : [];
+  const metaFromLog =
+    rawLogs.find((item) => item?.isSystemMetadata || item?.type === "HRHUB_REPORT_METADATA")?.metadata || {};
+
+  const department =
+    d.department ||
+    d.department_name ||
+    metaFromLog.department ||
+    metaFromLog.department_name ||
+    "Finance & Cashier Operations";
+
+  const phoneNumber =
+    d.phoneNumber ||
+    d.phone_number ||
+    metaFromLog.phoneNumber ||
+    metaFromLog.phone_number ||
+    "+63 917 842 9102";
+
+  const employeePosition =
+    d.employee_position ||
+    d.employeePosition ||
+    metaFromLog.employeePosition ||
+    metaFromLog.employee_position ||
+    "Cashier";
+
+  const branch =
+    d.branch ||
+    d.branchLocation ||
+    d.branch_location ||
+    metaFromLog.branch ||
+    "Purok Daisy, New Isabela, Tacurong City, Sultan Kudarat";
+
+  const auditDates = d.auditDates || d.audit_dates || metaFromLog.auditDates || "";
+  const auditedBy = d.auditedBy || d.audited_by || metaFromLog.auditedBy || "CFO Admin Staff, Ms. Rollyn Beatrice Simpal and Ms. Hygiene Reusora";
 
   const senderCompany = d.senderCompany || d.sender_company || d.company || "5A Royal Gaming OPC";
   const company = d.company || d.senderCompany || d.sender_company || "5A Royal Gaming OPC";
@@ -102,6 +136,11 @@ export function normalizeIncidentReport(d) {
   const nteExplanationDeadlineDays = d.nteExplanationDeadlineDays || d.nte_explanation_deadline_days || 1;
   const employeeExplanation = d.employeeExplanation || d.employee_explanation || "";
   const explanationReceivedAt = d.explanationReceivedAt || d.explanation_received_at || "";
+
+  // Filter out system metadata from user-facing activity logs
+  const displayLogs = rawLogs.filter(
+    (item) => !item?.isSystemMetadata && item?.type !== "HRHUB_REPORT_METADATA"
+  );
 
   return {
     ...d,
@@ -129,8 +168,8 @@ export function normalizeIncidentReport(d) {
     assignedCentralHrTitle: receiverHrTitle,
     employeeName: d.employee_name || d.employeeName || "",
     employee_name: d.employee_name || d.employeeName || "",
-    employeePosition: d.employee_position || d.employeePosition || "Cashier",
-    employee_position: d.employee_position || d.employeePosition || "Cashier",
+    employeePosition,
+    employee_position: employeePosition,
     dateOfIncident: d.date_of_incident || d.dateOfIncident || "",
     date_of_incident: d.date_of_incident || d.dateOfIncident || "",
     dateReported: d.date_reported || d.dateReported || "",
@@ -140,6 +179,7 @@ export function normalizeIncidentReport(d) {
     branch_location: branch,
     department,
     phoneNumber,
+    phone_number: phoneNumber,
     cashShortageAmount,
     cash_shortage_amount: cashShortageAmount,
     specificFindings,
@@ -183,56 +223,59 @@ export function normalizeIncidentReport(d) {
     nteExplanationDeadlineDays,
     employeeExplanation,
     explanationReceivedAt,
-    respondentSignature: d.respondentSignature || d.respondent_signature || "",
-    respondentSignedAt: d.respondentSignedAt || d.respondent_signed_at || "",
-    respondentSignedName: d.respondentSignedName || d.respondent_signed_name || d.employee_name || d.employeeName || "",
-    respondentRemarks: d.respondentRemarks || d.respondent_remarks || "",
-    employeeEmail: d.employeeEmail || d.employee_email || "",
+    activityLog: displayLogs,
+
+    respondentSignature: d.respondentSignature || d.respondent_signature || metaFromLog.respondentSignature || "",
+    respondentSignedAt: d.respondentSignedAt || d.respondent_signed_at || metaFromLog.respondentSignedAt || "",
+    respondentSignedName: d.respondentSignedName || d.respondent_signed_name || metaFromLog.respondentSignedName || d.employee_name || d.employeeName || "",
+    respondentRemarks: d.respondentRemarks || d.respondent_remarks || metaFromLog.respondentRemarks || "",
+    employeeEmail: d.employeeEmail || d.employee_email || metaFromLog.employeeEmail || "",
 
     // 1. Preparer & Operations Manager Signatures
-    preparerSignature: d.preparerSignature || d.preparer_signature || "",
-    preparerName: d.preparerName || d.preparer_name || senderHrName,
-    preparerTitle: d.preparerTitle || d.preparer_title || senderHrTitle,
-    operationsManagerSignature: d.operationsManagerSignature || d.operations_manager_signature || "",
-    operationsManagerName: d.operationsManagerName || d.operations_manager_name || "Operations Manager",
-    operationsManagerTitle: d.operationsManagerTitle || d.operations_manager_title || "Operations Manager",
+    preparerSignature: d.preparerSignature || d.preparer_signature || metaFromLog.preparerSignature || "",
+    preparerName: d.preparerName || d.preparer_name || metaFromLog.preparerName || senderHrName,
+    preparerTitle: d.preparerTitle || d.preparer_title || metaFromLog.preparerTitle || senderHrTitle,
+    operationsManagerSignature: d.operationsManagerSignature || d.operations_manager_signature || metaFromLog.operationsManagerSignature || "",
+    operationsManagerName: d.operationsManagerName || d.operations_manager_name || metaFromLog.operationsManagerName || "Operations Manager",
+    operationsManagerTitle: d.operationsManagerTitle || d.operations_manager_title || metaFromLog.operationsManagerTitle || "Operations Manager",
 
     // 2. Head Office Discretion 1: Filings Only
-    filingRemarks: d.filingRemarks || d.filing_remarks || "",
-    filedAt: d.filedAt || d.filed_at || "",
+    filingRemarks: d.filingRemarks || d.filing_remarks || metaFromLog.filingRemarks || "",
+    filedAt: d.filedAt || d.filed_at || metaFromLog.filedAt || "",
 
-    // 3. Branch HR Upload: Employee Signed NTE Proof of Receipt
-    nteSignedProof: d.nteSignedProof || d.nte_signed_proof || "",
-    nteSignedProofName: d.nteSignedProofName || d.nte_signed_proof_name || "",
-    nteServedAt: d.nteServedAt || d.nte_served_at || "",
+    // 3. Branch HR Upload Signed NTE Proof
+    nteSignedProof: d.nteSignedProof || d.nte_signed_proof || metaFromLog.nteSignedProof || "",
+    nteSignedProofName: d.nteSignedProofName || d.nte_signed_proof_name || metaFromLog.nteSignedProofName || "",
+    nteServedAt: d.nteServedAt || d.nte_served_at || metaFromLog.nteServedAt || "",
 
-    // 4. Head Office Discretion 2A: Notice of Warning
-    warningNoticeSubject: d.warningNoticeSubject || d.warning_notice_subject || "",
-    warningNoticeBody: d.warningNoticeBody || d.warning_notice_body || "",
-    warningNoticePenalty: d.warningNoticePenalty || d.warning_notice_penalty || "Written Warning & Reprimand",
-    warningIssuedAt: d.warningIssuedAt || d.warning_issued_at || "",
+    // 4. Head Office Discretion 2A: Warning Notice
+    warningNoticeSubject: d.warningNoticeSubject || d.warning_notice_subject || metaFromLog.warningNoticeSubject || "",
+    warningNoticePenalty: d.warningNoticePenalty || d.warning_notice_penalty || metaFromLog.warningNoticePenalty || "",
+    warningNoticeBody: d.warningNoticeBody || d.warning_notice_body || metaFromLog.warningNoticeBody || "",
+    warningIssuedAt: d.warningIssuedAt || d.warning_issued_at || metaFromLog.warningIssuedAt || "",
 
-    // 5. Head Office Discretion 2B: Notice of Investigation (NOI) with Zoom Meeting Schedule
-    zoomMeetingTopic: d.zoomMeetingTopic || d.zoom_meeting_topic || "",
-    zoomMeetingDate: d.zoomMeetingDate || d.zoom_meeting_date || "",
-    zoomMeetingTime: d.zoomMeetingTime || d.zoom_meeting_time || "",
-    zoomMeetingLink: d.zoomMeetingLink || d.zoom_meeting_link || "",
-    zoomMeetingId: d.zoomMeetingId || d.zoom_meeting_id || "",
-    zoomPasscode: d.zoomPasscode || d.zoom_passcode || "",
-    hearingCommittee: d.hearingCommittee || d.hearing_committee || "SGC Due Process Committee & HRMD",
-    noiRemarks: d.noiRemarks || d.noi_remarks || "",
-    noiIssuedAt: d.noiIssuedAt || d.noi_issued_at || "",
+    // 5. Head Office Discretion 2B: NOI & Zoom Hearing Schedule
+    zoomMeetingTopic: d.zoomMeetingTopic || d.zoom_meeting_topic || metaFromLog.zoomMeetingTopic || "",
+    zoomMeetingDate: d.zoomMeetingDate || d.zoom_meeting_date || metaFromLog.zoomMeetingDate || "",
+    zoomMeetingTime: d.zoomMeetingTime || d.zoom_meeting_time || metaFromLog.zoomMeetingTime || "",
+    zoomMeetingLink: d.zoomMeetingLink || d.zoom_meeting_link || metaFromLog.zoomMeetingLink || "",
+    zoomMeetingId: d.zoomMeetingId || d.zoom_meeting_id || metaFromLog.zoomMeetingId || "",
+    zoomPasscode: d.zoomPasscode || d.zoom_passcode || metaFromLog.zoomPasscode || "",
+    hearingCommittee: d.hearingCommittee || d.hearing_committee || metaFromLog.hearingCommittee || "",
+    noiRemarks: d.noiRemarks || d.noi_remarks || metaFromLog.noiRemarks || "",
+    noiIssuedAt: d.noiIssuedAt || d.noi_issued_at || metaFromLog.noiIssuedAt || "",
 
-    // 6. Post-NOI: Decision on Administrative Case
-    adminDecisionSubject: d.adminDecisionSubject || d.admin_decision_subject || "",
-    adminDecisionFindings: d.adminDecisionFindings || d.admin_decision_findings || "",
-    adminDecisionPenalty: d.adminDecisionPenalty || d.admin_decision_penalty || "",
-    adminDecisionBody: d.adminDecisionBody || d.admin_decision_body || "",
-    adminDecisionIssuedAt: d.adminDecisionIssuedAt || d.admin_decision_issued_at || "",
-    decisionSignedProof: d.decisionSignedProof || d.decision_signed_proof || "",
-    decisionSignedAt: d.decisionSignedAt || d.decision_signed_at || "",
+    // 6. Decision on Administrative Case
+    adminDecisionSubject: d.adminDecisionSubject || d.admin_decision_subject || metaFromLog.adminDecisionSubject || "",
+    adminDecisionFindings: d.adminDecisionFindings || d.admin_decision_findings || metaFromLog.adminDecisionFindings || "",
+    adminDecisionPenalty: d.adminDecisionPenalty || d.admin_decision_penalty || metaFromLog.adminDecisionPenalty || "",
+    adminDecisionBody: d.adminDecisionBody || d.admin_decision_body || metaFromLog.adminDecisionBody || "",
+    adminDecisionIssuedAt: d.adminDecisionIssuedAt || d.admin_decision_issued_at || metaFromLog.adminDecisionIssuedAt || "",
 
-    activityLog: Array.isArray(d.activity_log) ? d.activity_log : (d.activityLog || [])
+    // 7. Signed Decision Proof & Case Closure
+    decisionSignedProof: d.decisionSignedProof || d.decision_signed_proof || metaFromLog.decisionSignedProof || "",
+    decisionSignedProofName: d.decisionSignedProofName || d.decision_signed_proof_name || metaFromLog.decisionSignedProofName || "",
+    decisionSignedAt: d.decisionSignedAt || d.decision_signed_at || metaFromLog.decisionSignedAt || ""
   };
 }
 
@@ -381,7 +424,29 @@ export async function fetchIncidentReports() {
       // If dedicated table query succeeded without error, it is our Single Source of Truth!
       // If the user deleted all rows, dedicatedData is [] (length === 0), which we must strictly respect!
       if (!dedicatedErr && Array.isArray(dedicatedData)) {
-        const normalized = dedicatedData.map(normalizeIncidentReport);
+        // Also load cloud user_settings backup to cross-merge fields
+        let cloudMap = {};
+        try {
+          const { data: cloudBackup } = await supabase
+            .from("user_settings")
+            .select("settings_json")
+            .eq("user_id", CLOUD_BACKUP_KEY)
+            .maybeSingle();
+          if (cloudBackup?.settings_json?.reports && Array.isArray(cloudBackup.settings_json.reports)) {
+            cloudBackup.settings_json.reports.forEach((item) => {
+              if (item && (item.id || item.caseNumber)) {
+                cloudMap[item.id || item.caseNumber] = item;
+              }
+            });
+          }
+        } catch {
+          // ignore
+        }
+
+        const normalized = dedicatedData.map((row) => {
+          const cloudItem = cloudMap[row.id] || cloudMap[row.case_number] || {};
+          return normalizeIncidentReport({ ...cloudItem, ...row });
+        });
         saveLocalReports(normalized);
 
         // Also keep cloud backup in user_settings in sync
@@ -443,6 +508,14 @@ export async function saveIncidentReport(report) {
     ...report,
     id: report.id || `IR-${Date.now().toString().slice(-6)}`,
     caseNumber: report.caseNumber || report.id || `IR-${Date.now().toString().slice(-6)}`,
+    department: report.department || report.department_name || "Finance & Cashier Operations",
+    department_name: report.department || report.department_name || "Finance & Cashier Operations",
+    phoneNumber: report.phoneNumber || report.phone_number || "+63 917 842 9102",
+    phone_number: report.phoneNumber || report.phone_number || "+63 917 842 9102",
+    employeePosition: report.employeePosition || report.employee_position || "Cashier",
+    employee_position: report.employeePosition || report.employee_position || "Cashier",
+    branch: report.branch || report.branchLocation || "Purok Daisy, New Isabela, Tacurong City, Sultan Kudarat",
+    branchLocation: report.branch || report.branchLocation || "Purok Daisy, New Isabela, Tacurong City, Sultan Kudarat",
     specificFindings: findingsText,
     specific_findings: findingsText,
     fullIncidentNarrative: findingsText,
@@ -470,6 +543,10 @@ export async function saveIncidentReport(report) {
     senderCompany: report.senderCompany || report.company || "5A Royal Gaming OPC",
     company: report.company || report.senderCompany || "5A Royal Gaming OPC",
     receiverCompany: report.receiverCompany || "Simpal Group of Companies",
+    senderHrName: report.senderHrName || report.reportingHrName || "Branch HR",
+    senderHrTitle: report.senderHrTitle || report.reportingHrTitle || "HR Admin",
+    receiverHrName: report.receiverHrName || "JEVINCE JAYE S. JUBAY, CHRP",
+    receiverHrTitle: report.receiverHrTitle || "HRMD Manager",
     updatedAt: nowIso,
     createdAt: report.createdAt || nowIso
   };
@@ -500,7 +577,69 @@ export async function saveIncidentReport(report) {
 
   // Cloud Persistence (both dedicated table & guaranteed user_settings backup)
   if (supabase) {
-    // Destination A: Dedicated 'incident_reports' table
+    // Pack all extended metadata into a dedicated system log item stored in JSONB activity_log
+    const metaEntry = {
+      isSystemMetadata: true,
+      type: "HRHUB_REPORT_METADATA",
+      metadata: {
+        department: updatedReport.department || "Finance & Cashier Operations",
+        phoneNumber: updatedReport.phoneNumber || "+63 917 842 9102",
+        employeePosition: updatedReport.employeePosition || "Cashier",
+        branch: updatedReport.branch || "Purok Daisy, New Isabela, Tacurong City, Sultan Kudarat",
+        senderCompany: updatedReport.senderCompany || "5A Royal Gaming OPC",
+        receiverCompany: updatedReport.receiverCompany || "Simpal Group of Companies",
+        senderHrName: updatedReport.senderHrName,
+        senderHrTitle: updatedReport.senderHrTitle,
+        receiverHrName: updatedReport.receiverHrName,
+        receiverHrTitle: updatedReport.receiverHrTitle,
+        auditDates: updatedReport.auditDates,
+        auditedBy: updatedReport.auditedBy,
+        preparerSignature: updatedReport.preparerSignature,
+        preparerName: updatedReport.preparerName,
+        preparerTitle: updatedReport.preparerTitle,
+        operationsManagerSignature: updatedReport.operationsManagerSignature,
+        operationsManagerName: updatedReport.operationsManagerName,
+        operationsManagerTitle: updatedReport.operationsManagerTitle,
+        respondentSignature: updatedReport.respondentSignature,
+        respondentSignedAt: updatedReport.respondentSignedAt,
+        respondentSignedName: updatedReport.respondentSignedName,
+        respondentRemarks: updatedReport.respondentRemarks,
+        employeeEmail: updatedReport.employeeEmail,
+        filingRemarks: updatedReport.filingRemarks,
+        filedAt: updatedReport.filedAt,
+        nteSignedProof: updatedReport.nteSignedProof,
+        nteSignedProofName: updatedReport.nteSignedProofName,
+        nteServedAt: updatedReport.nteServedAt,
+        warningNoticeSubject: updatedReport.warningNoticeSubject,
+        warningNoticePenalty: updatedReport.warningNoticePenalty,
+        warningNoticeBody: updatedReport.warningNoticeBody,
+        warningIssuedAt: updatedReport.warningIssuedAt,
+        zoomMeetingTopic: updatedReport.zoomMeetingTopic,
+        zoomMeetingDate: updatedReport.zoomMeetingDate,
+        zoomMeetingTime: updatedReport.zoomMeetingTime,
+        zoomMeetingLink: updatedReport.zoomMeetingLink,
+        zoomMeetingId: updatedReport.zoomMeetingId,
+        zoomPasscode: updatedReport.zoomPasscode,
+        hearingCommittee: updatedReport.hearingCommittee,
+        noiRemarks: updatedReport.noiRemarks,
+        noiIssuedAt: updatedReport.noiIssuedAt,
+        adminDecisionSubject: updatedReport.adminDecisionSubject,
+        adminDecisionFindings: updatedReport.adminDecisionFindings,
+        adminDecisionPenalty: updatedReport.adminDecisionPenalty,
+        adminDecisionBody: updatedReport.adminDecisionBody,
+        adminDecisionIssuedAt: updatedReport.adminDecisionIssuedAt,
+        decisionSignedProof: updatedReport.decisionSignedProof,
+        decisionSignedProofName: updatedReport.decisionSignedProofName,
+        decisionSignedAt: updatedReport.decisionSignedAt
+      }
+    };
+
+    const cleanLogs = (Array.isArray(updatedReport.activityLog) ? updatedReport.activityLog : []).filter(
+      (item) => !item?.isSystemMetadata && item?.type !== "HRHUB_REPORT_METADATA"
+    );
+    const dbActivityLog = [metaEntry, ...cleanLogs];
+
+    // Destination A: Dedicated 'incident_reports' table with all native columns
     try {
       await supabase.from("incident_reports").upsert({
         id: updatedReport.id,
@@ -510,17 +649,21 @@ export async function saveIncidentReport(report) {
         date_reported: updatedReport.dateReported || null,
         reporting_hr_name: updatedReport.reportingHrName || updatedReport.senderHrName,
         reporting_hr_title: updatedReport.reportingHrTitle || updatedReport.senderHrTitle,
+        receiver_hr_name: updatedReport.receiverHrName || "JEVINCE JAYE S. JUBAY, CHRP",
+        receiver_hr_title: updatedReport.receiverHrTitle || "HRMD Manager",
         employee_name: updatedReport.employeeName,
-        employee_position: updatedReport.employeePosition,
-        company: updatedReport.company || updatedReport.senderCompany,
-        branch: updatedReport.branch,
+        employee_position: updatedReport.employeePosition || "Cashier",
+        company: updatedReport.company || updatedReport.senderCompany || "5A Royal Gaming OPC",
+        sender_company: updatedReport.senderCompany || updatedReport.company || "5A Royal Gaming OPC",
+        receiver_company: updatedReport.receiverCompany || "Simpal Group of Companies",
+        branch: updatedReport.branch || "Purok Daisy, New Isabela, Tacurong City, Sultan Kudarat",
         incident_category: updatedReport.incidentCategory,
         cash_shortage_amount: updatedReport.cashShortageAmount,
         specific_findings: findingsText,
         full_incident_narrative: findingsText,
         nte_subject: updatedReport.nteSubject,
         nte_body: updatedReport.nteBodyParagraph1,
-        activity_log: updatedReport.activityLog,
+        activity_log: dbActivityLog,
         created_at: updatedReport.createdAt,
         updated_at: updatedReport.updatedAt
       });

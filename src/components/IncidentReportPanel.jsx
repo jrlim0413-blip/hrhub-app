@@ -1839,10 +1839,24 @@ export default function IncidentReportPanel({
                     <div>
                       <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
                         <span>{report.employeeName}</span>
-                        <span className="text-xs font-medium text-slate-500">
-                          ({report.employeePosition || "Staff"} • {report.department || senderComp})
+                        <span className="text-xs font-semibold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                          {report.employeePosition || "Cashier"}
                         </span>
                       </h3>
+                      <div className="flex items-center gap-2 flex-wrap text-[11px] text-slate-600 mt-1 mb-1.5">
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-100 font-semibold text-slate-700 border border-slate-200/80">
+                          <Building2 size={11} className="text-slate-400" />
+                          {report.department || "Finance & Cashier Operations"}
+                        </span>
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-100 font-semibold text-slate-700 border border-slate-200/80">
+                          <Smartphone size={11} className="text-slate-400" />
+                          {report.phoneNumber || "+63 917 842 9102"}
+                        </span>
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-100 font-semibold text-slate-700 border border-slate-200/80">
+                          <MapPin size={11} className="text-slate-400" />
+                          <span className="truncate max-w-[260px]">{report.branch || "Tacurong Branch"}</span>
+                        </span>
+                      </div>
                       <p className="text-xs text-rose-700 font-semibold mt-0.5 flex items-center gap-1.5">
                         <AlertTriangle size={13} />
                         <span>Category: {report.incidentCategory}</span>
@@ -3037,6 +3051,7 @@ export default function IncidentReportPanel({
                         </div>
                       </div>
 
+                      {/* DEPARTMENT & PHONE NUMBER */}
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                         <div>
                           <div className="text-[10px] font-black uppercase tracking-wider text-slate-700 mb-1">
@@ -3044,7 +3059,7 @@ export default function IncidentReportPanel({
                           </div>
                           <div className="w-full px-3.5 py-2.5 rounded-xl bg-slate-100/80 border border-slate-200 text-xs font-semibold text-slate-800 flex items-center gap-2">
                             <Building2 size={14} className="text-slate-400 shrink-0" />
-                            <span>{selectedReport.department || selectedReport.senderCompany || selectedReport.company}</span>
+                            <span>{selectedReport.department || "Finance & Cashier Operations"}</span>
                           </div>
                         </div>
 
@@ -3055,6 +3070,29 @@ export default function IncidentReportPanel({
                           <div className="w-full px-3.5 py-2.5 rounded-xl bg-slate-100/80 border border-slate-200 text-xs font-semibold text-slate-800 flex items-center gap-2">
                             <Smartphone size={14} className="text-slate-400 shrink-0" />
                             <span>{selectedReport.phoneNumber || "+63 917 842 9102"}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* POSITION / DESIGNATION & BRANCH / AREA LOCATION */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                        <div>
+                          <div className="text-[10px] font-black uppercase tracking-wider text-slate-700 mb-1">
+                            POSITION / DESIGNATION
+                          </div>
+                          <div className="w-full px-3.5 py-2.5 rounded-xl bg-slate-100/80 border border-slate-200 text-xs font-semibold text-slate-800 flex items-center gap-2">
+                            <Briefcase size={14} className="text-slate-400 shrink-0" />
+                            <span>{selectedReport.employeePosition || "Cashier"}</span>
+                          </div>
+                        </div>
+
+                        <div>
+                          <div className="text-[10px] font-black uppercase tracking-wider text-slate-700 mb-1">
+                            BRANCH / AREA LOCATION
+                          </div>
+                          <div className="w-full px-3.5 py-2.5 rounded-xl bg-slate-100/80 border border-slate-200 text-xs font-semibold text-slate-800 flex items-center gap-2">
+                            <MapPin size={14} className="text-slate-400 shrink-0" />
+                            <span className="truncate">{selectedReport.branch || selectedReport.branchLocation || "Purok Daisy, New Isabela, Tacurong City, Sultan Kudarat"}</span>
                           </div>
                         </div>
                       </div>
