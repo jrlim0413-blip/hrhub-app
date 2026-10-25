@@ -20,21 +20,30 @@ const DEFAULT_SEED_REPORTS = [
     employeeName: "MA. CATHRINA PANIZARES",
     employeeId: "5ARG-2024-041",
     employeePosition: "Cashier",
+    department: "Finance & Cashier Operations",
+    phoneNumber: "+63 917 842 9102",
     company: "5A Royal Gaming OPC",
     branch: "Purok Daisy, New Isabela, Tacurong City, Sultan Kudarat",
     companyAddress: "Purok Daisy, New Isabela, Tacurong City, Sultan Kudarat, Philippines",
     companyEmail: "imsoroglohr@gmail.com",
     
-    // Audit & Findings
+    // Audit & Findings (Matches user's IR reference form)
+    incidentTime: "16:30 PM",
+    policeNotified: "NO",
     incidentCategory: "Cash Shortage & Non-observance of SOPs",
     auditDates: "September 24, 2026",
     auditedBy: "CFO Admin Staff, Ms. Rollyn Beatrice Simpal and Ms. Hygiene Reusora",
     cashShortageAmount: "12,102.00",
     specificFindings: "Outstanding cash shortage of PHP 12,102.00 during audit; allowed Mr. Mosher Bebot to borrow PHP 1,000.00 from company cash; permitted advance fuel transactions for SPVR Joevert Sudsud (PHP 2,030.00) and Mr. Mosher Bebot (PHP 1,050.00) despite scheduled release; shortages under SPVR Armando (PHP 4,208.00) and other Sales Agents (PHP 934.00) remained uncleared.",
     fullIncidentNarrative: "During the official audit conducted on September 24, 2026 by CFO Admin Staff Ms. Rollyn Beatrice Simpal and Ms. Hygiene Reusora, an unliquidated cash shortage was uncovered amounting to PHP 12,102.00 under Cashier Ma. Cathrina Panizares. Secondary ledger inspections also confirmed unauthorized employee cash borrowings and premature fuel advances contrary to Standard Operating Procedures.",
+    incidentCauses: "Non-observance of Cashier Standard Operating Procedures (SOPs), unauthorized credit extensions, and failure to reconcile daily cash float before shift closure.",
+    followUpRecommendations: "Immediate issuance of Notice to Explain (NTE) under Article 297 Labor Code, temporary suspension of vault disbursement authority, and comprehensive ledger audit.",
+    additionalNotes: "All physical cash count discrepancy sheets and borrower signed slips have been submitted and attached to the audit file.",
     evidenceNotes: "Official Audit Count Sheet signed Sept 24, 2026; Daily Cashier Vault Reconciliation Logs; Branch fuel log slips.",
     
-    // Central HR Routing
+    // Central HR Routing & Official Receipt
+    reportReceivedBy: "JEVINCE JAYE S. JUBAY, CHRP",
+    reportReceivedDate: "September 28, 2026",
     assignedCentralHrName: "JEVINCE JAYE S. JUBAY, CHRP",
     assignedCentralHrTitle: "HRMD Manager",
     assignedCentralHrCompany: "5A Royal Gaming OPC",

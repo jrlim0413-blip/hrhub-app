@@ -1,11 +1,10 @@
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   ShieldAlert,
   FileText,
   Send,
   Plus,
   Search,
-  Filter,
   CheckCircle2,
   Clock,
   AlertTriangle,
@@ -19,15 +18,11 @@ import {
   ArrowRight,
   Eye,
   FileCheck,
-  RotateCcw,
-  Sparkles,
-  Share2,
-  Download,
   Check,
-  ChevronRight,
-  AlertCircle,
-  HelpCircle,
-  History
+  Smartphone,
+  MapPin,
+  CreditCard,
+  DollarSign
 } from "lucide-react";
 import {
   fetchIncidentReports,
@@ -62,9 +57,9 @@ export default function IncidentReportPanel({
 
   // Modal states
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isIrViewerOpen, setIsIrViewerOpen] = useState(false);
   const [isNteViewerOpen, setIsNteViewerOpen] = useState(false);
   const [isNteDraftModalOpen, setIsNteDraftModalOpen] = useState(false);
-  const [isServeModalOpen, setIsServeModalOpen] = useState(false);
   const [isExplanationModalOpen, setIsExplanationModalOpen] = useState(false);
   const [selectedReport, setSelectedReport] = useState(null);
 
@@ -73,21 +68,30 @@ export default function IncidentReportPanel({
     employeeName: "",
     employeeId: "",
     employeePosition: "Cashier",
+    department: "Finance & Cashier Operations",
+    phoneNumber: "+63 917 842 9102",
     company: "5A Royal Gaming OPC",
     branch: "Purok Daisy, New Isabela, Tacurong City, Sultan Kudarat",
     reportingHrName: currentUser?.name || "Ms. Quennie R. Capuyan",
     reportingHrTitle: "HR Admin",
     dateOfIncident: new Date().toISOString().slice(0, 10),
     dateReported: new Date().toISOString().slice(0, 10),
+    incidentTime: "16:30 PM",
+    policeNotified: "NO",
     incidentCategory: "Cash Shortage & Non-observance of SOPs",
-    auditDates: "September 24, 2026",
+    auditDates: new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }),
     auditedBy: "CFO Admin Staff, Ms. Rollyn Beatrice Simpal and Ms. Hygiene Reusora",
-    cashShortageAmount: "12,102.00",
+    cashShortageAmount: "",
     specificFindings: "",
     fullIncidentNarrative: "",
+    incidentCauses: "",
+    followUpRecommendations: "Immediate issuance of Notice to Explain (NTE) under Article 297 Labor Code and audit of cash register.",
+    additionalNotes: "",
     evidenceNotes: "",
     assignedCentralHrName: DEFAULT_CENTRAL_HR_NAME,
-    assignedCentralHrTitle: DEFAULT_CENTRAL_HR_TITLE
+    assignedCentralHrTitle: DEFAULT_CENTRAL_HR_TITLE,
+    reportReceivedBy: DEFAULT_CENTRAL_HR_NAME,
+    reportReceivedDate: new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })
   });
 
   // Load records
@@ -142,21 +146,30 @@ export default function IncidentReportPanel({
       employeeName: "",
       employeeId: "",
       employeePosition: "Cashier",
+      department: "Finance & Cashier Operations",
+      phoneNumber: "+63 917 842 9102",
       company: "5A Royal Gaming OPC",
       branch: "Purok Daisy, New Isabela, Tacurong City, Sultan Kudarat",
       reportingHrName: currentUser?.name || "Ms. Quennie R. Capuyan",
       reportingHrTitle: "HR Admin",
       dateOfIncident: new Date().toISOString().slice(0, 10),
       dateReported: new Date().toISOString().slice(0, 10),
+      incidentTime: "16:30 PM",
+      policeNotified: "NO",
       incidentCategory: "Cash Shortage & Non-observance of SOPs",
       auditDates: new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }),
       auditedBy: "CFO Admin Staff, Ms. Rollyn Beatrice Simpal and Ms. Hygiene Reusora",
       cashShortageAmount: "",
       specificFindings: "",
       fullIncidentNarrative: "",
+      incidentCauses: "Non-observance of Cashier Standard Operating Procedures (SOPs), unauthorized credit extensions, and failure to reconcile daily cash float before shift closure.",
+      followUpRecommendations: "Immediate issuance of Notice to Explain (NTE) under Article 297 Labor Code and audit of cashier vault.",
+      additionalNotes: "All physical cash count discrepancy sheets and borrower signed slips have been submitted and attached to the audit file.",
       evidenceNotes: "",
       assignedCentralHrName: DEFAULT_CENTRAL_HR_NAME,
-      assignedCentralHrTitle: DEFAULT_CENTRAL_HR_TITLE
+      assignedCentralHrTitle: DEFAULT_CENTRAL_HR_TITLE,
+      reportReceivedBy: DEFAULT_CENTRAL_HR_NAME,
+      reportReceivedDate: new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })
     });
     setIsCreateModalOpen(true);
   };
@@ -319,6 +332,12 @@ export default function IncidentReportPanel({
     setIsNteViewerOpen(true);
   };
 
+  // View Authentic IR Document
+  const handleViewIrDocument = (report) => {
+    setSelectedReport(report);
+    setIsIrViewerOpen(true);
+  };
+
   // Print Document Trigger
   const handlePrintDocument = () => {
     window.print();
@@ -330,12 +349,12 @@ export default function IncidentReportPanel({
       <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs transition">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div className="flex items-start gap-3.5">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-rose-500 to-rose-700 text-white flex items-center justify-center shadow-md shadow-rose-500/20 shrink-0">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#96c158] to-[#7ea741] text-white flex items-center justify-center shadow-md shadow-[#96c158]/20 shrink-0">
               <ShieldAlert size={26} />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-md bg-rose-50 text-rose-700 border border-rose-200">
+                <span className="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-md bg-[#eef7e5] text-[#55782a] border border-[#d3eab8]">
                   Due Process & Compliance
                 </span>
                 <span className="text-[10px] font-semibold text-slate-400">
@@ -370,7 +389,7 @@ export default function IncidentReportPanel({
             <button
               type="button"
               onClick={handleOpenCreateModal}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-md shadow-rose-600/20 transition cursor-pointer active:scale-98"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-[#8cb84a] hover:bg-[#7ea741] text-white shadow-md shadow-[#8cb84a]/25 transition cursor-pointer active:scale-98"
             >
               <Plus size={16} />
               <span>Issue Incident Report (IR)</span>
@@ -439,7 +458,7 @@ export default function IncidentReportPanel({
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search employee, case #..."
-              className="w-full pl-9 pr-3 py-1.5 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent bg-slate-50/50"
+              className="w-full pl-9 pr-3 py-1.5 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#8cb84a] focus:border-transparent bg-slate-50/50"
             />
           </div>
         </div>
@@ -448,7 +467,7 @@ export default function IncidentReportPanel({
       {/* Case Workflow Status Pipeline / Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <div className="bg-white rounded-xl border border-slate-200 p-3.5 shadow-2xs flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center font-black">
+          <div className="w-10 h-10 rounded-lg bg-[#eef7e5] text-[#55782a] flex items-center justify-center font-black">
             <AlertTriangle size={20} />
           </div>
           <div>
@@ -502,7 +521,7 @@ export default function IncidentReportPanel({
             Active Incident & Notice to Explain Records ({filteredReports.length})
           </span>
           <span className="text-[11px] text-slate-400">
-            Click on any case to view details, draft NTE, or print official notice
+            Preview either the Incident Report (IR) Form or the official Notice to Explain (NTE)
           </span>
         </div>
 
@@ -518,7 +537,7 @@ export default function IncidentReportPanel({
             <button
               type="button"
               onClick={handleOpenCreateModal}
-              className="mt-4 px-4 py-2 rounded-xl text-xs font-bold bg-rose-600 text-white inline-flex items-center gap-2 hover:bg-rose-700 cursor-pointer"
+              className="mt-4 px-4 py-2 rounded-xl text-xs font-bold bg-[#8cb84a] text-white inline-flex items-center gap-2 hover:bg-[#7ea741] cursor-pointer"
             >
               <Plus size={14} />
               <span>Issue New Incident Report</span>
@@ -580,7 +599,7 @@ export default function IncidentReportPanel({
                       <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
                         <span>{report.employeeName}</span>
                         <span className="text-xs font-medium text-slate-500">
-                          ({report.employeePosition || "Staff"} • {report.company})
+                          ({report.employeePosition || "Staff"} • {report.department || report.company})
                         </span>
                       </h3>
                       <p className="text-xs text-rose-700 font-semibold mt-0.5 flex items-center gap-1.5">
@@ -635,6 +654,16 @@ export default function IncidentReportPanel({
                       <Volume2 size={16} />
                     </button>
 
+                    {/* Button 1: View Incident Report (IR) Form (Matching reference design) */}
+                    <button
+                      type="button"
+                      onClick={() => handleViewIrDocument(report)}
+                      className="px-3.5 py-2 rounded-xl text-xs font-bold bg-[#8cb84a] hover:bg-[#7ea741] text-white shadow-xs transition cursor-pointer inline-flex items-center gap-1.5"
+                    >
+                      <FileText size={14} />
+                      <span>View IR Form</span>
+                    </button>
+
                     {/* Central HR: Draft or Edit NTE */}
                     {isPendingCentral && (
                       <button
@@ -647,7 +676,7 @@ export default function IncidentReportPanel({
                       </button>
                     )}
 
-                    {/* View & Print Official NTE Document (User's authentic layout) */}
+                    {/* Button 2: View Official NTE Document (Letterhead layout) */}
                     <button
                       type="button"
                       onClick={() => handleViewNteDocument(report)}
@@ -691,222 +720,373 @@ export default function IncidentReportPanel({
         )}
       </div>
 
-      {/* MODAL 1: CREATE NEW INCIDENT REPORT (Area HR) */}
+      {/* ========================================================================= */}
+      {/* MODAL 1: CREATE NEW INCIDENT REPORT (Area HR) - STYLED FROM USER'S IMAGE */}
+      {/* ========================================================================= */}
       {isCreateModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-3 md:p-6 overflow-y-auto">
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-3xl w-full max-h-[92vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-            {/* Modal Header */}
-            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 shrink-0">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-rose-600 text-white flex items-center justify-center font-bold">
-                  <ShieldAlert size={22} />
-                </div>
-                <div>
-                  <h2 className="text-lg font-black text-slate-900">Issue Incident Report (IR)</h2>
-                  <p className="text-xs text-slate-500">
-                    Area HR creates the incident report to be forwarded to Central HRMD for Notice to Explain (NTE)
-                  </p>
-                </div>
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 md:p-6 overflow-y-auto">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-3xl w-full max-h-[94vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            {/* Top Green Banner (From Reference Image) */}
+            <div className="bg-[#96c158] text-white px-6 py-4 flex items-center justify-between shrink-0 shadow-sm">
+              <div className="flex-1 text-center">
+                <h2 className="text-xl sm:text-2xl font-black uppercase tracking-wider text-white">
+                  INCIDENT REPORT
+                </h2>
+                <p className="text-[11px] text-white/90 font-medium">
+                  Official Employee Incident Documentation Form
+                </p>
               </div>
               <button
                 type="button"
                 onClick={() => setIsCreateModalOpen(false)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition cursor-pointer"
+                className="p-1 rounded-lg text-white/80 hover:text-white hover:bg-white/20 transition cursor-pointer"
               >
-                <X size={18} />
+                <X size={20} />
               </button>
             </div>
 
             {/* Modal Form Content */}
-            <form onSubmit={handleSubmitIrToCentralHr} className="flex-1 overflow-y-auto p-6 space-y-5 custom-scrollbar">
-              {/* Employee Selection & Details */}
-              <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/40 space-y-4">
-                <div className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-2">
-                  <User size={14} className="text-rose-600" />
-                  1. Subject Employee Information
+            <form onSubmit={handleSubmitIrToCentralHr} className="flex-1 overflow-y-auto p-5 sm:p-8 space-y-7 custom-scrollbar bg-slate-50/30">
+              {/* SECTION 1: EMPLOYEE DETAILS */}
+              <div className="space-y-4">
+                <div className="text-center">
+                  <h3 className="text-sm font-extrabold uppercase tracking-wider text-slate-800">
+                    EMPLOYEE DETAILS
+                  </h3>
+                  <div className="w-12 h-0.5 bg-[#96c158] mx-auto mt-1 rounded-full" />
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                <div className="space-y-3.5">
+                  {/* NAME */}
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">
-                      Employee Full Name <span className="text-rose-600">*</span>
+                    <label className="block text-[11px] font-extrabold uppercase tracking-wide text-slate-700 mb-1">
+                      NAME <span className="text-rose-600">*</span>
                     </label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="e.g. MA. CATHRINA PANIZARES"
-                      value={irForm.employeeName}
-                      onChange={(e) => setIrForm({ ...irForm, employeeName: e.target.value.toUpperCase() })}
-                      className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-rose-500 font-bold"
-                    />
+                    <div className="relative">
+                      <CreditCard size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. MA. CATHRINA PANIZARES"
+                        value={irForm.employeeName}
+                        onChange={(e) => setIrForm({ ...irForm, employeeName: e.target.value.toUpperCase() })}
+                        className="w-full pl-10 pr-3.5 py-2.5 text-xs rounded-xl border border-slate-200 bg-slate-100/70 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#96c158] font-bold text-slate-900 transition"
+                      />
+                    </div>
                   </div>
 
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">
-                      Employee ID / Designation
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="e.g. Cashier"
-                      value={irForm.employeePosition}
-                      onChange={(e) => setIrForm({ ...irForm, employeePosition: e.target.value })}
-                      className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-rose-500"
-                    />
+                  {/* DEPARTMENT & PHONE NUMBER */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                    <div>
+                      <label className="block text-[11px] font-extrabold uppercase tracking-wide text-slate-700 mb-1">
+                        DEPARTMENT / SUBSIDIARY
+                      </label>
+                      <div className="relative">
+                        <Building2 size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                        <input
+                          type="text"
+                          placeholder="e.g. Finance & Cashier Operations"
+                          value={irForm.department}
+                          onChange={(e) => setIrForm({ ...irForm, department: e.target.value })}
+                          className="w-full pl-10 pr-3.5 py-2.5 text-xs rounded-xl border border-slate-200 bg-slate-100/70 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#96c158] text-slate-900 transition"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-extrabold uppercase tracking-wide text-slate-700 mb-1">
+                        PHONE NUMBER
+                      </label>
+                      <div className="relative">
+                        <Smartphone size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                        <input
+                          type="text"
+                          placeholder="e.g. +63 917 842 9102"
+                          value={irForm.phoneNumber}
+                          onChange={(e) => setIrForm({ ...irForm, phoneNumber: e.target.value })}
+                          className="w-full pl-10 pr-3.5 py-2.5 text-xs rounded-xl border border-slate-200 bg-slate-100/70 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#96c158] text-slate-900 transition"
+                        />
+                      </div>
+                    </div>
                   </div>
 
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">
-                      Company / Subsidiary
-                    </label>
-                    <select
-                      value={irForm.company}
-                      onChange={(e) => setIrForm({ ...irForm, company: e.target.value })}
-                      className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-rose-500 font-medium"
-                    >
-                      <option value="5A Royal Gaming OPC">5A Royal Gaming OPC</option>
-                      <option value="Simpal Group of Companies">Simpal Group of Companies</option>
-                      <option value="SIMCON">SIMCON</option>
-                      <option value="Lucky Betplay Corporation">Lucky Betplay Corporation</option>
-                      <option value="Imperial Gaming OPC">Imperial Gaming OPC</option>
-                    </select>
-                  </div>
+                  {/* HR Process Extra: Designation & Company */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                    <div>
+                      <label className="block text-[11px] font-extrabold uppercase tracking-wide text-slate-700 mb-1">
+                        POSITION / DESIGNATION
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Cashier"
+                        value={irForm.employeePosition}
+                        onChange={(e) => setIrForm({ ...irForm, employeePosition: e.target.value })}
+                        className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 bg-slate-100/70 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#96c158] text-slate-900 transition"
+                      />
+                    </div>
 
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">
-                      Branch / Area Location
-                    </label>
-                    <input
-                      type="text"
-                      value={irForm.branch}
-                      onChange={(e) => setIrForm({ ...irForm, branch: e.target.value })}
-                      placeholder="e.g. Purok Daisy, New Isabela, Tacurong City, Sultan Kudarat"
-                      className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-rose-500"
-                    />
+                    <div>
+                      <label className="block text-[11px] font-extrabold uppercase tracking-wide text-slate-700 mb-1">
+                        COMPANY ENTITY
+                      </label>
+                      <select
+                        value={irForm.company}
+                        onChange={(e) => setIrForm({ ...irForm, company: e.target.value })}
+                        className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 bg-slate-100/70 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#96c158] text-slate-900 font-medium transition"
+                      >
+                        <option value="5A Royal Gaming OPC">5A Royal Gaming OPC</option>
+                        <option value="Simpal Group of Companies">Simpal Group of Companies</option>
+                        <option value="SIMCON">SIMCON</option>
+                        <option value="Lucky Betplay Corporation">Lucky Betplay Corporation</option>
+                        <option value="Imperial Gaming OPC">Imperial Gaming OPC</option>
+                      </select>
+                    </div>
                   </div>
                 </div>
               </div>
 
-              {/* Incident Facts & Audit Specifics */}
-              <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/40 space-y-4">
-                <div className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-2">
-                  <AlertTriangle size={14} className="text-amber-600" />
-                  2. Incident Findings & Audit Details
+              {/* SECTION 2: DESCRIPTION OF INCIDENT */}
+              <div className="space-y-4 pt-2">
+                <div className="text-center">
+                  <h3 className="text-sm font-extrabold uppercase tracking-wider text-slate-800">
+                    DESCRIPTION OF INCIDENT
+                  </h3>
+                  <div className="w-12 h-0.5 bg-[#96c158] mx-auto mt-1 rounded-full" />
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">
-                      Incident Category / Allegation
+                {/* 2-Column Grid (Left: Meta, Right: Incident Details Box) */}
+                <div className="grid grid-cols-1 md:grid-cols-[200px_1fr] gap-4">
+                  {/* Left Column: Date, Location, Time, Police Notified */}
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-[11px] font-extrabold uppercase tracking-wide text-slate-700 mb-1">
+                        DATE
+                      </label>
+                      <div className="relative">
+                        <Calendar size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                        <input
+                          type="date"
+                          value={irForm.dateOfIncident}
+                          onChange={(e) => setIrForm({ ...irForm, dateOfIncident: e.target.value })}
+                          className="w-full pl-9 pr-2.5 py-2 text-xs rounded-xl border border-slate-200 bg-slate-100/70 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#96c158] text-slate-900"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-extrabold uppercase tracking-wide text-slate-700 mb-1">
+                        LOCATION
+                      </label>
+                      <div className="relative">
+                        <MapPin size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                        <input
+                          type="text"
+                          placeholder="e.g. Tacurong Branch"
+                          value={irForm.branch}
+                          onChange={(e) => setIrForm({ ...irForm, branch: e.target.value })}
+                          className="w-full pl-9 pr-2.5 py-2 text-xs rounded-xl border border-slate-200 bg-slate-100/70 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#96c158] text-slate-900"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-extrabold uppercase tracking-wide text-slate-700 mb-1">
+                        TIME
+                      </label>
+                      <div className="relative">
+                        <Clock size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                        <input
+                          type="text"
+                          placeholder="e.g. 16:30 PM"
+                          value={irForm.incidentTime}
+                          onChange={(e) => setIrForm({ ...irForm, incidentTime: e.target.value })}
+                          className="w-full pl-9 pr-2.5 py-2 text-xs rounded-xl border border-slate-200 bg-slate-100/70 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#96c158] text-slate-900"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-extrabold uppercase tracking-wide text-slate-700 mb-1.5">
+                        POLICE NOTIFIED
+                      </label>
+                      <div className="flex items-center gap-4 text-xs font-bold text-slate-700 pt-0.5">
+                        <label className="inline-flex items-center gap-1.5 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="policeNotified"
+                            value="YES"
+                            checked={irForm.policeNotified === "YES"}
+                            onChange={() => setIrForm({ ...irForm, policeNotified: "YES" })}
+                            className="text-[#96c158] focus:ring-[#96c158]"
+                          />
+                          <span>YES</span>
+                        </label>
+                        <label className="inline-flex items-center gap-1.5 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="policeNotified"
+                            value="NO"
+                            checked={irForm.policeNotified === "NO"}
+                            onChange={() => setIrForm({ ...irForm, policeNotified: "NO" })}
+                            className="text-[#96c158] focus:ring-[#96c158]"
+                          />
+                          <span>NO</span>
+                        </label>
+                      </div>
+                    </div>
+
+                    {/* Cash Shortage Amount (PHP) */}
+                    <div>
+                      <label className="block text-[11px] font-extrabold uppercase tracking-wide text-slate-700 mb-1">
+                        SHORTAGE (PHP)
+                      </label>
+                      <div className="relative">
+                        <DollarSign size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-rose-500" />
+                        <input
+                          type="text"
+                          placeholder="e.g. 12,102.00"
+                          value={irForm.cashShortageAmount}
+                          onChange={(e) => setIrForm({ ...irForm, cashShortageAmount: e.target.value })}
+                          className="w-full pl-9 pr-2.5 py-2 text-xs rounded-xl border border-slate-200 bg-slate-100/70 focus:bg-white focus:outline-none focus:ring-2 focus:ring-rose-500 font-bold text-rose-700"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Right Column: INCIDENT DETAILS (Large Box from reference image) */}
+                  <div className="flex flex-col">
+                    <label className="block text-[11px] font-extrabold uppercase tracking-wide text-slate-700 mb-1">
+                      INCIDENT DETAILS
                     </label>
-                    <input
-                      type="text"
-                      value={irForm.incidentCategory}
-                      onChange={(e) => setIrForm({ ...irForm, incidentCategory: e.target.value })}
-                      placeholder="e.g. Cash Shortage & Non-observance of SOPs"
-                      className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-rose-500 font-semibold"
+                    <textarea
+                      rows={8}
+                      placeholder="How the incident occurred, factors leading to it, what took place. Be as specific as possible."
+                      value={irForm.specificFindings}
+                      onChange={(e) => setIrForm({ ...irForm, specificFindings: e.target.value })}
+                      className="w-full flex-1 p-3.5 text-xs rounded-2xl border border-slate-200 bg-slate-100/70 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#96c158] text-slate-900 leading-relaxed custom-scrollbar transition"
+                    />
+                    <p className="text-[10px] text-slate-400 mt-1.5 italic">
+                      How the incident occurred, factors leading to it, what took place. Be as specific as possible.
+                    </p>
+                  </div>
+                </div>
+
+                {/* INCIDENT CAUSES & FOLLOW UP RECOMMENDATIONS */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                  <div>
+                    <label className="block text-[11px] font-extrabold uppercase tracking-wide text-slate-700 mb-1">
+                      INCIDENT CAUSES
+                    </label>
+                    <textarea
+                      rows={3}
+                      placeholder="Root cause, lapses in SOPs, failure to liquidate or verify..."
+                      value={irForm.incidentCauses}
+                      onChange={(e) => setIrForm({ ...irForm, incidentCauses: e.target.value })}
+                      className="w-full p-3 text-xs rounded-xl border border-slate-200 bg-slate-100/70 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#96c158] text-slate-900 leading-relaxed transition"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">
-                      Cash Shortage Amount (PHP)
+                    <label className="block text-[11px] font-extrabold uppercase tracking-wide text-slate-700 mb-1">
+                      FOLLOW UP RECOMMENDATIONS
                     </label>
-                    <input
-                      type="text"
-                      placeholder="e.g. 12,102.00"
-                      value={irForm.cashShortageAmount}
-                      onChange={(e) => setIrForm({ ...irForm, cashShortageAmount: e.target.value })}
-                      className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-rose-500 font-bold text-rose-700"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">
-                      Audit Date(s)
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="e.g. September 24, 2026"
-                      value={irForm.auditDates}
-                      onChange={(e) => setIrForm({ ...irForm, auditDates: e.target.value })}
-                      className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-rose-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">
-                      Audited By / Investigating Officers
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="e.g. CFO Admin Staff, Ms. Rollyn Beatrice Simpal and Ms. Hygiene Reusora"
-                      value={irForm.auditedBy}
-                      onChange={(e) => setIrForm({ ...irForm, auditedBy: e.target.value })}
-                      className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-rose-500"
+                    <textarea
+                      rows={3}
+                      placeholder="Recommended actions (e.g. Issue Notice to Explain, vault suspension, full audit)..."
+                      value={irForm.followUpRecommendations}
+                      onChange={(e) => setIrForm({ ...irForm, followUpRecommendations: e.target.value })}
+                      className="w-full p-3 text-xs rounded-xl border border-slate-200 bg-slate-100/70 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#96c158] text-slate-900 leading-relaxed transition"
                     />
                   </div>
                 </div>
 
+                {/* ADDITIONAL NOTES */}
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Specific Violations & Shortage Breakdown
+                  <label className="block text-[11px] font-extrabold uppercase tracking-wide text-slate-700 mb-1">
+                    ADDITIONAL NOTES
                   </label>
                   <textarea
-                    rows={3}
-                    placeholder="e.g. Allowed Mr. Mosher Bebot to borrow PHP 1,000.00 from company cash; permitted advance fuel transactions for SPVR Joevert Sudsud (PHP 2,030.00) and Mosher Bebot (PHP 1,050.00); SPVR Armando shortage PHP 4,208.00 remained uncleared."
-                    value={irForm.specificFindings}
-                    onChange={(e) => setIrForm({ ...irForm, specificFindings: e.target.value })}
-                    className="w-full p-2.5 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-rose-500 leading-relaxed"
+                    rows={2}
+                    placeholder="Attach references, physical count sheets, witness statements, CCTV logs..."
+                    value={irForm.additionalNotes}
+                    onChange={(e) => setIrForm({ ...irForm, additionalNotes: e.target.value })}
+                    className="w-full p-3 text-xs rounded-xl border border-slate-200 bg-slate-100/70 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#96c158] text-slate-900 leading-relaxed transition"
                   />
                 </div>
               </div>
 
-              {/* Area HR & Central HR Routing */}
-              <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/40 space-y-4">
-                <div className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-2">
-                  <ArrowRight size={14} className="text-emerald-600" />
-                  3. Peer-to-Peer HR Routing
+              {/* SECTION 3: FOR OFFICIAL USE ONLY */}
+              <div className="space-y-4 pt-2">
+                <div className="text-center">
+                  <h3 className="text-sm font-extrabold uppercase tracking-wider text-slate-800">
+                    FOR OFFICIAL USE ONLY
+                  </h3>
+                  <div className="w-12 h-0.5 bg-[#96c158] mx-auto mt-1 rounded-full" />
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">
-                      Reporting Area HR Admin (You)
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* REPORT RECEIVED BY (Green pastel background from reference image) */}
+                  <div className="p-3 rounded-xl bg-[#eef7e5] border border-[#d8eac2]">
+                    <label className="block text-[10px] font-extrabold uppercase tracking-wide text-[#55782a] mb-1">
+                      REPORT RECEIVED BY
                     </label>
-                    <input
-                      type="text"
-                      value={irForm.reportingHrName}
-                      onChange={(e) => setIrForm({ ...irForm, reportingHrName: e.target.value })}
-                      className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-rose-500 font-semibold"
-                    />
+                    <div className="relative">
+                      <User size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#55782a]" />
+                      <input
+                        type="text"
+                        value={irForm.assignedCentralHrName}
+                        onChange={(e) => setIrForm({ ...irForm, assignedCentralHrName: e.target.value })}
+                        className="w-full pl-9 pr-3 py-2 text-xs rounded-lg border border-[#cbe3b0] bg-white font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#96c158]"
+                      />
+                    </div>
                   </div>
 
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">
-                      Forward To Central HR / HRMD Manager
+                  {/* DATE */}
+                  <div className="p-3 rounded-xl bg-[#eef7e5] border border-[#d8eac2]">
+                    <label className="block text-[10px] font-extrabold uppercase tracking-wide text-[#55782a] mb-1">
+                      DATE
                     </label>
-                    <input
-                      type="text"
-                      value={irForm.assignedCentralHrName}
-                      onChange={(e) => setIrForm({ ...irForm, assignedCentralHrName: e.target.value })}
-                      className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-rose-500 font-semibold text-emerald-800"
-                    />
+                    <div className="relative">
+                      <Calendar size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#55782a]" />
+                      <input
+                        type="text"
+                        value={irForm.reportReceivedDate}
+                        onChange={(e) => setIrForm({ ...irForm, reportReceivedDate: e.target.value })}
+                        className="w-full pl-9 pr-3 py-2 text-xs rounded-lg border border-[#cbe3b0] bg-white font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#96c158]"
+                      />
+                    </div>
                   </div>
+                </div>
+
+                {/* Reporting HR Submitter */}
+                <div className="flex items-center justify-between text-xs text-slate-500 pt-1 px-1">
+                  <span>
+                    <strong>Filed By:</strong> {irForm.reportingHrName} ({irForm.reportingHrTitle})
+                  </span>
+                  <span>
+                    <strong>Target Workflow:</strong> Forwarded to Central HRMD for Notice to Explain (NTE)
+                  </span>
                 </div>
               </div>
 
+              {/* Bottom Green Banner (From Reference Image) */}
+              <div className="bg-[#96c158] text-white py-2.5 px-4 rounded-xl text-center shadow-xs">
+                <p className="text-xs font-black uppercase tracking-wider">{irForm.company}</p>
+                <p className="text-[10px] text-white/90">Employee Incident Report</p>
+              </div>
+
               {/* Modal Actions */}
-              <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-3 shrink-0">
+              <div className="pt-2 flex items-center justify-end gap-3 shrink-0">
                 <button
                   type="button"
                   onClick={() => setIsCreateModalOpen(false)}
-                  className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+                  className="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-200 transition cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2.5 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-md shadow-rose-600/20 transition cursor-pointer inline-flex items-center gap-2"
+                  className="px-6 py-2.5 rounded-xl text-xs font-bold bg-[#8cb84a] hover:bg-[#7ea741] text-white shadow-md shadow-[#8cb84a]/25 transition cursor-pointer inline-flex items-center gap-2"
                 >
                   <Send size={15} />
                   <span>Submit & Forward IR to Central HR</span>
@@ -917,7 +1097,288 @@ export default function IncidentReportPanel({
         </div>
       )}
 
-      {/* MODAL 2: CENTRAL HR DRAFT / ISSUE NTE MODAL */}
+      {/* ========================================================================= */}
+      {/* MODAL 2: AUTHENTIC INCIDENT REPORT (IR) DOCUMENT VIEWER & PRINT           */}
+      {/* (100% VISUAL RECREATION OF USER'S REFERENCE IMAGE)                        */}
+      {/* ========================================================================= */}
+      {isIrViewerOpen && selectedReport && (
+        <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 md:p-6 overflow-y-auto">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-4xl w-full max-h-[96vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            {/* Modal Controls Bar */}
+            <div className="px-5 py-3 border-b border-slate-200 bg-slate-100 flex items-center justify-between shrink-0 no-print">
+              <div className="flex items-center gap-2">
+                <span className="font-mono text-xs font-bold bg-white px-2 py-0.5 rounded border border-slate-300 text-slate-800">
+                  {selectedReport.caseNumber}
+                </span>
+                <span className="text-xs font-bold text-slate-700">Official Incident Report Form</span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {/* Voice speech */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const speech = `Official Incident Report for ${selectedReport.employeeName}. Incident occurred on ${selectedReport.dateOfIncident || "September 24, 2026"} at ${selectedReport.branch || "Tacurong Branch"}. Specific findings: ${selectedReport.specificFindings || selectedReport.fullIncidentNarrative}. Recommended action: ${selectedReport.followUpRecommendations || "Notice to Explain issuance"}.`;
+                    playAiVoiceAnnouncement(speech);
+                  }}
+                  title="Listen to official document reading"
+                  className="px-3 py-1.5 rounded-lg text-xs font-bold bg-white border border-slate-200 hover:bg-[#eef7e5] text-slate-700 hover:text-[#55782a] transition cursor-pointer inline-flex items-center gap-1.5"
+                >
+                  <Volume2 size={14} />
+                  <span>Listen (Voice)</span>
+                </button>
+
+                {/* Print button */}
+                <button
+                  type="button"
+                  onClick={handlePrintDocument}
+                  className="px-3 py-1.5 rounded-lg text-xs font-bold bg-[#8cb84a] hover:bg-[#7ea741] text-white transition cursor-pointer inline-flex items-center gap-1.5 shadow-xs"
+                >
+                  <Printer size={14} />
+                  <span>Print IR Document</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setIsIrViewerOpen(false)}
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200 transition cursor-pointer"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+            </div>
+
+            {/* Authentic Printable Document Container */}
+            <div className="flex-1 overflow-y-auto p-4 sm:p-8 bg-slate-100/70 flex justify-center custom-scrollbar">
+              <div className="bg-white w-full max-w-[760px] p-0 shadow-md border border-slate-200 rounded-sm print:p-0 print:border-none print:shadow-none text-slate-900 font-sans relative overflow-hidden flex flex-col justify-between min-h-[960px]">
+                {/* Top Green Banner */}
+                <div className="bg-[#96c158] text-white py-5 px-6 text-center">
+                  <h1 className="text-2xl sm:text-3xl font-black uppercase tracking-wider text-white">
+                    INCIDENT REPORT
+                  </h1>
+                </div>
+
+                {/* Document Body */}
+                <div className="p-8 sm:p-12 space-y-8 flex-1">
+                  {/* 1. EMPLOYEE DETAILS */}
+                  <div className="space-y-4">
+                    <h2 className="text-center text-sm sm:text-base font-extrabold uppercase tracking-wider text-slate-800">
+                      EMPLOYEE DETAILS
+                    </h2>
+
+                    <div className="space-y-3">
+                      <div>
+                        <div className="text-[10px] font-black uppercase tracking-wider text-slate-700 mb-1">
+                          NAME
+                        </div>
+                        <div className="w-full px-3.5 py-2.5 rounded-xl bg-slate-100/80 border border-slate-200 text-xs sm:text-sm font-bold text-slate-900 flex items-center gap-2.5">
+                          <CreditCard size={15} className="text-slate-400 shrink-0" />
+                          <span>{selectedReport.employeeName}</span>
+                          <span className="text-xs text-slate-500 font-medium ml-auto">
+                            ({selectedReport.employeePosition || "Staff"})
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                        <div>
+                          <div className="text-[10px] font-black uppercase tracking-wider text-slate-700 mb-1">
+                            DEPARTMENT
+                          </div>
+                          <div className="w-full px-3.5 py-2.5 rounded-xl bg-slate-100/80 border border-slate-200 text-xs font-semibold text-slate-800 flex items-center gap-2">
+                            <Building2 size={14} className="text-slate-400 shrink-0" />
+                            <span>{selectedReport.department || selectedReport.company}</span>
+                          </div>
+                        </div>
+
+                        <div>
+                          <div className="text-[10px] font-black uppercase tracking-wider text-slate-700 mb-1">
+                            PHONE NUMBER
+                          </div>
+                          <div className="w-full px-3.5 py-2.5 rounded-xl bg-slate-100/80 border border-slate-200 text-xs font-semibold text-slate-800 flex items-center gap-2">
+                            <Smartphone size={14} className="text-slate-400 shrink-0" />
+                            <span>{selectedReport.phoneNumber || "+63 917 842 9102"}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 2. DESCRIPTION OF INCIDENT */}
+                  <div className="space-y-4">
+                    <h2 className="text-center text-sm sm:text-base font-extrabold uppercase tracking-wider text-slate-800">
+                      DESCRIPTION OF INCIDENT
+                    </h2>
+
+                    {/* 2-column layout */}
+                    <div className="grid grid-cols-1 sm:grid-cols-[180px_1fr] gap-4">
+                      {/* Left Side */}
+                      <div className="space-y-3">
+                        <div>
+                          <div className="text-[10px] font-black uppercase tracking-wider text-slate-700 mb-1">
+                            DATE
+                          </div>
+                          <div className="w-full px-3 py-2 rounded-xl bg-slate-100/80 border border-slate-200 text-xs font-bold text-slate-800 flex items-center gap-2">
+                            <Calendar size={13} className="text-slate-400 shrink-0" />
+                            <span>{selectedReport.dateOfIncident || selectedReport.auditDates}</span>
+                          </div>
+                        </div>
+
+                        <div>
+                          <div className="text-[10px] font-black uppercase tracking-wider text-slate-700 mb-1">
+                            LOCATION
+                          </div>
+                          <div className="w-full px-3 py-2 rounded-xl bg-slate-100/80 border border-slate-200 text-xs font-bold text-slate-800 flex items-center gap-2">
+                            <MapPin size={13} className="text-slate-400 shrink-0" />
+                            <span className="truncate">{selectedReport.branch || "Tacurong Branch"}</span>
+                          </div>
+                        </div>
+
+                        <div>
+                          <div className="text-[10px] font-black uppercase tracking-wider text-slate-700 mb-1">
+                            TIME
+                          </div>
+                          <div className="w-full px-3 py-2 rounded-xl bg-slate-100/80 border border-slate-200 text-xs font-bold text-slate-800 flex items-center gap-2">
+                            <Clock size={13} className="text-slate-400 shrink-0" />
+                            <span>{selectedReport.incidentTime || "16:30 PM"}</span>
+                          </div>
+                        </div>
+
+                        <div>
+                          <div className="text-[10px] font-black uppercase tracking-wider text-slate-700 mb-1">
+                            POLICE NOTIFIED
+                          </div>
+                          <div className="flex items-center gap-3 text-xs font-bold text-slate-700 pt-1">
+                            <span className="inline-flex items-center gap-1">
+                              <span
+                                className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${
+                                  selectedReport.policeNotified === "YES"
+                                    ? "border-[#96c158] bg-[#96c158]"
+                                    : "border-slate-300"
+                                }`}
+                              >
+                                {selectedReport.policeNotified === "YES" && (
+                                  <span className="w-1.5 h-1.5 rounded-full bg-white" />
+                                )}
+                              </span>
+                              <span>YES</span>
+                            </span>
+                            <span className="inline-flex items-center gap-1">
+                              <span
+                                className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${
+                                  selectedReport.policeNotified !== "YES"
+                                    ? "border-[#96c158] bg-[#96c158]"
+                                    : "border-slate-300"
+                                }`}
+                              >
+                                {selectedReport.policeNotified !== "YES" && (
+                                  <span className="w-1.5 h-1.5 rounded-full bg-white" />
+                                )}
+                              </span>
+                              <span>NO</span>
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Right Side: INCIDENT DETAILS BOX */}
+                      <div className="flex flex-col">
+                        <div className="text-[10px] font-black uppercase tracking-wider text-slate-700 mb-1">
+                          INCIDENT DETAILS
+                        </div>
+                        <div className="w-full flex-1 p-3.5 rounded-2xl bg-slate-100/80 border border-slate-200 text-xs text-slate-800 leading-relaxed text-justify min-h-[160px]">
+                          {selectedReport.specificFindings || selectedReport.fullIncidentNarrative}
+                        </div>
+                        <div className="text-[9px] text-slate-400 mt-1 italic">
+                          How the incident occurred, factors leading to it, what took place. Be as specific as possible.
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Causes and Recommendations Boxes */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                      <div>
+                        <div className="text-[10px] font-black uppercase tracking-wider text-slate-700 mb-1">
+                          INCIDENT CAUSES
+                        </div>
+                        <div className="w-full p-3 rounded-xl bg-slate-100/80 border border-slate-200 text-xs text-slate-800 leading-relaxed min-h-[70px]">
+                          {selectedReport.incidentCauses || "Non-observance of Cashier Standard Operating Procedures (SOPs) and unauthorized transactions."}
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="text-[10px] font-black uppercase tracking-wider text-slate-700 mb-1">
+                          FOLLOW UP RECOMMENDATIONS
+                        </div>
+                        <div className="w-full p-3 rounded-xl bg-slate-100/80 border border-slate-200 text-xs text-slate-800 leading-relaxed min-h-[70px]">
+                          {selectedReport.followUpRecommendations || "Immediate issuance of Notice to Explain (NTE) under Article 297 Labor Code."}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Additional Notes Box */}
+                    <div>
+                      <div className="text-[10px] font-black uppercase tracking-wider text-slate-700 mb-1">
+                        ADDITIONAL NOTES
+                      </div>
+                      <div className="w-full p-3 rounded-xl bg-slate-100/80 border border-slate-200 text-xs text-slate-800 leading-relaxed min-h-[50px]">
+                        {selectedReport.additionalNotes || selectedReport.evidenceNotes || "All physical cash count discrepancy sheets and borrower signed slips have been submitted and attached to the audit file."}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 3. FOR OFFICIAL USE ONLY */}
+                  <div className="space-y-4 pt-2">
+                    <h2 className="text-center text-sm sm:text-base font-extrabold uppercase tracking-wider text-slate-800">
+                      FOR OFFICIAL USE ONLY
+                    </h2>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {/* REPORT RECEIVED BY */}
+                      <div className="p-3 rounded-xl bg-[#eef7e5] border border-[#d8eac2]">
+                        <div className="text-[10px] font-black uppercase tracking-wider text-[#55782a] mb-1">
+                          REPORT RECEIVED BY
+                        </div>
+                        <div className="flex items-center gap-2 text-xs font-bold text-slate-900">
+                          <User size={14} className="text-[#55782a] shrink-0" />
+                          <span>{selectedReport.reportReceivedBy || selectedReport.assignedCentralHrName || DEFAULT_CENTRAL_HR_NAME}</span>
+                        </div>
+                      </div>
+
+                      {/* DATE */}
+                      <div className="p-3 rounded-xl bg-[#eef7e5] border border-[#d8eac2]">
+                        <div className="text-[10px] font-black uppercase tracking-wider text-[#55782a] mb-1">
+                          DATE
+                        </div>
+                        <div className="flex items-center gap-2 text-xs font-bold text-slate-900">
+                          <Calendar size={14} className="text-[#55782a] shrink-0" />
+                          <span>{selectedReport.reportReceivedDate || selectedReport.dateReported || "September 28, 2026"}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="text-right text-[10px] text-slate-400">
+                      Report Filed By: {selectedReport.reportingHrName} ({selectedReport.reportingHrTitle})
+                    </div>
+                  </div>
+                </div>
+
+                {/* Bottom Green Banner */}
+                <div className="bg-[#96c158] text-white py-3.5 px-6 text-center shrink-0">
+                  <h3 className="text-sm font-black uppercase tracking-wider">
+                    {selectedReport.company || "5A ROYAL GAMING OPC"}
+                  </h3>
+                  <p className="text-[10px] text-white/90">Employee Incident Report</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL 3: CENTRAL HR DRAFT / ISSUE NTE MODAL                                */}
+      {/* ========================================================================= */}
       {isNteDraftModalOpen && selectedReport && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-3 md:p-6 overflow-y-auto">
           <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-3xl w-full max-h-[92vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
@@ -1060,7 +1521,9 @@ export default function IncidentReportPanel({
         </div>
       )}
 
-      {/* MODAL 3: AUTHENTIC NOTICE TO EXPLAIN (NTE) DOCUMENT VIEWER & PRINT */}
+      {/* ========================================================================= */}
+      {/* MODAL 4: AUTHENTIC NOTICE TO EXPLAIN (NTE) DOCUMENT VIEWER & PRINT         */}
+      {/* ========================================================================= */}
       {isNteViewerOpen && selectedReport && (
         <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 md:p-6 overflow-y-auto">
           <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-4xl w-full max-h-[96vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
@@ -1108,7 +1571,7 @@ export default function IncidentReportPanel({
               </div>
             </div>
 
-            {/* Official Letterhead Printable Document Container (Matches Photo 1:1) */}
+            {/* Official Letterhead Printable Document Container */}
             <div className="flex-1 overflow-y-auto p-4 sm:p-8 bg-slate-100/70 flex justify-center custom-scrollbar">
               <div className="bg-white w-full max-w-[760px] p-8 sm:p-12 shadow-md border border-slate-200 rounded-sm print:p-0 print:border-none print:shadow-none text-slate-900 font-sans relative">
                 {/* Background Watermark */}
@@ -1246,7 +1709,9 @@ export default function IncidentReportPanel({
         </div>
       )}
 
-      {/* MODAL 4: LOG EMPLOYEE EXPLANATION */}
+      {/* ========================================================================= */}
+      {/* MODAL 5: LOG EMPLOYEE EXPLANATION                                         */}
+      {/* ========================================================================= */}
       {isExplanationModalOpen && selectedReport && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-3 md:p-6 overflow-y-auto">
           <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-lg w-full overflow-hidden animate-in fade-in zoom-in-95 duration-200">
