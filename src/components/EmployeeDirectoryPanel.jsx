@@ -30,13 +30,14 @@ const SUBSIDIARIES = [
 const ROLES = [
   "HR Administrator",
   "HR Manager",
-  "HR Specialist",
+  "HR Admin I",
+  "HR Admin II",
+  "HR Admin III",
+  "HR Admin IV",
+  "HR Admin V",
+  "HR Admin VI",
+  "HR-Onsite",
   "Site Supervisor",
-  "Site Engineer",
-  "Compliance Officer",
-  "Operations Lead",
-  "Finance & Payroll Analyst",
-  "Safety Officer",
   "Team Member"
 ];
 
@@ -623,11 +624,11 @@ export default function EmployeeDirectoryPanel({
             <span className="p-2 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200">
               <Users size={18} />
             </span>
-            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-600">Personnel & Diversified HR Management</span>
+            <span className="text-[10px] font-black uppercase tracking-wider text-emerald-600">Personnel Directory</span>
           </div>
           <h2 className="mt-1 text-2xl font-black text-slate-900 tracking-tight">Employee Directory</h2>
           <p className="mt-0.5 text-xs text-slate-500 max-w-xl">
-            Centralized personnel registry across Simpal Group subsidiaries. Diversify HR handling, update employee assignments, manage access approvals, and monitor real-time presence.
+            Personnel registry, HR assignments, and account access across all subsidiaries.
           </p>
         </div>
 
@@ -660,7 +661,7 @@ export default function EmployeeDirectoryPanel({
               className="inline-flex items-center gap-2 bg-slate-900 hover:bg-slate-800 text-emerald-400 px-4 py-2.5 rounded-xl font-bold text-xs shadow-md shadow-slate-900/15 transition cursor-pointer"
             >
               <UserPlus size={15} />
-              <span>Pre-Register Employee</span>
+              <span>Pre-Register</span>
             </button>
           )}
         </div>
@@ -676,7 +677,7 @@ export default function EmployeeDirectoryPanel({
             </span>
           </div>
           <p className="mt-2 text-2xl font-black text-slate-900">{stats.total}</p>
-          <p className="text-[10px] text-slate-400 mt-0.5">Enrolled across subsidiaries</p>
+          <p className="text-[10px] text-slate-400 mt-0.5">All entities</p>
         </div>
 
         <div
@@ -692,7 +693,7 @@ export default function EmployeeDirectoryPanel({
         >
           <div className="flex items-center justify-between">
             <span className={`text-xs font-bold ${selectedHRFilter === "my-handled" || selectedFilter === "my-handled" ? "text-emerald-100" : "text-emerald-700"}`}>
-              My Assigned (Handled by Me)
+              My Assigned
             </span>
             <span className={`p-2 rounded-xl ${selectedHRFilter === "my-handled" || selectedFilter === "my-handled" ? "bg-emerald-600 text-white" : "bg-emerald-50 text-emerald-700"}`}>
               <UserCheck size={16} />
@@ -702,20 +703,20 @@ export default function EmployeeDirectoryPanel({
             <p className={`text-2xl font-black ${selectedHRFilter === "my-handled" || selectedFilter === "my-handled" ? "text-white" : "text-emerald-700"}`}>
               {stats.myHandledCount}
             </p>
-            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
-              selectedHRFilter === "my-handled" || selectedFilter === "my-handled" ? "bg-emerald-600 text-emerald-100" : "bg-emerald-100 text-emerald-800"
-            }`}>
-              {selectedHRFilter === "my-handled" ? "Filtered" : "Click to view"}
-            </span>
+            {selectedHRFilter === "my-handled" && (
+              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-600 text-emerald-100">
+                Filtered
+              </span>
+            )}
           </div>
           <p className={`text-[10px] mt-0.5 ${selectedHRFilter === "my-handled" || selectedFilter === "my-handled" ? "text-emerald-100" : "text-slate-400"}`}>
-            Assigned to your HR portfolio
+            Handled by you
           </p>
         </div>
 
         <div className="bg-white border border-slate-200/90 rounded-2xl p-4 shadow-xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-500">Active Online</span>
+            <span className="text-xs font-bold text-slate-500">Online Now</span>
             <span className="p-2 rounded-xl bg-emerald-50 text-emerald-700">
               <Sparkles size={16} />
             </span>
@@ -727,7 +728,7 @@ export default function EmployeeDirectoryPanel({
               <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
             </span>
           </div>
-          <p className="text-[10px] text-slate-400 mt-0.5">Real-time active connections</p>
+          <p className="text-[10px] text-slate-400 mt-0.5">Live sessions</p>
         </div>
 
         <div className={`border rounded-2xl p-4 shadow-xs transition ${
@@ -747,7 +748,7 @@ export default function EmployeeDirectoryPanel({
             {stats.pendingCount}
           </p>
           <p className="text-[10px] text-slate-400 mt-0.5">
-            {stats.pendingCount > 0 ? "Requires administrator sign-off" : "All accounts verified"}
+            {stats.pendingCount > 0 ? "Action required" : "All verified"}
           </p>
         </div>
       </div>
@@ -756,14 +757,14 @@ export default function EmployeeDirectoryPanel({
       <div className="bg-white border border-slate-200/90 rounded-2xl p-4 shadow-xs space-y-3">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
           {/* Search Box */}
-          <div className="flex-1 min-w-[240px]">
-            <div className="flex items-center gap-2.5 rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-xs text-slate-800 focus-within:border-emerald-500 focus-within:bg-white focus-within:ring-2 focus-within:ring-emerald-100 transition">
+          <div className="flex-1 min-w-[200px]">
+            <div className="flex items-center gap-2.5 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-800 focus-within:border-emerald-500 focus-within:bg-white focus-within:ring-2 focus-within:ring-emerald-100 transition">
               <Search size={15} className="text-slate-400 shrink-0" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search by name, email, company, role, branch, or assigned HR..."
+                placeholder="Search employee, branch, or role..."
                 className="w-full border-0 bg-transparent text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none"
               />
               {searchQuery && (
@@ -780,16 +781,16 @@ export default function EmployeeDirectoryPanel({
               <select
                 value={selectedHRFilter}
                 onChange={(e) => setSelectedHRFilter(e.target.value)}
-                className={`text-xs font-semibold border rounded-xl px-3 py-2.5 focus:outline-none focus:border-emerald-500 cursor-pointer transition ${
+                className={`text-xs font-semibold border rounded-xl px-2.5 py-2 focus:outline-none focus:border-emerald-500 cursor-pointer transition ${
                   selectedHRFilter === "my-handled"
                     ? "bg-emerald-50 border-emerald-300 text-emerald-900 font-bold"
                     : "bg-slate-50 border-slate-200 text-slate-700"
                 }`}
               >
-                <option value="all">👥 All HR Handlers</option>
-                <option value="my-handled">✨ My Assigned (Assigned to Me)</option>
-                <option value="unassigned">⚠️ Unassigned Personnel</option>
-                <optgroup label="Designated HR Handlers">
+                <option value="all">👥 All HR</option>
+                <option value="my-handled">✨ My Assigned</option>
+                <option value="unassigned">⚠️ Unassigned</option>
+                <optgroup label="HR Officers">
                   {availableHRHandlers.map((hr) => (
                     <option key={hr} value={hr}>{hr}</option>
                   ))}
@@ -801,9 +802,9 @@ export default function EmployeeDirectoryPanel({
             <select
               value={selectedSubsidiary}
               onChange={(e) => setSelectedSubsidiary(e.target.value)}
-              className="text-xs font-semibold bg-slate-50 border border-slate-200 text-slate-700 rounded-xl px-3 py-2.5 focus:outline-none focus:border-emerald-500 cursor-pointer"
+              className="text-xs font-semibold bg-slate-50 border border-slate-200 text-slate-700 rounded-xl px-2.5 py-2 focus:outline-none focus:border-emerald-500 cursor-pointer"
             >
-              <option value="all">🏢 All Subsidiaries</option>
+              <option value="all">🏢 All Companies</option>
               {SUBSIDIARIES.map((sub) => (
                 <option key={sub} value={sub}>{sub}</option>
               ))}
@@ -813,20 +814,20 @@ export default function EmployeeDirectoryPanel({
             <select
               value={selectedBranchFilter}
               onChange={(e) => setSelectedBranchFilter(e.target.value)}
-              className="text-xs font-semibold bg-slate-50 border border-slate-200 text-slate-700 rounded-xl px-3 py-2.5 focus:outline-none focus:border-emerald-500 cursor-pointer"
+              className="text-xs font-semibold bg-slate-50 border border-slate-200 text-slate-700 rounded-xl px-2.5 py-2 focus:outline-none focus:border-emerald-500 cursor-pointer"
             >
-              <option value="all">📍 All Branches / Stations</option>
+              <option value="all">📍 All Branches</option>
               {BRANCH_PRESETS.map((br) => (
                 <option key={br} value={br}>{br}</option>
               ))}
             </select>
 
             {/* View Mode Toggle */}
-            <div className="flex rounded-xl border border-slate-200 bg-slate-100 p-1 shrink-0">
+            <div className="flex rounded-xl border border-slate-200 bg-slate-100 p-0.5 shrink-0">
               <button
                 type="button"
                 onClick={() => setViewMode("grid")}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
                   viewMode === "grid" ? "bg-white text-slate-900 shadow-xs" : "text-slate-500 hover:text-slate-800"
                 }`}
               >
@@ -835,7 +836,7 @@ export default function EmployeeDirectoryPanel({
               <button
                 type="button"
                 onClick={() => setViewMode("table")}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
                   viewMode === "table" ? "bg-white text-slate-900 shadow-xs" : "text-slate-500 hover:text-slate-800"
                 }`}
               >
@@ -849,11 +850,11 @@ export default function EmployeeDirectoryPanel({
         <div className="flex items-center justify-between gap-2 overflow-x-auto pt-1 border-t border-slate-100 text-xs">
           <div className="flex items-center gap-2">
             {[
-              { id: "all", label: `All Personnel (${stats.total})` },
+              { id: "all", label: `All (${stats.total})` },
               { id: "my-handled", label: `My Assigned (${stats.myHandledCount})`, highlight: true },
-              { id: "online", label: `Active Online (${stats.onlineCount})` },
+              { id: "online", label: `Online (${stats.onlineCount})` },
               { id: "approved", label: `Approved (${stats.approvedCount})` },
-              { id: "pending", label: `Pending Review (${stats.pendingCount})` }
+              { id: "pending", label: `Pending (${stats.pendingCount})` }
             ].map((tab) => (
               <button
                 key={tab.id}
@@ -935,7 +936,7 @@ export default function EmployeeDirectoryPanel({
             const company = prof.company || "Simpal Group of Companies";
             const role = prof.role || "Team Member";
             const branch = prof.branch || DEFAULT_BRANCH_MAP[company] || "Head Office";
-            const assignedHR = prof.assigned_hr || "Unassigned HR";
+            const assignedHR = prof.assigned_hr || "Unassigned";
             const isHandledByMe = checkIsHandledByMe(prof);
 
             return (
@@ -1035,8 +1036,10 @@ export default function EmployeeDirectoryPanel({
 
                       <span className="flex items-center gap-1.5 text-slate-600 font-medium mt-0.5">
                         <UserCheck size={12} className="text-slate-400 shrink-0" />
-                        <span className="text-[10px] text-slate-600">
-                          Assigned HR: <strong className="text-slate-800">{assignedHR}</strong>
+                        <span className="text-[10px] text-slate-600 truncate">
+                          HR: <strong className={assignedHR.toLowerCase().includes("unassigned") ? "text-amber-600 font-semibold" : "text-slate-800 font-bold"}>
+                            {assignedHR.toLowerCase().includes("unassigned") ? "Unassigned" : assignedHR}
+                          </strong>
                         </span>
                       </span>
                     </div>
