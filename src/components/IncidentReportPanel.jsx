@@ -24,7 +24,14 @@ import {
   CreditCard,
   DollarSign,
   Briefcase,
-  Layers
+  Layers,
+  ShieldCheck,
+  Lock,
+  ArrowUpRight,
+  Inbox,
+  SendHorizontal,
+  Info,
+  Scale
 } from "lucide-react";
 import {
   fetchIncidentReports,
@@ -33,6 +40,13 @@ import {
   lookupAssignedHrForCompany,
   lookupSgcCentralHr
 } from "../lib/incidentReportStorage";
+import {
+  resolveUserHrRole,
+  ROLE_PERMISSION_MATRIX,
+  HR_ROLE_TYPES,
+  HR_ENTITIES,
+  isActionAuthorized
+} from "../lib/hrPermissionMatrix";
 import {
   playAiVoiceAnnouncement,
   stopVoiceAnnouncement,
@@ -62,12 +76,16 @@ export default function IncidentReportPanel({
 }) {
   const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [activeFilter, setActiveFilter] = useState("ALL"); // ALL, PENDING_SGC_REVIEW, NTE_RETURNED, SERVED, RESOLVED
-  const [portalView, setPortalView] = useState("ALL"); // ALL, SUBSIDIARY_PORTAL, SGC_CENTRAL_PORTAL
+  const [activeFilter, setActiveFilter] = useState("ALL");
   const [searchQuery, setSearchQuery] = useState("");
   const [voiceMutedState, setVoiceMutedState] = useState(isVoiceMuted());
 
-  // Modal states
+  // Role simulation toggle: "AUTO" (uses currentUser) | "HEAD_OFFICE_HRMD" | "SUBSIDIARY_BRANCH_HR"
+  const [roleSimulation, setRoleSimulation] = useState("AUTO");
+  const [simulatedSubsidiaryCompany, setSimulatedSubsidiaryCompany] = useState("5A Royal Gaming OPC");
+
+  // Modals
+  const [isPermissionMatrixOpen, setIsPermissionMatrixOpen] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isIrViewerOpen, setIsIrViewerOpen] = useState(false);
   const [isNteViewerOpen, setIsNteViewerOpen] = useState(false);
@@ -75,36 +93,53 @@ export default function IncidentReportPanel({
   const [isExplanationModalOpen, setIsExplanationModalOpen] = useState(false);
   const [selectedReport, setSelectedReport] = useState(null);
 
+  // Compute effective role & capabilities based on currentUser or simulated role
+  const effectiveRole = useMemo(() => {
+    const autoRole = resolveUserHrRole(currentUser);
+    if (roleSimulation === "AUTO") return autoRole;
+
+    if (roleSimulation === HR_ROLE_TYPES.HEAD_OFFICE_HRMD) {
+      return {
+        roleType: HR_ROLE_TYPES.HEAD_OFFICE_HRMD,
+        isHeadOffice: true,
+        company: HR_ENTITIES.HEAD_OFFICE,
+        roleTitle: "Head Office HRMD Central Authority",
+        permissions: ROLE_PERMISSION_MATRIX[HR_ROLE_TYPES.HEAD_OFFICE_HRMD]
+      };
+    }
+
+    return {
+      roleType: HR_ROLE_TYPES.SUBSIDIARY_BRANCH_HR,
+      isHeadOffice: false,
+      company: simulatedSubsidiaryCompany,
+      roleTitle: `${simulatedSubsidiaryCompany} HR Administrator`,
+      permissions: ROLE_PERMISSION_MATRIX[HR_ROLE_TYPES.SUBSIDIARY_BRANCH_HR]
+    };
+  }, [currentUser, roleSimulation, simulatedSubsidiaryCompany]);
+
   // Form states for creating a new Incident Report (Subsidiary HR -> SGC HRMD)
-  const initialCompany = currentUser?.company || "5A Royal Gaming OPC";
+  const initialCompany = effectiveRole.isHeadOffice ? "5A Royal Gaming OPC" : effectiveRole.company;
   const initialSenderHr = lookupAssignedHrForCompany(initialCompany, profiles);
   const initialSgcHr = lookupSgcCentralHr(profiles);
 
   const [irForm, setIrForm] = useState({
-    // SENDER: Subsidiary Company & HR
     senderCompany: initialCompany,
     company: initialCompany,
     reportingHrName: initialSenderHr.name,
     reportingHrTitle: initialSenderHr.title,
     reportingHrEmail: initialSenderHr.email,
-    
-    // RECEIVER: Simpal Group of Companies (SGC HRMD)
     receiverCompany: "Simpal Group of Companies",
     assignedCentralHrName: initialSgcHr.name,
     assignedCentralHrTitle: initialSgcHr.title,
     assignedCentralHrCompany: "Simpal Group of Companies",
     reportReceivedBy: `${initialSgcHr.name} (${initialSgcHr.title} - SGC)`,
     reportReceivedDate: new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }),
-
-    // Subject Employee
     employeeName: "",
     employeeId: "",
     employeePosition: "Cashier",
     department: "Finance & Cashier Operations",
     phoneNumber: "+63 917 842 9102",
     branch: "Purok Daisy, New Isabela, Tacurong City, Sultan Kudarat",
-    
-    // Incident Details
     dateOfIncident: new Date().toISOString().slice(0, 10),
     dateReported: new Date().toISOString().slice(0, 10),
     incidentTime: "16:30 PM",
@@ -116,7 +151,7 @@ export default function IncidentReportPanel({
     specificFindings: "",
     fullIncidentNarrative: "",
     incidentCauses: "Non-observance of Cashier Standard Operating Procedures (SOPs), unauthorized credit extensions, and failure to reconcile daily cash float before shift closure.",
-    followUpRecommendations: "Immediate transmittal to Simpal Group of Companies (SGC) HRMD for formal Notice to Explain (NTE) issuance under Article 297 Labor Code.",
+    followUpRecommendations: "Immediate transmittal to Simpal Group of Companies (SGC) Head Office HRMD for formal Notice to Explain (NTE) issuance under Article 297 Labor Code.",
     additionalNotes: "All physical cash count discrepancy sheets and borrower signed slips have been submitted and attached to the audit file.",
     evidenceNotes: ""
   });
@@ -163,20 +198,16 @@ export default function IncidentReportPanel({
     }
   };
 
-  // Filtered reports by status, portal perspective, and search
+  // Filtered reports: Head Office sees all, Subsidiary HR only sees their own company's reports
   const filteredReports = useMemo(() => {
     return reports.filter((item) => {
-      // Perspective filter: Subsidiary HR vs SGC Central HRMD
-      if (portalView === "SUBSIDIARY_PORTAL") {
-        // Show reports belonging to subsidiary issuer
-        if (currentUser?.company && currentUser.company !== "Simpal Group of Companies") {
-          const matchComp = (item.senderCompany || item.company || "").toLowerCase();
-          if (!matchComp.includes(currentUser.company.toLowerCase())) return false;
+      // Role scoping:
+      if (!effectiveRole.isHeadOffice) {
+        const itemComp = (item.senderCompany || item.company || "").toLowerCase();
+        const userComp = (effectiveRole.company || "").toLowerCase();
+        if (!itemComp.includes(userComp) && !userComp.includes(itemComp)) {
+          return false;
         }
-      } else if (portalView === "SGC_CENTRAL_PORTAL") {
-        // Show reports received by Simpal Group of Companies
-        const matchRecv = (item.receiverCompany || "Simpal Group of Companies").toLowerCase();
-        if (!matchRecv.includes("simpal")) return false;
       }
 
       // Filter status
@@ -197,11 +228,11 @@ export default function IncidentReportPanel({
       }
       return true;
     });
-  }, [reports, activeFilter, portalView, searchQuery, currentUser]);
+  }, [reports, activeFilter, effectiveRole, searchQuery]);
 
   // Open Create IR Modal
   const handleOpenCreateModal = () => {
-    const targetComp = currentUser?.company || "5A Royal Gaming OPC";
+    const targetComp = effectiveRole.isHeadOffice ? simulatedSubsidiaryCompany : effectiveRole.company;
     const assigned = lookupAssignedHrForCompany(targetComp, profiles);
     const sgcHr = lookupSgcCentralHr(profiles);
 
@@ -234,7 +265,7 @@ export default function IncidentReportPanel({
       specificFindings: "",
       fullIncidentNarrative: "",
       incidentCauses: "Non-observance of Cashier Standard Operating Procedures (SOPs), unauthorized credit extensions, and failure to reconcile daily cash float before shift closure.",
-      followUpRecommendations: "Immediate transmittal to Simpal Group of Companies (SGC) HRMD for formal Notice to Explain (NTE) issuance under Article 297 Labor Code.",
+      followUpRecommendations: "Immediate transmittal to Simpal Group of Companies (SGC) Head Office HRMD for formal Notice to Explain (NTE) issuance under Article 297 Labor Code.",
       additionalNotes: "All physical cash count discrepancy sheets and borrower signed slips have been submitted and attached to the audit file.",
       evidenceNotes: ""
     });
@@ -259,7 +290,7 @@ export default function IncidentReportPanel({
     const newReport = {
       id: caseId,
       caseNumber: caseId,
-      status: "SUBMITTED_TO_CENTRAL_HR", // Forwarded to Simpal Group of Companies (SGC)
+      status: "SUBMITTED_TO_CENTRAL_HR", // Transmitted to Head Office (Simpal Group of Companies)
       ...irForm,
       senderCompany: irForm.company,
       senderHrName: irForm.reportingHrName,
@@ -271,7 +302,7 @@ export default function IncidentReportPanel({
       companyEmail: DEFAULT_COMPANY_EMAIL,
       forwardedAt: new Date().toISOString(),
 
-      // Pre-seed template NTE paragraphs ready for SGC HRMD to review & approve
+      // Pre-seed template NTE paragraphs ready for Head Office SGC HRMD to review & approve
       nteSubject: "Notice to Explain",
       nteDate: dateFormatted,
       nteBodyParagraph1: `According to the incident report submitted by the ${irForm.reportingHrTitle}, ${irForm.reportingHrName} of ${irForm.company} dated ${dateFormatted}, it was found that you have an outstanding cash shortage of PHP ${irForm.cashShortageAmount || "0.00"} during the audit conducted on ${irForm.auditDates}, by the ${irForm.auditedBy}.`,
@@ -290,9 +321,9 @@ export default function IncidentReportPanel({
         {
           id: `act-${Date.now()}`,
           timestamp: new Date().toISOString(),
-          action: "IR_TRANSMITTED_TO_SGC",
+          action: "IR_TRANSMITTED_TO_HEAD_OFFICE",
           actor: `${irForm.reportingHrName} (${irForm.company} HR)`,
-          message: `Transmitted Incident Report ${caseId} for ${irForm.employeeName} to Simpal Group of Companies (SGC HRMD) for Notice to Explain issuance.`
+          message: `Transmitted Incident Report ${caseId} for ${irForm.employeeName} to Simpal Group of Companies (Head Office HRMD) for Notice to Explain evaluation.`
         }
       ]
     };
@@ -302,7 +333,7 @@ export default function IncidentReportPanel({
     setIsCreateModalOpen(false);
 
     // AI Buddy Voice Announcement
-    const announcement = `Attention Simpal Group of Companies HRMD! A new Incident Report has been transmitted from ${irForm.company} by HR Admin ${irForm.reportingHrName} for employee ${irForm.employeeName}. Forwarded to SGC for Notice to Explain evaluation.`;
+    const announcement = `Transmitted! Incident report for ${irForm.employeeName} has been officially sent from ${irForm.company} to Simpal Group of Companies Head Office for Notice to Explain evaluation.`;
     playAiVoiceAnnouncement(announcement);
   };
 
@@ -319,16 +350,16 @@ export default function IncidentReportPanel({
     const updated = {
       ...selectedReport,
       ...updatedDraft,
-      status: "NTE_ISSUED", // NTE Approved by SGC and returned to originating Company HR
+      status: "NTE_ISSUED", // NTE Approved by SGC Head Office and returned to Branch HR
       nteIssuedAt: new Date().toISOString(),
       activityLog: [
         ...(selectedReport.activityLog || []),
         {
           id: `act-${Date.now()}`,
           timestamp: new Date().toISOString(),
-          action: "NTE_ISSUED_BY_SGC",
-          actor: `${updatedDraft.nteSignatoryName} (${updatedDraft.nteSignatoryTitle} - SGC)`,
-          message: `Simpal Group of Companies (SGC) HRMD issued the official Notice to Explain and returned it to ${senderCompany} HR (${senderHrName}) for serving to employee.`
+          action: "NTE_ISSUED_BY_HEAD_OFFICE",
+          actor: `${updatedDraft.nteSignatoryName} (${updatedDraft.nteSignatoryTitle} - SGC Head Office)`,
+          message: `Simpal Group of Companies (Head Office) HRMD evaluated and issued the official Notice to Explain. Returned to ${senderCompany} HR (${senderHrName}) for serving to employee.`
         }
       ]
     };
@@ -339,7 +370,7 @@ export default function IncidentReportPanel({
     setSelectedReport(updated);
 
     // Voice announcement
-    const announcement = `Notice to Explain has been officially approved by Simpal Group of Companies HRMD and returned to ${senderCompany} HR ${senderHrName}. Please serve the document to ${updated.employeeName}.`;
+    const announcement = `Approved and returned! Official Notice to Explain has been issued by Simpal Group of Companies Head Office and dispatched back to ${senderCompany} HR ${senderHrName}. Please serve the document to ${updated.employeeName}.`;
     playAiVoiceAnnouncement(announcement);
   };
 
@@ -360,7 +391,7 @@ export default function IncidentReportPanel({
           timestamp: new Date().toISOString(),
           action: "NTE_SERVED_TO_EMPLOYEE",
           actor: `${senderHr} (${senderComp} HR)`,
-          message: `Official Notice to Explain was served to ${report.employeeName} by ${senderComp} HR. The one-working-day explanation period is active.`
+          message: `Notice to Explain served to ${report.employeeName} by ${senderComp} HR. The one-working-day explanation period is active.`
         }
       ]
     };
@@ -392,7 +423,7 @@ export default function IncidentReportPanel({
           timestamp: new Date().toISOString(),
           action: "EXPLANATION_RECEIVED",
           actor: report.reportingHrName || report.senderHrName,
-          message: `Received written explanation from ${report.employeeName} at ${senderComp}. Transmitted to Simpal Group of Companies HRMD for final administrative hearing determination.`
+          message: `Received written explanation from ${report.employeeName} at ${senderComp}. Transmitted to Simpal Group of Companies Head Office HRMD for final administrative hearing determination.`
         }
       ]
     };
@@ -402,7 +433,7 @@ export default function IncidentReportPanel({
     setIsExplanationModalOpen(false);
 
     // Voice announcement
-    const announcement = `Employee written explanation has been received and logged for case ${report.caseNumber}. Transmitted to Simpal Group of Companies HRMD for final administrative determination.`;
+    const announcement = `Employee written explanation has been received and transmitted to Simpal Group of Companies Head Office for administrative ruling on case ${report.caseNumber}.`;
     playAiVoiceAnnouncement(announcement);
   };
 
@@ -423,194 +454,369 @@ export default function IncidentReportPanel({
     window.print();
   };
 
+  // Pending counts for live hero indicators
+  const pendingSgcReviewCount = reports.filter((r) => r.status === "SUBMITTED_TO_CENTRAL_HR").length;
+  const nteReadyToServeCount = reports.filter((r) => r.status === "NTE_ISSUED").length;
+  const activeDueProcessCount = reports.filter((r) => r.status === "SERVED_TO_EMPLOYEE").length;
+
   return (
     <div className="space-y-6">
-      {/* Top Banner / Navigation Card */}
-      <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs transition">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-          <div className="flex items-start gap-3.5">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#96c158] to-[#7ea741] text-white flex items-center justify-center shadow-md shadow-[#96c158]/20 shrink-0">
-              <ShieldAlert size={26} />
-            </div>
-            <div>
+      {/* ========================================================================= */}
+      {/* 1. ROLE PERMISSION MATRIX BAR & PERSPECTIVE SIMULATION SWITCHER            */}
+      {/* ========================================================================= */}
+      <div className="rounded-2xl border border-slate-200 bg-white p-3.5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <button
+            type="button"
+            onClick={() => setIsPermissionMatrixOpen(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-900 hover:bg-slate-800 text-white shadow-xs transition cursor-pointer"
+          >
+            <ShieldCheck size={14} className="text-emerald-400" />
+            <span>Role Permission Matrix</span>
+          </button>
+
+          <span className="text-xs text-slate-400 hidden sm:inline">•</span>
+
+          <div className="inline-flex items-center gap-2 text-xs">
+            <span className="font-bold text-slate-500">Active View:</span>
+            {effectiveRole.isHeadOffice ? (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full font-black text-xs bg-emerald-100 text-emerald-900 border border-emerald-300">
+                <Building2 size={13} className="text-emerald-700" />
+                Head Office HRMD (Simpal Group of Companies)
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full font-black text-xs bg-[#eef7e5] text-[#55782a] border border-[#d3eab8]">
+                <Briefcase size={13} className="text-[#8cb84a]" />
+                Branch HR ({effectiveRole.company})
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Perspective Simulation Switcher (Lets the user feel both sides!) */}
+        <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl self-end md:self-auto text-xs">
+          <span className="text-[11px] font-bold text-slate-500 px-2 hidden sm:inline">Simulate View:</span>
+          <button
+            type="button"
+            onClick={() => setRoleSimulation("AUTO")}
+            className={`px-2.5 py-1 rounded-lg font-bold transition cursor-pointer ${
+              roleSimulation === "AUTO" ? "bg-white text-slate-900 shadow-xs" : "text-slate-600 hover:text-slate-900"
+            }`}
+          >
+            Auto (Login)
+          </button>
+          <button
+            type="button"
+            onClick={() => setRoleSimulation(HR_ROLE_TYPES.SUBSIDIARY_BRANCH_HR)}
+            className={`px-2.5 py-1 rounded-lg font-bold transition cursor-pointer ${
+              roleSimulation === HR_ROLE_TYPES.SUBSIDIARY_BRANCH_HR
+                ? "bg-[#8cb84a] text-white shadow-xs"
+                : "text-slate-600 hover:text-slate-900"
+            }`}
+          >
+            🏢 Branch HR (5A Royal)
+          </button>
+          <button
+            type="button"
+            onClick={() => setRoleSimulation(HR_ROLE_TYPES.HEAD_OFFICE_HRMD)}
+            className={`px-2.5 py-1 rounded-lg font-bold transition cursor-pointer ${
+              roleSimulation === HR_ROLE_TYPES.HEAD_OFFICE_HRMD
+                ? "bg-emerald-700 text-white shadow-xs"
+                : "text-slate-600 hover:text-slate-900"
+            }`}
+          >
+            🏛️ Head Office (SGC)
+          </button>
+        </div>
+      </div>
+
+      {/* ========================================================================= */}
+      {/* 2. DISTINCT HERO VIEWS: HEAD OFFICE (SGC) vs SUBSIDIARY BRANCH HR         */}
+      {/* ========================================================================= */}
+      {effectiveRole.isHeadOffice ? (
+        /* ======================== HEAD OFFICE HRMD VIEW ======================== */
+        <div className="bg-gradient-to-br from-emerald-900 via-slate-900 to-slate-950 text-white rounded-3xl p-6 shadow-xl border border-emerald-800/40 relative overflow-hidden">
+          <div className="absolute right-0 top-0 translate-x-12 -translate-y-12 w-64 h-64 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
+
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5 relative z-10">
+            <div className="space-y-2">
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-md bg-[#eef7e5] text-[#55782a] border border-[#d3eab8]">
-                  Entity Due Process Architecture
+                <span className="px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+                  Head Office Executive Command Center
                 </span>
-                <span className="text-[10px] font-semibold text-slate-500">
-                  Subsidiary Company (Sender) ➔ Simpal Group of Companies (Receiver & NTE Issuer)
+                <span className="text-xs text-slate-400">
+                  Simpal Group of Companies (SGC HRMD)
                 </span>
               </div>
-              <h1 className="text-xl md:text-2xl font-black text-slate-900 tracking-tight mt-1">
-                Incident Reports & Notice to Explain (NTE)
+              <h1 className="text-2xl md:text-3xl font-black text-white tracking-tight">
+                Central Due Process & NTE Issuance Desk
               </h1>
-              <p className="text-xs text-slate-500 mt-0.5 max-w-2xl">
-                The assigned HR of each entity issues an Incident Report (IR) to <strong>Simpal Group of Companies (SGC)</strong>. SGC evaluates and issues the formal <strong>Notice to Explain (NTE)</strong>, returning it to the originating company HR for employee service.
+              <p className="text-xs text-slate-300 max-w-2xl leading-relaxed">
+                As the <strong>Head Office</strong>, you receive all Incident Reports transmitted from branch subsidiaries (5A Royal, Lucky Betplay, SIMCON, etc.). You evaluate allegations, apply the Employees Code of Conduct and Labor Code Art. 297, and legally issue the official <strong>Notice to Explain (NTE)</strong> back to branch HR for serving.
               </p>
+            </div>
+
+            <div className="flex items-center gap-3 flex-wrap">
+              <button
+                type="button"
+                onClick={handleToggleVoice}
+                className={`inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-bold border transition cursor-pointer ${
+                  voiceMutedState
+                    ? "bg-white/10 text-white/80 border-white/20 hover:bg-white/20"
+                    : "bg-emerald-500 text-slate-950 font-black border-emerald-400 shadow-md shadow-emerald-500/30"
+                }`}
+              >
+                {voiceMutedState ? <VolumeX size={15} /> : <Volume2 size={15} className="animate-pulse" />}
+                <span>{voiceMutedState ? "Voice Muted" : "Head Office AI Voice Active"}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleOpenCreateModal}
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold bg-white text-slate-950 hover:bg-emerald-50 shadow-md transition cursor-pointer"
+              >
+                <Plus size={16} className="text-emerald-700 font-bold" />
+                <span>Issue Direct Head Office IR</span>
+              </button>
             </div>
           </div>
 
-          {/* Action Tools: Perspective Portal Toggle & Issue IR */}
-          <div className="flex items-center gap-2.5 flex-wrap">
-            <button
-              type="button"
-              onClick={handleToggleVoice}
-              title={voiceMutedState ? "Turn ON voice announcements" : "Mute voice announcements"}
-              className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold border transition cursor-pointer shadow-2xs ${
-                voiceMutedState
-                  ? "bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200"
-                  : "bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100"
-              }`}
-            >
-              {voiceMutedState ? <VolumeX size={15} /> : <Volume2 size={15} className="text-emerald-600 animate-pulse" />}
-              <span>{voiceMutedState ? "Voice Muted" : "AI Voice Active"}</span>
-            </button>
+          {/* SGC Head Office Live Action Alert Banner */}
+          {pendingSgcReviewCount > 0 && (
+            <div className="mt-5 p-3.5 rounded-2xl bg-amber-500/20 border border-amber-400/40 text-amber-200 flex items-center justify-between gap-3 text-xs animate-in fade-in duration-300">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-amber-500 text-slate-950 flex items-center justify-center font-black shrink-0">
+                  <Inbox size={18} />
+                </div>
+                <div>
+                  <strong className="text-amber-100 font-extrabold text-sm">
+                    {pendingSgcReviewCount} Incoming Incident Report{pendingSgcReviewCount > 1 ? "s" : ""} Awaiting NTE Evaluation!
+                  </strong>
+                  <p className="text-[11px] text-amber-300/90 mt-0.5">
+                    Transmitted by branch companies. Review evidence and issue official Notice to Explain to start due process.
+                  </p>
+                </div>
+              </div>
 
-            <button
-              type="button"
-              onClick={handleOpenCreateModal}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-[#8cb84a] hover:bg-[#7ea741] text-white shadow-md shadow-[#8cb84a]/25 transition cursor-pointer active:scale-98"
-            >
-              <Plus size={16} />
-              <span>Issue Incident Report (IR)</span>
-            </button>
+              <button
+                type="button"
+                onClick={() => setActiveFilter("PENDING_SGC_REVIEW")}
+                className="px-3 py-1.5 rounded-xl text-xs font-extrabold bg-amber-400 text-slate-950 hover:bg-amber-300 transition cursor-pointer shrink-0"
+              >
+                Review Inbox ({pendingSgcReviewCount})
+              </button>
+            </div>
+          )}
+        </div>
+      ) : (
+        /* ======================== SUBSIDIARY BRANCH HR VIEW ======================== */
+        <div className="bg-gradient-to-br from-[#7ea741] via-[#8cb84a] to-[#55782a] text-white rounded-3xl p-6 shadow-xl relative overflow-hidden">
+          <div className="absolute right-0 top-0 translate-x-12 -translate-y-12 w-64 h-64 bg-white/10 rounded-full blur-3xl pointer-events-none" />
+
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5 relative z-10">
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider bg-white/20 text-white border border-white/30">
+                  Branch Outbox & Case Tracker
+                </span>
+                <span className="text-xs text-white/90 font-bold">
+                  {effectiveRole.company}
+                </span>
+              </div>
+              <h1 className="text-2xl md:text-3xl font-black text-white tracking-tight">
+                {effectiveRole.company} • Incident Report Outbox
+              </h1>
+              <p className="text-xs text-white/90 max-w-2xl leading-relaxed">
+                As the <strong>Branch HR</strong>, you investigate on-site cash shortages and SOP breaches. You file the Incident Report (IR) and <strong>transmit it directly to Head Office (Simpal Group of Companies)</strong>. Once Head Office issues the official Notice to Explain (NTE), it returns here so you can serve it to the employee!
+              </p>
+            </div>
+
+            <div className="flex items-center gap-3 flex-wrap">
+              <button
+                type="button"
+                onClick={handleToggleVoice}
+                className={`inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-bold border transition cursor-pointer ${
+                  voiceMutedState
+                    ? "bg-white/10 text-white/80 border-white/20 hover:bg-white/20"
+                    : "bg-white text-[#55782a] font-black shadow-md"
+                }`}
+              >
+                {voiceMutedState ? <VolumeX size={15} /> : <Volume2 size={15} className="animate-pulse" />}
+                <span>{voiceMutedState ? "Voice Muted" : "Branch AI Voice Active"}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleOpenCreateModal}
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black bg-slate-950 hover:bg-slate-900 text-white shadow-xl transition cursor-pointer active:scale-98"
+              >
+                <SendHorizontal size={16} className="text-emerald-400" />
+                <span>Transmit Incident Report ➔ Head Office (SGC)</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Branch HR Live Action Alert: When NTE is returned from Head Office */}
+          {nteReadyToServeCount > 0 && (
+            <div className="mt-5 p-3.5 rounded-2xl bg-white/20 backdrop-blur-sm border border-white/40 text-white flex items-center justify-between gap-3 text-xs animate-in fade-in duration-300">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-white text-[#55782a] flex items-center justify-center font-black shrink-0">
+                  <CheckCircle2 size={18} />
+                </div>
+                <div>
+                  <strong className="text-white font-extrabold text-sm">
+                    {nteReadyToServeCount} Notice to Explain (NTE) Returned from Head Office SGC!
+                  </strong>
+                  <p className="text-[11px] text-white/90 mt-0.5">
+                    Official NTEs are approved and ready to be printed and served to employee on-site.
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setActiveFilter("NTE_RETURNED")}
+                className="px-3.5 py-1.5 rounded-xl text-xs font-black bg-white text-slate-900 hover:bg-slate-100 transition cursor-pointer shrink-0 shadow-sm"
+              >
+                View Returned NTEs ({nteReadyToServeCount})
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* 3. PIPELINE METRIC CARDS                                                  */}
+      {/* ========================================================================= */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-2xs flex items-center gap-3">
+          <div className="w-11 h-11 rounded-xl bg-slate-100 text-slate-700 flex items-center justify-center font-black">
+            <FileText size={22} />
+          </div>
+          <div>
+            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+              {effectiveRole.isHeadOffice ? "All Group IR Cases" : "Branch IR Transmissions"}
+            </div>
+            <div className="text-2xl font-black text-slate-900">{filteredReports.length}</div>
           </div>
         </div>
 
-        {/* Dynamic Multi-Entity Pipeline Indicator Banner */}
-        <div className="mt-4 p-3 rounded-xl bg-gradient-to-r from-emerald-50/70 via-slate-50 to-amber-50/70 border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-extrabold uppercase text-[10px] tracking-wider text-slate-500">
-              Workflow Pipeline:
-            </span>
-            <span className="font-extrabold text-slate-800 flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-white border border-slate-200">
-              <Building2 size={13} className="text-[#96c158]" />
-              Subsidiary HR (Sender)
-            </span>
-            <ArrowRight size={13} className="text-slate-400" />
-            <span className="font-extrabold text-emerald-800 flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-emerald-100/70 border border-emerald-300">
-              <Building2 size={13} className="text-emerald-700" />
-              Simpal Group of Companies (Receiver / SGC HRMD)
-            </span>
-            <ArrowRight size={13} className="text-slate-400" />
-            <span className="font-extrabold text-amber-800 flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-amber-100/70 border border-amber-300">
-              <FileText size={13} className="text-amber-700" />
-              NTE Returned to Subsidiary HR
-            </span>
+        <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-2xs flex items-center gap-3">
+          <div className="w-11 h-11 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center font-black">
+            <Clock size={22} />
           </div>
-
-          {/* Perspective View Switcher */}
-          <div className="flex items-center gap-1 self-end sm:self-auto">
-            <button
-              type="button"
-              onClick={() => setPortalView("ALL")}
-              className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition cursor-pointer ${
-                portalView === "ALL" ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-200"
-              }`}
-            >
-              All Pipelines
-            </button>
-            <button
-              type="button"
-              onClick={() => setPortalView("SUBSIDIARY_PORTAL")}
-              className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition cursor-pointer ${
-                portalView === "SUBSIDIARY_PORTAL"
-                  ? "bg-[#8cb84a] text-white shadow-xs"
-                  : "text-slate-600 hover:bg-slate-200"
-              }`}
-            >
-              Subsidiary HR
-            </button>
-            <button
-              type="button"
-              onClick={() => setPortalView("SGC_CENTRAL_PORTAL")}
-              className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition cursor-pointer ${
-                portalView === "SGC_CENTRAL_PORTAL"
-                  ? "bg-emerald-700 text-white shadow-xs"
-                  : "text-slate-600 hover:bg-slate-200"
-              }`}
-            >
-              SGC Central HRMD
-            </button>
+          <div>
+            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+              {effectiveRole.isHeadOffice ? "Pending SGC Evaluation" : "Under SGC Review"}
+            </div>
+            <div className="text-2xl font-black text-amber-600">{pendingSgcReviewCount}</div>
           </div>
         </div>
 
-        {/* Filter Pills & Search */}
-        <div className="mt-4 pt-3 border-t border-slate-100 flex flex-col md:flex-row items-center justify-between gap-3">
-          <div className="flex items-center gap-1.5 overflow-x-auto w-full md:w-auto pb-1">
-            {[
-              { id: "ALL", label: "All Cases", count: reports.length },
-              {
-                id: "PENDING_SGC_REVIEW",
-                label: "Transmitted to SGC (Pending NTE)",
-                count: reports.filter((r) => r.status === "SUBMITTED_TO_CENTRAL_HR").length,
-                badgeColor: "bg-amber-100 text-amber-800"
-              },
-              {
-                id: "NTE_RETURNED",
-                label: "SGC Approved NTE (Ready to Serve)",
-                count: reports.filter((r) => r.status === "NTE_ISSUED").length,
-                badgeColor: "bg-emerald-100 text-emerald-800"
-              },
-              {
-                id: "SERVED",
-                label: "Served to Employee",
-                count: reports.filter((r) => r.status === "SERVED_TO_EMPLOYEE").length,
-                badgeColor: "bg-blue-100 text-blue-800"
-              },
-              {
-                id: "RESOLVED",
-                label: "Explanation / Resolved",
-                count: reports.filter((r) => r.status === "CASE_RESOLVED" || r.status === "EXPLANATION_RECEIVED").length
-              }
-            ].map((tab) => {
-              const active = activeFilter === tab.id;
-              return (
-                <button
-                  key={tab.id}
-                  type="button"
-                  onClick={() => setActiveFilter(tab.id)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-2 cursor-pointer shrink-0 ${
-                    active
-                      ? "bg-slate-900 text-white shadow-xs"
-                      : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                  }`}
-                >
-                  <span>{tab.label}</span>
-                  <span
-                    className={`px-1.5 py-0.2 rounded-full text-[10px] font-extrabold ${
-                      active ? "bg-white/20 text-white" : tab.badgeColor || "bg-slate-200 text-slate-700"
-                    }`}
-                  >
-                    {tab.count}
-                  </span>
-                </button>
-              );
-            })}
+        <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-2xs flex items-center gap-3">
+          <div className="w-11 h-11 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-black">
+            <CheckCircle2 size={22} />
           </div>
+          <div>
+            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+              NTE Approved & Returned
+            </div>
+            <div className="text-2xl font-black text-emerald-600">{nteReadyToServeCount}</div>
+          </div>
+        </div>
 
-          <div className="relative w-full md:w-64">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search employee, company, HR..."
-              className="w-full pl-9 pr-3 py-1.5 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#8cb84a] focus:border-transparent bg-slate-50/50"
-            />
+        <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-2xs flex items-center gap-3">
+          <div className="w-11 h-11 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-black">
+            <Scale size={22} />
+          </div>
+          <div>
+            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+              Active Due Process Clock
+            </div>
+            <div className="text-2xl font-black text-blue-600">{activeDueProcessCount}</div>
           </div>
         </div>
       </div>
 
-      {/* Case List Table / Cards */}
+      {/* Filter Tabs & Search */}
+      <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-xs flex flex-col md:flex-row items-center justify-between gap-3">
+        <div className="flex items-center gap-1.5 overflow-x-auto w-full md:w-auto pb-1">
+          {[
+            { id: "ALL", label: "All Cases", count: filteredReports.length },
+            {
+              id: "PENDING_SGC_REVIEW",
+              label: effectiveRole.isHeadOffice ? "Incoming IRs (Need NTE)" : "Sent to Head Office (SGC)",
+              count: pendingSgcReviewCount,
+              badgeColor: "bg-amber-100 text-amber-800"
+            },
+            {
+              id: "NTE_RETURNED",
+              label: effectiveRole.isHeadOffice ? "SGC Dispatched NTEs" : "Returned NTEs (Ready to Serve)",
+              count: nteReadyToServeCount,
+              badgeColor: "bg-emerald-100 text-emerald-800"
+            },
+            {
+              id: "SERVED",
+              label: "Served to Employee",
+              count: activeDueProcessCount,
+              badgeColor: "bg-blue-100 text-blue-800"
+            },
+            {
+              id: "RESOLVED",
+              label: "Explanation / Resolved",
+              count: filteredReports.filter((r) => r.status === "CASE_RESOLVED" || r.status === "EXPLANATION_RECEIVED").length
+            }
+          ].map((tab) => {
+            const active = activeFilter === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveFilter(tab.id)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-2 cursor-pointer shrink-0 ${
+                  active
+                    ? "bg-slate-900 text-white shadow-xs"
+                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                }`}
+              >
+                <span>{tab.label}</span>
+                <span
+                  className={`px-1.5 py-0.2 rounded-full text-[10px] font-extrabold ${
+                    active ? "bg-white/20 text-white" : tab.badgeColor || "bg-slate-200 text-slate-700"
+                  }`}
+                >
+                  {tab.count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="relative w-full md:w-64">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search employee, case #..."
+            className="w-full pl-9 pr-3 py-1.5 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#8cb84a] focus:border-transparent bg-slate-50/50"
+          />
+        </div>
+      </div>
+
+      {/* ========================================================================= */}
+      {/* 4. ACTIVE CASE LIST (TAILORED TO ROLE)                                     */}
+      {/* ========================================================================= */}
       <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs">
         <div className="px-5 py-3.5 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
           <span className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2">
             <FileText size={14} className="text-slate-500" />
-            Active Records ({filteredReports.length})
+            {effectiveRole.isHeadOffice
+              ? "Head Office Central Incident & NTE Records"
+              : `${effectiveRole.company} Branch Due Process Records`} ({filteredReports.length})
           </span>
           <span className="text-[11px] text-slate-400">
-            Sender: Originating Subsidiary HR ➔ Receiver: Simpal Group of Companies (SGC HRMD)
+            {effectiveRole.isHeadOffice ? "Head Office Authority Mode" : "Branch Outbox Mode"}
           </span>
         </div>
 
@@ -621,7 +827,7 @@ export default function IncidentReportPanel({
             </div>
             <p className="text-sm font-bold text-slate-700">No incident reports found</p>
             <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
-              There are no records matching your current filter. Click "Issue Incident Report" to create a new case.
+              There are no records matching your current filter in this role view.
             </p>
             <button
               type="button"
@@ -649,36 +855,40 @@ export default function IncidentReportPanel({
                   key={report.id}
                   className="p-4 md:p-5 hover:bg-slate-50/80 transition flex flex-col lg:flex-row lg:items-center justify-between gap-4"
                 >
-                  {/* Left: Employee, Case #, and Incident Summary */}
+                  {/* Left Side */}
                   <div className="space-y-2 flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200">
                         {report.caseNumber}
                       </span>
 
-                      {/* Status Badge */}
+                      {/* Status Badges with role awareness */}
                       {isPendingSgc && (
                         <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200">
                           <Clock size={12} />
-                          Transmitted to SGC (Awaiting NTE Issuance)
+                          {effectiveRole.isHeadOffice
+                            ? "📥 Incoming: Transmitted from " + senderComp
+                            : "📤 Outbox: Transmitted to SGC Head Office"}
                         </span>
                       )}
                       {isNteIssued && (
                         <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 animate-pulse">
                           <CheckCircle2 size={12} />
-                          SGC Approved NTE ➔ Returned to {senderComp} HR
+                          {effectiveRole.isHeadOffice
+                            ? "NTE Issued ➔ Dispatched to " + senderComp
+                            : "📥 Returned from Head Office SGC (Ready to Serve)"}
                         </span>
                       )}
                       {isServed && (
                         <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200">
                           <Clock size={12} />
-                          Served to Employee (Clock Active)
+                          Served to Employee (Active 1-Day Response Window)
                         </span>
                       )}
                       {isExplanation && (
                         <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-purple-50 text-purple-700 border border-purple-200">
                           <CheckCircle2 size={12} />
-                          Explanation Received (Transmitted to SGC)
+                          Written Explanation Received
                         </span>
                       )}
 
@@ -687,7 +897,7 @@ export default function IncidentReportPanel({
                       </span>
                     </div>
 
-                    {/* Employee & Category */}
+                    {/* Employee & Subject */}
                     <div>
                       <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
                         <span>{report.employeeName}</span>
@@ -706,10 +916,10 @@ export default function IncidentReportPanel({
                       </p>
                     </div>
 
-                    {/* Sender & Receiver Explicit Routing Display */}
+                    {/* Sender vs Receiver Routing Bar */}
                     <div className="flex items-center gap-2 flex-wrap text-xs pt-0.5">
                       <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700 border border-slate-200">
-                        <span className="font-bold text-[10px] uppercase tracking-wider text-slate-500">SENDER:</span>
+                        <span className="font-bold text-[10px] uppercase tracking-wider text-slate-500">ORIGIN:</span>
                         <strong className="text-slate-900">{senderComp}</strong>
                         <span className="text-slate-500">({senderHr})</span>
                       </div>
@@ -717,37 +927,37 @@ export default function IncidentReportPanel({
                       <ArrowRight size={13} className="text-slate-400" />
 
                       <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200">
-                        <span className="font-bold text-[10px] uppercase tracking-wider text-emerald-600">RECEIVER (SGC):</span>
+                        <span className="font-bold text-[10px] uppercase tracking-wider text-emerald-600">HEAD OFFICE:</span>
                         <strong className="text-emerald-950">{receiverComp}</strong>
                         <span className="text-emerald-700">({receiverHr})</span>
                       </div>
                     </div>
                   </div>
 
-                  {/* Right: Actions */}
+                  {/* Right Side: Role-Aware Actions */}
                   <div className="flex items-center gap-2 flex-wrap shrink-0">
-                    {/* Speak Button */}
+                    {/* Voice Summary */}
                     <button
                       type="button"
                       onClick={() => {
-                        const summary = `Incident report ${report.caseNumber} issued by ${senderComp} HR ${senderHr} for ${report.employeeName}. Sent to ${receiverComp} HRMD ${receiverHr}. Status: ${
+                        const summary = `Case ${report.caseNumber}. Issued by ${senderComp} HR ${senderHr} for ${report.employeeName}. Sent to ${receiverComp} Head Office HRMD. Status: ${
                           isPendingSgc
-                            ? "Awaiting Simpal Group of Companies Notice to Explain issuance."
+                            ? "Awaiting Head Office SGC Notice to Explain issuance."
                             : isNteIssued
-                            ? "Notice to Explain has been approved by SGC and returned to subsidiary HR for serving."
+                            ? "Notice to Explain has been issued by SGC and returned to branch HR for serving."
                             : isServed
                             ? "Notice to Explain has been served to employee."
                             : "Written explanation received."
                         }`;
                         playAiVoiceAnnouncement(summary);
                       }}
-                      title="Speak case summary via AI Buddy"
+                      title="Speak summary via AI Buddy"
                       className="p-2 rounded-xl text-slate-500 hover:text-emerald-700 hover:bg-emerald-50 border border-slate-200 transition cursor-pointer"
                     >
                       <Volume2 size={16} />
                     </button>
 
-                    {/* Button 1: View Incident Report (IR) Form (Matching reference design) */}
+                    {/* View Incident Report Form (Green button) */}
                     <button
                       type="button"
                       onClick={() => handleViewIrDocument(report)}
@@ -757,19 +967,27 @@ export default function IncidentReportPanel({
                       <span>View IR Form</span>
                     </button>
 
-                    {/* Simpal Group of Companies: Evaluate & Issue NTE */}
-                    {isPendingSgc && (
+                    {/* SGC Head Office HRMD ONLY: Evaluate & Issue NTE */}
+                    {effectiveRole.isHeadOffice && isPendingSgc && (
                       <button
                         type="button"
                         onClick={() => handleOpenDraftNte(report)}
-                        className="px-3.5 py-2 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-600 text-white shadow-xs transition cursor-pointer inline-flex items-center gap-1.5"
+                        className="px-4 py-2 rounded-xl text-xs font-extrabold bg-amber-500 hover:bg-amber-600 text-slate-950 shadow-md transition cursor-pointer inline-flex items-center gap-1.5"
                       >
-                        <FileText size={14} />
-                        <span>SGC: Issue & Return NTE</span>
+                        <Scale size={14} />
+                        <span>SGC: Issue Official NTE</span>
                       </button>
                     )}
 
-                    {/* Button 2: View Official NTE Document (Letterhead layout) */}
+                    {/* Subsidiary HR when pending: Indicates it is in Head Office hands */}
+                    {!effectiveRole.isHeadOffice && isPendingSgc && (
+                      <span className="px-3 py-2 rounded-xl text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200 inline-flex items-center gap-1.5">
+                        <Clock size={13} />
+                        <span>Awaiting SGC NTE</span>
+                      </span>
+                    )}
+
+                    {/* View Official NTE (When drafted or issued) */}
                     <button
                       type="button"
                       onClick={() => handleViewNteDocument(report)}
@@ -791,7 +1009,7 @@ export default function IncidentReportPanel({
                       </button>
                     )}
 
-                    {/* Log Explanation */}
+                    {/* Subsidiary Company HR: Log Written Explanation */}
                     {isServed && (
                       <button
                         type="button"
@@ -802,7 +1020,7 @@ export default function IncidentReportPanel({
                         className="px-3 py-2 rounded-xl text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white shadow-xs transition cursor-pointer inline-flex items-center gap-1.5"
                       >
                         <FileCheck size={14} />
-                        <span>Log Explanation</span>
+                        <span>Log Explanation ➔ SGC</span>
                       </button>
                     )}
                   </div>
@@ -812,6 +1030,177 @@ export default function IncidentReportPanel({
           </div>
         )}
       </div>
+
+      {/* ========================================================================= */}
+      {/* MODAL 0: ROLE PERMISSION MATRIX MODAL                                     */}
+      {/* ========================================================================= */}
+      {isPermissionMatrixOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-3 md:p-6 overflow-y-auto">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-4xl w-full max-h-[92vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50 shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-slate-900 text-emerald-400 flex items-center justify-center font-bold">
+                  <ShieldCheck size={22} />
+                </div>
+                <div>
+                  <h2 className="text-lg font-black text-slate-900">
+                    Role & Permission Matrix: Head Office vs Subsidiary HR
+                  </h2>
+                  <p className="text-xs text-slate-500">
+                    Legal Due Process Mandate (Labor Code Art. 297 & SGC Group Corporate Governance)
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsPermissionMatrixOpen(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200 transition cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto space-y-5 custom-scrollbar text-xs">
+              <p className="text-slate-600 leading-relaxed">
+                This matrix governs the separation of functions between the <strong>Head Office (Simpal Group of Companies)</strong> and <strong>Subsidiary Branch HR officers</strong>. This enforces impartiality, due process integrity, and legal validity of disciplinary actions.
+              </p>
+
+              <div className="border border-slate-200 rounded-xl overflow-hidden shadow-2xs">
+                <table className="w-full text-left divide-y divide-slate-200">
+                  <thead className="bg-slate-100 text-[11px] font-black uppercase text-slate-700 tracking-wider">
+                    <tr>
+                      <th className="py-3 px-4">Function / Action</th>
+                      <th className="py-3 px-4 text-[#55782a] bg-[#eef7e5]">
+                        🏢 Subsidiary HR (Branch Outbox)
+                      </th>
+                      <th className="py-3 px-4 text-emerald-900 bg-emerald-100/70">
+                        🏛️ Head Office HRMD (SGC Command)
+                      </th>
+                      <th className="py-3 px-4 text-slate-600">Legal Due Process Basis</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
+                    <tr>
+                      <td className="py-3 px-4 font-bold text-slate-900">
+                        1. Investigate & Issue Incident Report (IR)
+                      </td>
+                      <td className="py-3 px-4 text-emerald-700 font-bold bg-[#eef7e5]/50">
+                        ✅ AUTHORIZED (Primary Duty)
+                      </td>
+                      <td className="py-3 px-4 text-emerald-700 font-bold bg-emerald-50/50">
+                        ✅ AUTHORIZED (Direct Cases)
+                      </td>
+                      <td className="py-3 px-4 text-slate-500">
+                        First-hand physical fact-finding on shortages / SOP breaches.
+                      </td>
+                    </tr>
+
+                    <tr>
+                      <td className="py-3 px-4 font-bold text-slate-900">
+                        2. View Cross-Entity Incident Reports
+                      </td>
+                      <td className="py-3 px-4 text-rose-600 font-bold bg-[#eef7e5]/50">
+                        ❌ RESTRICTED (Own Entity Only)
+                      </td>
+                      <td className="py-3 px-4 text-emerald-700 font-bold bg-emerald-50/50">
+                        ✅ FULL ACCESS (All Subsidiaries)
+                      </td>
+                      <td className="py-3 px-4 text-slate-500">
+                        Head Office executive oversight of corporate group compliance.
+                      </td>
+                    </tr>
+
+                    <tr>
+                      <td className="py-3 px-4 font-bold text-slate-900">
+                        3. Issue Official Notice to Explain (NTE)
+                      </td>
+                      <td className="py-3 px-4 text-rose-600 font-bold bg-[#eef7e5]/50">
+                        ❌ STRICTLY RESTRICTED
+                      </td>
+                      <td className="py-3 px-4 text-emerald-700 font-bold bg-emerald-50/50">
+                        ✅ EXCLUSIVE LEGAL AUTHORITY
+                      </td>
+                      <td className="py-3 px-4 text-slate-500">
+                        Guarantees legal vetting of citations (Art. 297 & Section 18 SOPs).
+                      </td>
+                    </tr>
+
+                    <tr>
+                      <td className="py-3 px-4 font-bold text-slate-900">
+                        4. Return Issued NTE to Branch HR
+                      </td>
+                      <td className="py-3 px-4 text-slate-400 bg-[#eef7e5]/50">
+                        N/A (Recipient of NTE)
+                      </td>
+                      <td className="py-3 px-4 text-emerald-700 font-bold bg-emerald-50/50">
+                        ✅ AUTHORIZED
+                      </td>
+                      <td className="py-3 px-4 text-slate-500">
+                        Dispatches signed memo for on-site physical service.
+                      </td>
+                    </tr>
+
+                    <tr>
+                      <td className="py-3 px-4 font-bold text-slate-900">
+                        5. Physically Serve NTE to Employee
+                      </td>
+                      <td className="py-3 px-4 text-emerald-700 font-bold bg-[#eef7e5]/50">
+                        ✅ AUTHORIZED (Primary Duty)
+                      </td>
+                      <td className="py-3 px-4 text-slate-600 bg-emerald-50/50">
+                        ✅ (Direct Head Office staff)
+                      </td>
+                      <td className="py-3 px-4 text-slate-500">
+                        Receipt block signature & 1-working-day due process clock initiation.
+                      </td>
+                    </tr>
+
+                    <tr>
+                      <td className="py-3 px-4 font-bold text-slate-900">
+                        6. Log Employee Written Explanation
+                      </td>
+                      <td className="py-3 px-4 text-emerald-700 font-bold bg-[#eef7e5]/50">
+                        ✅ AUTHORIZED (Forwards to SGC)
+                      </td>
+                      <td className="py-3 px-4 text-emerald-700 font-bold bg-emerald-50/50">
+                        ✅ AUTHORIZED
+                      </td>
+                      <td className="py-3 px-4 text-slate-500">
+                        Employee written defense submission into HR 201 File.
+                      </td>
+                    </tr>
+
+                    <tr>
+                      <td className="py-3 px-4 font-bold text-slate-900">
+                        7. Render Administrative Hearing & Close Case
+                      </td>
+                      <td className="py-3 px-4 text-rose-600 font-bold bg-[#eef7e5]/50">
+                        ❌ RESTRICTED
+                      </td>
+                      <td className="py-3 px-4 text-emerald-700 font-bold bg-emerald-50/50">
+                        ✅ EXCLUSIVE AUTHORITY
+                      </td>
+                      <td className="py-3 px-4 text-slate-500">
+                        Final penalty, suspension, repayment schedule, or clearance.
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="flex justify-end pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsPermissionMatrixOpen(false)}
+                  className="px-5 py-2 rounded-xl text-xs font-bold bg-slate-900 text-white cursor-pointer"
+                >
+                  Close Matrix
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ========================================================================= */}
       {/* MODAL 1: CREATE NEW INCIDENT REPORT (Subsidiary HR -> SGC HRMD)            */}
@@ -826,7 +1215,7 @@ export default function IncidentReportPanel({
                   INCIDENT REPORT
                 </h2>
                 <p className="text-[11px] text-white/90 font-medium">
-                  Transmitted to Simpal Group of Companies (SGC HRMD) for Notice to Explain (NTE)
+                  Transmitted to Simpal Group of Companies (Head Office HRMD) for Notice to Explain (NTE)
                 </p>
               </div>
               <button
@@ -872,10 +1261,10 @@ export default function IncidentReportPanel({
                   {/* RECEIVER: SGC */}
                   <div className="p-3 rounded-lg bg-white border border-emerald-300">
                     <label className="block text-[10px] font-black uppercase tracking-wide text-emerald-700 mb-1">
-                      2. RECEIVER: Notice to Explain (NTE) Issuer
+                      2. RECEIVER: Head Office Notice to Explain (NTE) Authority
                     </label>
                     <div className="text-xs font-black text-emerald-950 p-2 bg-emerald-50/70 rounded-lg border border-emerald-200">
-                      Simpal Group of Companies (SGC HRMD)
+                      Simpal Group of Companies (Head Office HRMD)
                     </div>
 
                     <div className="mt-2 text-[11px] text-emerald-800 flex items-center gap-1.5">
@@ -989,7 +1378,7 @@ export default function IncidentReportPanel({
                   <div className="w-12 h-0.5 bg-[#96c158] mx-auto mt-1 rounded-full" />
                 </div>
 
-                {/* 2-Column Grid (Left: Meta, Right: Incident Details Box) */}
+                {/* 2-Column Grid */}
                 <div className="grid grid-cols-1 md:grid-cols-[200px_1fr] gap-4">
                   {/* Left Column */}
                   <div className="space-y-3">
@@ -1127,7 +1516,7 @@ export default function IncidentReportPanel({
                     </label>
                     <textarea
                       rows={3}
-                      placeholder="Transmittal to Simpal Group of Companies (SGC) for formal Notice to Explain (NTE)..."
+                      placeholder="Transmittal to Simpal Group of Companies Head Office for formal Notice to Explain (NTE)..."
                       value={irForm.followUpRecommendations}
                       onChange={(e) => setIrForm({ ...irForm, followUpRecommendations: e.target.value })}
                       className="w-full p-3 text-xs rounded-xl border border-slate-200 bg-slate-100/70 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#96c158] text-slate-900 leading-relaxed transition"
@@ -1142,7 +1531,7 @@ export default function IncidentReportPanel({
                   </label>
                   <textarea
                     rows={2}
-                    placeholder="Attach audit sheets, count sheets, signed IOUs, or witness slips..."
+                    placeholder="Attach audit count sheets, signed IOUs, or witness slips..."
                     value={irForm.additionalNotes}
                     onChange={(e) => setIrForm({ ...irForm, additionalNotes: e.target.value })}
                     className="w-full p-3 text-xs rounded-xl border border-slate-200 bg-slate-100/70 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#96c158] text-slate-900 leading-relaxed transition"
@@ -1160,10 +1549,10 @@ export default function IncidentReportPanel({
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* REPORT RECEIVED BY (SGC HRMD) */}
+                  {/* REPORT RECEIVED BY (SGC Head Office) */}
                   <div className="p-3 rounded-xl bg-[#eef7e5] border border-[#d8eac2]">
                     <label className="block text-[10px] font-extrabold uppercase tracking-wide text-[#55782a] mb-1">
-                      REPORT RECEIVED BY (SGC HRMD)
+                      REPORT RECEIVED BY (SGC HEAD OFFICE HRMD)
                     </label>
                     <div className="relative">
                       <User size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#55782a]" />
@@ -1198,7 +1587,7 @@ export default function IncidentReportPanel({
                     <strong>Filed By:</strong> {irForm.reportingHrName} ({irForm.company} HR)
                   </span>
                   <span>
-                    <strong>Designated Receiver:</strong> Simpal Group of Companies (SGC HRMD)
+                    <strong>Designated Receiver:</strong> Simpal Group of Companies (Head Office HRMD)
                   </span>
                 </div>
               </div>
@@ -1223,7 +1612,7 @@ export default function IncidentReportPanel({
                   className="px-6 py-2.5 rounded-xl text-xs font-bold bg-[#8cb84a] hover:bg-[#7ea741] text-white shadow-md shadow-[#8cb84a]/25 transition cursor-pointer inline-flex items-center gap-2"
                 >
                   <Send size={15} />
-                  <span>Transmit IR to Simpal Group of Companies (SGC)</span>
+                  <span>Transmit IR to Head Office (Simpal Group of Companies)</span>
                 </button>
               </div>
             </form>
@@ -1251,7 +1640,7 @@ export default function IncidentReportPanel({
                 <button
                   type="button"
                   onClick={() => {
-                    const speech = `Official Incident Report for ${selectedReport.employeeName} of ${selectedReport.senderCompany || selectedReport.company}. Incident occurred on ${selectedReport.dateOfIncident || "September 24, 2026"} at ${selectedReport.branch || "Tacurong Branch"}. Transmitted to Simpal Group of Companies for Notice to Explain issuance.`;
+                    const speech = `Official Incident Report for ${selectedReport.employeeName} of ${selectedReport.senderCompany || selectedReport.company}. Incident occurred on ${selectedReport.dateOfIncident || "September 24, 2026"} at ${selectedReport.branch || "Tacurong Branch"}. Transmitted to Simpal Group of Companies Head Office for Notice to Explain issuance.`;
                     playAiVoiceAnnouncement(speech);
                   }}
                   title="Listen to official document reading"
@@ -1443,7 +1832,7 @@ export default function IncidentReportPanel({
                           FOLLOW UP RECOMMENDATIONS
                         </div>
                         <div className="w-full p-3 rounded-xl bg-slate-100/80 border border-slate-200 text-xs text-slate-800 leading-relaxed min-h-[70px]">
-                          {selectedReport.followUpRecommendations || "Transmitted to Simpal Group of Companies (SGC HRMD) for formal Notice to Explain (NTE) under Article 297 Labor Code."}
+                          {selectedReport.followUpRecommendations || "Transmitted to Simpal Group of Companies (Head Office HRMD) for formal Notice to Explain (NTE) under Article 297 Labor Code."}
                         </div>
                       </div>
                     </div>
@@ -1466,10 +1855,10 @@ export default function IncidentReportPanel({
                     </h2>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      {/* REPORT RECEIVED BY (SGC HRMD) */}
+                      {/* REPORT RECEIVED BY (SGC Head Office) */}
                       <div className="p-3 rounded-xl bg-[#eef7e5] border border-[#d8eac2]">
                         <div className="text-[10px] font-black uppercase tracking-wider text-[#55782a] mb-1">
-                          REPORT RECEIVED BY (SGC HRMD)
+                          REPORT RECEIVED BY (SGC HEAD OFFICE HRMD)
                         </div>
                         <div className="flex items-center gap-2 text-xs font-bold text-slate-900">
                           <User size={14} className="text-[#55782a] shrink-0" />
@@ -1494,7 +1883,7 @@ export default function IncidentReportPanel({
                         <strong>Sender:</strong> {selectedReport.senderCompany || selectedReport.company} HR ({selectedReport.senderHrName || selectedReport.reportingHrName})
                       </span>
                       <span>
-                        <strong>Receiver:</strong> Simpal Group of Companies (SGC HRMD)
+                        <strong>Receiver:</strong> Simpal Group of Companies (Head Office HRMD)
                       </span>
                     </div>
                   </div>
@@ -1514,7 +1903,7 @@ export default function IncidentReportPanel({
       )}
 
       {/* ========================================================================= */}
-      {/* MODAL 3: SIMPAL GROUP OF COMPANIES (SGC HRMD) EVALUATION & ISSUE NTE       */}
+      {/* MODAL 3: SIMPAL GROUP OF COMPANIES (HEAD OFFICE) ISSUE NTE                 */}
       {/* ========================================================================= */}
       {isNteDraftModalOpen && selectedReport && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-3 md:p-6 overflow-y-auto">
@@ -1522,11 +1911,11 @@ export default function IncidentReportPanel({
             <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-amber-50/60 shrink-0">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-amber-600 text-white flex items-center justify-center font-bold">
-                  <FileText size={22} />
+                  <Scale size={22} />
                 </div>
                 <div>
                   <h2 className="text-lg font-black text-slate-900">
-                    SGC HRMD: Issue Official Notice to Explain (NTE)
+                    Head Office SGC HRMD: Issue Official Notice to Explain (NTE)
                   </h2>
                   <p className="text-xs text-slate-500">
                     Simpal Group of Companies central evaluation for IR from {selectedReport.senderCompany || selectedReport.company} • Employee: {selectedReport.employeeName}
@@ -1544,7 +1933,7 @@ export default function IncidentReportPanel({
 
             <div className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar">
               <div className="p-3.5 rounded-xl bg-amber-50/80 border border-amber-200 text-xs text-amber-900 leading-relaxed">
-                <strong>Simpal Group of Companies (SGC) Evaluation Instruction:</strong> Review the incident details submitted by {selectedReport.senderCompany} HR ({selectedReport.senderHrName || selectedReport.reportingHrName}). Once issued, this official NTE will be returned to the originating company HR for formal serving to {selectedReport.employeeName}.
+                <strong>Simpal Group of Companies (Head Office) Instruction:</strong> Review the incident details submitted by {selectedReport.senderCompany} HR ({selectedReport.senderHrName || selectedReport.reportingHrName}). Once issued, this official NTE will be legally stamped and returned to the originating company HR for formal serving to {selectedReport.employeeName}.
               </div>
 
               <div>
@@ -1598,7 +1987,7 @@ export default function IncidentReportPanel({
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    SGC HRMD Signatory Name
+                    Head Office SGC Signatory Name
                   </label>
                   <input
                     type="text"
@@ -1629,7 +2018,7 @@ export default function IncidentReportPanel({
                   Cancel
                 </button>
                 <button
-                  type="button"
+                  type="submit"
                   onClick={() => {
                     const p1 = document.getElementById("nte-para-1").value;
                     const p2 = document.getElementById("nte-para-2").value;
@@ -1650,7 +2039,7 @@ export default function IncidentReportPanel({
                   className="px-5 py-2.5 rounded-xl text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white shadow-md shadow-amber-600/20 transition cursor-pointer inline-flex items-center gap-2"
                 >
                   <Send size={15} />
-                  <span>SGC: Approve & Return NTE to {selectedReport.senderCompany || selectedReport.company} HR</span>
+                  <span>Head Office SGC: Approve & Return NTE to {selectedReport.senderCompany || selectedReport.company} HR</span>
                 </button>
               </div>
             </div>
@@ -1670,7 +2059,7 @@ export default function IncidentReportPanel({
                 <span className="font-mono text-xs font-bold bg-white px-2 py-0.5 rounded border border-slate-300 text-slate-800">
                   {selectedReport.caseNumber}
                 </span>
-                <span className="text-xs font-bold text-slate-700">Official Notice to Explain (Issued by SGC)</span>
+                <span className="text-xs font-bold text-slate-700">Official Notice to Explain (Issued by Head Office SGC)</span>
               </div>
 
               <div className="flex items-center gap-2">
@@ -1678,7 +2067,7 @@ export default function IncidentReportPanel({
                 <button
                   type="button"
                   onClick={() => {
-                    const speech = `Official Notice to Explain issued by Simpal Group of Companies for ${selectedReport.employeeName}. Date: ${selectedReport.nteDate || "September 28, 2026"}. In line with due process, you are hereby requested to submit a written explanation within one working day upon receipt of this memo.`;
+                    const speech = `Official Notice to Explain issued by Simpal Group of Companies Head Office for ${selectedReport.employeeName}. Date: ${selectedReport.nteDate || "September 28, 2026"}. In line with due process, you are hereby requested to submit a written explanation within one working day upon receipt of this memo.`;
                     playAiVoiceAnnouncement(speech);
                   }}
                   title="Listen to official document reading"
@@ -1810,7 +2199,7 @@ export default function IncidentReportPanel({
                   </p>
                 </div>
 
-                {/* 4. Signatory Block (Issued by Simpal Group of Companies HRMD) */}
+                {/* 4. Signatory Block (Issued by Simpal Group of Companies Head Office HRMD) */}
                 <div className="mt-10 pt-4">
                   <div className="space-y-0.5">
                     <p className="font-black text-sm uppercase tracking-wide text-slate-900">
@@ -1820,7 +2209,7 @@ export default function IncidentReportPanel({
                       {selectedReport.nteSignatoryTitle || "HRMD Manager"}
                     </p>
                     <p className="text-xs text-slate-700">
-                      Simpal Group of Companies / {selectedReport.senderCompany || selectedReport.company}
+                      Simpal Group of Companies (Head Office) / {selectedReport.senderCompany || selectedReport.company}
                     </p>
                   </div>
                 </div>
@@ -1860,7 +2249,7 @@ export default function IncidentReportPanel({
                 <div>
                   <h2 className="text-base font-black text-slate-900">Log Written Explanation</h2>
                   <p className="text-xs text-slate-500">
-                    Record explanation received from {selectedReport.employeeName} ({selectedReport.senderCompany || selectedReport.company})
+                    Record explanation from {selectedReport.employeeName} ({selectedReport.senderCompany || selectedReport.company}) ➔ Transmit to SGC Head Office
                   </p>
                 </div>
               </div>
@@ -1903,7 +2292,7 @@ export default function IncidentReportPanel({
                   className="px-4 py-2 rounded-xl text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white transition cursor-pointer inline-flex items-center gap-1.5"
                 >
                   <Check size={14} />
-                  <span>Transmit Explanation to SGC HRMD</span>
+                  <span>Transmit Explanation to Head Office SGC</span>
                 </button>
               </div>
             </div>
