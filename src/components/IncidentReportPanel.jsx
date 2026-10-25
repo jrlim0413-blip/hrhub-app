@@ -117,6 +117,7 @@ export default function IncidentReportPanel({
   const [inAppEmails, setInAppEmails] = useState([]);
   const [activeEmailTab, setActiveEmailTab] = useState("INBOX"); // "INBOX" | "SENT"
   const [selectedEmailMessage, setSelectedEmailMessage] = useState(null);
+  const [selectedCaseReport, setSelectedCaseReport] = useState(null); // Per-row email filter
   const [emailForm, setEmailForm] = useState({
     to: "",
     cc: "",
@@ -740,6 +741,56 @@ export default function IncidentReportPanel({
     setInAppEmails(refreshed);
     setIsEmailModalOpen(false);
     playAiVoiceAnnouncement(`Official memo dispatched to ${emailForm.to}. Recorded in system Mailbox.`);
+  };
+
+  // Direct Gmail Dispatch: 1-click launch to real Gmail (mail.google.com)
+  // Sent emails appear directly in user's Gmail Sent folder, and respondent replies land in Gmail Inbox
+  const handleOpenDirectGmail = (report, emailType = "IR") => {
+    const sgcHr = lookupSgcCentralHr(profiles);
+    const senderHr = lookupAssignedHrForCompany(report.company || report.senderCompany, profiles);
+
+    let template;
+    if (emailType === "NTE" || report.status === "NTE_ISSUED" || report.status === "SERVED_TO_EMPLOYEE") {
+      template = generateNteEmailTemplate(report, sgcHr, senderHr);
+    } else {
+      template = generateIrEmailTemplate(report, senderHr, sgcHr);
+    }
+
+    // Automatically record an outgoing activity log in this specific IR
+    sendInAppEmail({
+      to: template.to,
+      cc: template.cc,
+      from: `${effectiveRole.reportingName} <${currentUser?.email || "imsoroglohr@gmail.com"}>`,
+      senderName: effectiveRole.reportingName,
+      senderCompany: effectiveRole.company,
+      subject: template.subject,
+      body: template.body,
+      tag: emailType === "NTE" ? "NTE_GMAIL" : "IR_GMAIL",
+      relatedReportId: report.id,
+      direction: "OUTGOING"
+    }).then(() => {
+      fetchInAppEmails().then(setInAppEmails);
+    });
+
+    // Launch Gmail Direct Web Composer with pre-filled To, CC, Subject, and Body
+    const toParam = template.to;
+    const ccParam = template.cc || "";
+    const suParam = template.subject;
+    const bodyParam = template.body;
+
+    const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(toParam)}${
+      ccParam ? `&cc=${encodeURIComponent(ccParam)}` : ""
+    }&su=${encodeURIComponent(suParam)}&body=${encodeURIComponent(bodyParam)}`;
+
+    window.open(gmailUrl, "_blank");
+    playAiVoiceAnnouncement(`Direct Gmail composer opened for case ${report.caseNumber}. The memo will be sent through your official Google Gmail account.`);
+  };
+
+  // Open In-App Mailbox specifically filtered for this IR row
+  const handleOpenRowMailbox = (report) => {
+    setSelectedCaseReport(report);
+    setActiveEmailTab("INBOX");
+    setIsEmailInboxOpen(true);
   };
 
   // Purge test / mock data to start with pure live process
@@ -1447,15 +1498,46 @@ export default function IncidentReportPanel({
                       </button>
                     )}
 
-                    {/* Integrated In-App Email Transmittal */}
+                    {/* 1-Click Direct to Gmail: Opens mail.google.com with prefilled recipient, subject, and memo */}
+                    <button
+                      type="button"
+                      onClick={() => handleOpenDirectGmail(report, isNteIssued || isServed ? "NTE" : "IR")}
+                      className="px-3.5 py-2 rounded-xl text-xs font-bold bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 hover:border-rose-300 shadow-2xs transition cursor-pointer inline-flex items-center gap-1.5 active:scale-98"
+                      title="Direct Gmail: Open official Gmail compose tab. Sent memos go to Gmail Sent; replies land in Gmail Inbox."
+                    >
+                      <Mail size={14} className="text-rose-600" />
+                      <span>Direct Gmail</span>
+                    </button>
+
+                    {/* Per-Row In-App Mailbox: View and track memo thread for this specific IR row */}
+                    {(() => {
+                      const caseEmails = inAppEmails.filter((e) => e.relatedReportId === report.id);
+                      return (
+                        <button
+                          type="button"
+                          onClick={() => handleOpenRowMailbox(report)}
+                          className="px-3 py-2 rounded-xl text-xs font-bold bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 shadow-2xs transition cursor-pointer inline-flex items-center gap-1.5"
+                          title="View In-App mail thread specifically for this incident report row"
+                        >
+                          <Inbox size={14} className="text-blue-600" />
+                          <span>Row Mail</span>
+                          {caseEmails.length > 0 && (
+                            <span className="px-1.5 py-0.2 rounded-full text-[10px] font-black bg-blue-600 text-white">
+                              {caseEmails.length}
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })()}
+
+                    {/* In-App Direct Compose Modal */}
                     <button
                       type="button"
                       onClick={() => handleOpenComposeEmail(report, isNteIssued || isServed ? "NTE" : "IR")}
-                      className="px-3 py-2 rounded-xl text-xs font-bold bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 shadow-2xs transition cursor-pointer inline-flex items-center gap-1.5"
-                      title="Send official Incident Report or NTE via In-App Email (no need to open browser/Gmail)"
+                      className="p-2 rounded-xl text-slate-500 hover:text-blue-700 hover:bg-blue-50 border border-slate-200 transition cursor-pointer"
+                      title="Compose in-app memo within HR Hub"
                     >
-                      <Mail size={14} />
-                      <span>Email Memo</span>
+                      <Send size={14} />
                     </button>
 
                     {/* SGC Head Office HRMD ONLY: Evaluate & Issue NTE */}
@@ -3428,25 +3510,60 @@ export default function IncidentReportPanel({
               </div>
             </div>
 
+            {/* Per-Row Case Filter Banner */}
+            {selectedCaseReport && (
+              <div className="px-6 py-2 bg-gradient-to-r from-amber-50 to-orange-50 border-b border-amber-200 flex items-center justify-between gap-3 text-xs shrink-0 flex-wrap">
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                  <span className="font-extrabold text-amber-950">
+                    Row Case Mailbox: {selectedCaseReport.caseNumber} • {selectedCaseReport.employeeName}
+                  </span>
+                  <span className="text-[11px] text-amber-800">
+                    ({selectedCaseReport.company || selectedCaseReport.senderCompany})
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleOpenDirectGmail(selectedCaseReport)}
+                    className="px-2.5 py-1 rounded-lg text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white transition cursor-pointer inline-flex items-center gap-1 shadow-xs"
+                    title="Launch prefilled message in official Gmail web composer"
+                  >
+                    <Mail size={12} />
+                    <span>Open in Gmail (Direct)</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedCaseReport(null)}
+                    className="px-2.5 py-1 rounded-lg text-xs font-bold bg-white hover:bg-amber-100 text-amber-900 border border-amber-300 transition cursor-pointer"
+                  >
+                    Show All Memos
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* Split Screen Mailbox Body */}
             <div className="flex-1 grid grid-cols-1 md:grid-cols-12 overflow-hidden">
               {/* Left Column: Email Thread List */}
               <div className="md:col-span-5 border-r border-slate-200 overflow-y-auto p-3 space-y-2 bg-slate-50/50 custom-scrollbar">
                 {inAppEmails.filter((e) =>
-                  activeEmailTab === "INBOX"
+                  (!selectedCaseReport || e.relatedReportId === selectedCaseReport.id) &&
+                  (activeEmailTab === "INBOX"
                     ? e.direction === "INCOMING"
-                    : e.direction === "OUTGOING"
+                    : e.direction === "OUTGOING")
                 ).length === 0 ? (
                   <div className="p-8 text-center text-xs text-slate-400">
                     <Inbox size={32} className="mx-auto mb-2 text-slate-300" />
-                    <span>No {activeEmailTab.toLowerCase()} messages in mailbox yet.</span>
+                    <span>No {activeEmailTab.toLowerCase()} messages in mailbox {selectedCaseReport ? "for this case row" : "yet"}.</span>
                   </div>
                 ) : (
                   inAppEmails
                     .filter((e) =>
-                      activeEmailTab === "INBOX"
+                      (!selectedCaseReport || e.relatedReportId === selectedCaseReport.id) &&
+                      (activeEmailTab === "INBOX"
                         ? e.direction === "INCOMING"
-                        : e.direction === "OUTGOING"
+                        : e.direction === "OUTGOING")
                     )
                     .map((mail) => {
                       const isSelected = selectedEmailMessage?.id === mail.id;
