@@ -33,7 +33,8 @@ import {
   Info,
   Scale,
   Trash2,
-  RefreshCw
+  RefreshCw,
+  Sparkles
 } from "lucide-react";
 import {
   fetchIncidentReports,
@@ -44,6 +45,11 @@ import {
   lookupAssignedHrForCompany,
   lookupSgcCentralHr
 } from "../lib/incidentReportStorage";
+import {
+  analyzeAndFormulateNte,
+  VIOLATION_PRESETS,
+  detectViolationCategory
+} from "../lib/nteLegalAnalyzer";
 import { supabase } from "../lib/supabase";
 import {
   resolveUserHrRole,
@@ -93,6 +99,8 @@ export default function IncidentReportPanel({
   const [isNteDraftModalOpen, setIsNteDraftModalOpen] = useState(false);
   const [isExplanationModalOpen, setIsExplanationModalOpen] = useState(false);
   const [selectedReport, setSelectedReport] = useState(null);
+  const [selectedPresetId, setSelectedPresetId] = useState(null);
+  const [aiAnalysisResult, setAiAnalysisResult] = useState(null);
 
   // Compute effective role & capabilities STRICTLY based on the logged-in account (currentUser)
   const effectiveRole = useMemo(() => {
@@ -336,6 +344,24 @@ export default function IncidentReportPanel({
       irForm.fullIncidentNarrative?.trim() ||
       "During surprise drawer reconciliation audit, a physical cash shortage was uncovered. The personnel on duty could not produce balancing vouchers or valid justification for the discrepancy.";
 
+    // Intelligently analyze incident report to formulate tailored, non-generic legal NTE citations
+    const legalAnalysis = analyzeAndFormulateNte({
+      ...irForm,
+      caseNumber: caseId,
+      specificFindings: findingsText,
+      fullIncidentNarrative: findingsText,
+      incidentCauses: irForm.incidentCauses,
+      cashShortageAmount: irForm.cashShortageAmount,
+      employeePosition: irForm.employeePosition,
+      employeeName: irForm.employeeName,
+      branch: irForm.branch,
+      company: irForm.company,
+      senderCompany: irForm.company,
+      dateReported: irForm.dateReported,
+      auditDates: irForm.auditDates,
+      auditedBy: irForm.auditedBy
+    });
+
     const newReport = {
       id: caseId,
       caseNumber: caseId,
@@ -363,16 +389,19 @@ export default function IncidentReportPanel({
       companyEmail: DEFAULT_COMPANY_EMAIL,
       forwardedAt: new Date().toISOString(),
 
-      // Pre-seed template NTE paragraphs ready for Head Office SGC HRMD to review & approve
-      nteSubject: "Notice to Explain",
+      // Smart, Non-Generic Legal Citations derived from actual report data
+      nteSubject: legalAnalysis.nteSubject,
       nteDate: dateFormatted,
-      nteBodyParagraph1: `According to the incident report submitted by the ${irForm.reportingHrTitle}, ${irForm.reportingHrName} of ${irForm.company} dated ${dateFormatted}, it was found that you have an outstanding cash shortage of PHP ${irForm.cashShortageAmount || "0.00"} during the audit conducted on ${irForm.auditDates}, by the ${irForm.auditedBy}.`,
-      nteBodyParagraph2: findingsText,
-      nteBodyParagraph3: `These circumstances raise serious concerns regarding your cash handling, accountability, and compliance with Company SOPs. As the assigned ${irForm.employeePosition}, you are expected to strictly control company funds, follow established procedures, and promptly address shortages and irregular transactions. Failure to do so may compromise the Company's financial controls and accountability.`,
-      nteDueProcessClause: "In line with due process, you are hereby requested to submit a written explanation within one (1) working day upon receipt of this memo. Given the above allegation, why you should not discipline and find liable for the following alleged violations of the Employees Code of Conduct.",
-      codeOfConductSection: "Section 18. Offenses Related to Job Performance and Productivity.\n(a) Non-observance of Standard Operating Procedures. Willful or unintentional non-observance of standard operating procedures for direct or indirect personal gain is classified as serious offense and shall accordingly be meted penalties for serious offense.",
-      laborCodeViolation: "The above-alleged offense also violates Article 297 of the Labor Code of the Philippines, particularly, serious misconduct, willful disobedience, gross and habitual neglect of duties, fraud or breach of trust, commission of a crime, and analogous cases.",
-      nteConclusion: "Therefore, failure on your part to submit a written explanation shall be considered an admission of the foregoing allegation.\n\nFor your strict Compliance.",
+      nteBodyParagraph1: legalAnalysis.nteBodyParagraph1,
+      nteBodyParagraph2: legalAnalysis.nteBodyParagraph2,
+      nteBodyParagraph3: legalAnalysis.nteBodyParagraph3,
+      nteDueProcessClause: legalAnalysis.nteDueProcessClause,
+      codeOfConductSection: legalAnalysis.codeOfConductSection,
+      laborCodeViolation: legalAnalysis.laborCodeViolation,
+      nteConclusion: legalAnalysis.nteConclusion,
+      violationPresetId: legalAnalysis.presetId,
+      violationSeverity: legalAnalysis.severity,
+      violationSummaryTitle: legalAnalysis.summaryTitle,
       nteSignatoryName: irForm.assignedCentralHrName,
       nteSignatoryTitle: irForm.assignedCentralHrTitle,
       nteSignatoryCompany: irForm.company,
@@ -384,7 +413,7 @@ export default function IncidentReportPanel({
           timestamp: new Date().toISOString(),
           action: "IR_TRANSMITTED_TO_HEAD_OFFICE",
           actor: `${irForm.reportingHrName} (${irForm.company} HR)`,
-          message: `Transmitted Incident Report ${caseId} for ${irForm.employeeName} to Simpal Group of Companies (Head Office HRMD) for Notice to Explain evaluation.`
+          message: `Transmitted Incident Report ${caseId} for ${irForm.employeeName} to Simpal Group of Companies (Head Office HRMD). Legal Evaluation: [${legalAnalysis.summaryTitle}].`
         }
       ]
     };
@@ -402,8 +431,49 @@ export default function IncidentReportPanel({
 
   // Simpal Group of Companies (SGC HRMD) Evaluates & Issues NTE (Returns to Originating Company)
   const handleOpenDraftNte = (report) => {
-    setSelectedReport(report);
+    // Intelligently analyze the incident details and derive non-generic Code of Conduct & Labor Code citations
+    const legalAnalysis = analyzeAndFormulateNte(report, report.violationPresetId || null);
+    setSelectedPresetId(legalAnalysis.presetId);
+    setAiAnalysisResult(legalAnalysis);
+
+    const enrichedReport = {
+      ...report,
+      nteSubject: report.nteSubject || legalAnalysis.nteSubject,
+      nteBodyParagraph1: report.nteBodyParagraph1 || legalAnalysis.nteBodyParagraph1,
+      nteBodyParagraph2: report.nteBodyParagraph2 || legalAnalysis.nteBodyParagraph2,
+      nteBodyParagraph3: report.nteBodyParagraph3 || legalAnalysis.nteBodyParagraph3,
+      codeOfConductSection: report.codeOfConductSection || legalAnalysis.codeOfConductSection,
+      laborCodeViolation: report.laborCodeViolation || legalAnalysis.laborCodeViolation,
+      nteDueProcessClause: report.nteDueProcessClause || legalAnalysis.nteDueProcessClause,
+      nteConclusion: report.nteConclusion || legalAnalysis.nteConclusion,
+      violationPresetId: legalAnalysis.presetId,
+      violationSeverity: legalAnalysis.severity,
+      violationSummaryTitle: legalAnalysis.summaryTitle
+    };
+
+    setSelectedReport(enrichedReport);
     setIsNteDraftModalOpen(true);
+  };
+
+  // Helper: SGC HRMD switches violation preset or triggers AI re-analysis
+  const handleApplyViolationPreset = (presetKey) => {
+    if (!selectedReport) return;
+    const newAnalysis = analyzeAndFormulateNte(selectedReport, presetKey);
+    setSelectedPresetId(newAnalysis.presetId);
+    setAiAnalysisResult(newAnalysis);
+
+    // Update DOM inputs dynamically if mounted
+    const p1 = document.getElementById("nte-para-1");
+    const p2 = document.getElementById("nte-para-2");
+    const p3 = document.getElementById("nte-para-3");
+    const coc = document.getElementById("nte-code-of-conduct");
+    const lc = document.getElementById("nte-labor-code");
+
+    if (p1) p1.value = newAnalysis.nteBodyParagraph1;
+    if (p2) p2.value = newAnalysis.nteBodyParagraph2;
+    if (p3) p3.value = newAnalysis.nteBodyParagraph3;
+    if (coc) coc.value = newAnalysis.codeOfConductSection;
+    if (lc) lc.value = newAnalysis.laborCodeViolation;
   };
 
   // Direct Simpal Group of Companies (Head Office) NTE Action
@@ -419,6 +489,18 @@ export default function IncidentReportPanel({
     const sgcHr = lookupSgcCentralHr(profiles);
     const dateFormatted = new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
     const directCaseNumber = `NTE-${new Date().getFullYear()}-${String(Date.now()).slice(-4)}`;
+
+    const legalAnalysis = analyzeAndFormulateNte({
+      employeeName: "MARIA KRISTINA SANTOS",
+      employeePosition: "Branch Cashier & Vault Custodian",
+      branchLocation: "Station 1",
+      company: "5A Royal Gaming OPC",
+      senderCompany: "5A Royal Gaming OPC",
+      cashShortageAmount: "12,500.00",
+      auditDates: dateFormatted,
+      auditedBy: `${sgcHr.name} (SGC Internal Audit)`,
+      specificFindings: "Cash shortage discrepancy of PHP 12,500.00 identified during surprise drawer reconciliation audit without supporting balancing chits."
+    });
 
     const directNteReport = {
       id: `nte-sgc-${Date.now()}`,
@@ -437,22 +519,27 @@ export default function IncidentReportPanel({
       cashShortageAmount: "12,500.00",
       auditDates: dateFormatted,
       auditedBy: `${sgcHr.name} (SGC Internal Audit)`,
-      specificFindings: "Cash shortage discrepancy identified during surprise drawer reconciliation audit.",
-      nteSubject: "Notice to Explain",
+      specificFindings: "Cash shortage discrepancy of PHP 12,500.00 identified during surprise drawer reconciliation audit without supporting balancing chits.",
+      nteSubject: legalAnalysis.nteSubject,
       nteDate: dateFormatted,
-      nteBodyParagraph1: `According to the operational audit findings conducted on ${dateFormatted}, an unremitted cash collection was recorded and requires your formal legal answer.`,
-      nteBodyParagraph2: "You are required to submit your sworn written explanation regarding these matters within the mandatory due process period.",
-      nteBodyParagraph3: "As an employee entrusted with company cashiering duties, adherence to established standard operating procedures is strictly required.",
-      nteDueProcessClause: "In line with due process, you are hereby requested to submit a written explanation within one (1) working day upon receipt of this memo. Given the above allegation, why you should not be disciplined and found liable under the Employees Code of Conduct.",
-      codeOfConductSection: "Section 18. Offenses Related to Job Performance and Productivity.\n(a) Non-observance of Standard Operating Procedures.",
-      laborCodeViolation: "Article 297 (Termination by Employer / Just Causes) of the Philippine Labor Code (PD 442).",
-      nteConclusion: "Failure on your part to submit a written explanation shall be considered an admission of the foregoing allegation.\n\nFor your strict Compliance.",
+      nteBodyParagraph1: legalAnalysis.nteBodyParagraph1,
+      nteBodyParagraph2: legalAnalysis.nteBodyParagraph2,
+      nteBodyParagraph3: legalAnalysis.nteBodyParagraph3,
+      nteDueProcessClause: legalAnalysis.nteDueProcessClause,
+      codeOfConductSection: legalAnalysis.codeOfConductSection,
+      laborCodeViolation: legalAnalysis.laborCodeViolation,
+      nteConclusion: legalAnalysis.nteConclusion,
+      violationPresetId: legalAnalysis.presetId,
+      violationSeverity: legalAnalysis.severity,
+      violationSummaryTitle: legalAnalysis.summaryTitle,
       nteSignatoryName: sgcHr.name,
       nteSignatoryTitle: sgcHr.title,
       nteSignatoryCompany: "Simpal Group of Companies",
       nteFooterNote: `Simpal Group HRMD 201 File & Records ${new Date().getFullYear()}`
     };
 
+    setSelectedPresetId(legalAnalysis.presetId);
+    setAiAnalysisResult(legalAnalysis);
     setSelectedReport(directNteReport);
     setIsNteDraftModalOpen(true);
   };
@@ -2126,6 +2213,71 @@ export default function IncidentReportPanel({
                 </div>
               </div>
 
+              {/* AI Violation Classifier & Preset Selector Bar */}
+              <div className="p-4 rounded-xl bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200/90 shadow-xs space-y-3">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-lg bg-amber-500 text-white flex items-center justify-center shadow-xs">
+                      <Sparkles size={16} />
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-black uppercase tracking-wider text-amber-800 block">
+                        AI LEGAL VIOLATION CLASSIFICATION
+                      </span>
+                      <h4 className="text-xs font-black text-slate-900">
+                        {aiAnalysisResult?.summaryTitle || selectedReport.violationSummaryTitle || "Cash Shortage, Unremitted Funds & Breach of Trust"}
+                      </h4>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="px-2.5 py-1 rounded-md text-[10px] font-extrabold bg-rose-600 text-white shadow-xs">
+                      {aiAnalysisResult?.severity || selectedReport.violationSeverity || "SERIOUS OFFENSE"}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const detected = detectViolationCategory(selectedReport);
+                        handleApplyViolationPreset(detected.id);
+                        playAiVoiceAnnouncement(`Re-analyzed! The incident has been classified under ${detected.label}. Legal citations updated.`);
+                      }}
+                      className="px-2.5 py-1 rounded-md text-[11px] font-bold bg-white hover:bg-amber-100 text-amber-900 border border-amber-300 transition cursor-pointer inline-flex items-center gap-1 shadow-xs"
+                      title="Re-analyze incident findings using AI"
+                    >
+                      <Sparkles size={12} className="text-amber-600" />
+                      <span>Auto-Classify with AI</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Quick Violation Category Switcher */}
+                <div className="pt-2 border-t border-amber-200/70">
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1.5">
+                    Select or Switch Violation Category (Under Philippine Labor Code & Code of Conduct):
+                  </label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-1.5">
+                    {Object.values(VIOLATION_PRESETS).map((preset) => {
+                      const isSelected = (selectedPresetId || selectedReport.violationPresetId) === preset.id;
+                      return (
+                        <button
+                          key={preset.id}
+                          type="button"
+                          onClick={() => handleApplyViolationPreset(preset.id)}
+                          className={`text-left p-2 rounded-lg border text-[11px] font-semibold transition cursor-pointer flex items-start gap-1.5 ${
+                            isSelected
+                              ? "bg-amber-600 text-white border-amber-600 shadow-xs"
+                              : "bg-white text-slate-700 border-slate-200 hover:border-amber-400 hover:bg-amber-50/50"
+                          }`}
+                        >
+                          <span className={`w-1.5 h-1.5 rounded-full mt-1 shrink-0 ${isSelected ? "bg-white" : "bg-amber-500"}`} />
+                          <span className="leading-tight line-clamp-2">{preset.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
                   1. Incident & Audit Findings Citation
@@ -2162,10 +2314,25 @@ export default function IncidentReportPanel({
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  3. Code of Conduct Citation
+                  3. Positional Trust & Fiduciary Responsibility
                 </label>
                 <textarea
-                  rows={3}
+                  rows={2}
+                  defaultValue={
+                    selectedReport.nteBodyParagraph3 ||
+                    `These circumstances raise serious concerns regarding your cash handling, accountability, and compliance with Company SOPs. As the assigned ${selectedReport.employeePosition || "Cashier"}, you are expected to strictly control company funds, follow established procedures, and promptly address shortages and irregular transactions.`
+                  }
+                  id="nte-para-3"
+                  className="w-full p-2.5 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500 font-sans"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  4. Company Employees Code of Conduct Citation
+                </label>
+                <textarea
+                  rows={4}
                   defaultValue={selectedReport.codeOfConductSection}
                   id="nte-code-of-conduct"
                   className="w-full p-2.5 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500 font-sans"
@@ -2174,12 +2341,27 @@ export default function IncidentReportPanel({
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  4. Labor Code Citation
+                  5. Philippine Labor Code Statutory Grounds (PD 442 Art. 297)
+                </label>
+                <textarea
+                  rows={3}
+                  defaultValue={selectedReport.laborCodeViolation}
+                  id="nte-labor-code"
+                  className="w-full p-2.5 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500 font-sans"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  6. Due Process Clause (DOLE 5-Day Twin-Notice Rule)
                 </label>
                 <textarea
                   rows={2}
-                  defaultValue={selectedReport.laborCodeViolation}
-                  id="nte-labor-code"
+                  defaultValue={
+                    selectedReport.nteDueProcessClause ||
+                    "In line with due process (DOLE Department Order No. 147-15), you are hereby requested to submit a written explanation within five (5) calendar days upon receipt of this memo, explaining why you should not be disciplined or meted penalties under the Employees Code of Conduct and the Labor Code."
+                  }
+                  id="nte-due-process"
                   className="w-full p-2.5 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500 font-sans"
                 />
               </div>
@@ -2222,16 +2404,23 @@ export default function IncidentReportPanel({
                   onClick={() => {
                     const p1 = document.getElementById("nte-para-1").value;
                     const p2 = document.getElementById("nte-para-2").value;
+                    const p3 = document.getElementById("nte-para-3").value;
                     const coc = document.getElementById("nte-code-of-conduct").value;
                     const lc = document.getElementById("nte-labor-code").value;
+                    const dp = document.getElementById("nte-due-process").value;
                     const sigName = document.getElementById("nte-sig-name").value;
                     const sigTitle = document.getElementById("nte-sig-title").value;
 
                     handleSaveAndReturnNte({
                       nteBodyParagraph1: p1,
                       nteBodyParagraph2: p2,
+                      nteBodyParagraph3: p3,
                       codeOfConductSection: coc,
                       laborCodeViolation: lc,
+                      nteDueProcessClause: dp,
+                      violationPresetId: selectedPresetId || selectedReport.violationPresetId,
+                      violationSeverity: aiAnalysisResult?.severity || selectedReport.violationSeverity,
+                      violationSummaryTitle: aiAnalysisResult?.summaryTitle || selectedReport.violationSummaryTitle,
                       nteSignatoryName: sigName,
                       nteSignatoryTitle: sigTitle
                     });
@@ -2373,29 +2562,36 @@ export default function IncidentReportPanel({
                       `These circumstances raise serious concerns regarding your cash handling, accountability, and compliance with Company SOPs. As the assigned ${selectedReport.employeePosition || "Cashier"}, you are expected to strictly control company funds, follow established procedures, and promptly address shortages and irregular transactions. Failure to do so may compromise the Company's financial controls and accountability.`}
                   </p>
 
-                  <p>
-                    In line with due process, you are hereby requested to submit a written explanation within one (1) working day upon receipt of this memo. Given the above allegation, why you should not discipline and find liable for the following alleged violations of the Employees Code of Conduct.
+                  <p className="text-slate-800">
+                    {selectedReport.nteDueProcessClause ||
+                      "In line with due process (DOLE Department Order No. 147-15), you are hereby requested to submit your written explanation within five (5) calendar days upon receipt of this memo. Given the above allegations, explain why you should not be disciplined and found liable under the Employees Code of Conduct and the Labor Code."}
                   </p>
 
-                  <div className="pl-4 border-l-2 border-slate-400 py-1 space-y-1">
-                    <p className="font-bold text-slate-900">
-                      Section 18. Offenses Related to Job Performance and Productivity.
+                  {/* Dynamic Code of Conduct Citation */}
+                  <div className="pl-4 border-l-4 border-amber-500 bg-amber-50/60 p-3.5 rounded-r-xl space-y-1.5 my-3">
+                    <p className="text-[11px] font-black uppercase tracking-wider text-amber-900">
+                      EMPLOYEES CODE OF CONDUCT VIOLATION CHARGE:
                     </p>
-                    <p>
-                      <strong>(a) Non-observance of Standard Operating Procedures.</strong> Willful or unintentional non-observance of standard operating procedures for direct or indirect personal gain is classified as serious offense and shall accordingly be meted penalties for serious offense.
-                    </p>
+                    <div className="font-semibold text-slate-900 whitespace-pre-wrap text-xs sm:text-[13px] leading-relaxed">
+                      {selectedReport.codeOfConductSection ||
+                        "Section 14. Offenses Against Honesty, Financial Custodianship & Company Property."}
+                    </div>
                   </div>
 
-                  <p>
-                    The above-alleged offense also violates <strong>Article 297 of the Labor Code of the Philippines</strong>, particularly, serious misconduct, willful disobedience, gross and habitual neglect of duties, fraud or breach of trust, commission of a crime, and analogous cases.
-                  </p>
+                  {/* Dynamic Philippine Labor Code Grounds */}
+                  <div className="pl-4 border-l-4 border-blue-600 bg-blue-50/60 p-3.5 rounded-r-xl space-y-1.5 my-3">
+                    <p className="text-[11px] font-black uppercase tracking-wider text-blue-900">
+                      PHILIPPINE LABOR CODE (PD 442 AS AMENDED) STATUTORY GROUNDS:
+                    </p>
+                    <div className="text-slate-900 whitespace-pre-wrap text-xs sm:text-[13px] leading-relaxed">
+                      {selectedReport.laborCodeViolation ||
+                        "Article 297 [formerly Art. 282] (Termination by Employer / Just Causes): Serious Misconduct, Gross Neglect of Duties, and Fraud / Loss of Confidence."}
+                    </div>
+                  </div>
 
-                  <p>
-                    Therefore, failure on your part to submit a written explanation shall be considered an admission of the foregoing allegation.
-                  </p>
-
-                  <p className="font-semibold text-slate-900">
-                    For your strict Compliance.
+                  <p className="text-slate-800 whitespace-pre-wrap">
+                    {selectedReport.nteConclusion ||
+                      "Therefore, failure on your part to submit a written explanation within the mandatory period shall be considered an admission of the foregoing allegation.\n\nFor your strict Compliance."}
                   </p>
                 </div>
 
