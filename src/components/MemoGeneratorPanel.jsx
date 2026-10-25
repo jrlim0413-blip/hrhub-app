@@ -6067,19 +6067,10 @@ function doPost(e) {
 
       for (var r = 0; r < validRecipients.length; r++) {
         var recipientEmail = validRecipients[r].trim();
-        var emailAttachments = [];
-        if (item.pdfHtml) {
-          try {
-            var blob = Utilities.newBlob(item.pdfHtml, "text/html", memoRef + ".html")
-              .getAs("application/pdf")
-              .setName(memoRef + " - " + companyName + ".pdf");
-            emailAttachments.push(blob);
-          } catch (e) {}
-        }
         try {
           GmailApp.sendEmail(recipientEmail, subject, plainBody, {
             htmlBody: htmlBody,
-            attachments: emailAttachments,
+            attachments: attachments,
             name: "HRHub Official Dispatch • " + companyName,
             replyTo: item.senderEmail || "${HR_OFFICIAL_EMAIL}"
           });

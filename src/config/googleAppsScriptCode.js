@@ -116,34 +116,18 @@ function doPost(e) {
         }
       }
 
-      // 2. Dispatch to each recipient individually with a fresh PDF attachment
-      // (Creating a fresh blob per recipient guarantees the blob stream is never locked or closed between sends)
+      // 2. Dispatch to each company employee with company-specific PDF
       var sentEmails = [];
       for (var r = 0; r < validRecipients.length; r++) {
         var recipientEmail = validRecipients[r].trim();
-        if (!recipientEmail || recipientEmail.indexOf("@") === -1) continue;
-
-        var emailAttachments = [];
-        if (cleanHtmlForPdf) {
-          try {
-            var singleBlob = Utilities.newBlob(cleanHtmlForPdf, "text/html", memoRef + ".html")
-              .getAs("application/pdf")
-              .setName(memoRef + " - " + companyName + ".pdf");
-            emailAttachments.push(singleBlob);
-          } catch (blobErr) {
-            Logger.log("PDF generation note for " + recipientEmail + ": " + blobErr.toString());
-          }
-        }
-
         try {
           GmailApp.sendEmail(recipientEmail, subject, plainBody, {
             htmlBody: htmlBody,
-            attachments: emailAttachments,
+            attachments: attachments,
             name: "HRHub Official Dispatch • " + companyName,
             replyTo: senderEmail
           });
           sentEmails.push(recipientEmail);
-          Logger.log("Successfully sent to: " + recipientEmail);
         } catch (sendErr) {
           Logger.log("Failed to send to " + recipientEmail + ": " + sendErr.toString());
         }
