@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import {
   ChevronLeft, ChevronRight, Layers, FileText, BarChart3,
-  Bot, CloudSun, Sparkles, Search, Plus, Star, ShieldCheck,
+  Bot, CloudSun, Sparkles, Search, Plus, Star, ShieldCheck, ShieldAlert,
   Building2, Calculator, Clock, HardHat, Dices, Award, Zap, TrendingUp,
   Receipt, FileCheck, Sliders, Activity, MailCheck, Wrench, Home,
   Compass, PhoneCall, Mail, DollarSign, CircleDollarSign, Workflow, LayoutDashboard,
@@ -24,6 +24,14 @@ export const FUNCTIONAL_WORKSPACE_TABS = [
     tag: "Operations",
     category: "operations",
     color: "text-slate-700"
+  },
+  {
+    id: "incident_reports",
+    label: "Incident Reports & NTE",
+    icon: ShieldAlert,
+    tag: "Due Process",
+    category: "hr",
+    color: "text-rose-600"
   },
   {
     id: "memo",
@@ -225,6 +233,13 @@ export default function MondayStyleSidebar({
     hr: {
       title: "HR & Administration",
       items: [
+        {
+          id: "incident_reports",
+          label: "Incident Reports & NTE",
+          icon: ShieldAlert,
+          tag: "Due Process",
+          tabId: "incident_reports"
+        },
         {
           id: "memo",
           label: "Memo Generator",

@@ -5,7 +5,7 @@ import {
   Megaphone, Award, Calendar, LogOut,
   BriefcaseBusiness, FileText, Sparkles, BarChart3,
   Database, RefreshCw, CheckCircle2, AlertCircle, Clock,
-  Bot, Layers, Home, X, CheckCheck, Menu, UserCheck
+  Bot, Layers, Home, X, CheckCheck, Menu, UserCheck, ShieldAlert
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import ProfileModal from "../components/ProfileModal";
@@ -15,6 +15,7 @@ import GrossReportPanel from "../components/GrossReportPanel";
 import EmployeeDirectoryPanel from "../components/EmployeeDirectoryPanel";
 import WeatherWidget from "../components/WeatherWidget";
 import MemoGeneratorPanel from "../components/MemoGeneratorPanel";
+import IncidentReportPanel from "../components/IncidentReportPanel";
 import SupervisorsAttendancePanel from "../components/SupervisorsAttendancePanel";
 import AiAssistantDrawer from "../components/AiAssistantDrawer";
 import AiAgentAvatar from "../components/AiAgentAvatar";
@@ -203,6 +204,14 @@ const WORKSPACE_TAB_DEFS = {
     activeClass: "bg-slate-900 text-white ring-2 ring-emerald-400",
     activeIconClass: "text-emerald-400",
     inactiveIconClass: "text-slate-600"
+  },
+  incident_reports: {
+    id: "incident_reports",
+    label: "Incident Reports & NTE",
+    icon: ShieldAlert,
+    activeClass: "bg-rose-600 text-white ring-2 ring-rose-300",
+    activeIconClass: "text-white",
+    inactiveIconClass: "text-rose-600"
   },
   memo: {
     id: "memo",
@@ -1894,6 +1903,16 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
               onOpenAiBuddy={() => setAiDrawerOpen(true)}
               setWorkspaceTab={handleOpenWorkspaceTab}
               profiles={supabaseProfiles}
+            />
+          )}
+
+          {/* TAB: INCIDENT REPORTS & NOTICE TO EXPLAIN (NTE) */}
+          {workspaceTab === "incident_reports" && (
+            <IncidentReportPanel
+              currentUser={currentUser}
+              profiles={supabaseProfiles}
+              onClose={() => handleCloseWorkspaceTab(null, "incident_reports")}
+              onOpenAiBuddy={() => setAiDrawerOpen(true)}
             />
           )}
 
