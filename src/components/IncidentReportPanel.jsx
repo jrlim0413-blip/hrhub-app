@@ -31,12 +31,14 @@ import {
   Inbox,
   SendHorizontal,
   Info,
-  Scale
+  Scale,
+  Trash2
 } from "lucide-react";
 import {
   fetchIncidentReports,
   saveIncidentReport,
   deleteIncidentReport,
+  clearAllIncidentReports,
   lookupAssignedHrForCompany,
   lookupSgcCentralHr
 } from "../lib/incidentReportStorage";
@@ -343,6 +345,67 @@ export default function IncidentReportPanel({
     setIsNteDraftModalOpen(true);
   };
 
+  // Direct Simpal Group of Companies (Head Office) NTE Action
+  const handleOpenDirectSgcNte = () => {
+    // If there is an existing pending report submitted to central HR, open it directly
+    const pending = reports.find((r) => r.status === "SUBMITTED_TO_CENTRAL_HR");
+    if (pending) {
+      handleOpenDraftNte(pending);
+      return;
+    }
+
+    // Otherwise, generate a fresh direct Head Office NTE draft for Simpal Group of Companies
+    const sgcHr = lookupSgcCentralHr(profiles);
+    const dateFormatted = new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+    const directCaseNumber = `NTE-${new Date().getFullYear()}-${String(Date.now()).slice(-4)}`;
+
+    const directNteReport = {
+      id: `nte-sgc-${Date.now()}`,
+      caseNumber: directCaseNumber,
+      employeeName: "MARIA KRISTINA SANTOS",
+      employeePosition: "Branch Cashier & Vault Custodian",
+      branchLocation: "Station 1",
+      company: "5A Royal Gaming OPC",
+      senderCompany: "5A Royal Gaming OPC",
+      receiverCompany: "Simpal Group of Companies",
+      reportingHrName: "Ms. Quennie R. Capuyan",
+      reportingHrTitle: "Branch HR Admin",
+      receiverHrName: sgcHr.name,
+      receiverHrTitle: sgcHr.title,
+      status: "SUBMITTED_TO_CENTRAL_HR",
+      cashShortageAmount: "12,500.00",
+      auditDates: dateFormatted,
+      auditedBy: `${sgcHr.name} (SGC Internal Audit)`,
+      specificFindings: "Cash shortage discrepancy identified during surprise drawer reconciliation audit.",
+      nteSubject: "Notice to Explain",
+      nteDate: dateFormatted,
+      nteBodyParagraph1: `According to the operational audit findings conducted on ${dateFormatted}, an unremitted cash collection was recorded and requires your formal legal answer.`,
+      nteBodyParagraph2: "You are required to submit your sworn written explanation regarding these matters within the mandatory due process period.",
+      nteBodyParagraph3: "As an employee entrusted with company cashiering duties, adherence to established standard operating procedures is strictly required.",
+      nteDueProcessClause: "In line with due process, you are hereby requested to submit a written explanation within one (1) working day upon receipt of this memo. Given the above allegation, why you should not be disciplined and found liable under the Employees Code of Conduct.",
+      codeOfConductSection: "Section 18. Offenses Related to Job Performance and Productivity.\n(a) Non-observance of Standard Operating Procedures.",
+      laborCodeViolation: "Article 297 (Termination by Employer / Just Causes) of the Philippine Labor Code (PD 442).",
+      nteConclusion: "Failure on your part to submit a written explanation shall be considered an admission of the foregoing allegation.\n\nFor your strict Compliance.",
+      nteSignatoryName: sgcHr.name,
+      nteSignatoryTitle: sgcHr.title,
+      nteSignatoryCompany: "Simpal Group of Companies",
+      nteFooterNote: `Simpal Group HRMD 201 File & Records ${new Date().getFullYear()}`
+    };
+
+    setSelectedReport(directNteReport);
+    setIsNteDraftModalOpen(true);
+  };
+
+  // Purge test / mock data to start with pure live process
+  const handleClearAllMockData = async () => {
+    if (window.confirm("Purge all incident reports to start with a completely clean process?")) {
+      await clearAllIncidentReports();
+      setReports([]);
+      setSelectedReport(null);
+      playAiVoiceAnnouncement("All test records purged. You are now starting with a completely clean incident reporting process.");
+    }
+  };
+
   const handleSaveAndReturnNte = async (updatedDraft) => {
     const senderCompany = selectedReport.senderCompany || selectedReport.company || "5A Royal Gaming OPC";
     const senderHrName = selectedReport.senderHrName || selectedReport.reportingHrName || "Area HR Admin";
@@ -475,6 +538,28 @@ export default function IncidentReportPanel({
             <span>Role Permission Matrix</span>
           </button>
 
+          {/* Dedicated Simpal Group of Companies Action Button */}
+          <button
+            type="button"
+            onClick={handleOpenDirectSgcNte}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-600 hover:to-teal-500 text-slate-950 shadow-xs transition cursor-pointer active:scale-98"
+            title="Simpal Group of Companies (Head Office) Direct NTE Action"
+          >
+            <Building2 size={14} className="text-slate-950 font-bold" />
+            <span>Simpal Group (Issue NTE)</span>
+          </button>
+
+          {/* Clean Mock Data Button */}
+          <button
+            type="button"
+            onClick={handleClearAllMockData}
+            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 transition cursor-pointer"
+            title="Purge all test/mock data to start with a completely clean process"
+          >
+            <Trash2 size={13} className="text-rose-600" />
+            <span className="hidden sm:inline">Clean Process</span>
+          </button>
+
           <span className="text-xs text-slate-400 hidden sm:inline">•</span>
 
           <div className="inline-flex items-center gap-2 text-xs">
@@ -570,13 +655,23 @@ export default function IncidentReportPanel({
                 <span>{voiceMutedState ? "Voice Muted" : "Head Office AI Voice Active"}</span>
               </button>
 
+              {/* Simpal Group of Companies Action Button */}
+              <button
+                type="button"
+                onClick={handleOpenDirectSgcNte}
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black bg-gradient-to-r from-emerald-400 to-teal-300 hover:from-emerald-300 hover:to-teal-200 text-slate-950 shadow-lg shadow-emerald-500/20 transition cursor-pointer active:scale-98"
+              >
+                <Building2 size={16} className="text-slate-950 font-black" />
+                <span>Simpal Group of Companies • Issue Notice to Explain (NTE)</span>
+              </button>
+
               <button
                 type="button"
                 onClick={handleOpenCreateModal}
-                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold bg-white text-slate-950 hover:bg-emerald-50 shadow-md transition cursor-pointer"
+                className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-bold bg-white/20 text-white hover:bg-white/30 border border-white/20 transition cursor-pointer"
               >
-                <Plus size={16} className="text-emerald-700 font-bold" />
-                <span>Issue Direct Head Office IR</span>
+                <Plus size={15} className="text-emerald-300" />
+                <span>Issue IR</span>
               </button>
             </div>
           </div>
@@ -829,14 +924,25 @@ export default function IncidentReportPanel({
             <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
               There are no records matching your current filter in this role view.
             </p>
-            <button
-              type="button"
-              onClick={handleOpenCreateModal}
-              className="mt-4 px-4 py-2 rounded-xl text-xs font-bold bg-[#8cb84a] text-white inline-flex items-center gap-2 hover:bg-[#7ea741] cursor-pointer"
-            >
-              <Plus size={14} />
-              <span>Issue New Incident Report</span>
-            </button>
+            <div className="flex items-center justify-center gap-3 mt-4 flex-wrap">
+              <button
+                type="button"
+                onClick={handleOpenCreateModal}
+                className="px-4 py-2 rounded-xl text-xs font-bold bg-[#8cb84a] text-white inline-flex items-center gap-2 hover:bg-[#7ea741] cursor-pointer"
+              >
+                <Plus size={14} />
+                <span>Issue New Incident Report (Branch)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleOpenDirectSgcNte}
+                className="px-4 py-2 rounded-xl text-xs font-black bg-gradient-to-r from-emerald-500 to-teal-400 text-slate-950 inline-flex items-center gap-2 hover:from-emerald-400 hover:to-teal-300 cursor-pointer shadow-md"
+              >
+                <Building2 size={14} className="text-slate-950 font-bold" />
+                <span>Simpal Group of Companies • Issue NTE</span>
+              </button>
+            </div>
           </div>
         ) : (
           <div className="divide-y divide-slate-100">

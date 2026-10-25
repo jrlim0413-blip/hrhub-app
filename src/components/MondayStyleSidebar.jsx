@@ -64,6 +64,14 @@ export const FUNCTIONAL_WORKSPACE_TABS = [
     tag: "Attendance",
     category: "operations",
     color: "text-[#008559]"
+  },
+  {
+    id: "permission_matrix",
+    label: "Role Permission Matrix",
+    icon: ShieldCheck,
+    tag: "RBAC Matrix",
+    category: "tools",
+    color: "text-emerald-600"
   }
 ];
 
@@ -315,6 +323,13 @@ export default function MondayStyleSidebar({
       title: "Tools",
       items: [
         {
+          id: "permission_matrix",
+          label: "Role Permission Matrix",
+          icon: ShieldCheck,
+          tag: "RBAC Matrix",
+          tabId: "permission_matrix"
+        },
+        {
           id: "email_webhook",
           label: "Mass Email & Webhook Dispatch",
           icon: MailCheck,
@@ -443,19 +458,6 @@ export default function MondayStyleSidebar({
               </button>
             </div>
           </div>
-
-          {/* Rail Bottom Action */}
-          <button
-            type="button"
-            onClick={() => handleCategoryIconClick("tools")}
-            className="w-[58px] py-2 px-1 rounded-xl flex flex-col items-center justify-center text-[#676879] hover:text-[#323338] hover:bg-slate-200/60 transition cursor-pointer gap-1"
-            title="Tools & Workflows"
-          >
-            <Sliders size={18} />
-            <span className="text-[10px] tracking-tight leading-none text-center font-medium">
-              Settings
-            </span>
-          </button>
         </div>
 
         {/* ================= 2. SECONDARY DRAWER PANEL ================= */}

@@ -17,6 +17,7 @@ import WeatherWidget from "../components/WeatherWidget";
 import MemoGeneratorPanel from "../components/MemoGeneratorPanel";
 import IncidentReportPanel from "../components/IncidentReportPanel";
 import SupervisorsAttendancePanel from "../components/SupervisorsAttendancePanel";
+import RolePermissionMatrixPanel from "../components/RolePermissionMatrixPanel";
 import AiAssistantDrawer from "../components/AiAssistantDrawer";
 import AiAgentAvatar from "../components/AiAgentAvatar";
 import AiAssistantGirlWidget from "../components/AiAssistantGirlWidget";
@@ -242,6 +243,14 @@ const WORKSPACE_TAB_DEFS = {
     label: "Supervisors Attendance",
     icon: UserCheck,
     activeClass: "bg-[#008559] text-white ring-2 ring-emerald-300",
+    activeIconClass: "text-white",
+    inactiveIconClass: "text-emerald-600"
+  },
+  permission_matrix: {
+    id: "permission_matrix",
+    label: "Role Permission Matrix",
+    icon: ShieldCheck,
+    activeClass: "bg-emerald-700 text-white ring-2 ring-emerald-300",
     activeIconClass: "text-white",
     inactiveIconClass: "text-emerald-600"
   }
@@ -1981,6 +1990,14 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
           {/* TAB 5: SUPERVISORS ATTENDANCE */}
           {workspaceTab === "supervisors_attendance" && (
             <SupervisorsAttendancePanel onClose={() => handleCloseWorkspaceTab(null, "supervisors_attendance")} />
+          )}
+
+          {/* TAB 6: ROLE & ACCOUNT CAPABILITIES MATRIX */}
+          {workspaceTab === "permission_matrix" && (
+            <RolePermissionMatrixPanel
+              currentUser={currentUser}
+              onClose={() => handleCloseWorkspaceTab(null, "permission_matrix")}
+            />
           )}
         </div>
       </div>
