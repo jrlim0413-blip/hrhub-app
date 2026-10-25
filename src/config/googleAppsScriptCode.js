@@ -116,20 +116,45 @@ function doPost(e) {
         }
       }
 
-      // 2. Dispatch to each company employee with company-specific PDF
+      // 2. Dispatch to recipients
+      // In GmailApp, sending to a comma-separated list of recipients ("a@gmail.com, b@gmail.com")
+      // delivers to all recipients simultaneously in 1 reliable call without attachment stream exhaustion!
+      var recipientList = validRecipients.join(", ");
       var sentEmails = [];
-      for (var r = 0; r < validRecipients.length; r++) {
-        var recipientEmail = validRecipients[r].trim();
-        try {
-          GmailApp.sendEmail(recipientEmail, subject, plainBody, {
-            htmlBody: htmlBody,
-            attachments: attachments,
-            name: "HRHub Official Dispatch • " + companyName,
-            replyTo: senderEmail
-          });
-          sentEmails.push(recipientEmail);
-        } catch (sendErr) {
-          Logger.log("Failed to send to " + recipientEmail + ": " + sendErr.toString());
+      try {
+        GmailApp.sendEmail(recipientList, subject, plainBody, {
+          htmlBody: htmlBody,
+          attachments: attachments,
+          name: "HRHub Official Dispatch • " + companyName,
+          replyTo: senderEmail
+        });
+        sentEmails = validRecipients;
+        Logger.log("Batch delivery success for: " + recipientList);
+      } catch (batchErr) {
+        Logger.log("Batch delivery notice: " + batchErr.toString() + " - trying individual fallback");
+        for (var r = 0; r < validRecipients.length; r++) {
+          var singleEmail = validRecipients[r].trim();
+          try {
+            var singleAttachments = [];
+            if (cleanHtmlForPdf) {
+              try {
+                singleAttachments.push(
+                  Utilities.newBlob(cleanHtmlForPdf, "text/html", memoRef + ".html")
+                    .getAs("application/pdf")
+                    .setName(memoRef + " - " + companyName + ".pdf")
+                );
+              } catch (e) {}
+            }
+            GmailApp.sendEmail(singleEmail, subject, plainBody, {
+              htmlBody: htmlBody,
+              attachments: singleAttachments,
+              name: "HRHub Official Dispatch • " + companyName,
+              replyTo: senderEmail
+            });
+            sentEmails.push(singleEmail);
+          } catch (singleErr) {
+            Logger.log("Failed to send to " + singleEmail + ": " + singleErr.toString());
+          }
         }
       }
 
