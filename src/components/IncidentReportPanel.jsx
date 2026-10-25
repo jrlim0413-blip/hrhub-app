@@ -82,10 +82,6 @@ export default function IncidentReportPanel({
   const [searchQuery, setSearchQuery] = useState("");
   const [voiceMutedState, setVoiceMutedState] = useState(isVoiceMuted());
 
-  // Role simulation toggle: "AUTO" (uses currentUser) | "HEAD_OFFICE_HRMD" | "SUBSIDIARY_BRANCH_HR"
-  const [roleSimulation, setRoleSimulation] = useState("AUTO");
-  const [simulatedSubsidiaryCompany, setSimulatedSubsidiaryCompany] = useState("5A Royal Gaming OPC");
-
   // Modals
   const [isPermissionMatrixOpen, setIsPermissionMatrixOpen] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -95,29 +91,10 @@ export default function IncidentReportPanel({
   const [isExplanationModalOpen, setIsExplanationModalOpen] = useState(false);
   const [selectedReport, setSelectedReport] = useState(null);
 
-  // Compute effective role & capabilities based on currentUser or simulated role
+  // Compute effective role & capabilities STRICTLY based on the logged-in account (currentUser)
   const effectiveRole = useMemo(() => {
-    const autoRole = resolveUserHrRole(currentUser);
-    if (roleSimulation === "AUTO") return autoRole;
-
-    if (roleSimulation === HR_ROLE_TYPES.HEAD_OFFICE_HRMD) {
-      return {
-        roleType: HR_ROLE_TYPES.HEAD_OFFICE_HRMD,
-        isHeadOffice: true,
-        company: HR_ENTITIES.HEAD_OFFICE,
-        roleTitle: "Head Office HRMD Central Authority",
-        permissions: ROLE_PERMISSION_MATRIX[HR_ROLE_TYPES.HEAD_OFFICE_HRMD]
-      };
-    }
-
-    return {
-      roleType: HR_ROLE_TYPES.SUBSIDIARY_BRANCH_HR,
-      isHeadOffice: false,
-      company: simulatedSubsidiaryCompany,
-      roleTitle: `${simulatedSubsidiaryCompany} HR Administrator`,
-      permissions: ROLE_PERMISSION_MATRIX[HR_ROLE_TYPES.SUBSIDIARY_BRANCH_HR]
-    };
-  }, [currentUser, roleSimulation, simulatedSubsidiaryCompany]);
+    return resolveUserHrRole(currentUser, profiles);
+  }, [currentUser, profiles]);
 
   // Form states for creating a new Incident Report (Subsidiary HR -> SGC HRMD)
   const initialCompany = effectiveRole.isHeadOffice ? "5A Royal Gaming OPC" : effectiveRole.company;
@@ -234,16 +211,16 @@ export default function IncidentReportPanel({
 
   // Open Create IR Modal
   const handleOpenCreateModal = () => {
-    const targetComp = effectiveRole.isHeadOffice ? simulatedSubsidiaryCompany : effectiveRole.company;
+    const targetComp = effectiveRole.company || "5A Royal Gaming OPC";
     const assigned = lookupAssignedHrForCompany(targetComp, profiles);
     const sgcHr = lookupSgcCentralHr(profiles);
 
     setIrForm({
       senderCompany: targetComp,
       company: targetComp,
-      reportingHrName: assigned.name,
-      reportingHrTitle: assigned.title,
-      reportingHrEmail: assigned.email,
+      reportingHrName: currentUser?.name || assigned.name,
+      reportingHrTitle: currentUser?.role || assigned.title,
+      reportingHrEmail: currentUser?.email || assigned.email,
       receiverCompany: "Simpal Group of Companies",
       assignedCentralHrName: sgcHr.name,
       assignedCentralHrTitle: sgcHr.title,
@@ -525,31 +502,58 @@ export default function IncidentReportPanel({
   return (
     <div className="space-y-6">
       {/* ========================================================================= */}
-      {/* 1. ROLE PERMISSION MATRIX BAR & PERSPECTIVE SIMULATION SWITCHER            */}
+      {/* 1. LOGGED-IN ACCOUNT IDENTITY & ROLE BANNER                                */}
       {/* ========================================================================= */}
       <div className="rounded-2xl border border-slate-200 bg-white p-3.5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3">
         <div className="flex items-center gap-2.5 flex-wrap">
-          <button
-            type="button"
-            onClick={() => setIsPermissionMatrixOpen(true)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-900 hover:bg-slate-800 text-white shadow-xs transition cursor-pointer"
-          >
-            <ShieldCheck size={14} className="text-emerald-400" />
-            <span>Role Permission Matrix</span>
-          </button>
+          {/* Identity of Logged-In User */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">Signed In:</span>
+            <span className="text-xs font-black text-slate-900 bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-200">
+              {currentUser?.name || currentUser?.email || "HR Officer"}
+            </span>
+          </div>
 
-          {/* Dedicated Simpal Group of Companies Action Button */}
-          <button
-            type="button"
-            onClick={handleOpenDirectSgcNte}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-600 hover:to-teal-500 text-slate-950 shadow-xs transition cursor-pointer active:scale-98"
-            title="Simpal Group of Companies (Head Office) Direct NTE Action"
-          >
-            <Building2 size={14} className="text-slate-950 font-bold" />
-            <span>Simpal Group (Issue NTE)</span>
-          </button>
+          <span className="text-xs text-slate-300 hidden sm:inline">•</span>
 
-          {/* Clean Mock Data Button */}
+          {/* Role Status Tag */}
+          {effectiveRole.isHeadOffice ? (
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl font-black text-xs bg-emerald-100 text-emerald-900 border border-emerald-300 shadow-2xs">
+              <Building2 size={13} className="text-emerald-700" />
+              Head Office HRMD (Simpal Group of Companies)
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl font-black text-xs bg-[#eef7e5] text-[#55782a] border border-[#d3eab8] shadow-2xs">
+              <Briefcase size={13} className="text-[#8cb84a]" />
+              Branch HR ({effectiveRole.company})
+            </span>
+          )}
+        </div>
+
+        {/* Right side: Action button strictly corresponding to the logged-in account */}
+        <div className="flex items-center gap-2 flex-wrap">
+          {effectiveRole.isHeadOffice ? (
+            <button
+              type="button"
+              onClick={handleOpenDirectSgcNte}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-black bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-600 hover:to-teal-500 text-slate-950 shadow-xs transition cursor-pointer active:scale-98"
+              title="Simpal Group of Companies (Head Office) Issue Notice to Explain"
+            >
+              <Building2 size={14} className="text-slate-950 font-bold" />
+              <span>Simpal Group (Issue NTE)</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={handleOpenCreateModal}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-black bg-[#8cb84a] hover:bg-[#7ea741] text-white shadow-xs transition cursor-pointer active:scale-98"
+              title="Transmit Incident Report to Head Office (Simpal Group of Companies)"
+            >
+              <SendHorizontal size={14} className="text-white font-bold" />
+              <span>Transmit IR ➔ Head Office</span>
+            </button>
+          )}
+
           <button
             type="button"
             onClick={handleClearAllMockData}
@@ -558,59 +562,6 @@ export default function IncidentReportPanel({
           >
             <Trash2 size={13} className="text-rose-600" />
             <span className="hidden sm:inline">Clean Process</span>
-          </button>
-
-          <span className="text-xs text-slate-400 hidden sm:inline">•</span>
-
-          <div className="inline-flex items-center gap-2 text-xs">
-            <span className="font-bold text-slate-500">Active View:</span>
-            {effectiveRole.isHeadOffice ? (
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full font-black text-xs bg-emerald-100 text-emerald-900 border border-emerald-300">
-                <Building2 size={13} className="text-emerald-700" />
-                Head Office HRMD (Simpal Group of Companies)
-              </span>
-            ) : (
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full font-black text-xs bg-[#eef7e5] text-[#55782a] border border-[#d3eab8]">
-                <Briefcase size={13} className="text-[#8cb84a]" />
-                Branch HR ({effectiveRole.company})
-              </span>
-            )}
-          </div>
-        </div>
-
-        {/* Perspective Simulation Switcher (Lets the user feel both sides!) */}
-        <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl self-end md:self-auto text-xs">
-          <span className="text-[11px] font-bold text-slate-500 px-2 hidden sm:inline">Simulate View:</span>
-          <button
-            type="button"
-            onClick={() => setRoleSimulation("AUTO")}
-            className={`px-2.5 py-1 rounded-lg font-bold transition cursor-pointer ${
-              roleSimulation === "AUTO" ? "bg-white text-slate-900 shadow-xs" : "text-slate-600 hover:text-slate-900"
-            }`}
-          >
-            Auto (Login)
-          </button>
-          <button
-            type="button"
-            onClick={() => setRoleSimulation(HR_ROLE_TYPES.SUBSIDIARY_BRANCH_HR)}
-            className={`px-2.5 py-1 rounded-lg font-bold transition cursor-pointer ${
-              roleSimulation === HR_ROLE_TYPES.SUBSIDIARY_BRANCH_HR
-                ? "bg-[#8cb84a] text-white shadow-xs"
-                : "text-slate-600 hover:text-slate-900"
-            }`}
-          >
-            🏢 Branch HR (5A Royal)
-          </button>
-          <button
-            type="button"
-            onClick={() => setRoleSimulation(HR_ROLE_TYPES.HEAD_OFFICE_HRMD)}
-            className={`px-2.5 py-1 rounded-lg font-bold transition cursor-pointer ${
-              roleSimulation === HR_ROLE_TYPES.HEAD_OFFICE_HRMD
-                ? "bg-emerald-700 text-white shadow-xs"
-                : "text-slate-600 hover:text-slate-900"
-            }`}
-          >
-            🏛️ Head Office (SGC)
           </button>
         </div>
       </div>
@@ -663,15 +614,6 @@ export default function IncidentReportPanel({
               >
                 <Building2 size={16} className="text-slate-950 font-black" />
                 <span>Simpal Group of Companies • Issue Notice to Explain (NTE)</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={handleOpenCreateModal}
-                className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-bold bg-white/20 text-white hover:bg-white/30 border border-white/20 transition cursor-pointer"
-              >
-                <Plus size={15} className="text-emerald-300" />
-                <span>Issue IR</span>
               </button>
             </div>
           </div>
@@ -925,23 +867,25 @@ export default function IncidentReportPanel({
               There are no records matching your current filter in this role view.
             </p>
             <div className="flex items-center justify-center gap-3 mt-4 flex-wrap">
-              <button
-                type="button"
-                onClick={handleOpenCreateModal}
-                className="px-4 py-2 rounded-xl text-xs font-bold bg-[#8cb84a] text-white inline-flex items-center gap-2 hover:bg-[#7ea741] cursor-pointer"
-              >
-                <Plus size={14} />
-                <span>Issue New Incident Report (Branch)</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={handleOpenDirectSgcNte}
-                className="px-4 py-2 rounded-xl text-xs font-black bg-gradient-to-r from-emerald-500 to-teal-400 text-slate-950 inline-flex items-center gap-2 hover:from-emerald-400 hover:to-teal-300 cursor-pointer shadow-md"
-              >
-                <Building2 size={14} className="text-slate-950 font-bold" />
-                <span>Simpal Group of Companies • Issue NTE</span>
-              </button>
+              {effectiveRole.isHeadOffice ? (
+                <button
+                  type="button"
+                  onClick={handleOpenDirectSgcNte}
+                  className="px-5 py-2.5 rounded-xl text-xs font-black bg-gradient-to-r from-emerald-500 to-teal-400 text-slate-950 inline-flex items-center gap-2 hover:from-emerald-400 hover:to-teal-300 cursor-pointer shadow-md active:scale-98"
+                >
+                  <Building2 size={15} className="text-slate-950 font-bold" />
+                  <span>Simpal Group of Companies • Issue Notice to Explain (NTE)</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleOpenCreateModal}
+                  className="px-5 py-2.5 rounded-xl text-xs font-black bg-[#8cb84a] text-white inline-flex items-center gap-2 hover:bg-[#7ea741] cursor-pointer shadow-md active:scale-98"
+                >
+                  <SendHorizontal size={15} className="text-white" />
+                  <span>+ Transmit Incident Report ➔ Head Office (SGC)</span>
+                </button>
+              )}
             </div>
           </div>
         ) : (

@@ -17,12 +17,15 @@ import {
   syncMatrixToCloud
 } from "../lib/rbacStorage";
 
-export default function RolePermissionMatrixPanel({ onClose }) {
+export default function RolePermissionMatrixPanel({ currentUser, onClose }) {
   const [matrixData, setMatrixData] = useState(() => getRbacMatrixData());
   const [viewMode, setViewMode] = useState("role"); // "role" | "account"
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncStatusText, setSyncStatusText] = useState("Cloud Synced Online");
   const [toastMessage, setToastMessage] = useState("");
+
+  const currentEmail = (currentUser?.email || "").toLowerCase().trim();
+  const currentRole = (currentUser?.role || "").toLowerCase().trim();
 
   // Sync state with storage events
   useEffect(() => {
@@ -214,21 +217,29 @@ export default function RolePermissionMatrixPanel({ onClose }) {
                     </th>
                   ))
                 ) : (
-                  SPECIFIC_ACCOUNTS.map((acct) => (
-                    <th key={acct.id} className="py-3 px-3 text-center min-w-[130px]">
-                      <div className="inline-flex flex-col items-center">
-                        <span className="px-2 py-0.5 rounded-lg text-[10px] font-black bg-slate-900 text-emerald-400 border border-slate-800 shadow-2xs">
-                          {acct.badge}
-                        </span>
-                        <span className="text-[10px] font-bold text-slate-700 truncate max-w-[120px] mt-1">
-                          {acct.name}
-                        </span>
-                        <span className="text-[9px] text-slate-400 truncate max-w-[120px]">
-                          {acct.company}
-                        </span>
-                      </div>
-                    </th>
-                  ))
+                  SPECIFIC_ACCOUNTS.map((acct) => {
+                    const isMyAccount = currentEmail && acct.email.toLowerCase() === currentEmail;
+                    return (
+                      <th key={acct.id} className={`py-3 px-3 text-center min-w-[130px] ${isMyAccount ? "bg-emerald-50/50" : ""}`}>
+                        <div className="inline-flex flex-col items-center">
+                          <span className="px-2 py-0.5 rounded-lg text-[10px] font-black bg-slate-900 text-emerald-400 border border-slate-800 shadow-2xs">
+                            {acct.badge}
+                          </span>
+                          <span className="text-[10px] font-bold text-slate-700 truncate max-w-[120px] mt-1">
+                            {acct.name}
+                          </span>
+                          <span className="text-[9px] text-slate-400 truncate max-w-[120px]">
+                            {acct.company}
+                          </span>
+                          {isMyAccount && (
+                            <span className="mt-1 px-1.5 py-0.2 rounded text-[8px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300">
+                              Active Login
+                            </span>
+                          )}
+                        </div>
+                      </th>
+                    );
+                  })
                 )}
               </tr>
             </thead>

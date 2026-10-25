@@ -59,18 +59,39 @@ export const ROLE_PERMISSION_MATRIX = {
 
 /**
  * Resolves whether a given user is Head Office HRMD or a Subsidiary Branch HR
- * @param {object} user - Current user object
+ * based strictly on the logged-in account and their registered Employee Directory profile.
+ * @param {object} user - Current logged-in user object
+ * @param {Array} profiles - Live Employee Directory profiles
  * @returns {object} Role definition and specific capabilities
  */
-export function resolveUserHrRole(user) {
-  const company = (user?.company || "").trim();
+export function resolveUserHrRole(user, profiles = []) {
   const email = (user?.email || "").toLowerCase().trim();
 
-  // Head Office checks
+  // 1. First, check registered profile in Employee Directory by email
+  let registeredCompany = user?.company || "";
+  let registeredName = user?.name || "";
+  let registeredRole = user?.role || "";
+
+  if (profiles && Array.isArray(profiles) && email) {
+    const matched = profiles.find((p) => (p.email || "").toLowerCase().trim() === email);
+    if (matched) {
+      if (matched.company) registeredCompany = matched.company;
+      if (matched.name) registeredName = matched.name;
+      if (matched.role) registeredRole = matched.role;
+    }
+  }
+
+  const normCompany = (registeredCompany || "").toLowerCase().trim();
+
+  // Head Office checks:
+  // Accounts whose company is explicitly "Simpal Group of Companies" / SGC Head Office,
+  // or admin accounts (admin@hrhub.com, jay@simpalgroup.com, hrmd)
   const isHeadOffice =
-    company.toLowerCase().includes("simpal") ||
-    company.toLowerCase().includes("sgc") ||
+    normCompany.includes("simpal group") ||
+    normCompany === "sgc" ||
+    normCompany.includes("head office") ||
     email === "admin@hrhub.com" ||
+    email === "jay@simpalgroup.com" ||
     email.includes("hrmd");
 
   const roleType = isHeadOffice
@@ -78,12 +99,18 @@ export function resolveUserHrRole(user) {
     : HR_ROLE_TYPES.SUBSIDIARY_BRANCH_HR;
 
   const permissions = ROLE_PERMISSION_MATRIX[roleType];
+  const finalCompany = isHeadOffice
+    ? HR_ENTITIES.HEAD_OFFICE
+    : (registeredCompany || "5A Royal Gaming OPC");
 
   return {
     roleType,
     isHeadOffice,
-    company: isHeadOffice ? HR_ENTITIES.HEAD_OFFICE : (company || "5A Royal Gaming OPC"),
-    roleTitle: isHeadOffice ? "Head Office HRMD Manager" : `${company || "Branch"} HR Administrator`,
+    company: finalCompany,
+    userName: registeredName || user?.name || "HR Officer",
+    roleTitle: isHeadOffice
+      ? "Head Office HRMD Central Authority"
+      : `${finalCompany} HR Administrator`,
     permissions
   };
 }
