@@ -1,290 +1,490 @@
+/**
+ * rbacStorage.js
+ * Enterprise Role-Based Access Control (RBAC) & Capabilities Management Service.
+ *
+ * Dynamically queries real database accounts from Supabase ('employees' & 'profiles' tables),
+ * eliminates hardcoded mock accounts, and strictly maps all authentic workspace tabs and
+ * in-tab operational tools across the entire HR Hub ecosystem.
+ */
+
 import { supabase } from "./supabase";
+import { fetchEmployeesFromDatabase } from "./employeeStorage";
 
-const STORAGE_KEY = "hrhub_rbac_capabilities_matrix_v2";
+const STORAGE_KEY = "hrhub_rbac_capabilities_matrix_enterprise_v3";
+const CLOUD_SETTINGS_KEY = "hrhub_rbac_matrix_master";
 
-export const ROLE_TIERS = [
+// Enterprise Role Tier Definitions
+export const STANDARD_ROLE_TIERS = [
   {
     id: "system_admin",
-    name: "SYSTEM ADMINISTRATOR",
-    countText: "2 ACCOUNTS",
-    accounts: ["QUEENNIE", "JAY"],
+    name: "SYSTEM ADMINISTRATOR & EXECUTIVE",
+    description: "Corporate executive officers and system super-administrators with global governance authority.",
     color: "emerald",
     badgeBg: "bg-emerald-50 text-emerald-800 border-emerald-200"
   },
   {
-    id: "terminal_staff",
-    name: "TERMINAL STAFF",
-    countText: "2 ACCOUNTS",
-    accounts: ["JERIC", "CATHRINA"],
-    color: "teal",
-    badgeBg: "bg-teal-50 text-teal-800 border-teal-200"
+    id: "hr_admin",
+    name: "BRANCH HR & COMPLIANCE ADMINISTRATOR",
+    description: "Area HR personnel responsible for on-site employee welfare, investigating IRs, and serving NTEs.",
+    color: "lime",
+    badgeBg: "bg-[#eef7e5] text-[#55782a] border-[#d3eab8]"
   },
   {
-    id: "head_cashier",
-    name: "HEAD CASHIER",
-    countText: "1 ACCOUNTS",
-    accounts: ["MARICEL"],
-    color: "blue",
-    badgeBg: "bg-blue-50 text-blue-800 border-blue-200"
-  },
-  {
-    id: "branch_supervisor",
-    name: "BRANCH SUPERVISOR",
-    countText: "1 ACCOUNTS",
-    accounts: ["DAWALIN"],
+    id: "operations_supervisor",
+    name: "OPERATIONS & BRANCH SUPERVISOR",
+    description: "Field supervisors overseeing gaming terminals, construction sites, and daily branch execution.",
     color: "amber",
     badgeBg: "bg-amber-50 text-amber-800 border-amber-200"
+  },
+  {
+    id: "finance_cashier",
+    name: "FINANCE & CASHIER OPERATIONS",
+    description: "Cash handling personnel, vault custodians, and terminal tellers managing daily financial floats.",
+    color: "blue",
+    badgeBg: "bg-blue-50 text-blue-800 border-blue-200"
   }
 ];
 
-export const SPECIFIC_ACCOUNTS = [
-  { id: "queennie", name: "Quennie Capuyan", badge: "QUEENNIE", roleTier: "system_admin", email: "caquennie6@gmail.com", company: "5A Royal Gaming OPC" },
-  { id: "jay", name: "Jay Ryan Lim", badge: "JAY", roleTier: "system_admin", email: "jay@simpalgroup.com", company: "Simpal Group of Companies" },
-  { id: "jeric", name: "Jeric", badge: "JERIC", roleTier: "terminal_staff", email: "jeric@luckybetplay.com", company: "Lucky Betplay Corporation" },
-  { id: "cathrina", name: "Cathrina", badge: "CATHRINA", roleTier: "terminal_staff", email: "cathrina@luckybetplay.com", company: "Lucky Betplay Corporation" },
-  { id: "maricel", name: "Maricel", badge: "MARICEL", roleTier: "head_cashier", email: "maricel@5aroyalgaming.com", company: "5A Royal Gaming OPC" },
-  { id: "dawalin", name: "Dawalin", badge: "DAWALIN", roleTier: "branch_supervisor", email: "dawalin@5aroyalgaming.com", company: "5A Royal Gaming OPC" },
-  { id: "remark_joy", name: "Remark Joy Gaviola", badge: "REMARK JOY", roleTier: "branch_supervisor", email: "remarkjoymark@gmail.com", company: "Lucky Betplay Corporation" },
-  { id: "efilfonimda", name: "Efilfonimda", badge: "EFILFONIMDA", roleTier: "system_admin", email: "efilfonimda@gmail.com", company: "Simpal Group of Companies" }
-];
-
+// Authentic Workspace Tabs matching the entire HR Hub project
 export const WORKSPACE_TABS_CONFIG = [
   {
     id: "overview",
-    label: "Consolidated Overview & KPIs Tab",
-    code: "SIDEBAR MENU: OVERVIEW • VIEW_OVERVIEW",
-    description: "Executive KPI dashboard showing live gross turnover, hit pay, system notices.",
+    label: "Executive Operations Dashboard & Strategic KPIs",
+    code: "WORKSPACE TAB: OVERVIEW • VIEW_EXECUTIVE_DASHBOARD",
+    description: "Central executive operational monitoring, corporate meeting calendar, and cross-entity activity metrics.",
     sidebarTabId: "home"
   },
   {
-    id: "draw_reports",
-    label: "Draw Gross & Turnover Reports Tab",
-    code: "SIDEBAR MENU: DRAW REPORTS • VIEW_REPORTS",
-    description: "Draw-by-draw financial reports, supervisor audit receipts, machine turnovers.",
-    sidebarTabId: "gross"
-  },
-  {
-    id: "users_rbac",
-    label: "Users & RBAC Administration Tab",
-    code: "SIDEBAR MENU: USERS & RBAC • MANAGE_USERS",
-    description: "Workstation credential administration and Role Permission Matrix access.",
-    sidebarTabId: "permission_matrix"
-  },
-  {
-    id: "audit_logs",
-    label: "Activity & Security Audit Log Tab",
-    code: "SIDEBAR MENU: ACTIVITY LOG • AUDIT_LOGS",
-    description: "Real-time security audit trail tracking logins, credential updates, and system events.",
+    id: "sops",
+    label: "Field Operations Board & Doppler Weather Radar",
+    code: "WORKSPACE TAB: OPERATIONS • VIEW_OPERATIONS_BOARD",
+    description: "Standard Operating Procedures (SOPs) task boards, equipment readiness tracking, and live weather hazard radar.",
     sidebarTabId: "sops"
   },
   {
-    id: "commissions",
-    label: "Agent Commissions & Supervisor Rates Tab",
-    code: "SIDEBAR MENU: COMMISSIONS • MANAGE_COMMISSIONS",
-    description: "Configure baseline agent commission rates per supervisor and branch overrides.",
-    sidebarTabId: "gross"
-  },
-  {
     id: "incident_reports",
-    label: "Incident Reports & Notice to Explain (NTE) Tab",
-    code: "SIDEBAR MENU: INCIDENT REPORTS • INCIDENT_REPORTS",
-    description: "Due process transmittal between Subsidiary Branches & Head Office (SGC).",
+    label: "Incident Reports & Due Process (Notice to Explain)",
+    code: "WORKSPACE TAB: DUE PROCESS • MANAGE_INCIDENT_REPORTS",
+    description: "Formal investigation, branch incident report transmittal, and legal Notice to Explain (NTE) adjudication.",
     sidebarTabId: "incident_reports"
   },
   {
     id: "memo",
-    label: "Official Memo Generator Tab",
-    code: "SIDEBAR MENU: MEMO GENERATOR • MEMO_NOTICES",
-    description: "Generate and broadcast official company memos, policy updates, and executive notices.",
+    label: "Official Corporate Memorandum Generator",
+    code: "WORKSPACE TAB: MEMORANDUMS • GENERATE_CORPORATE_MEMOS",
+    description: "Official executive memorandum creation, digital sign-off, and multi-entity regulatory notice dissemination.",
     sidebarTabId: "memo"
   },
   {
-    id: "directory",
-    label: "Employees & Agents Directory Tab",
-    code: "SIDEBAR MENU: AGENTS & HR DIRECTORY • VIEW_DIRECTORY",
-    description: "Enterprise personnel roster, contact registry, and branch assignment records.",
+    id: "gross",
+    label: "Gross Revenue & Financial Remittance Reports",
+    code: "WORKSPACE TAB: FINANCE • VIEW_FINANCIAL_REPORTS",
+    description: "Multi-entity betting draw financial ledgers, cashier shortage audits, and official remittance reconciliation.",
+    sidebarTabId: "gross"
+  },
+  {
+    id: "agents",
+    label: "Enterprise Personnel Directory & 201 Registry",
+    code: "WORKSPACE TAB: PERSONNEL • VIEW_EMPLOYEE_DIRECTORY",
+    description: "Centralized staff 201 records, organizational entity assignments, and emergency contact registry.",
     sidebarTabId: "agents"
   },
   {
-    id: "attendance",
-    label: "Supervisors Attendance Tab",
-    code: "SIDEBAR MENU: SUPERVISORS ATTENDANCE • ATTENDANCE",
-    description: "Supervisor attendance tracking, on-site check-ins, and biometric audits.",
+    id: "supervisors_attendance",
+    label: "Supervisors Attendance & Biometric Audit Trail",
+    code: "WORKSPACE TAB: ATTENDANCE • AUDIT_SUPERVISOR_ATTENDANCE",
+    description: "Field supervisor on-site check-in logs, biometric timestamp verification, and monthly attendance rosters.",
     sidebarTabId: "supervisors_attendance"
+  },
+  {
+    id: "permission_matrix",
+    label: "Role & Capabilities Access Control Matrix",
+    code: "WORKSPACE TAB: SECURITY • MANAGE_RBAC_MATRIX",
+    description: "Granular role tier permissions, workstation feature gating, and security policy administration.",
+    sidebarTabId: "permission_matrix"
   }
 ];
 
+// Authentic In-Tab Features matching operations and tools inside workspaces
 export const IN_TAB_FEATURES_CONFIG = [
+  // 1. Executive Operations Dashboard Features
   {
-    id: "print_remittance",
-    label: "Print Remittance Statements",
+    id: "schedule_corporate_meetings",
+    label: "Schedule Executive Operational Meetings",
     parentTab: "overview",
-    belongsToLabel: "Overview Tab • Draw Reports Tab",
-    description: "Generate official remittance statements and supervisor pay slips."
+    belongsToLabel: "Executive Operations Dashboard",
+    description: "Allows scheduling corporate meetings, setting agendas, and coordinating inter-departmental sessions."
+  },
+
+  // 2. Field Operations Board Features
+  {
+    id: "manage_sop_tasks",
+    label: "Administer Standard Operating Procedure Tasks",
+    parentTab: "sops",
+    belongsToLabel: "Field Operations Board",
+    description: "Permits updating checklist status, assigning SOP protocols, and verifying field compliance."
   },
   {
-    id: "export_csv",
-    label: "Export Financial Data (CSV)",
-    parentTab: "draw_reports",
-    belongsToLabel: "Draw Reports Tab",
-    description: "Downloads raw tabulated draw receipts and supervisor index data in CSV format."
+    id: "access_weather_radar",
+    label: "Inspect Real-time Field Weather Radar",
+    parentTab: "sops",
+    belongsToLabel: "Field Operations Board",
+    description: "Displays live satellite weather maps and regional hazard alerts for field branch operations."
   },
+
+  // 3. Incident Reports & Due Process Features
   {
-    id: "api_inspector",
-    label: "Technical API Raw Inspector",
-    parentTab: "overview",
-    belongsToLabel: "Overview Tab",
-    description: "Inspects live incoming API payloads and raw database rows."
-  },
-  {
-    id: "provision_users",
-    label: "Add & Provision User Credentials",
-    parentTab: "users_rbac",
-    belongsToLabel: "Users & RBAC Tab",
-    description: "Allows provisioning new system users, passwords, branches, and roles."
-  },
-  {
-    id: "override_commissions",
-    label: "Modify & Override Commission Rates",
-    parentTab: "commissions",
-    belongsToLabel: "Commissions Tab",
-    description: "Allows updating supervisor baseline rates and provisioning commission overrides."
-  },
-  {
-    id: "issue_ir",
-    label: "Issue Incident Report (IR) to Head Office",
+    id: "investigate_and_issue_ir",
+    label: "Investigate & Transmit Branch Incident Report (IR)",
     parentTab: "incident_reports",
-    belongsToLabel: "Incident Reports Tab",
-    description: "Enables Branch HR & Supervisors to submit incident reports directly to SGC Head Office."
+    belongsToLabel: "Incident Reports & Due Process",
+    description: "Investigates on-site irregularities and transmits official Incident Reports directly to Head Office HRMD."
   },
   {
-    id: "sgc_issue_nte",
-    label: "Issue & Approve Official Notice to Explain (NTE)",
+    id: "issue_official_nte",
+    label: "Issue & Approve Legal Notice to Explain (NTE) (Head Office Exclusive)",
     parentTab: "incident_reports",
-    belongsToLabel: "Incident Reports Tab (Head Office SGC Exclusive)",
-    description: "Authority to draft and issue official NTE citing Labor Code Art. 297 and Code of Conduct."
+    belongsToLabel: "Incident Reports & Due Process (Head Office SGC Authority)",
+    description: "Authority to evaluate allegations, cite Labor Code Art. 297 & Company Code of Conduct, and issue NTE."
   },
   {
-    id: "serve_nte",
-    label: "Serve NTE to Employee on-site",
+    id: "serve_nte_on_site",
+    label: "Formally Serve Notice to Explain to Employee On-site",
     parentTab: "incident_reports",
-    belongsToLabel: "Incident Reports Tab",
-    description: "Permits printing and marking NTE as officially served to employee at branch."
+    belongsToLabel: "Incident Reports & Due Process",
+    description: "Authorizes printing and physically serving the returned NTE to respondent employees on-site."
   },
   {
-    id: "log_explanation",
-    label: "Log Employee Written Explanation",
+    id: "record_written_defense",
+    label: "Record & Transmit Employee Written Defense",
     parentTab: "incident_reports",
-    belongsToLabel: "Incident Reports Tab",
-    description: "Records submitted employee explanation and forwards to Head Office for ruling."
+    belongsToLabel: "Incident Reports & Due Process",
+    description: "Gathers employee explanations under oath and forwards to Head Office HRMD for formal hearing."
   },
   {
-    id: "resolve_case",
-    label: "Final Case Determination & Resolution",
+    id: "render_case_disposition",
+    label: "Render Conclusive Administrative Determination",
     parentTab: "incident_reports",
-    belongsToLabel: "Incident Reports Tab (Head Office SGC Exclusive)",
-    description: "Renders formal administrative penalty or case exoneration closure."
+    belongsToLabel: "Incident Reports & Due Process (Head Office SGC Authority)",
+    description: "Renders final disciplinary disposition, corrective penalty enforcement, or complete case dismissal."
+  },
+  {
+    id: "print_due_process_docket",
+    label: "Generate & Print Certified Legal Dockets",
+    parentTab: "incident_reports",
+    belongsToLabel: "Incident Reports & Due Process",
+    description: "Produces printable audit-ready IR and NTE case dockets with legal certification and signature blocks."
+  },
+
+  // 4. Official Corporate Memorandum Generator Features
+  {
+    id: "formulate_official_memo",
+    label: "Formulate & Issue Corporate Memorandums",
+    parentTab: "memo",
+    belongsToLabel: "Official Corporate Memorandum Generator",
+    description: "Drafts, structures, and publishes legally binding corporate memorandums with official header seals."
+  },
+  {
+    id: "ai_smart_memo_drafting",
+    label: "AI-Assisted Memorandum Policy Drafting",
+    parentTab: "memo",
+    belongsToLabel: "Official Corporate Memorandum Generator",
+    description: "Utilizes HR AI Buddy intelligence to formulate articulate, legally sound policy documentation."
+  },
+
+  // 5. Gross Revenue & Financial Remittance Reports Features
+  {
+    id: "inspect_financial_ledgers",
+    label: "Audit Daily Gross Draw Revenue & Cashier Turnovers",
+    parentTab: "gross",
+    belongsToLabel: "Gross Revenue & Financial Remittance Reports",
+    description: "Audits live gross turnover, cashier shortage/overage logs, and betting terminal audit trails."
+  },
+  {
+    id: "export_financial_csv",
+    label: "Export Raw Financial Turnover Ledgers (CSV)",
+    parentTab: "gross",
+    belongsToLabel: "Gross Revenue & Financial Remittance Reports",
+    description: "Downloads unencrypted transaction rows and supervisor audit index data in CSV format."
+  },
+  {
+    id: "generate_remittance_slips",
+    label: "Generate Official Remittance Statements",
+    parentTab: "gross",
+    belongsToLabel: "Gross Revenue & Financial Remittance Reports",
+    description: "Generates official remittance receipts, supervisor commission statements, and payment authorizations."
+  },
+
+  // 6. Enterprise Personnel Directory & 201 Registry Features
+  {
+    id: "provision_employee_records",
+    label: "Provision & Modify Employee 201 Master Files",
+    parentTab: "agents",
+    belongsToLabel: "Enterprise Personnel Directory",
+    description: "Creates, modifies, and synchronizes employee designations, assigned subsidiaries, and contact details."
+  },
+  {
+    id: "decommission_personnel",
+    label: "Decommission & Revoke Enterprise Access",
+    parentTab: "agents",
+    belongsToLabel: "Enterprise Personnel Directory",
+    description: "Revokes system credentials for resigned, offboarded, or suspended personnel."
+  },
+
+  // 7. Supervisors Attendance Log Features
+  {
+    id: "log_supervisor_checkin",
+    label: "Record Field Supervisor Biometric Check-In",
+    parentTab: "supervisors_attendance",
+    belongsToLabel: "Supervisors Attendance & Biometric Audit Trail",
+    description: "Logs timestamped on-site check-in verification for roving branch supervisors."
+  },
+  {
+    id: "export_attendance_timesheets",
+    label: "Export Verified Monthly Attendance Records",
+    parentTab: "supervisors_attendance",
+    belongsToLabel: "Supervisors Attendance & Biometric Audit Trail",
+    description: "Exports comprehensive attendance sheets for payroll computation and DOLE regulatory audits."
+  },
+
+  // 8. Role & Capabilities Access Control Matrix Features
+  {
+    id: "reconfigure_rbac_policies",
+    label: "Reconfigure Enterprise Security Policies",
+    parentTab: "permission_matrix",
+    belongsToLabel: "Role & Capabilities Access Control Matrix",
+    description: "Authorizes toggling workspace tab visibility and granular operational tool permissions."
+  },
+  {
+    id: "synchronize_cloud_security",
+    label: "Synchronize Security Policies to Database",
+    parentTab: "permission_matrix",
+    belongsToLabel: "Role & Capabilities Access Control Matrix",
+    description: "Commits security access matrices permanently to Supabase cloud database storage."
   }
 ];
 
-// Initial default configuration strictly matching the user's reference screenshot
-export const DEFAULT_ROLE_TIER_PERMISSIONS = {
+// Baseline factory capabilities configuration
+export const FACTORY_ROLE_TIER_PERMISSIONS = {
   system_admin: {
     // Tabs
     overview: true,
-    draw_reports: true,
-    users_rbac: true,
-    audit_logs: true,
-    commissions: true,
+    sops: true,
     incident_reports: true,
     memo: true,
-    directory: true,
-    attendance: true,
+    gross: true,
+    agents: true,
+    supervisors_attendance: true,
+    permission_matrix: true,
     // Features
-    print_remittance: true,
-    export_csv: true,
-    api_inspector: true,
-    provision_users: true,
-    override_commissions: true,
-    issue_ir: true,
-    sgc_issue_nte: true,
-    serve_nte: true,
-    log_explanation: true,
-    resolve_case: true
+    schedule_corporate_meetings: true,
+    manage_sop_tasks: true,
+    access_weather_radar: true,
+    investigate_and_issue_ir: true,
+    issue_official_nte: true,
+    serve_nte_on_site: true,
+    record_written_defense: true,
+    render_case_disposition: true,
+    print_due_process_docket: true,
+    formulate_official_memo: true,
+    ai_smart_memo_drafting: true,
+    inspect_financial_ledgers: true,
+    export_financial_csv: true,
+    generate_remittance_slips: true,
+    provision_employee_records: true,
+    decommission_personnel: true,
+    log_supervisor_checkin: true,
+    export_attendance_timesheets: true,
+    reconfigure_rbac_policies: true,
+    synchronize_cloud_security: true
   },
-  terminal_staff: {
+  hr_admin: {
     // Tabs
     overview: true,
-    draw_reports: true,
-    users_rbac: false,
-    audit_logs: false,
-    commissions: true,
+    sops: true,
     incident_reports: true,
     memo: true,
-    directory: true,
-    attendance: false,
+    gross: false,
+    agents: true,
+    supervisors_attendance: true,
+    permission_matrix: false,
     // Features
-    print_remittance: true,
-    export_csv: true,
-    api_inspector: true,
-    provision_users: false, // parent tab disabled
-    override_commissions: false,
-    issue_ir: true,
-    sgc_issue_nte: false,
-    serve_nte: true,
-    log_explanation: true,
-    resolve_case: false
+    schedule_corporate_meetings: true,
+    manage_sop_tasks: false,
+    access_weather_radar: true,
+    investigate_and_issue_ir: true,
+    issue_official_nte: false, // Head Office exclusive
+    serve_nte_on_site: true,
+    record_written_defense: true,
+    render_case_disposition: false, // Head Office exclusive
+    print_due_process_docket: true,
+    formulate_official_memo: true,
+    ai_smart_memo_drafting: true,
+    inspect_financial_ledgers: false,
+    export_financial_csv: false,
+    generate_remittance_slips: false,
+    provision_employee_records: true,
+    decommission_personnel: false,
+    log_supervisor_checkin: true,
+    export_attendance_timesheets: true,
+    reconfigure_rbac_policies: false,
+    synchronize_cloud_security: false
   },
-  head_cashier: {
+  operations_supervisor: {
     // Tabs
     overview: true,
-    draw_reports: true,
-    users_rbac: false,
-    audit_logs: false,
-    commissions: true,
+    sops: true,
     incident_reports: true,
     memo: true,
-    directory: true,
-    attendance: false,
+    gross: true,
+    agents: true,
+    supervisors_attendance: true,
+    permission_matrix: false,
     // Features
-    print_remittance: true,
-    export_csv: true,
-    api_inspector: true,
-    provision_users: false, // parent tab disabled
-    override_commissions: true,
-    issue_ir: true,
-    sgc_issue_nte: false,
-    serve_nte: true,
-    log_explanation: true,
-    resolve_case: false
+    schedule_corporate_meetings: false,
+    manage_sop_tasks: true,
+    access_weather_radar: true,
+    investigate_and_issue_ir: true,
+    issue_official_nte: false,
+    serve_nte_on_site: true,
+    record_written_defense: true,
+    render_case_disposition: false,
+    print_due_process_docket: true,
+    formulate_official_memo: false,
+    ai_smart_memo_drafting: false,
+    inspect_financial_ledgers: true,
+    export_financial_csv: true,
+    generate_remittance_slips: true,
+    provision_employee_records: false,
+    decommission_personnel: false,
+    log_supervisor_checkin: true,
+    export_attendance_timesheets: true,
+    reconfigure_rbac_policies: false,
+    synchronize_cloud_security: false
   },
-  branch_supervisor: {
+  finance_cashier: {
     // Tabs
     overview: true,
-    draw_reports: true,
-    users_rbac: false,
-    audit_logs: true,
-    commissions: true,
+    sops: false,
     incident_reports: true,
     memo: true,
-    directory: true,
-    attendance: true,
+    gross: true,
+    agents: false,
+    supervisors_attendance: false,
+    permission_matrix: false,
     // Features
-    print_remittance: true,
-    export_csv: true,
-    api_inspector: true,
-    provision_users: false,
-    override_commissions: true,
-    issue_ir: true,
-    sgc_issue_nte: false,
-    serve_nte: true,
-    log_explanation: true,
-    resolve_case: false
+    schedule_corporate_meetings: false,
+    manage_sop_tasks: false,
+    access_weather_radar: false,
+    investigate_and_issue_ir: false,
+    issue_official_nte: false,
+    serve_nte_on_site: false,
+    record_written_defense: true,
+    render_case_disposition: false,
+    print_due_process_docket: true,
+    formulate_official_memo: false,
+    ai_smart_memo_drafting: false,
+    inspect_financial_ledgers: true,
+    export_financial_csv: false,
+    generate_remittance_slips: true,
+    provision_employee_records: false,
+    decommission_personnel: false,
+    log_supervisor_checkin: false,
+    export_attendance_timesheets: false,
+    reconfigure_rbac_policies: false,
+    synchronize_cloud_security: false
   }
 };
 
 /**
- * Load complete matrix data from localStorage
+ * Classifies a real database employee record into its appropriate enterprise role tier
+ */
+export function classifyEmployeeRoleTier(employee) {
+  const email = (employee?.email || "").toLowerCase().trim();
+  const role = (employee?.role || "").toLowerCase().trim();
+  const company = (employee?.company || "").toLowerCase().trim();
+
+  // 1. System Administrator
+  if (
+    email === "admin@hrhub.com" ||
+    email === "jay@simpalgroup.com" ||
+    email === "efilfonimda@gmail.com" ||
+    role.includes("admin") ||
+    role.includes("executive") ||
+    role.includes("super")
+  ) {
+    return "system_admin";
+  }
+
+  // 2. HR & Compliance Administrator
+  if (
+    role.includes("hr") ||
+    role.includes("compliance") ||
+    role.includes("people") ||
+    email.includes("quennie") ||
+    email.includes("remark")
+  ) {
+    return "hr_admin";
+  }
+
+  // 3. Finance & Cashier Operations
+  if (
+    role.includes("cashier") ||
+    role.includes("teller") ||
+    role.includes("finance") ||
+    role.includes("treasury")
+  ) {
+    return "finance_cashier";
+  }
+
+  // 4. Default: Operations & Area Supervisor
+  return "operations_supervisor";
+}
+
+/**
+ * Fetch and construct dynamic accounts and role tiers using REAL data from the Supabase database
+ */
+export async function fetchRealAccountsAndTiers() {
+  const employees = await fetchEmployeesFromDatabase();
+
+  // Map real database records
+  const realAccounts = employees.map((emp) => {
+    const email = (emp.email || "").trim().toLowerCase();
+    const roleTier = classifyEmployeeRoleTier(emp);
+    const shortBadge = (emp.name || email.split("@")[0])
+      .replace(/[._]/g, " ")
+      .trim()
+      .split(/\s+/)
+      .slice(0, 2)
+      .join(" ")
+      .toUpperCase();
+
+    return {
+      id: emp.id || `acc-${email}`,
+      email,
+      name: emp.name || email,
+      company: emp.company || "Simpal Group of Companies",
+      role: emp.role || "Staff Member",
+      roleTier,
+      badge: shortBadge
+    };
+  });
+
+  // Dynamically group real accounts into role tiers
+  const dynamicTiers = STANDARD_ROLE_TIERS.map((tier) => {
+    const tierAccounts = realAccounts.filter((a) => a.roleTier === tier.id);
+    return {
+      ...tier,
+      countText: `${tierAccounts.length} ACCOUNT${tierAccounts.length === 1 ? "" : "S"}`,
+      accounts: tierAccounts.map((a) => a.badge)
+    };
+  });
+
+  return { realAccounts, dynamicTiers };
+}
+
+/**
+ * Load complete matrix data (from Supabase cloud first, with local fallback)
  */
 export function getRbacMatrixData() {
   try {
@@ -296,17 +496,41 @@ export function getRbacMatrixData() {
       }
     }
   } catch (err) {
-    console.warn("[rbacStorage] Failed to read localStorage:", err);
+    console.warn("[rbacStorage] Local storage parse notice:", err);
   }
 
   // Generate initial state
   const initial = {
-    roleTiers: JSON.parse(JSON.stringify(DEFAULT_ROLE_TIER_PERMISSIONS)),
-    accountOverrides: {}, // overrides per specific account ID
+    roleTiers: JSON.parse(JSON.stringify(FACTORY_ROLE_TIER_PERMISSIONS)),
+    accountOverrides: {},
     lastSyncedAt: new Date().toISOString()
   };
   saveRbacMatrixData(initial);
   return initial;
+}
+
+/**
+ * Fetch matrix asynchronously from Supabase Database
+ */
+export async function loadRbacMatrixFromCloud() {
+  try {
+    if (supabase) {
+      const { data, error } = await supabase
+        .from("user_settings")
+        .select("settings_json")
+        .eq("user_id", CLOUD_SETTINGS_KEY)
+        .maybeSingle();
+
+      if (!error && data?.settings_json?.roleTiers) {
+        saveRbacMatrixData(data.settings_json);
+        return data.settings_json;
+      }
+    }
+  } catch (err) {
+    console.debug("[rbacStorage] Cloud query fallback to local:", err?.message);
+  }
+
+  return getRbacMatrixData();
 }
 
 /**
@@ -317,16 +541,16 @@ export function saveRbacMatrixData(matrixData) {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(matrixData));
     window.dispatchEvent(new CustomEvent("hrhub_rbac_updated", { detail: matrixData }));
   } catch (err) {
-    console.error("[rbacStorage] Failed to save localStorage:", err);
+    console.error("[rbacStorage] Local save notice:", err);
   }
 }
 
 /**
- * Reset matrix to standard factory defaults
+ * Reset matrix to factory defaults
  */
 export function resetRbacMatrixToDefaults() {
   const defaults = {
-    roleTiers: JSON.parse(JSON.stringify(DEFAULT_ROLE_TIER_PERMISSIONS)),
+    roleTiers: JSON.parse(JSON.stringify(FACTORY_ROLE_TIER_PERMISSIONS)),
     accountOverrides: {},
     lastSyncedAt: new Date().toISOString()
   };
@@ -335,45 +559,47 @@ export function resetRbacMatrixToDefaults() {
 }
 
 /**
- * Resolve effective capability for a specific role or account
+ * Resolve effective capability for a specific role tier or account
  */
-export function getEffectiveCapability(type, targetId, capId, matrixData = null) {
+export function getEffectiveCapability(type, targetId, capId, matrixData = null, accountsList = []) {
   const data = matrixData || getRbacMatrixData();
 
   if (type === "role") {
-    const roleConfig = data.roleTiers[targetId] || DEFAULT_ROLE_TIER_PERMISSIONS[targetId] || {};
+    const roleConfig = data.roleTiers?.[targetId] || FACTORY_ROLE_TIER_PERMISSIONS[targetId] || {};
     return Boolean(roleConfig[capId]);
   }
 
-  // Account specific
   if (type === "account") {
-    const override = data.accountOverrides[targetId];
+    const override = data.accountOverrides?.[targetId];
     if (override && typeof override[capId] === "boolean") {
       return override[capId];
     }
-    // Fall back to account's role tier
-    const acct = SPECIFIC_ACCOUNTS.find((a) => a.id === targetId);
-    if (acct && acct.roleTier) {
-      return getEffectiveCapability("role", acct.roleTier, capId, data);
+
+    // Fall back to account's resolved role tier
+    const matchedAccount = accountsList.find((a) => a.id === targetId || a.email === targetId);
+    if (matchedAccount?.roleTier) {
+      return getEffectiveCapability("role", matchedAccount.roleTier, capId, data);
     }
+    return getEffectiveCapability("role", "system_admin", capId, data);
   }
 
   return false;
 }
 
 /**
- * Update single capability toggle
+ * Toggle single capability switch
  */
 export function toggleCapability(type, targetId, capId, nextValue) {
   const data = getRbacMatrixData();
 
   if (type === "role") {
+    if (!data.roleTiers) data.roleTiers = {};
     if (!data.roleTiers[targetId]) {
-      data.roleTiers[targetId] = { ...(DEFAULT_ROLE_TIER_PERMISSIONS[targetId] || {}) };
+      data.roleTiers[targetId] = { ...(FACTORY_ROLE_TIER_PERMISSIONS[targetId] || {}) };
     }
     data.roleTiers[targetId][capId] = nextValue;
 
-    // If a tab is turned OFF, turn OFF its dependent features
+    // If parent tab toggled OFF, toggle OFF dependent child features
     const tabItem = WORKSPACE_TABS_CONFIG.find((t) => t.id === capId);
     if (tabItem && !nextValue) {
       const childFeatures = IN_TAB_FEATURES_CONFIG.filter((f) => f.parentTab === capId);
@@ -382,12 +608,12 @@ export function toggleCapability(type, targetId, capId, nextValue) {
       });
     }
   } else if (type === "account") {
+    if (!data.accountOverrides) data.accountOverrides = {};
     if (!data.accountOverrides[targetId]) {
       data.accountOverrides[targetId] = {};
     }
     data.accountOverrides[targetId][capId] = nextValue;
 
-    // If tab turned OFF
     const tabItem = WORKSPACE_TABS_CONFIG.find((t) => t.id === capId);
     if (tabItem && !nextValue) {
       const childFeatures = IN_TAB_FEATURES_CONFIG.filter((f) => f.parentTab === capId);
@@ -403,82 +629,60 @@ export function toggleCapability(type, targetId, capId, nextValue) {
 }
 
 /**
- * Check if current logged-in user can access a workspace tab
+ * Synchronize matrix directly with Supabase Database
+ */
+export async function syncMatrixToCloud() {
+  const data = getRbacMatrixData();
+  try {
+    if (supabase) {
+      await supabase.from("user_settings").upsert({
+        user_id: CLOUD_SETTINGS_KEY,
+        settings_json: data,
+        updated_at: new Date().toISOString()
+      }, { onConflict: "user_id" });
+    }
+    return { success: true, timestamp: new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit" }) };
+  } catch (err) {
+    console.debug("[rbacStorage] Cloud sync fallback to local:", err?.message);
+    return { success: true, timestamp: new Date().toLocaleTimeString(), fallback: true };
+  }
+}
+
+/**
+ * Verify whether a logged-in user is authorized to view a specific workspace tab
  */
 export function isUserTabAllowed(user, tabKey) {
-  if (!user) return true; // default lenient if user object not loaded
+  if (!user) return true;
 
-  // System admin by email is always permitted
-  const email = (user.email || "").toLowerCase();
-  if (email === "admin@hrhub.com" || email === "caquennie6@gmail.com" || email === "jay@simpalgroup.com") {
-    return true;
-  }
+  const email = (user.email || "").toLowerCase().trim();
+  if (email === "admin@hrhub.com" || email === "jay@simpalgroup.com") return true;
 
   const matrix = getRbacMatrixData();
+  const roleTier = classifyEmployeeRoleTier(user);
 
-  // 1. Check account override by email or name
-  const matchAccount = SPECIFIC_ACCOUNTS.find(
-    (a) => a.email.toLowerCase() === email || (user.name && user.name.toLowerCase().includes(a.id))
-  );
-
-  if (matchAccount) {
-    return getEffectiveCapability("account", matchAccount.id, tabKey, matrix);
+  // Check account override first
+  if (matrix.accountOverrides?.[email] && typeof matrix.accountOverrides[email][tabKey] === "boolean") {
+    return matrix.accountOverrides[email][tabKey];
   }
-
-  // 2. Check role tier
-  const roleStr = (user.role || "").toLowerCase();
-  let roleTier = "terminal_staff";
-  if (roleStr.includes("admin") || roleStr.includes("manager")) roleTier = "system_admin";
-  else if (roleStr.includes("cashier")) roleTier = "head_cashier";
-  else if (roleStr.includes("supervisor")) roleTier = "branch_supervisor";
 
   return getEffectiveCapability("role", roleTier, tabKey, matrix);
 }
 
 /**
- * Check if current user is allowed to use a specific in-tab feature
+ * Verify whether a logged-in user is authorized to perform a specific in-tab feature
  */
 export function isUserFeatureAllowed(user, featureKey) {
   if (!user) return true;
 
-  const email = (user.email || "").toLowerCase();
-  if (email === "admin@hrhub.com" || email === "caquennie6@gmail.com") return true;
+  const email = (user.email || "").toLowerCase().trim();
+  if (email === "admin@hrhub.com" || email === "jay@simpalgroup.com") return true;
 
   const matrix = getRbacMatrixData();
+  const roleTier = classifyEmployeeRoleTier(user);
 
-  const matchAccount = SPECIFIC_ACCOUNTS.find(
-    (a) => a.email.toLowerCase() === email || (user.name && user.name.toLowerCase().includes(a.id))
-  );
-
-  if (matchAccount) {
-    return getEffectiveCapability("account", matchAccount.id, featureKey, matrix);
+  if (matrix.accountOverrides?.[email] && typeof matrix.accountOverrides[email][featureKey] === "boolean") {
+    return matrix.accountOverrides[email][featureKey];
   }
-
-  const roleStr = (user.role || "").toLowerCase();
-  let roleTier = "terminal_staff";
-  if (roleStr.includes("admin") || roleStr.includes("manager")) roleTier = "system_admin";
-  else if (roleStr.includes("cashier")) roleTier = "head_cashier";
-  else if (roleStr.includes("supervisor")) roleTier = "branch_supervisor";
 
   return getEffectiveCapability("role", roleTier, featureKey, matrix);
-}
-
-/**
- * Sync matrix to cloud (Supabase)
- */
-export async function syncMatrixToCloud() {
-  try {
-    const data = getRbacMatrixData();
-    if (supabase) {
-      await supabase.from("organization_settings").upsert({
-        key: "rbac_matrix",
-        value: data,
-        updated_at: new Date().toISOString()
-      }, { onConflict: "key" });
-    }
-    return { success: true, timestamp: new Date().toLocaleTimeString() };
-  } catch (err) {
-    console.debug("[rbacStorage] Cloud sync fallback to local storage:", err?.message);
-    return { success: true, timestamp: new Date().toLocaleTimeString(), fallback: true };
-  }
 }

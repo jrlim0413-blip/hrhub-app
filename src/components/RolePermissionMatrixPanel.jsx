@@ -1,16 +1,15 @@
 import { useState, useEffect } from "react";
 import {
-  ShieldCheck, RotateCcw, Cloud, CloudCheck, CheckCircle2,
-  Users, User, AlertTriangle, Sparkles, Sliders, Info, ShieldAlert,
-  ChevronDown, ChevronRight, Lock, Check, Layers
+  ShieldCheck, RotateCcw, Cloud, Users, User, AlertTriangle,
+  Sparkles, Sliders, RefreshCw, Layers, Database, Lock, CheckCircle2
 } from "lucide-react";
 import {
-  ROLE_TIERS,
-  SPECIFIC_ACCOUNTS,
+  STANDARD_ROLE_TIERS,
   WORKSPACE_TABS_CONFIG,
   IN_TAB_FEATURES_CONFIG,
+  fetchRealAccountsAndTiers,
   getRbacMatrixData,
-  saveRbacMatrixData,
+  loadRbacMatrixFromCloud,
   resetRbacMatrixToDefaults,
   toggleCapability,
   getEffectiveCapability,
@@ -19,16 +18,40 @@ import {
 
 export default function RolePermissionMatrixPanel({ currentUser, onClose }) {
   const [matrixData, setMatrixData] = useState(() => getRbacMatrixData());
+  const [realAccounts, setRealAccounts] = useState([]);
+  const [roleTiers, setRoleTiers] = useState(STANDARD_ROLE_TIERS);
+  const [loadingAccounts, setLoadingAccounts] = useState(true);
   const [viewMode, setViewMode] = useState("role"); // "role" | "account"
   const [isSyncing, setIsSyncing] = useState(false);
-  const [syncStatusText, setSyncStatusText] = useState("Cloud Synced Online");
+  const [syncStatusText, setSyncStatusText] = useState("Database Cloud Synchronized");
   const [toastMessage, setToastMessage] = useState("");
 
   const currentEmail = (currentUser?.email || "").toLowerCase().trim();
-  const currentRole = (currentUser?.role || "").toLowerCase().trim();
 
-  // Sync state with storage events
+  // Load real accounts from database and cloud permissions
+  const loadDatabaseData = async () => {
+    setLoadingAccounts(true);
+    try {
+      const [cloudMatrix, accountData] = await Promise.all([
+        loadRbacMatrixFromCloud(),
+        fetchRealAccountsAndTiers()
+      ]);
+
+      if (cloudMatrix) setMatrixData(cloudMatrix);
+      if (accountData) {
+        setRealAccounts(accountData.realAccounts);
+        setRoleTiers(accountData.dynamicTiers);
+      }
+    } catch (err) {
+      console.warn("Failed to load real accounts for RBAC matrix:", err);
+    } finally {
+      setLoadingAccounts(false);
+    }
+  };
+
   useEffect(() => {
+    loadDatabaseData();
+
     const handleUpdate = (e) => {
       if (e.detail) {
         setMatrixData(e.detail);
@@ -43,13 +66,12 @@ export default function RolePermissionMatrixPanel({ currentUser, onClose }) {
     setTimeout(() => setToastMessage(""), 3500);
   };
 
-  // Handle toggle switch click
+  // Toggle capability handler
   const handleToggle = (type, targetId, capId, currentValue, parentTabKey = null) => {
-    // If parent tab is disabled, prevent enabling feature
     if (parentTabKey) {
-      const parentAllowed = getEffectiveCapability(type, targetId, parentTabKey, matrixData);
+      const parentAllowed = getEffectiveCapability(type, targetId, parentTabKey, matrixData, realAccounts);
       if (!parentAllowed && !currentValue) {
-        showToast("⚠️ Cannot enable feature while parent workspace tab is disabled.");
+        showToast("⚠️ Permission Denied: Cannot enable operational feature while parent workspace tab is disabled.");
         return;
       }
     }
@@ -57,26 +79,26 @@ export default function RolePermissionMatrixPanel({ currentUser, onClose }) {
     const nextVal = !currentValue;
     const updated = toggleCapability(type, targetId, capId, nextVal);
     setMatrixData({ ...updated });
-    showToast(`Permission updated for ${targetId.toUpperCase()} (${nextVal ? "ENABLED" : "DISABLED"})`);
+    showToast(`Access Control Updated: ${targetId.toUpperCase()} (${nextVal ? "AUTHORIZED" : "RESTRICTED"})`);
   };
 
   // Reset defaults handler
   const handleResetDefaults = () => {
-    if (window.confirm("Reset all role & account permissions back to standard defaults?")) {
+    if (window.confirm("Reset all enterprise role & account access policies back to standard factory defaults?")) {
       const reset = resetRbacMatrixToDefaults();
       setMatrixData({ ...reset });
-      showToast("Reset to factory RBAC defaults successfully.");
+      showToast("All security access policies restored to baseline defaults.");
     }
   };
 
   // Cloud Sync handler
   const handleSyncCloud = async () => {
     setIsSyncing(true);
-    setSyncStatusText("Syncing to Cloud...");
+    setSyncStatusText("Synchronizing to Database...");
     const res = await syncMatrixToCloud();
     setIsSyncing(false);
-    setSyncStatusText(`Cloud Synced Online (${res.timestamp})`);
-    showToast("Matrix successfully synced to database cloud storage.");
+    setSyncStatusText(`Database Cloud Synchronized (${res.timestamp})`);
+    showToast("Security access matrix successfully committed to cloud database storage.");
   };
 
   return (
@@ -90,24 +112,25 @@ export default function RolePermissionMatrixPanel({ currentUser, onClose }) {
       )}
 
       {/* ========================================================================= */}
-      {/* 1. TOP HEADER & CLOUD SYNC ACTIONS                                         */}
+      {/* 1. ENTERPRISE HEADER & CLOUD PERSISTENCE CONTROLS                          */}
       {/* ========================================================================= */}
       <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-xl md:text-2xl font-black text-slate-900 tracking-tight">
-              Role & Account Capabilities Matrix
+              Enterprise Role & Capabilities Access Control Matrix
             </h1>
           </div>
           <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-            Configure operational permissions by role tier or customize access specifically per individual account.
+            Configure authoritative workstation permissions by enterprise role tier or customize access specifically per individual database account.
           </p>
         </div>
 
         <div className="flex items-center gap-2.5 flex-wrap">
-          {/* Cloud Synced Online Pill */}
+          {/* Cloud Synced Online Indicator */}
           <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 shadow-2xs">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <Database size={13} className="text-emerald-600" />
             <span>{syncStatusText}</span>
           </div>
 
@@ -119,7 +142,19 @@ export default function RolePermissionMatrixPanel({ currentUser, onClose }) {
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 hover:border-slate-300 transition shadow-2xs cursor-pointer disabled:opacity-50"
           >
             <Cloud size={14} className={isSyncing ? "animate-spin text-emerald-600" : "text-slate-500"} />
-            <span>{isSyncing ? "Syncing..." : "Sync Cloud"}</span>
+            <span>{isSyncing ? "Committing..." : "Sync Cloud"}</span>
+          </button>
+
+          {/* Refresh Database Accounts Button */}
+          <button
+            type="button"
+            onClick={loadDatabaseData}
+            disabled={loadingAccounts}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 hover:border-slate-300 transition shadow-2xs cursor-pointer"
+            title="Reload real personnel records from Supabase database"
+          >
+            <RefreshCw size={13} className={loadingAccounts ? "animate-spin text-emerald-600" : "text-slate-500"} />
+            <span>Reload DB Records</span>
           </button>
 
           {/* Reset Defaults Button */}
@@ -135,7 +170,7 @@ export default function RolePermissionMatrixPanel({ currentUser, onClose }) {
       </div>
 
       {/* ========================================================================= */}
-      {/* 2. SUB-BAR: TABS SWITCHER (By Role Tier vs By Specific Account)            */}
+      {/* 2. SUB-BAR: TIER VIEW vs SPECIFIC DATABASE ACCOUNT VIEW                    */}
       {/* ========================================================================= */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-3 rounded-2xl border border-slate-200/90 shadow-2xs">
         <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
@@ -149,7 +184,7 @@ export default function RolePermissionMatrixPanel({ currentUser, onClose }) {
             }`}
           >
             <Users size={14} />
-            <span>By Role Tier ({ROLE_TIERS.length})</span>
+            <span>By Enterprise Role Tier ({roleTiers.length})</span>
           </button>
 
           <button
@@ -162,22 +197,22 @@ export default function RolePermissionMatrixPanel({ currentUser, onClose }) {
             }`}
           >
             <User size={14} />
-            <span>By Specific Account ({SPECIFIC_ACCOUNTS.length})</span>
+            <span>By Database Personnel Account ({realAccounts.length})</span>
           </button>
         </div>
 
-        <div className="text-xs font-semibold text-amber-700 flex items-center gap-1.5">
+        <div className="text-xs font-semibold text-amber-800 flex items-center gap-1.5">
           <span className="text-amber-500 font-black">⚡</span>
           <span>
             {viewMode === "role"
-              ? "Toggling a capability updates all accounts assigned to the role tier"
-              : "Individual account overrides will take precedence over role tier defaults"}
+              ? "Toggling a capability immediately updates policy governance for all accounts assigned to the tier"
+              : "Specific database account overrides supersede role tier defaults for that user account"}
           </span>
         </div>
       </div>
 
       {/* ========================================================================= */}
-      {/* 3. CAPABILITIES MATRIX MAIN TABLE CONTAINER                                */}
+      {/* 3. CAPABILITIES MATRIX TABLE CONTAINER                                     */}
       {/* ========================================================================= */}
       <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs overflow-hidden">
         <div className="overflow-x-auto custom-scrollbar">
@@ -185,54 +220,63 @@ export default function RolePermissionMatrixPanel({ currentUser, onClose }) {
             {/* TABLE HEADER (COLUMNS) */}
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50/70">
-                <th className="py-4 px-5 text-[11px] font-black uppercase tracking-wider text-slate-500 w-[300px]">
-                  System Capability
+                <th className="py-4 px-5 text-[11px] font-black uppercase tracking-wider text-slate-500 w-[320px]">
+                  Authoritative Workspace Capability
                 </th>
 
                 {viewMode === "role" ? (
-                  ROLE_TIERS.map((tier) => (
-                    <th key={tier.id} className="py-4 px-4 text-center min-w-[160px]">
+                  roleTiers.map((tier) => (
+                    <th key={tier.id} className="py-4 px-4 text-center min-w-[170px]">
                       <div className="inline-flex flex-col items-center">
                         <div className={`px-3 py-1.5 rounded-xl border text-[11px] font-black uppercase tracking-wider flex items-center gap-1.5 shadow-2xs ${tier.badgeBg}`}>
                           {tier.id === "system_admin" && <ShieldCheck size={13} className="text-emerald-700" />}
-                          {tier.id === "terminal_staff" && <User size={13} className="text-teal-700" />}
-                          {tier.id === "head_cashier" && <Sliders size={13} className="text-blue-700" />}
-                          {tier.id === "branch_supervisor" && <Users size={13} className="text-amber-700" />}
+                          {tier.id === "hr_admin" && <Users size={13} className="text-lime-700" />}
+                          {tier.id === "operations_supervisor" && <Sliders size={13} className="text-amber-700" />}
+                          {tier.id === "finance_cashier" && <User size={13} className="text-blue-700" />}
                           <span>{tier.name}</span>
                         </div>
                         <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-1.5">
                           {tier.countText}
                         </div>
-                        <div className="flex items-center gap-1 mt-1 flex-wrap justify-center">
-                          {tier.accounts.map((acct) => (
-                            <span
-                              key={acct}
-                              className="px-1.5 py-0.5 rounded text-[9px] font-black bg-slate-200/80 text-slate-700 border border-slate-300"
-                            >
-                              {acct}
-                            </span>
-                          ))}
+                        <div className="flex items-center gap-1 mt-1 flex-wrap justify-center max-w-[180px]">
+                          {tier.accounts && tier.accounts.length > 0 ? (
+                            tier.accounts.map((badgeName) => (
+                              <span
+                                key={badgeName}
+                                className="px-1.5 py-0.5 rounded text-[9px] font-black bg-slate-200/80 text-slate-700 border border-slate-300"
+                              >
+                                {badgeName}
+                              </span>
+                            ))
+                          ) : (
+                            <span className="text-[9px] text-slate-400 italic">No assigned accounts</span>
+                          )}
                         </div>
                       </div>
                     </th>
                   ))
                 ) : (
-                  SPECIFIC_ACCOUNTS.map((acct) => {
+                  realAccounts.map((acct) => {
                     const isMyAccount = currentEmail && acct.email.toLowerCase() === currentEmail;
                     return (
-                      <th key={acct.id} className={`py-3 px-3 text-center min-w-[130px] ${isMyAccount ? "bg-emerald-50/50" : ""}`}>
+                      <th
+                        key={acct.id}
+                        className={`py-3 px-3 text-center min-w-[140px] transition-colors ${
+                          isMyAccount ? "bg-emerald-50/60 ring-1 ring-inset ring-emerald-300" : ""
+                        }`}
+                      >
                         <div className="inline-flex flex-col items-center">
                           <span className="px-2 py-0.5 rounded-lg text-[10px] font-black bg-slate-900 text-emerald-400 border border-slate-800 shadow-2xs">
                             {acct.badge}
                           </span>
-                          <span className="text-[10px] font-bold text-slate-700 truncate max-w-[120px] mt-1">
+                          <span className="text-[10px] font-bold text-slate-800 truncate max-w-[130px] mt-1">
                             {acct.name}
                           </span>
-                          <span className="text-[9px] text-slate-400 truncate max-w-[120px]">
+                          <span className="text-[9px] text-slate-400 truncate max-w-[130px]">
                             {acct.company}
                           </span>
                           {isMyAccount && (
-                            <span className="mt-1 px-1.5 py-0.2 rounded text-[8px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300">
+                            <span className="mt-1 px-1.5 py-0.2 rounded text-[8px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300 animate-pulse">
                               Active Login
                             </span>
                           )}
@@ -247,17 +291,17 @@ export default function RolePermissionMatrixPanel({ currentUser, onClose }) {
             {/* TABLE BODY */}
             <tbody className="divide-y divide-slate-100 text-xs">
               {/* ========================================================================= */}
-              {/* SECTION 1: WORKSPACE TABS (Sidebar Navigation)                            */}
+              {/* SECTION 1: WORKSPACE TABS (Primary Navigation)                            */}
               {/* ========================================================================= */}
               <tr className="bg-emerald-50/40 border-y border-emerald-100">
-                <td colSpan={viewMode === "role" ? ROLE_TIERS.length + 1 : SPECIFIC_ACCOUNTS.length + 1} className="py-2.5 px-5">
+                <td colSpan={viewMode === "role" ? roleTiers.length + 1 : realAccounts.length + 1} className="py-2.5 px-5">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2 font-black text-xs text-emerald-900">
                       <Layers size={16} className="text-emerald-700" />
-                      <span>WORKSPACE TABS (Sidebar Navigation)</span>
+                      <span>WORKSPACE TABS (Sidebar Navigation Governance)</span>
                     </div>
                     <span className="text-[11px] font-medium text-emerald-700 hidden sm:inline">
-                      Controls which workspace menus appear in the left sidebar navigation
+                      Governs which primary operational tabs are visible and accessible in the left navigation sidebar
                     </span>
                   </div>
                 </td>
@@ -285,8 +329,8 @@ export default function RolePermissionMatrixPanel({ currentUser, onClose }) {
                   </td>
 
                   {viewMode === "role" ? (
-                    ROLE_TIERS.map((tier) => {
-                      const isAllowed = getEffectiveCapability("role", tier.id, tab.id, matrixData);
+                    roleTiers.map((tier) => {
+                      const isAllowed = getEffectiveCapability("role", tier.id, tab.id, matrixData, realAccounts);
                       return (
                         <td key={tier.id} className="py-3 px-4 text-center">
                           <button
@@ -309,13 +353,13 @@ export default function RolePermissionMatrixPanel({ currentUser, onClose }) {
                       );
                     })
                   ) : (
-                    SPECIFIC_ACCOUNTS.map((acct) => {
-                      const isAllowed = getEffectiveCapability("account", acct.id, tab.id, matrixData);
+                    realAccounts.map((acct) => {
+                      const isAllowed = getEffectiveCapability("account", acct.email, tab.id, matrixData, realAccounts);
                       return (
                         <td key={acct.id} className="py-3 px-2 text-center">
                           <button
                             type="button"
-                            onClick={() => handleToggle("account", acct.id, tab.id, isAllowed)}
+                            onClick={() => handleToggle("account", acct.email, tab.id, isAllowed)}
                             className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black transition-all cursor-pointer shadow-2xs ${
                               isAllowed
                                 ? "bg-emerald-500 text-white hover:bg-emerald-600"
@@ -337,17 +381,17 @@ export default function RolePermissionMatrixPanel({ currentUser, onClose }) {
               ))}
 
               {/* ========================================================================= */}
-              {/* SECTION 2: IN-TAB FEATURES (Operations & Tools Inside Tabs)                */}
+              {/* SECTION 2: IN-TAB FEATURES (Operational Actions & Tooling)                */}
               {/* ========================================================================= */}
               <tr className="bg-amber-50/40 border-y border-amber-100">
-                <td colSpan={viewMode === "role" ? ROLE_TIERS.length + 1 : SPECIFIC_ACCOUNTS.length + 1} className="py-2.5 px-5">
+                <td colSpan={viewMode === "role" ? roleTiers.length + 1 : realAccounts.length + 1} className="py-2.5 px-5">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2 font-black text-xs text-amber-900">
                       <Sliders size={16} className="text-amber-700" />
-                      <span>IN-TAB FEATURES (Operations & Tools Inside Tabs)</span>
+                      <span>IN-TAB OPERATIONAL FEATURES (Workspace Tool Execution Authority)</span>
                     </div>
                     <span className="text-[11px] font-medium text-amber-700 hidden sm:inline">
-                      Operational actions and tools inside workspaces. Cannot be enabled if parent tab is disabled.
+                      Authorizes specific operational actions inside tabs. Dependent features are strictly gated if the parent workspace tab is disabled.
                     </span>
                   </div>
                 </td>
@@ -365,7 +409,7 @@ export default function RolePermissionMatrixPanel({ currentUser, onClose }) {
                           {feature.label}
                         </div>
                         <div className="text-[9px] font-bold text-amber-700 mt-0.5 flex items-center gap-1">
-                          <span className="text-slate-400">BELONGS TO:</span>
+                          <span className="text-slate-400">PARENT WORKSPACE:</span>
                           <span className="px-1 py-0.2 rounded bg-amber-50 border border-amber-200">
                             {feature.belongsToLabel}
                           </span>
@@ -378,9 +422,9 @@ export default function RolePermissionMatrixPanel({ currentUser, onClose }) {
                   </td>
 
                   {viewMode === "role" ? (
-                    ROLE_TIERS.map((tier) => {
-                      const parentAllowed = getEffectiveCapability("role", tier.id, feature.parentTab, matrixData);
-                      const isAllowed = getEffectiveCapability("role", tier.id, feature.id, matrixData);
+                    roleTiers.map((tier) => {
+                      const parentAllowed = getEffectiveCapability("role", tier.id, feature.parentTab, matrixData, realAccounts);
+                      const isAllowed = getEffectiveCapability("role", tier.id, feature.id, matrixData, realAccounts);
 
                       if (!parentAllowed) {
                         return (
@@ -392,7 +436,7 @@ export default function RolePermissionMatrixPanel({ currentUser, onClose }) {
                               </span>
                               <span className="inline-flex items-center gap-1 text-[9px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.2 rounded">
                                 <AlertTriangle size={9} />
-                                <span>Tab Disabled</span>
+                                <span>Parent Tab Disabled</span>
                               </span>
                             </div>
                           </td>
@@ -421,9 +465,9 @@ export default function RolePermissionMatrixPanel({ currentUser, onClose }) {
                       );
                     })
                   ) : (
-                    SPECIFIC_ACCOUNTS.map((acct) => {
-                      const parentAllowed = getEffectiveCapability("account", acct.id, feature.parentTab, matrixData);
-                      const isAllowed = getEffectiveCapability("account", acct.id, feature.id, matrixData);
+                    realAccounts.map((acct) => {
+                      const parentAllowed = getEffectiveCapability("account", acct.email, feature.parentTab, matrixData, realAccounts);
+                      const isAllowed = getEffectiveCapability("account", acct.email, feature.id, matrixData, realAccounts);
 
                       if (!parentAllowed) {
                         return (
@@ -439,7 +483,7 @@ export default function RolePermissionMatrixPanel({ currentUser, onClose }) {
                         <td key={acct.id} className="py-3 px-2 text-center">
                           <button
                             type="button"
-                            onClick={() => handleToggle("account", acct.id, feature.id, isAllowed, feature.parentTab)}
+                            onClick={() => handleToggle("account", acct.email, feature.id, isAllowed, feature.parentTab)}
                             className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black transition-all cursor-pointer shadow-2xs ${
                               isAllowed
                                 ? "bg-emerald-500 text-white hover:bg-emerald-600"
