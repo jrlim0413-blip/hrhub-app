@@ -591,11 +591,19 @@ export async function saveIncidentReport(report) {
     additional_notes: report.additionalNotes || report.additional_notes || "",
     senderCompany: report.senderCompany || report.company || "5A Royal Gaming OPC",
     company: report.company || report.senderCompany || "5A Royal Gaming OPC",
-    receiverCompany: report.receiverCompany || "Simpal Group of Companies",
     senderHrName: report.senderHrName || report.reportingHrName || "Branch HR",
     senderHrTitle: report.senderHrTitle || report.reportingHrTitle || "HR Admin",
     receiverHrName: report.receiverHrName || "JEVINCE JAYE S. JUBAY, CHRP",
     receiverHrTitle: report.receiverHrTitle || "HRMD Manager",
+    preparerSignature: report.preparerSignature || report.preparer_signature || "",
+    preparerName: report.preparerName || report.preparer_name || report.senderHrName || report.reportingHrName || "Branch HR",
+    preparerTitle: report.preparerTitle || report.preparer_title || report.senderHrTitle || report.reportingHrTitle || "HR Admin",
+    operationsManagerSignature: report.operationsManagerSignature || report.operations_manager_signature || "",
+    operationsManagerName: report.operationsManagerName || report.operations_manager_name || "Operations Manager",
+    operationsManagerTitle: report.operationsManagerTitle || report.operations_manager_title || "Operations Manager",
+    approvedByName: report.approvedByName || report.approved_by_name || report.receiverHrName || "JEVINCE JAYE S. JUBAY, CHRP",
+    approvedByTitle: report.approvedByTitle || report.approved_by_title || "HRMD Manager (Head Office)",
+    approvedBySignature: report.approvedBySignature || report.approved_by_signature || "",
     updatedAt: nowIso,
     createdAt: report.createdAt || nowIso
   };
@@ -815,4 +823,73 @@ export async function clearAllIncidentReports() {
   }
 
   return [];
+}
+
+/**
+ * Key for storing persistent default signatories in localStorage and Supabase user_settings
+ */
+export const DEFAULT_SIGNATORIES_KEY = "hrhub_ir_default_signatories_v1";
+
+/**
+ * Saves default IR signatories both to LocalStorage and to Supabase user_settings table
+ */
+export async function saveDefaultIrSignatories(signatories) {
+  if (!signatories) return;
+  try {
+    localStorage.setItem(DEFAULT_SIGNATORIES_KEY, JSON.stringify(signatories));
+  } catch (err) {
+    console.warn("[incidentReportStorage] Local save default signatories warning:", err);
+  }
+
+  if (supabase) {
+    try {
+      await supabase.from("user_settings").upsert(
+        {
+          user_id: DEFAULT_SIGNATORIES_KEY,
+          settings_json: signatories,
+          updated_at: new Date().toISOString()
+        },
+        { onConflict: "user_id" }
+      );
+    } catch (err) {
+      console.warn("[incidentReportStorage] Supabase save default signatories warning:", err);
+    }
+  }
+  return signatories;
+}
+
+/**
+ * Loads default IR signatories from LocalStorage and synchronizes with Supabase user_settings
+ */
+export async function loadDefaultIrSignatories() {
+  let localData = null;
+  try {
+    const raw = localStorage.getItem(DEFAULT_SIGNATORIES_KEY);
+    if (raw) {
+      localData = JSON.parse(raw);
+    }
+  } catch (err) {
+    // Ignore JSON parse error
+  }
+
+  if (supabase) {
+    try {
+      const { data } = await supabase
+        .from("user_settings")
+        .select("settings_json")
+        .eq("user_id", DEFAULT_SIGNATORIES_KEY)
+        .maybeSingle();
+
+      if (data?.settings_json && typeof data.settings_json === "object") {
+        try {
+          localStorage.setItem(DEFAULT_SIGNATORIES_KEY, JSON.stringify(data.settings_json));
+        } catch {}
+        return data.settings_json;
+      }
+    } catch (err) {
+      console.debug("[incidentReportStorage] Supabase load default signatories warning:", err?.message);
+    }
+  }
+
+  return localData;
 }

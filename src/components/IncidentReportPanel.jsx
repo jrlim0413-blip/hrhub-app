@@ -44,7 +44,11 @@ import {
   Reply,
   Video,
   ExternalLink,
-  Users
+  Users,
+  Save,
+  ZoomIn,
+  ZoomOut,
+  Maximize2
 } from "lucide-react";
 import {
   fetchIncidentReports,
@@ -53,8 +57,11 @@ import {
   clearAllIncidentReports,
   subscribeToLiveReports,
   lookupAssignedHrForCompany,
-  lookupSgcCentralHr
+  lookupSgcCentralHr,
+  saveDefaultIrSignatories,
+  loadDefaultIrSignatories
 } from "../lib/incidentReportStorage";
+import { processSignatureToTransparentPng } from "../lib/signatureImageProcessor";
 import { supabase } from "../lib/supabase";
 import {
   resolveUserHrRole,
@@ -310,6 +317,45 @@ export default function IncidentReportPanel({
     };
   }, [effectiveRole.isHeadOffice]);
 
+  // Persistent Default Signatories State (Saved in LocalStorage & Supabase user_settings)
+  const [defaultSignatories, setDefaultSignatories] = useState(null);
+  const [isSavingDefaults, setIsSavingDefaults] = useState(false);
+  const [defaultsSavedSuccess, setDefaultsSavedSuccess] = useState(false);
+
+  // Zoom scale state for Document Viewer (100% default, can be 85% Fit, 90%, 100%, 115%)
+  const [irDocumentZoom, setIrDocumentZoom] = useState(100);
+
+  // Load default signatories on mount
+  useEffect(() => {
+    let mounted = true;
+    const fetchDefaults = async () => {
+      try {
+        const defs = await loadDefaultIrSignatories();
+        if (defs && mounted) {
+          setDefaultSignatories(defs);
+          setIrForm((prev) => ({
+            ...prev,
+            preparerName: defs.preparerName || prev.preparerName,
+            preparerTitle: defs.preparerTitle || prev.preparerTitle,
+            preparerSignature: defs.preparerSignature || prev.preparerSignature,
+            operationsManagerName: defs.operationsManagerName || prev.operationsManagerName,
+            operationsManagerTitle: defs.operationsManagerTitle || prev.operationsManagerTitle,
+            operationsManagerSignature: defs.operationsManagerSignature || prev.operationsManagerSignature,
+            approvedByName: defs.approvedByName || prev.approvedByName,
+            approvedByTitle: defs.approvedByTitle || prev.approvedByTitle,
+            approvedBySignature: defs.approvedBySignature || prev.approvedBySignature
+          }));
+        }
+      } catch (err) {
+        console.debug("Error loading default signatories:", err);
+      }
+    };
+    fetchDefaults();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
   // Voice toggle handler
   const handleToggleVoice = () => {
     const nextState = !voiceMutedState;
@@ -398,10 +444,22 @@ export default function IncidentReportPanel({
   };
 
   // Open Create IR Modal
-  const handleOpenCreateModal = () => {
+  const handleOpenCreateModal = async () => {
     const targetComp = effectiveRole.company || "5A Royal Gaming OPC";
     const assigned = lookupAssignedHrForCompany(targetComp, profiles);
     const sgcHr = lookupSgcCentralHr(profiles);
+
+    // Pull persistent defaults if not yet cached in state
+    let defs = defaultSignatories;
+    if (!defs) {
+      try {
+        defs = await loadDefaultIrSignatories();
+        if (defs) setDefaultSignatories(defs);
+      } catch (err) {
+        console.debug("Could not fetch default signatories:", err);
+      }
+    }
+    const d = defs || {};
 
     setIrForm({
       senderCompany: targetComp,
@@ -443,15 +501,15 @@ export default function IncidentReportPanel({
       followUpRecommendations: "Immediate transmittal to Simpal Group of Companies (SGC) Head Office HRMD for formal Notice to Explain (NTE) issuance under Article 297 Labor Code.",
       additionalNotes: "All physical cash count discrepancy sheets and borrower signed slips have been submitted and attached to the audit file.",
       evidenceNotes: "",
-      preparerSignature: "",
-      preparerName: currentUser?.name || assigned.name,
-      preparerTitle: currentUser?.role || assigned.title,
-      operationsManagerSignature: "",
-      operationsManagerName: "Operations Manager",
-      operationsManagerTitle: "Operations Manager",
-      approvedByName: sgcHr.name,
-      approvedByTitle: `${sgcHr.title} (Head Office)`,
-      approvedBySignature: ""
+      preparerSignature: d.preparerSignature || "",
+      preparerName: d.preparerName || currentUser?.name || assigned.name,
+      preparerTitle: d.preparerTitle || currentUser?.role || assigned.title,
+      operationsManagerSignature: d.operationsManagerSignature || "",
+      operationsManagerName: d.operationsManagerName || "Operations Manager",
+      operationsManagerTitle: d.operationsManagerTitle || "Operations Manager",
+      approvedByName: d.approvedByName || sgcHr.name,
+      approvedByTitle: d.approvedByTitle || `${sgcHr.title} (Head Office)`,
+      approvedBySignature: d.approvedBySignature || ""
     });
     setIsCreateModalOpen(true);
   };
@@ -766,17 +824,58 @@ export default function IncidentReportPanel({
     playAiVoiceAnnouncement(`Incident Report receipt confirmed and digitally signed by ${signReportTarget.employeeName}. Conforme stamped onto official case file.`);
   };
 
-  // Helper: Read signature image file to DataURL
-  const handleSignatureUpload = (file, targetField) => {
+  // Helper: Read and compress signature image file to lightweight transparent PNG DataURL
+  const handleSignatureUpload = async (file, targetField) => {
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (e) => {
+    try {
+      const transparentDataUrl = await processSignatureToTransparentPng(file, {
+        maxDimension: 800,
+        adaptiveBackground: true,
+        autoCrop: true
+      });
       setIrForm((prev) => ({
         ...prev,
-        [targetField]: e.target.result
+        [targetField]: transparentDataUrl
       }));
+    } catch (err) {
+      console.warn("Signature processing fallback:", err);
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setIrForm((prev) => ({
+          ...prev,
+          [targetField]: e.target.result
+        }));
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  // Helper: Save current IR signatories as persistent defaults in Database & LocalStorage
+  const handleSaveDefaultSignatories = async () => {
+    setIsSavingDefaults(true);
+    const defs = {
+      preparerName: irForm.preparerName || irForm.reportingHrName || "",
+      preparerTitle: irForm.preparerTitle || irForm.reportingHrTitle || "Branch HR",
+      preparerSignature: irForm.preparerSignature || "",
+      operationsManagerName: irForm.operationsManagerName || "Operations Manager",
+      operationsManagerTitle: irForm.operationsManagerTitle || "Operations Manager",
+      operationsManagerSignature: irForm.operationsManagerSignature || "",
+      approvedByName: irForm.approvedByName || irForm.assignedCentralHrName || "JEVINCE JAYE S. JUBAY, CHRP",
+      approvedByTitle: irForm.approvedByTitle || "HRMD Manager (Head Office)",
+      approvedBySignature: irForm.approvedBySignature || "",
+      savedAt: new Date().toISOString()
     };
-    reader.readAsDataURL(file);
+    try {
+      await saveDefaultIrSignatories(defs);
+      setDefaultSignatories(defs);
+      setDefaultsSavedSuccess(true);
+      setTimeout(() => setDefaultsSavedSuccess(false), 4500);
+    } catch (err) {
+      console.error("Failed to save default signatories:", err);
+      alert("Failed to save default signatories to database.");
+    } finally {
+      setIsSavingDefaults(false);
+    }
   };
 
   // 1. Head Office Discretion 1: Add to Filings (File for Record Only)
@@ -2796,6 +2895,29 @@ export default function IncidentReportPanel({
                     )}
                   </div>
                 </div>
+
+                {/* Save Signatories as Default Action Bar */}
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-3.5 bg-emerald-50/90 border border-emerald-200 rounded-xl mt-2">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 size={16} className="text-emerald-600 shrink-0" />
+                    <span className="text-xs text-emerald-950 font-medium">
+                      {defaultsSavedSuccess ? (
+                        <strong className="text-emerald-700">✓ Naka-save na bilang Default Signatories sa Database!</strong>
+                      ) : (
+                        <span>I-set bilang default signatories para automatic nang may e-signature at pangalan sa bawat susunod na IR.</span>
+                      )}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={isSavingDefaults}
+                    onClick={handleSaveDefaultSignatories}
+                    className="px-4 py-2 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white shadow-xs transition cursor-pointer flex items-center gap-1.5 shrink-0"
+                  >
+                    <Save size={14} />
+                    <span>{isSavingDefaults ? "Saving..." : "Set as Default Signatories"}</span>
+                  </button>
+                </div>
               </div>
 
               {/* SECTION 3: FOR OFFICIAL USE ONLY (Head Office Only) */}
@@ -2885,8 +3007,8 @@ export default function IncidentReportPanel({
       {/* MODAL 2: AUTHENTIC INCIDENT REPORT (IR) DOCUMENT VIEWER & PRINT           */}
       {/* ========================================================================= */}
       {isIrViewerOpen && selectedReport && (
-        <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 md:p-6 overflow-y-auto">
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-4xl w-full max-h-[96vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-sm flex items-start justify-center p-2 sm:p-4 md:p-6 overflow-y-auto">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-4xl w-full h-[90vh] sm:h-[92vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200 my-auto">
             {/* Modal Controls Bar */}
             <div className="px-5 py-3 border-b border-slate-200 bg-slate-100 flex items-center justify-between shrink-0 no-print">
               <div className="flex items-center gap-2">
@@ -2897,6 +3019,42 @@ export default function IncidentReportPanel({
               </div>
 
               <div className="flex items-center gap-2">
+                {/* Zoom Scale Controls */}
+                <div className="hidden sm:flex items-center gap-1 bg-white border border-slate-300 rounded-lg px-2 py-1 text-xs shadow-2xs">
+                  <span className="text-[10px] font-bold text-slate-500 mr-1">Zoom:</span>
+                  <button
+                    type="button"
+                    onClick={() => setIrDocumentZoom((prev) => Math.max(70, prev - 10))}
+                    title="Zoom Out (-10%)"
+                    className="p-1 hover:bg-slate-100 rounded text-slate-700 transition cursor-pointer"
+                  >
+                    <ZoomOut size={13} />
+                  </button>
+                  <span className="font-mono font-bold text-[11px] text-slate-800 min-w-[34px] text-center">
+                    {irDocumentZoom}%
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setIrDocumentZoom((prev) => Math.min(130, prev + 10))}
+                    title="Zoom In (+10%)"
+                    className="p-1 hover:bg-slate-100 rounded text-slate-700 transition cursor-pointer"
+                  >
+                    <ZoomIn size={13} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIrDocumentZoom((prev) => (prev === 85 ? 100 : 85))}
+                    title={irDocumentZoom === 85 ? "Reset to 100%" : "Fit entire page height"}
+                    className={`ml-1.5 px-2 py-0.5 rounded text-[10px] font-bold transition cursor-pointer ${
+                      irDocumentZoom === 85
+                        ? "bg-[#0f2b48] text-white"
+                        : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                    }`}
+                  >
+                    {irDocumentZoom === 85 ? "100%" : "Fit Page"}
+                  </button>
+                </div>
+
                 {/* Voice speech */}
                 <button
                   type="button"
@@ -2932,8 +3090,15 @@ export default function IncidentReportPanel({
             </div>
 
             {/* Authentic Printable Document Container */}
-            <div className="flex-1 overflow-y-auto p-4 sm:p-8 bg-slate-100/70 flex justify-center custom-scrollbar">
-              <div className="bg-white w-full max-w-[840px] p-6 sm:p-10 shadow-xl border border-slate-200 rounded-sm print:p-0 print:border-none print:shadow-none text-slate-900 font-sans relative overflow-hidden flex flex-col justify-between min-h-[1100px]">
+            <div className="flex-1 min-h-0 overflow-y-auto p-3 sm:p-8 pb-36 sm:pb-48 bg-slate-200/80 flex justify-center custom-scrollbar">
+              <div 
+                style={{
+                  transform: irDocumentZoom !== 100 ? `scale(${irDocumentZoom / 100})` : "none",
+                  transformOrigin: "top center",
+                  marginBottom: irDocumentZoom < 100 ? `-${(100 - irDocumentZoom) * 11}px` : "0"
+                }}
+                className="bg-white w-full max-w-[840px] p-6 sm:p-10 shadow-xl border border-slate-300 rounded-sm print:p-0 print:border-none print:shadow-none print:transform-none text-slate-900 font-sans relative flex flex-col transition-transform duration-150"
+              >
                 {/* Top Right Corner Geometric Diagonal Stripes */}
                 <div className="absolute top-0 right-0 w-36 h-28 pointer-events-none overflow-hidden no-print">
                   <svg className="w-full h-full" viewBox="0 0 144 112" fill="none">
