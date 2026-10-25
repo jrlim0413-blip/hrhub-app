@@ -213,9 +213,11 @@ export default function IncidentReportPanel({
     additionalNotes: "All physical cash count discrepancy sheets and borrower signed slips have been submitted and attached to the audit file.",
     evidenceNotes: "",
     preparerSignature: "",
+    preparerSignatureScale: 1.25,
     preparerName: initialSenderHr.name,
     preparerTitle: initialSenderHr.title,
     operationsManagerSignature: "",
+    operationsManagerSignatureScale: 1.25,
     operationsManagerName: "Operations Manager",
     operationsManagerTitle: "Operations Manager",
     approvedByName: initialSgcHr.name,
@@ -333,9 +335,11 @@ export default function IncidentReportPanel({
             preparerName: defs.preparerName || prev.preparerName,
             preparerTitle: defs.preparerTitle || prev.preparerTitle,
             preparerSignature: defs.preparerSignature || prev.preparerSignature,
+            preparerSignatureScale: defs.preparerSignatureScale || prev.preparerSignatureScale || 1.25,
             operationsManagerName: defs.operationsManagerName || prev.operationsManagerName,
             operationsManagerTitle: defs.operationsManagerTitle || prev.operationsManagerTitle,
             operationsManagerSignature: defs.operationsManagerSignature || prev.operationsManagerSignature,
+            operationsManagerSignatureScale: defs.operationsManagerSignatureScale || prev.operationsManagerSignatureScale || 1.25,
             approvedByName: defs.approvedByName || prev.approvedByName,
             approvedByTitle: defs.approvedByTitle || prev.approvedByTitle,
             approvedBySignature: defs.approvedBySignature || prev.approvedBySignature
@@ -497,9 +501,11 @@ export default function IncidentReportPanel({
       additionalNotes: "All physical cash count discrepancy sheets and borrower signed slips have been submitted and attached to the audit file.",
       evidenceNotes: "",
       preparerSignature: d.preparerSignature || "",
+      preparerSignatureScale: d.preparerSignatureScale || 1.25,
       preparerName: d.preparerName || currentUser?.name || assigned.name,
       preparerTitle: d.preparerTitle || currentUser?.role || assigned.title,
       operationsManagerSignature: d.operationsManagerSignature || "",
+      operationsManagerSignatureScale: d.operationsManagerSignatureScale || 1.25,
       operationsManagerName: d.operationsManagerName || "Operations Manager",
       operationsManagerTitle: d.operationsManagerTitle || "Operations Manager",
       approvedByName: d.approvedByName || sgcHr.name,
@@ -563,9 +569,11 @@ export default function IncidentReportPanel({
       receiverHrName: irForm.assignedCentralHrName,
       receiverHrTitle: irForm.assignedCentralHrTitle,
       preparerSignature: irForm.preparerSignature || "",
+      preparerSignatureScale: irForm.preparerSignatureScale || 1.25,
       preparerName: irForm.preparerName || irForm.reportingHrName,
       preparerTitle: irForm.preparerTitle || irForm.reportingHrTitle,
       operationsManagerSignature: irForm.operationsManagerSignature || "",
+      operationsManagerSignatureScale: irForm.operationsManagerSignatureScale || 1.25,
       operationsManagerName: irForm.operationsManagerName || "Operations Manager",
       operationsManagerTitle: irForm.operationsManagerTitle || "Operations Manager",
       companyAddress: DEFAULT_COMPANY_ADDRESS,
@@ -852,9 +860,11 @@ export default function IncidentReportPanel({
       preparerName: irForm.preparerName || irForm.reportingHrName || "",
       preparerTitle: irForm.preparerTitle || irForm.reportingHrTitle || "Branch HR",
       preparerSignature: irForm.preparerSignature || "",
+      preparerSignatureScale: irForm.preparerSignatureScale || 1.25,
       operationsManagerName: irForm.operationsManagerName || "Operations Manager",
       operationsManagerTitle: irForm.operationsManagerTitle || "Operations Manager",
       operationsManagerSignature: irForm.operationsManagerSignature || "",
+      operationsManagerSignatureScale: irForm.operationsManagerSignatureScale || 1.25,
       approvedByName: irForm.approvedByName || irForm.assignedCentralHrName || "JEVINCE JAYE S. JUBAY, CHRP",
       approvedByTitle: irForm.approvedByTitle || "HRMD Manager (Head Office)",
       approvedBySignature: irForm.approvedBySignature || "",
@@ -2877,16 +2887,74 @@ export default function IncidentReportPanel({
                     </div>
 
                     {irForm.preparerSignature ? (
-                      <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 flex flex-col items-center relative group">
-                        <img
-                          src={irForm.preparerSignature}
-                          alt="Preparer E-Signature"
-                          className="max-h-16 object-contain"
-                        />
+                      <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex flex-col items-center relative group">
+                        {/* Live Scaled Signature Preview */}
+                        <div className="h-20 w-full flex items-center justify-center overflow-hidden bg-white/70 rounded-lg border border-dashed border-slate-200 p-1">
+                          <img
+                            src={irForm.preparerSignature}
+                            alt="Preparer E-Signature"
+                            style={{
+                              transform: `scale(${irForm.preparerSignatureScale || 1.25})`,
+                              transformOrigin: "center"
+                            }}
+                            className="max-h-14 object-contain transition-transform duration-100"
+                          />
+                        </div>
+
+                        {/* Interactive E-Sig Size Controls */}
+                        <div className="w-full flex items-center justify-between gap-1 mt-2.5 pt-2 border-t border-slate-200">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[10px] font-extrabold uppercase text-slate-500">Size:</span>
+                            <button
+                              type="button"
+                              onClick={() => setIrForm(prev => ({
+                                ...prev,
+                                preparerSignatureScale: Math.max(0.7, Number(((prev.preparerSignatureScale || 1.25) - 0.15).toFixed(2)))
+                              }))}
+                              className="w-6 h-6 rounded bg-slate-200 hover:bg-slate-300 text-slate-800 font-black flex items-center justify-center transition cursor-pointer text-xs"
+                              title="Make signature smaller"
+                            >
+                              -
+                            </button>
+                            <span className="text-[11px] font-mono font-bold text-slate-800 min-w-[36px] text-center">
+                              {Math.round((irForm.preparerSignatureScale || 1.25) * 100)}%
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setIrForm(prev => ({
+                                ...prev,
+                                preparerSignatureScale: Math.min(2.2, Number(((prev.preparerSignatureScale || 1.25) + 0.15).toFixed(2)))
+                              }))}
+                              className="w-6 h-6 rounded bg-slate-200 hover:bg-slate-300 text-slate-800 font-black flex items-center justify-center transition cursor-pointer text-xs"
+                              title="Make signature bigger"
+                            >
+                              +
+                            </button>
+                          </div>
+
+                          {/* Quick Scale Presets */}
+                          <div className="flex items-center gap-1">
+                            {[1.0, 1.3, 1.6].map(scale => (
+                              <button
+                                key={scale}
+                                type="button"
+                                onClick={() => setIrForm(prev => ({ ...prev, preparerSignatureScale: scale }))}
+                                className={`px-2 py-0.5 rounded text-[10px] font-bold transition cursor-pointer ${
+                                  Math.abs((irForm.preparerSignatureScale || 1.25) - scale) < 0.05
+                                    ? "bg-[#153459] text-white shadow-2xs"
+                                    : "bg-slate-200 hover:bg-slate-300 text-slate-700"
+                                }`}
+                              >
+                                {scale === 1.0 ? "1x" : scale === 1.3 ? "1.3x" : "1.6x"}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
                         <button
                           type="button"
                           onClick={() => setIrForm({ ...irForm, preparerSignature: "" })}
-                          className="mt-1.5 text-[10px] text-rose-600 font-bold hover:underline cursor-pointer"
+                          className="mt-2 text-[10px] text-rose-600 font-bold hover:underline cursor-pointer"
                         >
                           Remove / Replace Signature
                         </button>
@@ -2938,16 +3006,74 @@ export default function IncidentReportPanel({
                     </div>
 
                     {irForm.operationsManagerSignature ? (
-                      <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 flex flex-col items-center relative group">
-                        <img
-                          src={irForm.operationsManagerSignature}
-                          alt="Operations Manager E-Signature"
-                          className="max-h-16 object-contain"
-                        />
+                      <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex flex-col items-center relative group">
+                        {/* Live Scaled Signature Preview */}
+                        <div className="h-20 w-full flex items-center justify-center overflow-hidden bg-white/70 rounded-lg border border-dashed border-slate-200 p-1">
+                          <img
+                            src={irForm.operationsManagerSignature}
+                            alt="Operations Manager E-Signature"
+                            style={{
+                              transform: `scale(${irForm.operationsManagerSignatureScale || 1.25})`,
+                              transformOrigin: "center"
+                            }}
+                            className="max-h-14 object-contain transition-transform duration-100"
+                          />
+                        </div>
+
+                        {/* Interactive E-Sig Size Controls */}
+                        <div className="w-full flex items-center justify-between gap-1 mt-2.5 pt-2 border-t border-slate-200">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[10px] font-extrabold uppercase text-slate-500">Size:</span>
+                            <button
+                              type="button"
+                              onClick={() => setIrForm(prev => ({
+                                ...prev,
+                                operationsManagerSignatureScale: Math.max(0.7, Number(((prev.operationsManagerSignatureScale || 1.25) - 0.15).toFixed(2)))
+                              }))}
+                              className="w-6 h-6 rounded bg-slate-200 hover:bg-slate-300 text-slate-800 font-black flex items-center justify-center transition cursor-pointer text-xs"
+                              title="Make signature smaller"
+                            >
+                              -
+                            </button>
+                            <span className="text-[11px] font-mono font-bold text-slate-800 min-w-[36px] text-center">
+                              {Math.round((irForm.operationsManagerSignatureScale || 1.25) * 100)}%
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setIrForm(prev => ({
+                                ...prev,
+                                operationsManagerSignatureScale: Math.min(2.2, Number(((prev.operationsManagerSignatureScale || 1.25) + 0.15).toFixed(2)))
+                              }))}
+                              className="w-6 h-6 rounded bg-slate-200 hover:bg-slate-300 text-slate-800 font-black flex items-center justify-center transition cursor-pointer text-xs"
+                              title="Make signature bigger"
+                            >
+                              +
+                            </button>
+                          </div>
+
+                          {/* Quick Scale Presets */}
+                          <div className="flex items-center gap-1">
+                            {[1.0, 1.3, 1.6].map(scale => (
+                              <button
+                                key={scale}
+                                type="button"
+                                onClick={() => setIrForm(prev => ({ ...prev, operationsManagerSignatureScale: scale }))}
+                                className={`px-2 py-0.5 rounded text-[10px] font-bold transition cursor-pointer ${
+                                  Math.abs((irForm.operationsManagerSignatureScale || 1.25) - scale) < 0.05
+                                    ? "bg-[#153459] text-white shadow-2xs"
+                                    : "bg-slate-200 hover:bg-slate-300 text-slate-700"
+                                }`}
+                              >
+                                {scale === 1.0 ? "1x" : scale === 1.3 ? "1.3x" : "1.6x"}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
                         <button
                           type="button"
                           onClick={() => setIrForm({ ...irForm, operationsManagerSignature: "" })}
-                          className="mt-1.5 text-[10px] text-rose-600 font-bold hover:underline cursor-pointer"
+                          className="mt-2 text-[10px] text-rose-600 font-bold hover:underline cursor-pointer"
                         >
                           Remove / Replace Signature
                         </button>
@@ -3501,95 +3627,111 @@ export default function IncidentReportPanel({
                   </div>
 
                   {/* ============================================================== */}
-                  {/* 5. SIGNATURES / ENDORSEMENTS (Prepared By, Reviewed, Approved) */}
+                  {/* 5. SIGNATURES / ENDORSEMENTS (Prepared By & Reviewed By)       */}
                   {/* ============================================================== */}
-                  <div className="bg-[#f4f7fb] border border-[#d0dbe7] rounded-md p-2.5 sm:p-3 text-xs">
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
-                      {/* 1. Prepared by */}
-                      <div className="space-y-1.5">
-                        <span className="text-[10.5px] font-bold text-slate-800 block">Prepared by:</span>
-                        <div className="h-11 flex items-center justify-center border-b border-slate-300 pb-0.5">
-                          {selectedReport.preparerSignature ? (
-                            <img
-                              src={selectedReport.preparerSignature}
-                              alt="Preparer E-Sig"
-                              className="max-h-10 object-contain"
-                            />
-                          ) : (
-                            <span className="text-[10px] text-slate-400 italic">(Signed on file)</span>
-                          )}
-                        </div>
-                        <div className="text-center pt-0.5">
-                          <div className="text-[10.5px] font-extrabold text-slate-900 uppercase">
-                            {selectedReport.preparerName || selectedReport.senderHrName}
+                  {(() => {
+                    // In Head Office account, "Approved by" is completely removed per user request
+                    const showApprovedBy = !effectiveRole.isHeadOffice && Boolean(selectedReport.approvedBySignature);
+                    return (
+                      <div className="bg-[#f4f7fb] border border-[#d0dbe7] rounded-md p-2.5 sm:p-3 text-xs">
+                        <div className={`grid grid-cols-1 ${showApprovedBy ? "sm:grid-cols-3" : "sm:grid-cols-2"} gap-4 sm:gap-6`}>
+                          {/* 1. Prepared by */}
+                          <div className="space-y-1.5">
+                            <span className="text-[10.5px] font-bold text-slate-800 block">Prepared by:</span>
+                            <div className="h-14 sm:h-16 flex items-center justify-center border-b border-slate-300 pb-0.5 overflow-hidden">
+                              {selectedReport.preparerSignature ? (
+                                <img
+                                  src={selectedReport.preparerSignature}
+                                  alt="Preparer E-Sig"
+                                  style={{
+                                    transform: `scale(${selectedReport.preparerSignatureScale || 1.25})`,
+                                    transformOrigin: "center"
+                                  }}
+                                  className="max-h-12 object-contain transition-transform"
+                                />
+                              ) : (
+                                <span className="text-[10px] text-slate-400 italic">(Signed on file)</span>
+                              )}
+                            </div>
+                            <div className="text-center pt-0.5">
+                              <div className="text-[10.5px] font-extrabold text-slate-900 uppercase">
+                                {selectedReport.preparerName || selectedReport.senderHrName}
+                              </div>
+                              <div className="text-[9.5px] text-slate-500 font-medium">
+                                Name / Position ({selectedReport.preparerTitle || "Branch HR"})
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1.5 pt-0.5 border-t border-slate-200 text-[9.5px]">
+                              <span className="text-slate-500 font-semibold">Date:</span>
+                              <span className="text-slate-900 font-medium">{selectedReport.dateReported || selectedReport.createdAt?.slice(0, 10)}</span>
+                            </div>
                           </div>
-                          <div className="text-[9.5px] text-slate-500 font-medium">
-                            Name / Position ({selectedReport.preparerTitle || "Branch HR"})
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-1.5 pt-0.5 border-t border-slate-200 text-[9.5px]">
-                          <span className="text-slate-500 font-semibold">Date:</span>
-                          <span className="text-slate-900 font-medium">{selectedReport.dateReported || selectedReport.createdAt?.slice(0, 10)}</span>
-                        </div>
-                      </div>
 
-                      {/* 2. Reviewed by */}
-                      <div className="space-y-1.5">
-                        <span className="text-[10.5px] font-bold text-slate-800 block">Reviewed by:</span>
-                        <div className="h-11 flex items-center justify-center border-b border-slate-300 pb-0.5">
-                          {selectedReport.operationsManagerSignature ? (
-                            <img
-                              src={selectedReport.operationsManagerSignature}
-                              alt="Manager E-Sig"
-                              className="max-h-10 object-contain"
-                            />
-                          ) : (
-                            <span className="text-[10px] text-slate-400 italic">(Signed on file)</span>
-                          )}
-                        </div>
-                        <div className="text-center pt-0.5">
-                          <div className="text-[10.5px] font-extrabold text-slate-900 uppercase">
-                            {selectedReport.operationsManagerName || "Operations Manager"}
+                          {/* 2. Reviewed by */}
+                          <div className="space-y-1.5">
+                            <span className="text-[10.5px] font-bold text-slate-800 block">Reviewed by:</span>
+                            <div className="h-14 sm:h-16 flex items-center justify-center border-b border-slate-300 pb-0.5 overflow-hidden">
+                              {selectedReport.operationsManagerSignature ? (
+                                <img
+                                  src={selectedReport.operationsManagerSignature}
+                                  alt="Manager E-Sig"
+                                  style={{
+                                    transform: `scale(${selectedReport.operationsManagerSignatureScale || 1.25})`,
+                                    transformOrigin: "center"
+                                  }}
+                                  className="max-h-12 object-contain transition-transform"
+                                />
+                              ) : (
+                                <span className="text-[10px] text-slate-400 italic">(Signed on file)</span>
+                              )}
+                            </div>
+                            <div className="text-center pt-0.5">
+                              <div className="text-[10.5px] font-extrabold text-slate-900 uppercase">
+                                {selectedReport.operationsManagerName || "Operations Manager"}
+                              </div>
+                              <div className="text-[9.5px] text-slate-500 font-medium">
+                                Name / Position ({selectedReport.operationsManagerTitle || "Area Operations Manager"})
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1.5 pt-0.5 border-t border-slate-200 text-[9.5px]">
+                              <span className="text-slate-500 font-semibold">Date:</span>
+                              <span className="text-slate-900 font-medium">{selectedReport.dateReported || selectedReport.createdAt?.slice(0, 10)}</span>
+                            </div>
                           </div>
-                          <div className="text-[9.5px] text-slate-500 font-medium">
-                            Name / Position ({selectedReport.operationsManagerTitle || "Area Operations Manager"})
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-1.5 pt-0.5 border-t border-slate-200 text-[9.5px]">
-                          <span className="text-slate-500 font-semibold">Date:</span>
-                          <span className="text-slate-900 font-medium">{selectedReport.dateReported || selectedReport.createdAt?.slice(0, 10)}</span>
-                        </div>
-                      </div>
 
-                      {/* 3. Approved by */}
-                      <div className="space-y-1.5">
-                        <span className="text-[10.5px] font-bold text-slate-800 block">Approved by:</span>
-                        <div className="h-11 flex items-center justify-center border-b border-slate-300 pb-0.5">
-                          {selectedReport.approvedBySignature ? (
-                            <img
-                              src={selectedReport.approvedBySignature}
-                              alt="Approver E-Sig"
-                              className="max-h-10 object-contain"
-                            />
-                          ) : (
-                            <span className="text-[10px] text-slate-400 italic">(Simpal Group of Companies HRMD)</span>
+                          {/* 3. Approved by (Strictly omitted in Head Office account view) */}
+                          {showApprovedBy && (
+                            <div className="space-y-1.5">
+                              <span className="text-[10.5px] font-bold text-slate-800 block">Approved by:</span>
+                              <div className="h-14 sm:h-16 flex items-center justify-center border-b border-slate-300 pb-0.5 overflow-hidden">
+                                {selectedReport.approvedBySignature ? (
+                                  <img
+                                    src={selectedReport.approvedBySignature}
+                                    alt="Approver E-Sig"
+                                    className="max-h-12 object-contain"
+                                  />
+                                ) : (
+                                  <span className="text-[10px] text-slate-400 italic">(Simpal Group of Companies HRMD)</span>
+                                )}
+                              </div>
+                              <div className="text-center pt-0.5">
+                                <div className="text-[10.5px] font-extrabold text-slate-900 uppercase">
+                                  {selectedReport.approvedByName || selectedReport.receiverHrName || "JEVINCE JAYE S. JUBAY, CHRP"}
+                                </div>
+                                <div className="text-[9.5px] text-slate-500 font-medium">
+                                  Name / Position ({selectedReport.approvedByTitle || "HRMD Manager"})
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-1.5 pt-0.5 border-t border-slate-200 text-[9.5px]">
+                                <span className="text-slate-500 font-semibold">Date:</span>
+                                <span className="text-slate-900 font-medium">{selectedReport.reportReceivedDate || selectedReport.dateReported || selectedReport.createdAt?.slice(0, 10)}</span>
+                              </div>
+                            </div>
                           )}
                         </div>
-                        <div className="text-center pt-0.5">
-                          <div className="text-[10.5px] font-extrabold text-slate-900 uppercase">
-                            {selectedReport.approvedByName || selectedReport.receiverHrName || "JEVINCE JAYE S. JUBAY, CHRP"}
-                          </div>
-                          <div className="text-[9.5px] text-slate-500 font-medium">
-                            Name / Position ({selectedReport.approvedByTitle || "HRMD Manager"})
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-1.5 pt-0.5 border-t border-slate-200 text-[9.5px]">
-                          <span className="text-slate-500 font-semibold">Date:</span>
-                          <span className="text-slate-900 font-medium">{selectedReport.reportReceivedDate || selectedReport.dateReported || selectedReport.createdAt?.slice(0, 10)}</span>
-                        </div>
                       </div>
-                    </div>
-                  </div>
+                    );
+                  })()}
 
                   {/* RESPONDENT ACKNOWLEDGMENT (Only shown if signed conformed) */}
                   {Boolean(selectedReport.respondentSignature) && (

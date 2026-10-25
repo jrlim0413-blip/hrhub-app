@@ -269,9 +269,11 @@ export function normalizeIncidentReport(d) {
 
     // 1. Preparer & Operations Manager Signatures
     preparerSignature: d.preparerSignature || d.preparer_signature || metaFromLog.preparerSignature || "",
+    preparerSignatureScale: Number(d.preparerSignatureScale || d.preparer_signature_scale || metaFromLog.preparerSignatureScale || 1.25),
     preparerName: d.preparerName || d.preparer_name || metaFromLog.preparerName || senderHrName,
     preparerTitle: d.preparerTitle || d.preparer_title || metaFromLog.preparerTitle || senderHrTitle,
     operationsManagerSignature: d.operationsManagerSignature || d.operations_manager_signature || metaFromLog.operationsManagerSignature || "",
+    operationsManagerSignatureScale: Number(d.operationsManagerSignatureScale || d.operations_manager_signature_scale || metaFromLog.operationsManagerSignatureScale || 1.25),
     operationsManagerName: d.operationsManagerName || d.operations_manager_name || metaFromLog.operationsManagerName || "Operations Manager",
     operationsManagerTitle: d.operationsManagerTitle || d.operations_manager_title || metaFromLog.operationsManagerTitle || "Operations Manager",
 
