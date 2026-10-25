@@ -329,13 +329,34 @@ export async function fetchIncidentReports() {
         .select("*")
         .order("created_at", { ascending: false });
 
-      if (!dedicatedErr && Array.isArray(dedicatedData) && dedicatedData.length > 0) {
+      // If dedicated table query succeeded without error, it is our Single Source of Truth!
+      // If the user deleted all rows, dedicatedData is [] (length === 0), which we must strictly respect!
+      if (!dedicatedErr && Array.isArray(dedicatedData)) {
         const normalized = dedicatedData.map(normalizeIncidentReport);
         saveLocalReports(normalized);
+
+        // Also keep cloud backup in user_settings in sync
+        try {
+          await supabase.from("user_settings").upsert(
+            {
+              user_id: CLOUD_BACKUP_KEY,
+              settings_json: {
+                reports: normalized,
+                lastUpdated: new Date().toISOString()
+              },
+              updated_at: new Date().toISOString()
+            },
+            { onConflict: "user_id" }
+          );
+        } catch {
+          // Ignore
+        }
+
         return normalized;
       }
 
-      // 2. Guaranteed Cloud Fallback: Query 'user_settings' for master incident reports
+      // 2. Only if the dedicated table had a query ERROR (e.g., table does not exist yet or schema mismatch),
+      // fallback to user_settings backup
       const { data: cloudBackup, error: backupErr } = await supabase
         .from("user_settings")
         .select("settings_json")
