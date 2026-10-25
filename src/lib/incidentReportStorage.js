@@ -188,6 +188,50 @@ export function normalizeIncidentReport(d) {
     respondentSignedName: d.respondentSignedName || d.respondent_signed_name || d.employee_name || d.employeeName || "",
     respondentRemarks: d.respondentRemarks || d.respondent_remarks || "",
     employeeEmail: d.employeeEmail || d.employee_email || "",
+
+    // 1. Preparer & Operations Manager Signatures
+    preparerSignature: d.preparerSignature || d.preparer_signature || "",
+    preparerName: d.preparerName || d.preparer_name || senderHrName,
+    preparerTitle: d.preparerTitle || d.preparer_title || senderHrTitle,
+    operationsManagerSignature: d.operationsManagerSignature || d.operations_manager_signature || "",
+    operationsManagerName: d.operationsManagerName || d.operations_manager_name || "Operations Manager",
+    operationsManagerTitle: d.operationsManagerTitle || d.operations_manager_title || "Operations Manager",
+
+    // 2. Head Office Discretion 1: Filings Only
+    filingRemarks: d.filingRemarks || d.filing_remarks || "",
+    filedAt: d.filedAt || d.filed_at || "",
+
+    // 3. Branch HR Upload: Employee Signed NTE Proof of Receipt
+    nteSignedProof: d.nteSignedProof || d.nte_signed_proof || "",
+    nteSignedProofName: d.nteSignedProofName || d.nte_signed_proof_name || "",
+    nteServedAt: d.nteServedAt || d.nte_served_at || "",
+
+    // 4. Head Office Discretion 2A: Notice of Warning
+    warningNoticeSubject: d.warningNoticeSubject || d.warning_notice_subject || "",
+    warningNoticeBody: d.warningNoticeBody || d.warning_notice_body || "",
+    warningNoticePenalty: d.warningNoticePenalty || d.warning_notice_penalty || "Written Warning & Reprimand",
+    warningIssuedAt: d.warningIssuedAt || d.warning_issued_at || "",
+
+    // 5. Head Office Discretion 2B: Notice of Investigation (NOI) with Zoom Meeting Schedule
+    zoomMeetingTopic: d.zoomMeetingTopic || d.zoom_meeting_topic || "",
+    zoomMeetingDate: d.zoomMeetingDate || d.zoom_meeting_date || "",
+    zoomMeetingTime: d.zoomMeetingTime || d.zoom_meeting_time || "",
+    zoomMeetingLink: d.zoomMeetingLink || d.zoom_meeting_link || "",
+    zoomMeetingId: d.zoomMeetingId || d.zoom_meeting_id || "",
+    zoomPasscode: d.zoomPasscode || d.zoom_passcode || "",
+    hearingCommittee: d.hearingCommittee || d.hearing_committee || "SGC Due Process Committee & HRMD",
+    noiRemarks: d.noiRemarks || d.noi_remarks || "",
+    noiIssuedAt: d.noiIssuedAt || d.noi_issued_at || "",
+
+    // 6. Post-NOI: Decision on Administrative Case
+    adminDecisionSubject: d.adminDecisionSubject || d.admin_decision_subject || "",
+    adminDecisionFindings: d.adminDecisionFindings || d.admin_decision_findings || "",
+    adminDecisionPenalty: d.adminDecisionPenalty || d.admin_decision_penalty || "",
+    adminDecisionBody: d.adminDecisionBody || d.admin_decision_body || "",
+    adminDecisionIssuedAt: d.adminDecisionIssuedAt || d.admin_decision_issued_at || "",
+    decisionSignedProof: d.decisionSignedProof || d.decision_signed_proof || "",
+    decisionSignedAt: d.decisionSignedAt || d.decision_signed_at || "",
+
     activityLog: Array.isArray(d.activity_log) ? d.activity_log : (d.activityLog || [])
   };
 }

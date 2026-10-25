@@ -41,7 +41,9 @@ import {
   Paperclip,
   AtSign,
   MessageSquare,
-  Reply
+  Reply,
+  Video,
+  ExternalLink
 } from "lucide-react";
 import {
   fetchIncidentReports,
@@ -136,6 +138,49 @@ export default function IncidentReportPanel({
   const sigCanvasRef = useRef(null);
   const isDrawingRef = useRef(false);
 
+  // New Disciplinary Lifecycle Modals (Head Office & Branch HR)
+  const [isAddToFilingsModalOpen, setIsAddToFilingsModalOpen] = useState(false);
+  const [filingRemarksInput, setFilingRemarksInput] = useState("Reviewed by SGC Head Office HRMD. Noted and retained for 201 file records. Minor discrepancy resolved on-site without formal disciplinary proceeding.");
+
+  const [isUploadNteProofModalOpen, setIsUploadNteProofModalOpen] = useState(false);
+  const [nteProofData, setNteProofData] = useState({ fileData: "", fileName: "", dateServed: new Date().toISOString().slice(0, 10), remarks: "" });
+
+  const [isWarningModalOpen, setIsWarningModalOpen] = useState(false);
+  const [warningForm, setWarningForm] = useState({
+    penalty: "1st Written Warning & Reprimand",
+    subject: "",
+    body: "",
+    signatoryName: "JEVINCE JAYE S. JUBAY, CHRP",
+    signatoryTitle: "HRMD Manager"
+  });
+
+  const [isNoiModalOpen, setIsNoiModalOpen] = useState(false);
+  const [noiForm, setNoiForm] = useState({
+    zoomMeetingTopic: "",
+    zoomMeetingDate: "",
+    zoomMeetingTime: "10:00 AM PST",
+    zoomMeetingLink: "",
+    zoomMeetingId: "",
+    zoomPasscode: "",
+    hearingCommittee: "SGC Due Process Committee & HRMD",
+    noiRemarks: "You are required to attend this administrative investigation hearing. You may be accompanied by a representative or legal counsel of your choice in accordance with DOLE Department Order No. 147-15."
+  });
+
+  const [isAdminDecisionModalOpen, setIsAdminDecisionModalOpen] = useState(false);
+  const [adminDecisionForm, setAdminDecisionForm] = useState({
+    subject: "",
+    findings: "Guilty of Non-observance of Cashier Standard Operating Procedures and Discrepancy",
+    penalty: "Written Warning & Restitution of Unaccounted Funds",
+    body: "",
+    signatoryName: "JEVINCE JAYE S. JUBAY, CHRP",
+    signatoryTitle: "HRMD Manager"
+  });
+
+  const [isUploadDecisionProofModalOpen, setIsUploadDecisionProofModalOpen] = useState(false);
+  const [decisionProofData, setDecisionProofData] = useState({ fileData: "", fileName: "", dateServed: new Date().toISOString().slice(0, 10), remarks: "" });
+
+  const [isZoomViewerOpen, setIsZoomViewerOpen] = useState(false);
+
   // Compute effective role & capabilities STRICTLY based on the logged-in account (currentUser)
   const effectiveRole = useMemo(() => {
     return resolveUserHrRole(currentUser, profiles);
@@ -177,7 +222,13 @@ export default function IncidentReportPanel({
     incidentCauses: "Non-observance of Cashier Standard Operating Procedures (SOPs), unauthorized credit extensions, and failure to reconcile daily cash float before shift closure.",
     followUpRecommendations: "Immediate transmittal to Simpal Group of Companies (SGC) Head Office HRMD for formal Notice to Explain (NTE) issuance under Article 297 Labor Code.",
     additionalNotes: "All physical cash count discrepancy sheets and borrower signed slips have been submitted and attached to the audit file.",
-    evidenceNotes: ""
+    evidenceNotes: "",
+    preparerSignature: "",
+    preparerName: initialSenderHr.name,
+    preparerTitle: initialSenderHr.title,
+    operationsManagerSignature: "",
+    operationsManagerName: "Operations Manager",
+    operationsManagerTitle: "Operations Manager"
   });
 
   // When Originating Subsidiary Company changes, dynamically lookup the assigned HR from Employee Directory
@@ -312,10 +363,29 @@ export default function IncidentReportPanel({
       }
 
       // Filter status
-      if (activeFilter === "PENDING_SGC_REVIEW" && item.status !== "SUBMITTED_TO_CENTRAL_HR") return false;
-      if (activeFilter === "NTE_RETURNED" && item.status !== "NTE_ISSUED") return false;
-      if (activeFilter === "SERVED" && item.status !== "SERVED_TO_EMPLOYEE") return false;
-      if (activeFilter === "RESOLVED" && item.status !== "CASE_RESOLVED" && item.status !== "EXPLANATION_RECEIVED") return false;
+      if (activeFilter === "PENDING_SGC" && item.status !== "SUBMITTED_TO_CENTRAL_HR") return false;
+      if (activeFilter === "FILED_RECORD" && item.status !== "FILED_FOR_RECORD") return false;
+      if (
+        activeFilter === "NTE_STAGE" &&
+        item.status !== "NTE_ISSUED" &&
+        item.status !== "NTE_SERVED_ACKNOWLEDGED" &&
+        item.status !== "SERVED_TO_EMPLOYEE"
+      )
+        return false;
+      if (activeFilter === "EXPLANATION" && item.status !== "EXPLANATION_RECEIVED") return false;
+      if (
+        activeFilter === "NOI_ZOOM" &&
+        item.status !== "NOI_ISSUED" &&
+        item.status !== "NOTICE_OF_WARNING_ISSUED"
+      )
+        return false;
+      if (
+        activeFilter === "DECISION_CLOSED" &&
+        item.status !== "ADMIN_DECISION_ISSUED" &&
+        item.status !== "CASE_CLOSED" &&
+        item.status !== "CASE_RESOLVED"
+      )
+        return false;
 
       // Search
       if (searchQuery.trim()) {
@@ -425,6 +495,12 @@ export default function IncidentReportPanel({
       receiverCompany: "Simpal Group of Companies",
       receiverHrName: irForm.assignedCentralHrName,
       receiverHrTitle: irForm.assignedCentralHrTitle,
+      preparerSignature: irForm.preparerSignature || "",
+      preparerName: irForm.preparerName || irForm.reportingHrName,
+      preparerTitle: irForm.preparerTitle || irForm.reportingHrTitle,
+      operationsManagerSignature: irForm.operationsManagerSignature || "",
+      operationsManagerName: irForm.operationsManagerName || "Operations Manager",
+      operationsManagerTitle: irForm.operationsManagerTitle || "Operations Manager",
       companyAddress: DEFAULT_COMPANY_ADDRESS,
       companyEmail: DEFAULT_COMPANY_EMAIL,
       forwardedAt: new Date().toISOString(),
@@ -791,6 +867,305 @@ export default function IncidentReportPanel({
     setSelectedCaseReport(report);
     setActiveEmailTab("INBOX");
     setIsEmailInboxOpen(true);
+  };
+
+  // Helper: Read signature image file to DataURL
+  const handleSignatureUpload = (file, targetField) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      setIrForm((prev) => ({
+        ...prev,
+        [targetField]: e.target.result
+      }));
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // 1. Head Office Discretion 1: Add to Filings (File for Record Only)
+  const handleOpenAddToFilings = (report) => {
+    setSelectedReport(report);
+    setFilingRemarksInput("Reviewed by SGC Head Office HRMD. Incident report noted and officially retained for 201 file records. Minor discrepancy resolved on-site without formal disciplinary proceeding.");
+    setIsAddToFilingsModalOpen(true);
+  };
+
+  const handleConfirmAddToFilings = async () => {
+    if (!selectedReport) return;
+    const dateNow = new Date().toLocaleString("en-US", {
+      month: "long",
+      day: "numeric",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true
+    });
+
+    const updated = {
+      ...selectedReport,
+      status: "FILED_FOR_RECORD",
+      filingRemarks: filingRemarksInput,
+      filedAt: dateNow,
+      activityLog: [
+        ...(selectedReport.activityLog || []),
+        {
+          id: `act-file-${Date.now()}`,
+          timestamp: new Date().toISOString(),
+          action: "IR_FILED_FOR_RECORD",
+          actor: `${effectiveRole.reportingName} (SGC Head Office HRMD)`,
+          message: `Incident Report added to 201 filings for record purposes only. Notes: "${filingRemarksInput}"`
+        }
+      ]
+    };
+
+    await saveIncidentReport(updated);
+    await loadRecords();
+    setIsAddToFilingsModalOpen(false);
+    setSelectedReport(updated);
+    playAiVoiceAnnouncement(`Incident Report for ${selectedReport.employeeName} has been officially added to 201 filings.`);
+  };
+
+  // 2. Branch HR: Upload Employee Signed NTE Proof of Receipt
+  const handleOpenUploadNteProof = (report) => {
+    setSelectedReport(report);
+    setNteProofData({
+      fileData: report.nteSignedProof || "",
+      fileName: report.nteSignedProofName || "",
+      dateServed: new Date().toISOString().slice(0, 10),
+      remarks: "Employee personally served physical copy of NTE and affixed signature acknowledging receipt."
+    });
+    setIsUploadNteProofModalOpen(true);
+  };
+
+  const handleSaveNteProof = async () => {
+    if (!selectedReport) return;
+    if (!nteProofData.fileData) {
+      alert("Please upload the scanned copy or photo of the employee's signed Notice to Explain.");
+      return;
+    }
+
+    const timestampStr = new Date().toLocaleString("en-US", {
+      month: "long",
+      day: "numeric",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true
+    });
+
+    const updated = {
+      ...selectedReport,
+      status: "NTE_SERVED_ACKNOWLEDGED",
+      nteSignedProof: nteProofData.fileData,
+      nteSignedProofName: nteProofData.fileName,
+      nteServedAt: nteProofData.dateServed || timestampStr,
+      activityLog: [
+        ...(selectedReport.activityLog || []),
+        {
+          id: `act-nte-proof-${Date.now()}`,
+          timestamp: new Date().toISOString(),
+          action: "NTE_SIGNED_PROOF_UPLOADED",
+          actor: `${effectiveRole.reportingName} (${selectedReport.company || selectedReport.senderCompany} HR)`,
+          message: `Employee signed Notice to Explain proof of receipt uploaded by Branch HR (${nteProofData.fileName || "scanned copy"}). Awaiting written explanation.`
+        }
+      ]
+    };
+
+    await saveIncidentReport(updated);
+    await loadRecords();
+    setIsUploadNteProofModalOpen(false);
+    setSelectedReport(updated);
+    playAiVoiceAnnouncement(`Signed Notice to Explain proof of receipt uploaded successfully.`);
+  };
+
+  // 3. Head Office Discretion 2A: Issue Notice of Warning
+  const handleOpenWarningModal = (report) => {
+    setSelectedReport(report);
+    setWarningForm({
+      penalty: "1st Written Warning & Reprimand",
+      subject: `FORMAL NOTICE OF WARNING — RE: INCIDENT INVESTIGATION FOR ${(report.employeeName || "EMPLOYEE").toUpperCase()}`,
+      body: `After comprehensive evaluation of the Incident Report, drawer audit discrepancy records, and the written explanation submitted, the Management of Simpal Group of Companies has determined that your conduct warrants an official disciplinary warning.\n\nYou are hereby issued this Written Warning for non-observance of Cashier Standard Operating Procedures (SOPs) and drawer balancing guidelines. Any further non-compliance or future discrepancy shall result in more severe penalties, up to and including suspension or termination of employment under Company Policy and Philippine Labor Code Article 297.`,
+      signatoryName: report.assignedCentralHrName || "JEVINCE JAYE S. JUBAY, CHRP",
+      signatoryTitle: report.assignedCentralHrTitle || "HRMD Manager"
+    });
+    setIsWarningModalOpen(true);
+  };
+
+  const handleIssueNoticeOfWarning = async () => {
+    if (!selectedReport) return;
+    const dateFormatted = new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+    const updated = {
+      ...selectedReport,
+      status: "NOTICE_OF_WARNING_ISSUED",
+      warningNoticeSubject: warningForm.subject,
+      warningNoticePenalty: warningForm.penalty,
+      warningNoticeBody: warningForm.body,
+      warningIssuedAt: dateFormatted,
+      activityLog: [
+        ...(selectedReport.activityLog || []),
+        {
+          id: `act-warn-${Date.now()}`,
+          timestamp: new Date().toISOString(),
+          action: "NOTICE_OF_WARNING_ISSUED",
+          actor: `${warningForm.signatoryName} (${warningForm.signatoryTitle} - SGC Head Office)`,
+          message: `Issued formal Notice of Warning (${warningForm.penalty}) to ${selectedReport.employeeName}. Transmitted to Branch HR for serving.`
+        }
+      ]
+    };
+    await saveIncidentReport(updated);
+    await loadRecords();
+    setIsWarningModalOpen(false);
+    setSelectedReport(updated);
+    playAiVoiceAnnouncement(`Notice of Warning has been issued by Head Office for ${selectedReport.employeeName}. Returned to branch HR.`);
+  };
+
+  // 4. Head Office Discretion 2B: Notice of Investigation (NOI) with REQUIRED Zoom Meeting Schedule
+  const handleOpenNoiModal = (report) => {
+    setSelectedReport(report);
+    const hearingDate = new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10);
+    setNoiForm({
+      zoomMeetingTopic: `Administrative Investigation Hearing: Case ${report.caseNumber} - ${report.employeeName}`,
+      zoomMeetingDate: hearingDate,
+      zoomMeetingTime: "10:00 AM PST",
+      zoomMeetingLink: `https://zoom.us/j/${Math.floor(80000000000 + Math.random() * 9000000000)}?pwd=SGC${new Date().getFullYear()}`,
+      zoomMeetingId: `${Math.floor(812 + Math.random() * 100)} ${Math.floor(1000 + Math.random() * 9000)} ${Math.floor(1000 + Math.random() * 9000)}`,
+      zoomPasscode: `SGC${new Date().getFullYear()}`,
+      hearingCommittee: "SGC Due Process Committee, Legal Counsel & Central HRMD",
+      noiRemarks: "You are hereby formally directed to attend the Administrative Hearing via Zoom on the schedule stated below. In accordance with DOLE Department Order No. 147-15, you have the right to be assisted by a representative, lawyer, or union officer if you so desire. Your attendance is mandatory to present your complete evidence and testimony."
+    });
+    setIsNoiModalOpen(true);
+  };
+
+  const handleIssueNoi = async () => {
+    if (!selectedReport) return;
+    if (!noiForm.zoomMeetingLink || !noiForm.zoomMeetingDate || !noiForm.zoomMeetingTime) {
+      alert("Please provide the required Zoom Meeting Date, Time, and Meeting Link.");
+      return;
+    }
+    const dateFormatted = new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+    const updated = {
+      ...selectedReport,
+      status: "NOI_ISSUED",
+      zoomMeetingTopic: noiForm.zoomMeetingTopic,
+      zoomMeetingDate: noiForm.zoomMeetingDate,
+      zoomMeetingTime: noiForm.zoomMeetingTime,
+      zoomMeetingLink: noiForm.zoomMeetingLink,
+      zoomMeetingId: noiForm.zoomMeetingId,
+      zoomPasscode: noiForm.zoomPasscode,
+      hearingCommittee: noiForm.hearingCommittee,
+      noiRemarks: noiForm.noiRemarks,
+      noiIssuedAt: dateFormatted,
+      activityLog: [
+        ...(selectedReport.activityLog || []),
+        {
+          id: `act-noi-${Date.now()}`,
+          timestamp: new Date().toISOString(),
+          action: "NOI_ISSUED_WITH_ZOOM_SCHEDULE",
+          actor: `SGC Due Process Committee & HRMD`,
+          message: `Issued formal Notice of Investigation (NOI) with scheduled Zoom hearing on ${noiForm.zoomMeetingDate} at ${noiForm.zoomMeetingTime}. Zoom Meeting ID: ${noiForm.zoomMeetingId}.`
+        }
+      ]
+    };
+    await saveIncidentReport(updated);
+    await loadRecords();
+    setIsNoiModalOpen(false);
+    setSelectedReport(updated);
+    playAiVoiceAnnouncement(`Notice of Investigation officially issued with Zoom hearing schedule for ${selectedReport.employeeName}. Transmitted to branch HR and employee.`);
+  };
+
+  // 5. Post-NOI: Decision on Administrative Case
+  const handleOpenAdminDecisionModal = (report) => {
+    setSelectedReport(report);
+    setAdminDecisionForm({
+      subject: `DECISION ON ADMINISTRATIVE CASE — CASE NO: ${report.caseNumber} (${report.employeeName.toUpperCase()})`,
+      findings: "Guilty of Non-observance of Cashier Standard Operating Procedures (SOPs) and Failure to Balance Cash Float",
+      penalty: "3-Day Suspension Without Pay & Mandatory Restitution of Funds",
+      body: `After due deliberation of the findings of the Administrative Hearing conducted via Zoom on ${report.zoomMeetingDate || "scheduled date"}, taking into account the incident narrative, drawer audit discrepancy sheets, and the respondent's verbal and written submissions, the SGC Due Process Committee hereby issues its official Decision:\n\n1. The Respondent is found ADMINISTRATIVELY LIABLE for deviation from standard cash custody procedures.\n2. In accordance with the Company Employees Code of Conduct and Labor Code Due Process standards, the respondent is meted the sanction of Suspension Without Pay and required to settle the outstanding shortage amount through authorized salary installment deductions.\n\nThis decision is final, executory, and entered into the employee's permanent 201 personnel records.`,
+      signatoryName: report.assignedCentralHrName || "JEVINCE JAYE S. JUBAY, CHRP",
+      signatoryTitle: report.assignedCentralHrTitle || "HRMD Manager"
+    });
+    setIsAdminDecisionModalOpen(true);
+  };
+
+  const handleIssueAdminDecision = async () => {
+    if (!selectedReport) return;
+    const dateFormatted = new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+    const updated = {
+      ...selectedReport,
+      status: "ADMIN_DECISION_ISSUED",
+      adminDecisionSubject: adminDecisionForm.subject,
+      adminDecisionFindings: adminDecisionForm.findings,
+      adminDecisionPenalty: adminDecisionForm.penalty,
+      adminDecisionBody: adminDecisionForm.body,
+      adminDecisionIssuedAt: dateFormatted,
+      activityLog: [
+        ...(selectedReport.activityLog || []),
+        {
+          id: `act-decision-${Date.now()}`,
+          timestamp: new Date().toISOString(),
+          action: "ADMIN_DECISION_ISSUED",
+          actor: `${adminDecisionForm.signatoryName} (SGC Head Office HRMD)`,
+          message: `Head Office issued official Decision on Administrative Case (${adminDecisionForm.penalty}). Sent to Branch HR for personal serving and signed employee acknowledgment.`
+        }
+      ]
+    };
+    await saveIncidentReport(updated);
+    await loadRecords();
+    setIsAdminDecisionModalOpen(false);
+    setSelectedReport(updated);
+    playAiVoiceAnnouncement(`Decision on Administrative Case issued by Head Office. Returned to branch HR for serving and final employee acknowledgment.`);
+  };
+
+  // 6. Branch HR: Upload Employee Signed Decision Proof & Close Case
+  const handleOpenUploadDecisionProof = (report) => {
+    setSelectedReport(report);
+    setDecisionProofData({
+      fileData: report.decisionSignedProof || "",
+      fileName: report.decisionSignedProofName || "",
+      dateServed: new Date().toISOString().slice(0, 10),
+      remarks: "Employee personally served copy of Administrative Case Decision, signed acknowledgment copy affixed."
+    });
+    setIsUploadDecisionProofModalOpen(true);
+  };
+
+  const handleSaveDecisionProofAndCloseCase = async () => {
+    if (!selectedReport) return;
+    if (!decisionProofData.fileData) {
+      alert("Please upload the signed copy of the Administrative Decision signed by the employee.");
+      return;
+    }
+
+    const timestampStr = new Date().toLocaleString("en-US", {
+      month: "long",
+      day: "numeric",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true
+    });
+
+    const updated = {
+      ...selectedReport,
+      status: "CASE_CLOSED",
+      decisionSignedProof: decisionProofData.fileData,
+      decisionSignedProofName: decisionProofData.fileName,
+      decisionSignedAt: decisionProofData.dateServed || timestampStr,
+      activityLog: [
+        ...(selectedReport.activityLog || []),
+        {
+          id: `act-closed-${Date.now()}`,
+          timestamp: new Date().toISOString(),
+          action: "CASE_CLOSED_DUE_PROCESS_COMPLETED",
+          actor: `${effectiveRole.reportingName} (${selectedReport.company || selectedReport.senderCompany} HR)`,
+          message: `Employee signed copy of the Administrative Decision successfully uploaded. Case is now officially CLOSED and ARCHIVED in compliance with Philippine Due Process.`
+        }
+      ]
+    };
+
+    await saveIncidentReport(updated);
+    await loadRecords();
+    setIsUploadDecisionProofModalOpen(false);
+    setSelectedReport(updated);
+    playAiVoiceAnnouncement(`Administrative decision signed and acknowledged by employee. Case is officially closed and archived.`);
   };
 
   // Purge test / mock data to start with pure live process
@@ -1227,27 +1602,52 @@ export default function IncidentReportPanel({
           {[
             { id: "ALL", label: "All Cases", count: filteredReports.length },
             {
-              id: "PENDING_SGC_REVIEW",
-              label: effectiveRole.isHeadOffice ? "Incoming IRs (Need NTE)" : "Sent to Head Office (SGC)",
-              count: pendingSgcReviewCount,
+              id: "PENDING_SGC",
+              label: effectiveRole.isHeadOffice ? "Pending SGC Evaluation" : "Sent to Head Office (SGC)",
+              count: reports.filter((r) => r.status === "SUBMITTED_TO_CENTRAL_HR").length,
               badgeColor: "bg-amber-100 text-amber-800"
             },
             {
-              id: "NTE_RETURNED",
-              label: effectiveRole.isHeadOffice ? "SGC Dispatched NTEs" : "Returned NTEs (Ready to Serve)",
-              count: nteReadyToServeCount,
+              id: "FILED_RECORD",
+              label: "201 Filings",
+              count: reports.filter((r) => r.status === "FILED_FOR_RECORD").length,
+              badgeColor: "bg-slate-100 text-slate-800"
+            },
+            {
+              id: "NTE_STAGE",
+              label: "NTE Stage",
+              count: reports.filter(
+                (r) =>
+                  r.status === "NTE_ISSUED" ||
+                  r.status === "NTE_SERVED_ACKNOWLEDGED" ||
+                  r.status === "SERVED_TO_EMPLOYEE"
+              ).length,
               badgeColor: "bg-emerald-100 text-emerald-800"
             },
             {
-              id: "SERVED",
-              label: "Served to Employee",
-              count: activeDueProcessCount,
-              badgeColor: "bg-blue-100 text-blue-800"
+              id: "EXPLANATION",
+              label: "Explanations",
+              count: reports.filter((r) => r.status === "EXPLANATION_RECEIVED").length,
+              badgeColor: "bg-purple-100 text-purple-800"
             },
             {
-              id: "RESOLVED",
-              label: "Explanation / Resolved",
-              count: filteredReports.filter((r) => r.status === "CASE_RESOLVED" || r.status === "EXPLANATION_RECEIVED").length
+              id: "NOI_ZOOM",
+              label: "NOI / Zoom Hearings",
+              count: reports.filter(
+                (r) => r.status === "NOI_ISSUED" || r.status === "NOTICE_OF_WARNING_ISSUED"
+              ).length,
+              badgeColor: "bg-indigo-100 text-indigo-800"
+            },
+            {
+              id: "DECISION_CLOSED",
+              label: "Decisions & Closed",
+              count: reports.filter(
+                (r) =>
+                  r.status === "ADMIN_DECISION_ISSUED" ||
+                  r.status === "CASE_CLOSED" ||
+                  r.status === "CASE_RESOLVED"
+              ).length,
+              badgeColor: "bg-teal-100 text-teal-800"
             }
           ].map((tab) => {
             const active = activeFilter === tab.id;
@@ -1338,9 +1738,15 @@ export default function IncidentReportPanel({
           <div className="divide-y divide-slate-100">
             {filteredReports.map((report) => {
               const isPendingSgc = report.status === "SUBMITTED_TO_CENTRAL_HR";
+              const isFiledForRecord = report.status === "FILED_FOR_RECORD";
               const isNteIssued = report.status === "NTE_ISSUED";
+              const isNteAcknowledged = report.status === "NTE_SERVED_ACKNOWLEDGED";
               const isServed = report.status === "SERVED_TO_EMPLOYEE";
               const isExplanation = report.status === "EXPLANATION_RECEIVED";
+              const isWarning = report.status === "NOTICE_OF_WARNING_ISSUED";
+              const isNoi = report.status === "NOI_ISSUED";
+              const isAdminDecision = report.status === "ADMIN_DECISION_ISSUED";
+              const isClosed = report.status === "CASE_CLOSED" || report.status === "CASE_RESOLVED";
               const senderComp = report.senderCompany || report.company || "Subsidiary Company";
               const senderHr = report.senderHrName || report.reportingHrName || "Area HR Admin";
               const receiverComp = report.receiverCompany || "Simpal Group of Companies";
@@ -1363,8 +1769,14 @@ export default function IncidentReportPanel({
                         <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200">
                           <Clock size={12} />
                           {effectiveRole.isHeadOffice
-                            ? "📥 Incoming: Transmitted from " + senderComp
+                            ? "📥 Incoming IR: Transmitted from " + senderComp
                             : "📤 Outbox: Transmitted to SGC Head Office"}
+                        </span>
+                      )}
+                      {isFiledForRecord && (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-100 text-slate-700 border border-slate-300">
+                          <CheckCircle2 size={12} className="text-slate-500" />
+                          📁 Filed for 201 Record Only
                         </span>
                       )}
                       {isNteIssued && (
@@ -1372,19 +1784,49 @@ export default function IncidentReportPanel({
                           <CheckCircle2 size={12} />
                           {effectiveRole.isHeadOffice
                             ? "NTE Issued ➔ Dispatched to " + senderComp
-                            : "📥 Returned from Head Office SGC (Ready to Serve)"}
+                            : "📥 Returned from Head Office SGC (Awaiting Signed Proof)"}
+                        </span>
+                      )}
+                      {isNteAcknowledged && (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-teal-50 text-teal-800 border border-teal-200">
+                          <CheckCheck size={12} className="text-teal-600" />
+                          ✅ NTE Served & Signed (Proof Uploaded)
                         </span>
                       )}
                       {isServed && (
                         <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200">
                           <Clock size={12} />
-                          Served to Employee (Active 1-Day Response Window)
+                          Served to Employee (Active 5-Day Period)
                         </span>
                       )}
                       {isExplanation && (
                         <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-purple-50 text-purple-700 border border-purple-200">
                           <CheckCircle2 size={12} />
-                          Written Explanation Received
+                          Written Explanation Received (Awaiting SGC Evaluation)
+                        </span>
+                      )}
+                      {isWarning && (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-900 border border-amber-300">
+                          <AlertTriangle size={12} className="text-amber-700" />
+                          ⚠️ Notice of Warning Issued
+                        </span>
+                      )}
+                      {isNoi && (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-indigo-50 text-indigo-800 border border-indigo-200 animate-pulse">
+                          <Scale size={12} className="text-indigo-600" />
+                          🔍 Formal Investigation (NOI via Zoom)
+                        </span>
+                      )}
+                      {isAdminDecision && (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-rose-50 text-rose-800 border border-rose-300">
+                          <FileText size={12} className="text-rose-600" />
+                          ⚖️ Decision on Administrative Case Issued
+                        </span>
+                      )}
+                      {isClosed && (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-900 border border-emerald-300">
+                          <CheckCheck size={12} className="text-emerald-700" />
+                          ✅ Case Closed & Archived
                         </span>
                       )}
 
@@ -1540,61 +1982,243 @@ export default function IncidentReportPanel({
                       <Send size={14} />
                     </button>
 
-                    {/* SGC Head Office HRMD ONLY: Evaluate & Issue NTE */}
+                    {/* 1. SGC HEAD OFFICE EVALUATION OF IR (Pending Stage) */}
                     {effectiveRole.isHeadOffice && isPendingSgc && (
-                      <button
-                        type="button"
-                        onClick={() => handleOpenDraftNte(report)}
-                        className="px-4 py-2 rounded-xl text-xs font-extrabold bg-amber-500 hover:bg-amber-600 text-slate-950 shadow-md transition cursor-pointer inline-flex items-center gap-1.5"
-                      >
-                        <Scale size={14} />
-                        <span>SGC: Issue Official NTE</span>
-                      </button>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {/* Option A: Add to Filings only */}
+                        <button
+                          type="button"
+                          onClick={() => handleOpenAddToFilings(report)}
+                          className="px-3.5 py-2 rounded-xl text-xs font-black bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 shadow-2xs transition cursor-pointer inline-flex items-center gap-1.5 active:scale-98"
+                          title="SGC Head Office Discretion: File for 201 records only without disciplinary proceeding"
+                        >
+                          <span>📁 Add to Filings</span>
+                        </button>
+
+                        {/* Option B: Proceed to Notice to Explain */}
+                        <button
+                          type="button"
+                          onClick={() => handleOpenDraftNte(report)}
+                          className="px-4 py-2 rounded-xl text-xs font-black bg-amber-500 hover:bg-amber-600 text-slate-950 shadow-md transition cursor-pointer inline-flex items-center gap-1.5 active:scale-98"
+                          title="SGC Head Office Discretion: Issue official Notice to Explain (NTE)"
+                        >
+                          <Scale size={14} />
+                          <span>⚖️ Proceed to Notice to Explain</span>
+                        </button>
+                      </div>
                     )}
 
                     {/* Subsidiary HR when pending: Indicates it is in Head Office hands */}
                     {!effectiveRole.isHeadOffice && isPendingSgc && (
                       <span className="px-3 py-2 rounded-xl text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200 inline-flex items-center gap-1.5">
                         <Clock size={13} />
-                        <span>Awaiting SGC NTE</span>
+                        <span>Awaiting Head Office (SGC) Evaluation</span>
                       </span>
                     )}
 
-                    {/* View Official NTE (When drafted or issued) */}
-                    <button
-                      type="button"
-                      onClick={() => handleViewNteDocument(report)}
-                      className="px-3.5 py-2 rounded-xl text-xs font-bold bg-slate-900 hover:bg-slate-800 text-white shadow-xs transition cursor-pointer inline-flex items-center gap-1.5"
-                    >
-                      <Eye size={14} />
-                      <span>View Official NTE</span>
-                    </button>
-
-                    {/* Subsidiary Company HR: Mark as Served */}
-                    {isNteIssued && (
+                    {/* 2. FILED FOR RECORD VIEW */}
+                    {isFiledForRecord && (
                       <button
                         type="button"
-                        onClick={() => handleServeNte(report)}
-                        className="px-3.5 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs transition cursor-pointer inline-flex items-center gap-1.5"
+                        onClick={() =>
+                          alert(
+                            `📁 201 FILING RECORD NOTES:\n\nFiled On: ${
+                              report.filedAt || "Recorded"
+                            }\nRemarks: ${
+                              report.filingRemarks ||
+                              "Retained in HR 201 files for record purposes only."
+                            }`
+                          )
+                        }
+                        className="px-3 py-2 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 transition cursor-pointer inline-flex items-center gap-1.5"
                       >
-                        <Check size={14} />
-                        <span>Serve to Employee</span>
+                        <span>📁 View Filing Notes</span>
                       </button>
                     )}
 
-                    {/* Subsidiary Company HR: Log Written Explanation */}
-                    {isServed && (
+                    {/* 3. NTE ISSUED STAGE: View NTE + Branch HR Upload Signed Proof */}
+                    {(isNteIssued || isNteAcknowledged || isServed || isExplanation || isWarning || isNoi || isAdminDecision || isClosed) && (
+                      <button
+                        type="button"
+                        onClick={() => handleViewNteDocument(report)}
+                        className="px-3.5 py-2 rounded-xl text-xs font-bold bg-slate-900 hover:bg-slate-800 text-white shadow-xs transition cursor-pointer inline-flex items-center gap-1.5"
+                      >
+                        <Eye size={14} />
+                        <span>View Official NTE</span>
+                      </button>
+                    )}
+
+                    {/* Branch HR: Upload Employee-Signed NTE Proof of Receipt */}
+                    {isNteIssued && (
+                      <button
+                        type="button"
+                        onClick={() => handleOpenUploadNteProof(report)}
+                        className="px-4 py-2 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-600/25 transition cursor-pointer inline-flex items-center gap-1.5 active:scale-98 animate-pulse"
+                        title="Upload photo or scan of the employee's signed copy acknowledging receipt of the NTE"
+                      >
+                        <FileSignature size={14} />
+                        <span>📤 Upload Signed NTE Proof</span>
+                      </button>
+                    )}
+
+                    {/* Branch HR: Log Employee Written Explanation once signed proof is uploaded or served */}
+                    {(isNteAcknowledged || isServed) && (
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {report.nteSignedProof && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedReport(report);
+                              setIsUploadNteProofModalOpen(true);
+                            }}
+                            className="px-3 py-2 rounded-xl text-xs font-bold bg-teal-50 text-teal-800 border border-teal-200 hover:bg-teal-100 transition cursor-pointer inline-flex items-center gap-1"
+                            title="View employee signed NTE receipt proof"
+                          >
+                            <Paperclip size={13} className="text-teal-600" />
+                            <span>Signed NTE Proof</span>
+                          </button>
+                        )}
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedReport(report);
+                            setIsExplanationModalOpen(true);
+                          }}
+                          className="px-3.5 py-2 rounded-xl text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white shadow-xs transition cursor-pointer inline-flex items-center gap-1.5"
+                        >
+                          <FileCheck size={14} />
+                          <span>📝 Log Explanation ➔ SGC</span>
+                        </button>
+                      </div>
+                    )}
+
+                    {/* 4. SGC HEAD OFFICE EVALUATION OF EXPLANATION */}
+                    {isExplanation && effectiveRole.isHeadOffice && (
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {/* Option A: Issue Notice of Warning */}
+                        <button
+                          type="button"
+                          onClick={() => handleOpenWarningModal(report)}
+                          className="px-3.5 py-2 rounded-xl text-xs font-black bg-amber-500 hover:bg-amber-600 text-slate-950 shadow-xs transition cursor-pointer inline-flex items-center gap-1.5"
+                          title="SGC Head Office Discretion: End proceeding with Notice of Warning"
+                        >
+                          <AlertTriangle size={14} />
+                          <span>⚠️ Issue Notice of Warning</span>
+                        </button>
+
+                        {/* Option B: Proceed to Notice of Investigation (NOI) with required Zoom Schedule */}
+                        <button
+                          type="button"
+                          onClick={() => handleOpenNoiModal(report)}
+                          className="px-4 py-2 rounded-xl text-xs font-black bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-600/25 transition cursor-pointer inline-flex items-center gap-1.5"
+                          title="SGC Head Office Discretion: Proceed to formal Notice of Investigation and schedule Zoom hearing"
+                        >
+                          <Scale size={14} />
+                          <span>🔍 Proceed to NOI (Zoom Hearing)</span>
+                        </button>
+                      </div>
+                    )}
+
+                    {isExplanation && !effectiveRole.isHeadOffice && (
+                      <span className="px-3 py-2 rounded-xl text-xs font-bold bg-purple-50 text-purple-800 border border-purple-200 inline-flex items-center gap-1.5">
+                        <Clock size={13} />
+                        <span>Under SGC Head Office Evaluation</span>
+                      </span>
+                    )}
+
+                    {/* 5. NOTICE OF WARNING ISSUED */}
+                    {isWarning && (
                       <button
                         type="button"
                         onClick={() => {
                           setSelectedReport(report);
-                          setIsExplanationModalOpen(true);
+                          setIsWarningModalOpen(true);
                         }}
-                        className="px-3 py-2 rounded-xl text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white shadow-xs transition cursor-pointer inline-flex items-center gap-1.5"
+                        className="px-3.5 py-2 rounded-xl text-xs font-bold bg-amber-100 hover:bg-amber-200 text-amber-950 border border-amber-300 transition cursor-pointer inline-flex items-center gap-1.5"
                       >
-                        <FileCheck size={14} />
-                        <span>Log Explanation ➔ SGC</span>
+                        <AlertTriangle size={14} className="text-amber-700" />
+                        <span>⚠️ View Warning Notice</span>
                       </button>
+                    )}
+
+                    {/* 6. NOTICE OF INVESTIGATION (NOI) & ZOOM HEARING */}
+                    {isNoi && (
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {/* View Zoom Schedule button */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedReport(report);
+                            setIsZoomViewerOpen(true);
+                          }}
+                          className="px-3.5 py-2 rounded-xl text-xs font-black bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-600/20 transition cursor-pointer inline-flex items-center gap-1.5"
+                          title="View Zoom Meeting Schedule & Join Link"
+                        >
+                          <span>🎥 View Zoom Hearing Schedule</span>
+                        </button>
+
+                        {/* SGC Head Office can issue Decision of Administrative Case */}
+                        {effectiveRole.isHeadOffice && (
+                          <button
+                            type="button"
+                            onClick={() => handleOpenAdminDecisionModal(report)}
+                            className="px-4 py-2 rounded-xl text-xs font-black bg-rose-600 hover:bg-rose-700 text-white shadow-md shadow-rose-600/25 transition cursor-pointer inline-flex items-center gap-1.5"
+                          >
+                            <Scale size={14} />
+                            <span>⚖️ Issue Decision on Admin Case</span>
+                          </button>
+                        )}
+                      </div>
+                    )}
+
+                    {/* 7. DECISION ON ADMINISTRATIVE CASE ISSUED */}
+                    {isAdminDecision && (
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedReport(report);
+                            setIsAdminDecisionModalOpen(true);
+                          }}
+                          className="px-3.5 py-2 rounded-xl text-xs font-bold bg-slate-900 hover:bg-slate-800 text-white transition cursor-pointer inline-flex items-center gap-1.5"
+                        >
+                          <FileText size={14} />
+                          <span>View Admin Decision</span>
+                        </button>
+
+                        {/* Branch HR serves decision to employee & uploads employee-signed copy to CLOSE CASE */}
+                        <button
+                          type="button"
+                          onClick={() => handleOpenUploadDecisionProof(report)}
+                          className="px-4 py-2 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white shadow-md transition cursor-pointer inline-flex items-center gap-1.5 animate-pulse"
+                          title="Branch HR serves decision to employee, gets employee signature, and uploads proof to close case"
+                        >
+                          <FileSignature size={14} />
+                          <span>📤 Upload Signed Decision & Close Case</span>
+                        </button>
+                      </div>
+                    )}
+
+                    {/* 8. CASE CLOSED */}
+                    {isClosed && (
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedReport(report);
+                            if (report.decisionSignedProof) {
+                              setIsUploadDecisionProofModalOpen(true);
+                            } else {
+                              setIsAdminDecisionModalOpen(true);
+                            }
+                          }}
+                          className="px-3.5 py-2 rounded-xl text-xs font-black bg-emerald-50 text-emerald-900 border border-emerald-300 hover:bg-emerald-100 transition cursor-pointer inline-flex items-center gap-1.5"
+                        >
+                          <CheckCheck size={14} className="text-emerald-700" />
+                          <span>✅ View Closed Case & Signed Proof</span>
+                        </button>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -2112,6 +2736,144 @@ export default function IncidentReportPanel({
                 </div>
               </div>
 
+              {/* PREPARER & OPERATIONS MANAGER E-SIGNATURE UPLOAD SECTION */}
+              <div className="space-y-4 pt-2">
+                <div className="text-center">
+                  <h3 className="text-sm font-extrabold uppercase tracking-wider text-slate-800 flex items-center justify-center gap-2">
+                    <FileSignature size={16} className="text-[#8cb84a]" />
+                    <span>E-Signature Endorsement (Prepared By & Operations Manager)</span>
+                  </h3>
+                  <div className="w-16 h-0.5 bg-[#96c158] mx-auto mt-1 rounded-full" />
+                  <p className="text-[11px] text-slate-500 mt-1">
+                    Upload digital signatures to authenticate the Incident Report before transmitting to SGC Head Office.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* 1. PREPARED BY (Branch HR / Originator) */}
+                  <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-3">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[11px] font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                        <User size={13} className="text-slate-500" />
+                        <span>Prepared By (Reporter / HR)</span>
+                      </label>
+                      {irForm.preparerSignature && (
+                        <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                          ✓ E-Sig Uploaded
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="space-y-2">
+                      <input
+                        type="text"
+                        placeholder="Preparer Full Name"
+                        value={irForm.preparerName}
+                        onChange={(e) => setIrForm({ ...irForm, preparerName: e.target.value })}
+                        className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-200 bg-slate-50 font-bold text-slate-800"
+                      />
+                      <input
+                        type="text"
+                        placeholder="Preparer Designation / Title"
+                        value={irForm.preparerTitle}
+                        onChange={(e) => setIrForm({ ...irForm, preparerTitle: e.target.value })}
+                        className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-200 bg-slate-50 text-slate-600"
+                      />
+                    </div>
+
+                    {irForm.preparerSignature ? (
+                      <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 flex flex-col items-center relative group">
+                        <img
+                          src={irForm.preparerSignature}
+                          alt="Preparer E-Signature"
+                          className="max-h-16 object-contain"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setIrForm({ ...irForm, preparerSignature: "" })}
+                          className="mt-1.5 text-[10px] text-rose-600 font-bold hover:underline cursor-pointer"
+                        >
+                          Remove / Replace Signature
+                        </button>
+                      </div>
+                    ) : (
+                      <label className="flex flex-col items-center justify-center p-4 border-2 border-dashed border-slate-300 hover:border-[#8cb84a] rounded-xl bg-slate-50/50 hover:bg-[#eef7e5]/30 cursor-pointer transition">
+                        <FileSignature size={20} className="text-slate-400 mb-1" />
+                        <span className="text-xs font-bold text-slate-700">Upload Preparer E-Sig</span>
+                        <span className="text-[10px] text-slate-400">Click to choose image file (PNG/JPG)</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) => handleSignatureUpload(e.target.files[0], "preparerSignature")}
+                        />
+                      </label>
+                    )}
+                  </div>
+
+                  {/* 2. OPERATIONS MANAGER / MANAGER */}
+                  <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-3">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[11px] font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                        <Briefcase size={13} className="text-slate-500" />
+                        <span>Operations Manager / Manager</span>
+                      </label>
+                      {irForm.operationsManagerSignature && (
+                        <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                          ✓ E-Sig Uploaded
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="space-y-2">
+                      <input
+                        type="text"
+                        placeholder="Manager Full Name"
+                        value={irForm.operationsManagerName}
+                        onChange={(e) => setIrForm({ ...irForm, operationsManagerName: e.target.value })}
+                        className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-200 bg-slate-50 font-bold text-slate-800"
+                      />
+                      <input
+                        type="text"
+                        placeholder="Manager Title (e.g. Operations Manager)"
+                        value={irForm.operationsManagerTitle}
+                        onChange={(e) => setIrForm({ ...irForm, operationsManagerTitle: e.target.value })}
+                        className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-200 bg-slate-50 text-slate-600"
+                      />
+                    </div>
+
+                    {irForm.operationsManagerSignature ? (
+                      <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 flex flex-col items-center relative group">
+                        <img
+                          src={irForm.operationsManagerSignature}
+                          alt="Operations Manager E-Signature"
+                          className="max-h-16 object-contain"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setIrForm({ ...irForm, operationsManagerSignature: "" })}
+                          className="mt-1.5 text-[10px] text-rose-600 font-bold hover:underline cursor-pointer"
+                        >
+                          Remove / Replace Signature
+                        </button>
+                      </div>
+                    ) : (
+                      <label className="flex flex-col items-center justify-center p-4 border-2 border-dashed border-slate-300 hover:border-[#8cb84a] rounded-xl bg-slate-50/50 hover:bg-[#eef7e5]/30 cursor-pointer transition">
+                        <FileSignature size={20} className="text-slate-400 mb-1" />
+                        <span className="text-xs font-bold text-slate-700">Upload Operations Manager E-Sig</span>
+                        <span className="text-[10px] text-slate-400">Click to choose image file (PNG/JPG)</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) => handleSignatureUpload(e.target.files[0], "operationsManagerSignature")}
+                        />
+                      </label>
+                    )}
+                  </div>
+                </div>
+              </div>
+
               {/* SECTION 3: FOR OFFICIAL USE ONLY */}
               <div className="space-y-4 pt-2">
                 <div className="text-center">
@@ -2469,6 +3231,66 @@ export default function IncidentReportPanel({
                       <span>
                         <strong>Receiver:</strong> Simpal Group of Companies (Head Office HRMD)
                       </span>
+                    </div>
+
+                    {/* OFFICIAL ENDORSEMENT SIGNATURES: PREPARED BY & OPERATIONS MANAGER */}
+                    <div className="p-4 rounded-2xl bg-[#f8fafc] border border-slate-200 space-y-3 mt-3">
+                      <div className="text-[10px] font-black uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                        <FileSignature size={13} className="text-[#8cb84a]" />
+                        <span>Management Endorsement & Transmittal Signatures</span>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        {/* Column 1: Prepared By */}
+                        <div className="p-3 rounded-xl bg-white border border-slate-200 flex flex-col items-center text-center">
+                          <span className="text-[9px] font-black uppercase tracking-wider text-slate-400 mb-1">
+                            PREPARED BY (BRANCH HR / REPORTER)
+                          </span>
+                          {selectedReport.preparerSignature ? (
+                            <img
+                              src={selectedReport.preparerSignature}
+                              alt="Preparer Signature"
+                              className="max-h-14 object-contain mb-1"
+                            />
+                          ) : (
+                            <div className="h-12 flex items-center justify-center text-[11px] text-slate-400 italic">
+                              (Affixed on file)
+                            </div>
+                          )}
+                          <div className="w-48 h-px bg-slate-300 mt-1 mb-1" />
+                          <strong className="text-xs font-black text-slate-900">
+                            {selectedReport.preparerName || selectedReport.reportingHrName || selectedReport.senderHrName}
+                          </strong>
+                          <span className="text-[10px] text-slate-500 font-medium">
+                            {selectedReport.preparerTitle || selectedReport.reportingHrTitle || "Branch HR Admin"}
+                          </span>
+                        </div>
+
+                        {/* Column 2: Noted & Endorsed By */}
+                        <div className="p-3 rounded-xl bg-white border border-slate-200 flex flex-col items-center text-center">
+                          <span className="text-[9px] font-black uppercase tracking-wider text-slate-400 mb-1">
+                            NOTED & ENDORSED BY (OPERATIONS MANAGER)
+                          </span>
+                          {selectedReport.operationsManagerSignature ? (
+                            <img
+                              src={selectedReport.operationsManagerSignature}
+                              alt="Operations Manager Signature"
+                              className="max-h-14 object-contain mb-1"
+                            />
+                          ) : (
+                            <div className="h-12 flex items-center justify-center text-[11px] text-slate-400 italic">
+                              (Affixed on file)
+                            </div>
+                          )}
+                          <div className="w-48 h-px bg-slate-300 mt-1 mb-1" />
+                          <strong className="text-xs font-black text-slate-900">
+                            {selectedReport.operationsManagerName || "Operations Manager"}
+                          </strong>
+                          <span className="text-[10px] text-slate-500 font-medium">
+                            {selectedReport.operationsManagerTitle || "Operations Manager / Area Manager"}
+                          </span>
+                        </div>
+                      </div>
                     </div>
 
                     {/* 4. RESPONDENT (EMPLOYEE) ACKNOWLEDGMENT & SIGNATURE CONFORME */}
@@ -3702,6 +4524,832 @@ export default function IncidentReportPanel({
                     </p>
                   </div>
                 )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* LIFECYCLE MODAL 1: SGC HEAD OFFICE — ADD TO FILINGS (201 RECORD ONLY)     */}
+      {/* ========================================================================= */}
+      {isAddToFilingsModalOpen && selectedReport && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-3 md:p-6 overflow-y-auto">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-lg w-full overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-900 text-white">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-slate-800 text-slate-200 flex items-center justify-center font-bold">
+                  📁
+                </div>
+                <div>
+                  <h2 className="text-base font-black text-white">
+                    SGC Discretion: Add to Filings
+                  </h2>
+                  <p className="text-xs text-slate-400">
+                    Retain in 201 file records only without formal disciplinary action
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsAddToFilingsModalOpen(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs space-y-1">
+                <div>
+                  <strong>Case Number:</strong> {selectedReport.caseNumber}
+                </div>
+                <div>
+                  <strong>Employee:</strong> {selectedReport.employeeName} ({selectedReport.employeePosition || "Staff"})
+                </div>
+                <div>
+                  <strong>Originating Company:</strong> {selectedReport.senderCompany || selectedReport.company}
+                </div>
+                {selectedReport.cashShortageAmount && (
+                  <div>
+                    <strong>Discrepancy Amount:</strong> PHP {selectedReport.cashShortageAmount}
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
+                  Head Office HRMD Filing Remarks:
+                </label>
+                <textarea
+                  rows={4}
+                  value={filingRemarksInput}
+                  onChange={(e) => setFilingRemarksInput(e.target.value)}
+                  placeholder="Enter remarks for filing..."
+                  className="w-full p-3 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900 leading-relaxed font-sans"
+                />
+                <p className="text-[10px] text-slate-400 mt-1">
+                  This case will be marked as "Filed for 201 Record Only". No Notice to Explain will be issued.
+                </p>
+              </div>
+
+              <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setIsAddToFilingsModalOpen(false)}
+                  className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmAddToFilings}
+                  className="px-5 py-2.5 rounded-xl text-xs font-black bg-slate-900 hover:bg-slate-800 text-white shadow-md transition cursor-pointer inline-flex items-center gap-2 active:scale-98"
+                >
+                  <Check size={15} />
+                  <span>Confirm Add to 201 Filings</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* LIFECYCLE MODAL 2: BRANCH HR — UPLOAD SIGNED NTE PROOF OF RECEIPT         */}
+      {/* ========================================================================= */}
+      {isUploadNteProofModalOpen && selectedReport && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-3 md:p-6 overflow-y-auto">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-lg w-full overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-emerald-700 text-white">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-white/20 text-white flex items-center justify-center font-bold">
+                  <FileSignature size={22} />
+                </div>
+                <div>
+                  <h2 className="text-base font-black text-white">
+                    Upload Employee-Signed NTE Proof
+                  </h2>
+                  <p className="text-xs text-emerald-100">
+                    Serve NTE to employee on-site and attach signed acknowledgment receipt
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsUploadNteProofModalOpen(false)}
+                className="p-1.5 rounded-lg text-emerald-200 hover:text-white hover:bg-emerald-600 transition cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 text-xs space-y-1 text-emerald-950">
+                <div>
+                  <strong>Case:</strong> {selectedReport.caseNumber} • <strong>Employee:</strong> {selectedReport.employeeName}
+                </div>
+                <div>
+                  <strong>Serving HR:</strong> {effectiveRole.reportingName} ({selectedReport.company || selectedReport.senderCompany} HR)
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
+                  Date Served to Employee:
+                </label>
+                <input
+                  type="date"
+                  value={nteProofData.dateServed}
+                  onChange={(e) => setNteProofData({ ...nteProofData, dateServed: e.target.value })}
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-600"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
+                  Scanned Copy / Photo of Employee-Signed NTE:
+                </label>
+                {nteProofData.fileData ? (
+                  <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col items-center">
+                    <img
+                      src={nteProofData.fileData}
+                      alt="Signed NTE Proof"
+                      className="max-h-48 object-contain rounded-lg shadow-xs"
+                    />
+                    <div className="mt-2 text-xs text-slate-600 font-medium">{nteProofData.fileName || "signed_nte_proof.jpg"}</div>
+                    <button
+                      type="button"
+                      onClick={() => setNteProofData({ ...nteProofData, fileData: "", fileName: "" })}
+                      className="mt-1 text-[11px] text-rose-600 font-bold hover:underline cursor-pointer"
+                    >
+                      Remove / Upload Another File
+                    </button>
+                  </div>
+                ) : (
+                  <label className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-emerald-300 hover:border-emerald-600 rounded-2xl bg-emerald-50/40 hover:bg-emerald-50 cursor-pointer transition">
+                    <FileSignature size={28} className="text-emerald-600 mb-2" />
+                    <span className="text-xs font-bold text-emerald-950">
+                      Upload Signed NTE Copy (Image / Photo)
+                    </span>
+                    <span className="text-[10px] text-emerald-700 mt-0.5">PNG, JPG, or WebP</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          const reader = new FileReader();
+                          reader.onload = (evt) => {
+                            setNteProofData((prev) => ({
+                              ...prev,
+                              fileData: evt.target.result,
+                              fileName: file.name
+                            }));
+                          };
+                          reader.readAsDataURL(file);
+                        }
+                      }}
+                    />
+                  </label>
+                )}
+              </div>
+
+              <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setIsUploadNteProofModalOpen(false)}
+                  className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveNteProof}
+                  className="px-5 py-2.5 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-600/20 transition cursor-pointer inline-flex items-center gap-2 active:scale-98"
+                >
+                  <Check size={15} />
+                  <span>Confirm Signed NTE Upload</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* LIFECYCLE MODAL 3: SGC HEAD OFFICE — ISSUE NOTICE OF WARNING              */}
+      {/* ========================================================================= */}
+      {isWarningModalOpen && selectedReport && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-3 md:p-6 overflow-y-auto">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-xl w-full overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-amber-500 text-slate-950">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-slate-950 text-amber-400 flex items-center justify-center font-bold">
+                  <AlertTriangle size={22} />
+                </div>
+                <div>
+                  <h2 className="text-base font-black text-slate-950">
+                    SGC Discretion: Issue Notice of Warning
+                  </h2>
+                  <p className="text-xs text-slate-800">
+                    Conclude due process with an official Written Warning & Reprimand
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsWarningModalOpen(false)}
+                className="p-1.5 rounded-lg text-slate-800 hover:text-slate-950 hover:bg-amber-400 transition cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
+                    Warning Sanction Level:
+                  </label>
+                  <select
+                    value={warningForm.penalty}
+                    onChange={(e) => setWarningForm({ ...warningForm, penalty: e.target.value })}
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  >
+                    <option value="1st Written Warning & Reprimand">1st Written Warning & Reprimand</option>
+                    <option value="2nd Written Warning">2nd Written Warning</option>
+                    <option value="Final Written Warning">Final Written Warning</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
+                    Signatory (Head Office):
+                  </label>
+                  <input
+                    type="text"
+                    value={warningForm.signatoryName}
+                    onChange={(e) => setWarningForm({ ...warningForm, signatoryName: e.target.value })}
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 font-bold text-slate-900"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
+                  Subject Line:
+                </label>
+                <input
+                  type="text"
+                  value={warningForm.subject}
+                  onChange={(e) => setWarningForm({ ...warningForm, subject: e.target.value })}
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 font-bold text-slate-900"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
+                  Notice Content:
+                </label>
+                <textarea
+                  rows={6}
+                  value={warningForm.body}
+                  onChange={(e) => setWarningForm({ ...warningForm, body: e.target.value })}
+                  className="w-full p-3 text-xs rounded-xl border border-slate-200 leading-relaxed font-sans"
+                />
+              </div>
+
+              <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setIsWarningModalOpen(false)}
+                  className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleIssueNoticeOfWarning}
+                  className="px-5 py-2.5 rounded-xl text-xs font-black bg-amber-500 hover:bg-amber-600 text-slate-950 shadow-md transition cursor-pointer inline-flex items-center gap-2 active:scale-98"
+                >
+                  <AlertTriangle size={15} />
+                  <span>Promulgate Notice of Warning</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* LIFECYCLE MODAL 4: SGC HEAD OFFICE — NOTICE OF INVESTIGATION (NOI) ZOOM   */}
+      {/* ========================================================================= */}
+      {isNoiModalOpen && selectedReport && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-3 md:p-6 overflow-y-auto">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-2xl w-full overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-indigo-700 text-white">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-white/20 text-white flex items-center justify-center font-bold">
+                  <Video size={22} />
+                </div>
+                <div>
+                  <h2 className="text-base font-black text-white">
+                    SGC Discretion: Notice of Investigation (NOI)
+                  </h2>
+                  <p className="text-xs text-indigo-100">
+                    Mandatory Zoom Administrative Hearing Schedule (DOLE Department Order No. 147-15)
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsNoiModalOpen(false)}
+                className="p-1.5 rounded-lg text-indigo-200 hover:text-white hover:bg-indigo-600 transition cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div className="p-3 bg-indigo-50 rounded-xl border border-indigo-200 text-xs text-indigo-950">
+                <strong>Mandatory Requirement:</strong> Head Office is required to prepare a complete Zoom Hearing Schedule with meeting details, committee, and counsel notice.
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
+                  Hearing Topic / Case Title: *
+                </label>
+                <input
+                  type="text"
+                  value={noiForm.zoomMeetingTopic}
+                  onChange={(e) => setNoiForm({ ...noiForm, zoomMeetingTopic: e.target.value })}
+                  placeholder="Administrative Investigation Hearing Topic"
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 font-bold text-slate-900 focus:ring-2 focus:ring-indigo-600"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
+                    Hearing Date: *
+                  </label>
+                  <input
+                    type="date"
+                    value={noiForm.zoomMeetingDate}
+                    onChange={(e) => setNoiForm({ ...noiForm, zoomMeetingDate: e.target.value })}
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 font-bold text-slate-900"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
+                    Hearing Time: *
+                  </label>
+                  <input
+                    type="text"
+                    value={noiForm.zoomMeetingTime}
+                    onChange={(e) => setNoiForm({ ...noiForm, zoomMeetingTime: e.target.value })}
+                    placeholder="e.g. 10:00 AM PST"
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 font-bold text-slate-900"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
+                  Zoom Meeting Link URL: *
+                </label>
+                <div className="relative">
+                  <Video size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-indigo-600" />
+                  <input
+                    type="url"
+                    value={noiForm.zoomMeetingLink}
+                    onChange={(e) => setNoiForm({ ...noiForm, zoomMeetingLink: e.target.value })}
+                    placeholder="https://zoom.us/j/..."
+                    className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-slate-200 font-mono text-indigo-900 focus:ring-2 focus:ring-indigo-600"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
+                    Zoom Meeting ID: *
+                  </label>
+                  <input
+                    type="text"
+                    value={noiForm.zoomMeetingId}
+                    onChange={(e) => setNoiForm({ ...noiForm, zoomMeetingId: e.target.value })}
+                    placeholder="812 4001 8920"
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 font-mono text-slate-900"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
+                    Zoom Passcode: *
+                  </label>
+                  <input
+                    type="text"
+                    value={noiForm.zoomPasscode}
+                    onChange={(e) => setNoiForm({ ...noiForm, zoomPasscode: e.target.value })}
+                    placeholder="SGC2026"
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 font-mono text-slate-900"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
+                  Hearing Committee & Legal Panel:
+                </label>
+                <input
+                  type="text"
+                  value={noiForm.hearingCommittee}
+                  onChange={(e) => setNoiForm({ ...noiForm, hearingCommittee: e.target.value })}
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 text-slate-900"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
+                  Due Process Instructions & Legal Rights:
+                </label>
+                <textarea
+                  rows={3}
+                  value={noiForm.noiRemarks}
+                  onChange={(e) => setNoiForm({ ...noiForm, noiRemarks: e.target.value })}
+                  className="w-full p-3 text-xs rounded-xl border border-slate-200 leading-relaxed font-sans"
+                />
+              </div>
+
+              <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setIsNoiModalOpen(false)}
+                  className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleIssueNoi}
+                  className="px-6 py-2.5 rounded-xl text-xs font-black bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-600/20 transition cursor-pointer inline-flex items-center gap-2 active:scale-98"
+                >
+                  <Video size={15} />
+                  <span>Issue Formal NOI & Schedule Zoom Hearing</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* LIFECYCLE MODAL 5: ZOOM HEARING VIEWER (FOR SGC, BRANCH HR & EMPLOYEE)    */}
+      {/* ========================================================================= */}
+      {isZoomViewerOpen && selectedReport && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-3 md:p-6 overflow-y-auto">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-lg w-full overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-blue-600 text-white">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-white/20 text-white flex items-center justify-center font-bold">
+                  <Video size={22} />
+                </div>
+                <div>
+                  <h2 className="text-base font-black text-white">
+                    Official Zoom Hearing Schedule
+                  </h2>
+                  <p className="text-xs text-blue-100">
+                    Administrative Case Hearing • Case {selectedReport.caseNumber}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsZoomViewerOpen(false)}
+                className="p-1.5 rounded-lg text-blue-200 hover:text-white hover:bg-blue-500 transition cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div className="text-center py-2">
+                <span className="text-[10px] font-black uppercase tracking-wider text-blue-600 bg-blue-50 px-3 py-1 rounded-full border border-blue-200">
+                  MANDATORY ATTENDANCE REQUIRED
+                </span>
+                <h3 className="text-lg font-black text-slate-900 mt-2">
+                  {selectedReport.zoomMeetingTopic || `Investigation Hearing: ${selectedReport.employeeName}`}
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Respondent: <strong>{selectedReport.employeeName}</strong> • {selectedReport.company || selectedReport.senderCompany}
+                </p>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  <div>
+                    <span className="text-[10px] font-bold uppercase text-slate-400 block">Date</span>
+                    <strong className="text-slate-900">{selectedReport.zoomMeetingDate || "Scheduled Date"}</strong>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-bold uppercase text-slate-400 block">Time</span>
+                    <strong className="text-slate-900">{selectedReport.zoomMeetingTime || "10:00 AM PST"}</strong>
+                  </div>
+                </div>
+
+                <div className="pt-2 border-t border-slate-200 grid grid-cols-2 gap-3 text-xs">
+                  <div>
+                    <span className="text-[10px] font-bold uppercase text-slate-400 block">Zoom Meeting ID</span>
+                    <strong className="font-mono text-blue-900">{selectedReport.zoomMeetingId || "812 4001 8920"}</strong>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-bold uppercase text-slate-400 block">Passcode</span>
+                    <strong className="font-mono text-blue-900">{selectedReport.zoomPasscode || "SGC2026"}</strong>
+                  </div>
+                </div>
+
+                <div className="pt-2 border-t border-slate-200 text-xs">
+                  <span className="text-[10px] font-bold uppercase text-slate-400 block">Hearing Committee</span>
+                  <span className="text-slate-700 font-semibold">{selectedReport.hearingCommittee || "SGC Due Process Committee & Central HRMD"}</span>
+                </div>
+              </div>
+
+              {selectedReport.noiRemarks && (
+                <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-xs text-amber-950 leading-relaxed italic">
+                  "{selectedReport.noiRemarks}"
+                </div>
+              )}
+
+              <div className="pt-2">
+                <a
+                  href={selectedReport.zoomMeetingLink || "#"}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full py-3 rounded-2xl text-xs font-black bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-600/25 transition cursor-pointer flex items-center justify-center gap-2 active:scale-98"
+                >
+                  <Video size={16} />
+                  <span>🎥 Join Zoom Administrative Hearing Now</span>
+                  <ExternalLink size={14} />
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* LIFECYCLE MODAL 6: SGC HEAD OFFICE — DECISION ON ADMINISTRATIVE CASE       */}
+      {/* ========================================================================= */}
+      {isAdminDecisionModalOpen && selectedReport && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-3 md:p-6 overflow-y-auto">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-2xl w-full overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-rose-600 text-white">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-white/20 text-white flex items-center justify-center font-bold">
+                  <Scale size={22} />
+                </div>
+                <div>
+                  <h2 className="text-base font-black text-white">
+                    Decision on Administrative Case
+                  </h2>
+                  <p className="text-xs text-rose-100">
+                    Final Executive Ruling & Disciplinary Promulgation (Labor Code Art. 297)
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsAdminDecisionModalOpen(false)}
+                className="p-1.5 rounded-lg text-rose-200 hover:text-white hover:bg-rose-500 transition cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div className="p-3 bg-rose-50 rounded-xl border border-rose-200 text-xs text-rose-950">
+                This Decision will be transmitted to the Branch HR of <strong>{selectedReport.company || selectedReport.senderCompany}</strong>, who must serve it in person to employee <strong>{selectedReport.employeeName}</strong> and upload their signed receipt to close the case.
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
+                  Decision Subject:
+                </label>
+                <input
+                  type="text"
+                  value={adminDecisionForm.subject}
+                  onChange={(e) => setAdminDecisionForm({ ...adminDecisionForm, subject: e.target.value })}
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 font-bold text-slate-900"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
+                  Investigation Findings & Administrative Liability:
+                </label>
+                <textarea
+                  rows={2}
+                  value={adminDecisionForm.findings}
+                  onChange={(e) => setAdminDecisionForm({ ...adminDecisionForm, findings: e.target.value })}
+                  className="w-full p-2.5 text-xs rounded-xl border border-slate-200 text-slate-900 font-medium"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
+                    Sanction / Penalty / Restitution:
+                  </label>
+                  <input
+                    type="text"
+                    value={adminDecisionForm.penalty}
+                    onChange={(e) => setAdminDecisionForm({ ...adminDecisionForm, penalty: e.target.value })}
+                    placeholder="e.g. 3-Day Suspension & Restitution"
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 font-bold text-rose-700"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
+                    Signatory (Head Office HRMD):
+                  </label>
+                  <input
+                    type="text"
+                    value={adminDecisionForm.signatoryName}
+                    onChange={(e) => setAdminDecisionForm({ ...adminDecisionForm, signatoryName: e.target.value })}
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 font-bold text-slate-900"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
+                  Full Deliberations & Decision Ruling:
+                </label>
+                <textarea
+                  rows={6}
+                  value={adminDecisionForm.body}
+                  onChange={(e) => setAdminDecisionForm({ ...adminDecisionForm, body: e.target.value })}
+                  className="w-full p-3 text-xs rounded-xl border border-slate-200 leading-relaxed font-sans"
+                />
+              </div>
+
+              <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setIsAdminDecisionModalOpen(false)}
+                  className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleIssueAdminDecision}
+                  className="px-6 py-2.5 rounded-xl text-xs font-black bg-rose-600 hover:bg-rose-700 text-white shadow-md shadow-rose-600/20 transition cursor-pointer inline-flex items-center gap-2 active:scale-98"
+                >
+                  <Scale size={15} />
+                  <span>Promulgate Decision to Branch HR</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* LIFECYCLE MODAL 7: BRANCH HR — UPLOAD SIGNED DECISION & CLOSE CASE         */}
+      {/* ========================================================================= */}
+      {isUploadDecisionProofModalOpen && selectedReport && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-3 md:p-6 overflow-y-auto">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-lg w-full overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-emerald-800 text-white">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-white/20 text-white flex items-center justify-center font-bold">
+                  <CheckCheck size={22} />
+                </div>
+                <div>
+                  <h2 className="text-base font-black text-white">
+                    Upload Signed Decision & Close Case
+                  </h2>
+                  <p className="text-xs text-emerald-200">
+                    Serve Decision on Administrative Case, get employee signature, and close case
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsUploadDecisionProofModalOpen(false)}
+                className="p-1.5 rounded-lg text-emerald-300 hover:text-white hover:bg-emerald-700 transition cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 text-xs space-y-1 text-emerald-950">
+                <div>
+                  <strong>Case:</strong> {selectedReport.caseNumber} • <strong>Employee:</strong> {selectedReport.employeeName}
+                </div>
+                <div>
+                  <strong>Decision Penalty:</strong> {selectedReport.adminDecisionPenalty || "Disciplinary Action"}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
+                  Date Served to Employee:
+                </label>
+                <input
+                  type="date"
+                  value={decisionProofData.dateServed}
+                  onChange={(e) => setDecisionProofData({ ...decisionProofData, dateServed: e.target.value })}
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-700"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
+                  Upload Scanned / Photo Copy of Employee-Signed Decision: *
+                </label>
+                {decisionProofData.fileData ? (
+                  <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col items-center">
+                    <img
+                      src={decisionProofData.fileData}
+                      alt="Signed Decision Proof"
+                      className="max-h-48 object-contain rounded-lg shadow-xs"
+                    />
+                    <div className="mt-2 text-xs text-slate-600 font-medium">{decisionProofData.fileName || "signed_decision.jpg"}</div>
+                    <button
+                      type="button"
+                      onClick={() => setDecisionProofData({ ...decisionProofData, fileData: "", fileName: "" })}
+                      className="mt-1 text-[11px] text-rose-600 font-bold hover:underline cursor-pointer"
+                    >
+                      Remove / Upload Another File
+                    </button>
+                  </div>
+                ) : (
+                  <label className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-emerald-300 hover:border-emerald-700 rounded-2xl bg-emerald-50/40 hover:bg-emerald-50 cursor-pointer transition">
+                    <FileSignature size={28} className="text-emerald-700 mb-2" />
+                    <span className="text-xs font-bold text-emerald-950">
+                      Upload Signed Decision Proof
+                    </span>
+                    <span className="text-[10px] text-emerald-700 mt-0.5">PNG, JPG, or WebP</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          const reader = new FileReader();
+                          reader.onload = (evt) => {
+                            setDecisionProofData((prev) => ({
+                              ...prev,
+                              fileData: evt.target.result,
+                              fileName: file.name
+                            }));
+                          };
+                          reader.readAsDataURL(file);
+                        }
+                      }}
+                    />
+                  </label>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
+                  Branch Serving Remarks:
+                </label>
+                <textarea
+                  rows={2}
+                  value={decisionProofData.remarks}
+                  onChange={(e) => setDecisionProofData({ ...decisionProofData, remarks: e.target.value })}
+                  placeholder="Employee personally served copy of Administrative Case Decision, signed acknowledgment copy affixed."
+                  className="w-full p-2.5 text-xs rounded-xl border border-slate-200 font-medium text-slate-800"
+                />
+              </div>
+
+              <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setIsUploadDecisionProofModalOpen(false)}
+                  className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveDecisionProofAndCloseCase}
+                  className="px-6 py-2.5 rounded-xl text-xs font-black bg-emerald-700 hover:bg-emerald-800 text-white shadow-md shadow-emerald-700/20 transition cursor-pointer inline-flex items-center gap-2 active:scale-98"
+                >
+                  <CheckCheck size={16} />
+                  <span>Upload Signed Proof & Close Case</span>
+                </button>
               </div>
             </div>
           </div>
