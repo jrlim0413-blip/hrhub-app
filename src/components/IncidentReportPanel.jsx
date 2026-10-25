@@ -2238,13 +2238,20 @@ export default function IncidentReportPanel({
           <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-3xl w-full max-h-[94vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
             {/* Top Green Banner */}
             <div className="bg-[#96c158] text-white px-6 py-4 flex items-center justify-between shrink-0 shadow-sm">
-              <div className="flex-1 text-center">
-                <h2 className="text-xl sm:text-2xl font-black uppercase tracking-wider text-white">
-                  INCIDENT REPORT
-                </h2>
-                <p className="text-[11px] text-white/90 font-medium">
-                  Transmitted to Simpal Group of Companies (Head Office HRMD) for Notice to Explain (NTE)
-                </p>
+              <div className="flex items-center gap-3">
+                <img
+                  src="/logos/lucky_betplay_sun.png"
+                  alt="Lucky Betplay Logo"
+                  className="w-10 h-10 object-contain bg-white rounded-lg p-0.5 shadow-xs shrink-0"
+                />
+                <div>
+                  <h2 className="text-xl sm:text-2xl font-black uppercase tracking-wider text-white leading-none">
+                    INCIDENT REPORT
+                  </h2>
+                  <p className="text-[11px] text-white/90 font-medium mt-0.5">
+                    Transmitted to Simpal Group of Companies (Head Office HRMD) for Notice to Explain (NTE)
+                  </p>
+                </div>
               </div>
               <button
                 type="button"
@@ -2943,26 +2950,12 @@ export default function IncidentReportPanel({
                   <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-slate-200">
                     {/* Left: Company Logo & Branding */}
                     <div className="flex items-center gap-3">
-                      {/* Stylized Sun Logo */}
-                      <div className="relative w-12 h-12 flex items-center justify-center shrink-0">
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          {[0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330].map((deg) => (
-                            <div
-                              key={deg}
-                              className="absolute w-1 h-12 bg-amber-400 rounded-full"
-                              style={{ transform: `rotate(${deg}deg)` }}
-                            />
-                          ))}
-                          <div className="w-7 h-7 rounded-full bg-white relative z-10 border border-amber-300 flex items-center justify-center">
-                            <div className="grid grid-cols-2 gap-0.5">
-                              <div className="w-1.5 h-1.5 rounded-full bg-rose-500" />
-                              <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-                              <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                              <div className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-                            </div>
-                          </div>
-                        </div>
-                      </div>
+                      {/* Official Lucky Betplay Sun Logo */}
+                      <img
+                        src="/logos/lucky_betplay_sun.png"
+                        alt="Lucky Betplay Corporation Logo"
+                        className="w-16 h-16 sm:w-20 sm:h-20 object-contain shrink-0"
+                      />
 
                       <div>
                         <h2 className="text-lg sm:text-xl font-black tracking-tight text-[#c81e1e] uppercase leading-none">
