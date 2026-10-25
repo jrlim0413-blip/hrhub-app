@@ -4,7 +4,8 @@ import {
   RefreshCw, UserPlus, Mail, Building2, Briefcase,
   Copy, Check, Filter, Trash2, ShieldAlert,
   Sparkles, X, ChevronDown, Edit3, MapPin, UserCheck,
-  Phone, UserCog, CheckSquare, Layers, Sliders
+  Phone, UserCog, CheckSquare, Layers, Sliders,
+  LayoutGrid, List
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import {
@@ -617,18 +618,18 @@ export default function EmployeeDirectoryPanel({
         </div>
       )}
 
-      {/* Main Header & Actions */}
-      <div className="bg-white border border-slate-200/90 rounded-3xl p-6 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+      {/* Main Corporate Header */}
+      <div className="bg-white border border-slate-200/90 rounded-2xl p-6 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <span className="p-2 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200">
-              <Users size={18} />
+            <span className="p-1.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200/70">
+              <Users size={16} />
             </span>
-            <span className="text-[10px] font-black uppercase tracking-wider text-emerald-600">Personnel Directory</span>
+            <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-700">Simpal Group • Personnel Governance</span>
           </div>
           <h2 className="mt-1 text-2xl font-black text-slate-900 tracking-tight">Employee Directory</h2>
           <p className="mt-0.5 text-xs text-slate-500 max-w-xl">
-            Personnel registry, HR assignments, and account access across all subsidiaries.
+            Enterprise personnel database, corporate roles, branch assignments, and diversified HR handler portfolios.
           </p>
         </div>
 
@@ -637,7 +638,7 @@ export default function EmployeeDirectoryPanel({
             type="button"
             onClick={onRefresh}
             title="Refresh Directory"
-            className="p-2.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-600 hover:text-slate-900 transition cursor-pointer"
+            className="p-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 hover:text-slate-900 transition cursor-pointer shadow-2xs"
           >
             <RefreshCw size={15} className={loading ? "animate-spin text-emerald-600" : ""} />
           </button>
@@ -647,7 +648,7 @@ export default function EmployeeDirectoryPanel({
               type="button"
               onClick={onOpenPermissions}
               title="Configure Role & Permissions Matrix"
-              className="inline-flex items-center gap-1.5 px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 hover:text-slate-900 text-xs font-bold transition cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 hover:text-slate-900 text-xs font-bold transition cursor-pointer shadow-2xs"
             >
               <Sliders size={14} className="text-emerald-600" />
               <span>Permissions Matrix</span>
@@ -658,114 +659,197 @@ export default function EmployeeDirectoryPanel({
             <button
               type="button"
               onClick={handleOpenAddModal}
-              className="inline-flex items-center gap-2 bg-slate-900 hover:bg-slate-800 text-emerald-400 px-4 py-2.5 rounded-xl font-bold text-xs shadow-md shadow-slate-900/15 transition cursor-pointer"
+              className="inline-flex items-center gap-2 bg-slate-900 hover:bg-slate-800 text-white px-4 py-2.5 rounded-xl font-bold text-xs shadow-sm transition cursor-pointer"
             >
-              <UserPlus size={15} />
-              <span>Pre-Register</span>
+              <UserPlus size={15} className="text-emerald-400" />
+              <span>Pre-Register Employee</span>
             </button>
           )}
         </div>
       </div>
 
-      {/* Metric Cards */}
+      {/* Corporate Metric KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white border border-slate-200/90 rounded-2xl p-4 shadow-xs">
+        {/* Card 1: Total Personnel */}
+        <div className="bg-white border border-slate-200/90 rounded-2xl p-4.5 shadow-xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-500">Total Personnel</span>
-            <span className="p-2 rounded-xl bg-slate-100 text-slate-700">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Total Personnel</span>
+            <span className="p-2 rounded-xl bg-slate-100 text-slate-600">
               <Users size={16} />
             </span>
           </div>
-          <p className="mt-2 text-2xl font-black text-slate-900">{stats.total}</p>
-          <p className="text-[10px] text-slate-400 mt-0.5">All entities</p>
+          <p className="mt-3 text-2xl font-black text-slate-900 tracking-tight">{stats.total}</p>
+          <p className="text-[11px] text-slate-400 mt-0.5">Enrolled across subsidiaries</p>
         </div>
 
+        {/* Card 2: My Portfolio */}
         <div
           onClick={() => {
             setSelectedHRFilter(selectedHRFilter === "my-handled" ? "all" : "my-handled");
             if (selectedFilter === "my-handled") setSelectedFilter("all");
           }}
-          className={`border rounded-2xl p-4 shadow-xs cursor-pointer transition ${
+          className={`border rounded-2xl p-4.5 shadow-xs cursor-pointer transition ${
             selectedHRFilter === "my-handled" || selectedFilter === "my-handled"
-              ? "bg-emerald-500 text-white border-emerald-600 shadow-md ring-2 ring-emerald-500/20"
+              ? "bg-emerald-500 text-white border-emerald-600 shadow-sm ring-2 ring-emerald-500/20"
               : "bg-white border-slate-200/90 hover:border-emerald-300"
           }`}
         >
           <div className="flex items-center justify-between">
-            <span className={`text-xs font-bold ${selectedHRFilter === "my-handled" || selectedFilter === "my-handled" ? "text-emerald-100" : "text-emerald-700"}`}>
-              My Assigned
+            <span className={`text-[11px] font-bold uppercase tracking-wider ${
+              selectedHRFilter === "my-handled" || selectedFilter === "my-handled" ? "text-emerald-100" : "text-emerald-800"
+            }`}>
+              My Portfolio
             </span>
-            <span className={`p-2 rounded-xl ${selectedHRFilter === "my-handled" || selectedFilter === "my-handled" ? "bg-emerald-600 text-white" : "bg-emerald-50 text-emerald-700"}`}>
+            <span className={`p-2 rounded-xl ${
+              selectedHRFilter === "my-handled" || selectedFilter === "my-handled" ? "bg-emerald-600 text-white" : "bg-emerald-50 text-emerald-700"
+            }`}>
               <UserCheck size={16} />
             </span>
           </div>
-          <div className="mt-2 flex items-center gap-2">
-            <p className={`text-2xl font-black ${selectedHRFilter === "my-handled" || selectedFilter === "my-handled" ? "text-white" : "text-emerald-700"}`}>
+          <div className="mt-3 flex items-baseline gap-2">
+            <p className={`text-2xl font-black tracking-tight ${
+              selectedHRFilter === "my-handled" || selectedFilter === "my-handled" ? "text-white" : "text-emerald-700"
+            }`}>
               {stats.myHandledCount}
             </p>
             {selectedHRFilter === "my-handled" && (
-              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-600 text-emerald-100">
+              <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-emerald-600 text-emerald-100">
                 Filtered
               </span>
             )}
           </div>
-          <p className={`text-[10px] mt-0.5 ${selectedHRFilter === "my-handled" || selectedFilter === "my-handled" ? "text-emerald-100" : "text-slate-400"}`}>
-            Handled by you
+          <p className={`text-[11px] mt-0.5 ${
+            selectedHRFilter === "my-handled" || selectedFilter === "my-handled" ? "text-emerald-100" : "text-slate-400"
+          }`}>
+            Under your direct care
           </p>
         </div>
 
-        <div className="bg-white border border-slate-200/90 rounded-2xl p-4 shadow-xs">
+        {/* Card 3: Active Online */}
+        <div className="bg-white border border-slate-200/90 rounded-2xl p-4.5 shadow-xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-500">Online Now</span>
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Active Online</span>
             <span className="p-2 rounded-xl bg-emerald-50 text-emerald-700">
               <Sparkles size={16} />
             </span>
           </div>
-          <div className="mt-2 flex items-center gap-2">
-            <p className="text-2xl font-black text-emerald-700">{stats.onlineCount}</p>
+          <div className="mt-3 flex items-center gap-2">
+            <p className="text-2xl font-black text-emerald-700 tracking-tight">{stats.onlineCount}</p>
             <span className="flex h-2.5 w-2.5 relative">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
               <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
             </span>
           </div>
-          <p className="text-[10px] text-slate-400 mt-0.5">Live sessions</p>
+          <p className="text-[11px] text-slate-400 mt-0.5">Real-time active sessions</p>
         </div>
 
-        <div className={`border rounded-2xl p-4 shadow-xs transition ${
+        {/* Card 4: Pending Review */}
+        <div className={`border rounded-2xl p-4.5 shadow-xs transition ${
           stats.pendingCount > 0
             ? "bg-amber-50/60 border-amber-200"
             : "bg-white border-slate-200/90"
         }`}>
           <div className="flex items-center justify-between">
-            <span className={`text-xs font-bold ${stats.pendingCount > 0 ? "text-amber-900" : "text-slate-500"}`}>
+            <span className={`text-[11px] font-bold uppercase tracking-wider ${
+              stats.pendingCount > 0 ? "text-amber-900" : "text-slate-500"
+            }`}>
               Pending Review
             </span>
-            <span className={`p-2 rounded-xl ${stats.pendingCount > 0 ? "bg-amber-100 text-amber-800" : "bg-slate-100 text-slate-700"}`}>
+            <span className={`p-2 rounded-xl ${
+              stats.pendingCount > 0 ? "bg-amber-100 text-amber-800" : "bg-slate-100 text-slate-600"
+            }`}>
               <Clock size={16} />
             </span>
           </div>
-          <p className={`mt-2 text-2xl font-black ${stats.pendingCount > 0 ? "text-amber-700" : "text-slate-900"}`}>
+          <p className={`mt-3 text-2xl font-black tracking-tight ${
+            stats.pendingCount > 0 ? "text-amber-700" : "text-slate-900"
+          }`}>
             {stats.pendingCount}
           </p>
-          <p className="text-[10px] text-slate-400 mt-0.5">
-            {stats.pendingCount > 0 ? "Action required" : "All verified"}
+          <p className="text-[11px] text-slate-400 mt-0.5">
+            {stats.pendingCount > 0 ? "Requires authorization" : "All accounts verified"}
           </p>
         </div>
       </div>
 
-      {/* Control Bar: Search, HR Diversification Filters, Subsidiary & View Mode */}
-      <div className="bg-white border border-slate-200/90 rounded-2xl p-4 shadow-xs space-y-3">
-        {/* Row 1: Search & View Toggle */}
-        <div className="flex items-center justify-between gap-3">
-          {/* Search Box */}
-          <div className="flex-1">
+      {/* Unified Corporate Toolbar: Status Tabs & Filter Bar */}
+      <div className="bg-white border border-slate-200/90 rounded-2xl shadow-xs overflow-hidden">
+        {/* Tier 1: Corporate Status Tabs */}
+        <div className="px-4 pt-2.5 pb-0 border-b border-slate-100 flex items-center justify-between gap-4 overflow-x-auto bg-slate-50/40">
+          <div className="flex items-center gap-1 sm:gap-2 -mb-px">
+            {[
+              { id: "all", label: "All Personnel", count: stats.total },
+              { id: "my-handled", label: "My Portfolio", count: stats.myHandledCount, highlight: true },
+              { id: "online", label: "Online Now", count: stats.onlineCount, isOnlineTab: true },
+              { id: "approved", label: "Approved", count: stats.approvedCount },
+              { id: "pending", label: "Pending Review", count: stats.pendingCount, isPendingTab: true }
+            ].map((tab) => {
+              const isActive = selectedFilter === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => {
+                    setSelectedFilter(tab.id);
+                    if (tab.id === "my-handled") {
+                      setSelectedHRFilter("my-handled");
+                    }
+                  }}
+                  className={`group flex items-center gap-2 py-3 px-3.5 border-b-2 text-xs font-semibold whitespace-nowrap transition cursor-pointer ${
+                    isActive
+                      ? "border-emerald-600 text-emerald-950 font-bold"
+                      : "border-transparent text-slate-500 hover:text-slate-900 hover:border-slate-300"
+                  }`}
+                >
+                  {tab.isOnlineTab && (
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                  )}
+                  <span>{tab.label}</span>
+                  <span
+                    className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full transition ${
+                      isActive
+                        ? "bg-emerald-100 text-emerald-800"
+                        : tab.isPendingTab && tab.count > 0
+                        ? "bg-amber-100 text-amber-800"
+                        : "bg-slate-200/70 text-slate-600 group-hover:bg-slate-200"
+                    }`}
+                  >
+                    {tab.count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Reset link if filters active */}
+          {(selectedHRFilter !== "all" || selectedSubsidiary !== "all" || selectedBranchFilter !== "all" || searchQuery) && (
+            <button
+              type="button"
+              onClick={() => {
+                setSearchQuery("");
+                setSelectedFilter("all");
+                setSelectedSubsidiary("all");
+                setSelectedHRFilter("all");
+                setSelectedBranchFilter("all");
+              }}
+              className="text-xs font-semibold text-rose-600 hover:text-rose-700 hover:underline px-2 py-1 shrink-0 cursor-pointer"
+            >
+              Clear filters
+            </button>
+          )}
+        </div>
+
+        {/* Tier 2: Search & Dropdown Filters Bar */}
+        <div className="p-3.5 bg-white flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+          {/* Search Bar */}
+          <div className="flex-1 min-w-[220px]">
             <div className="flex items-center gap-2.5 rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2 text-xs text-slate-800 focus-within:border-emerald-500 focus-within:bg-white focus-within:ring-2 focus-within:ring-emerald-100 transition">
               <Search size={15} className="text-slate-400 shrink-0" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search employee, branch, or role..."
+                placeholder="Search employee by name, role, email, or branch..."
                 className="w-full border-0 bg-transparent text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none"
               />
               {searchQuery && (
@@ -776,45 +860,21 @@ export default function EmployeeDirectoryPanel({
             </div>
           </div>
 
-          {/* View Mode Toggle */}
-          <div className="flex rounded-xl border border-slate-200 bg-slate-100 p-0.5 shrink-0">
-            <button
-              type="button"
-              onClick={() => setViewMode("grid")}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
-                viewMode === "grid" ? "bg-white text-slate-900 shadow-xs" : "text-slate-500 hover:text-slate-800"
-              }`}
-            >
-              Cards
-            </button>
-            <button
-              type="button"
-              onClick={() => setViewMode("table")}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
-                viewMode === "table" ? "bg-white text-slate-900 shadow-xs" : "text-slate-500 hover:text-slate-800"
-              }`}
-            >
-              Table
-            </button>
-          </div>
-        </div>
-
-        {/* Row 2: Filter Dropdowns & Status Pills */}
-        <div className="pt-2.5 border-t border-slate-100 flex flex-col lg:flex-row lg:items-center justify-between gap-2.5">
-          {/* HR Diversification & Location Dropdowns */}
-          <div className="flex items-center gap-2 flex-wrap">
+          {/* Dropdown Filters and View Mode Switcher */}
+          <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+            {/* HR Handler Select */}
             <div className="relative">
               <select
                 value={selectedHRFilter}
                 onChange={(e) => setSelectedHRFilter(e.target.value)}
-                className={`text-xs font-semibold border rounded-xl px-2.5 py-1.5 focus:outline-none focus:border-emerald-500 cursor-pointer transition ${
+                className={`h-9 text-xs font-medium border rounded-xl px-3 py-1.5 focus:outline-none focus:border-emerald-500 cursor-pointer transition ${
                   selectedHRFilter === "my-handled"
                     ? "bg-emerald-50 border-emerald-300 text-emerald-900 font-bold"
                     : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100"
                 }`}
               >
-                <option value="all">👥 All HR</option>
-                <option value="my-handled">✨ My Assigned</option>
+                <option value="all">👥 HR: All Handlers</option>
+                <option value="my-handled">✨ Assigned to Me</option>
                 <option value="unassigned">⚠️ Unassigned</option>
                 <optgroup label="HR Officers">
                   {availableHRHandlers.map((hr) => (
@@ -824,76 +884,55 @@ export default function EmployeeDirectoryPanel({
               </select>
             </div>
 
-            {/* Subsidiary Filter */}
+            {/* Company Select */}
             <select
               value={selectedSubsidiary}
               onChange={(e) => setSelectedSubsidiary(e.target.value)}
-              className="text-xs font-semibold bg-slate-50 border border-slate-200 text-slate-700 hover:bg-slate-100 rounded-xl px-2.5 py-1.5 focus:outline-none focus:border-emerald-500 cursor-pointer"
+              className="h-9 text-xs font-medium bg-slate-50 border border-slate-200 text-slate-700 hover:bg-slate-100 rounded-xl px-3 py-1.5 focus:outline-none focus:border-emerald-500 cursor-pointer"
             >
-              <option value="all">🏢 All Companies</option>
+              <option value="all">🏢 Company: All</option>
               {SUBSIDIARIES.map((sub) => (
                 <option key={sub} value={sub}>{sub}</option>
               ))}
             </select>
 
-            {/* Branch Filter */}
+            {/* Branch Select */}
             <select
               value={selectedBranchFilter}
               onChange={(e) => setSelectedBranchFilter(e.target.value)}
-              className="text-xs font-semibold bg-slate-50 border border-slate-200 text-slate-700 hover:bg-slate-100 rounded-xl px-2.5 py-1.5 focus:outline-none focus:border-emerald-500 cursor-pointer"
+              className="h-9 text-xs font-medium bg-slate-50 border border-slate-200 text-slate-700 hover:bg-slate-100 rounded-xl px-3 py-1.5 focus:outline-none focus:border-emerald-500 cursor-pointer"
             >
-              <option value="all">📍 All Branches</option>
+              <option value="all">📍 Branch: All</option>
               {BRANCH_PRESETS.map((br) => (
                 <option key={br} value={br}>{br}</option>
               ))}
             </select>
-          </div>
 
-          {/* Status Filter Pills */}
-          <div className="flex items-center gap-1.5 overflow-x-auto text-xs flex-wrap">
-            {[
-              { id: "all", label: `All (${stats.total})` },
-              { id: "my-handled", label: `My Assigned (${stats.myHandledCount})`, highlight: true },
-              { id: "online", label: `Online (${stats.onlineCount})` },
-              { id: "approved", label: `Approved (${stats.approvedCount})` },
-              { id: "pending", label: `Pending (${stats.pendingCount})` }
-            ].map((tab) => (
+            {/* View Mode Switcher */}
+            <div className="flex rounded-xl border border-slate-200 bg-slate-100 p-0.5 shrink-0 ml-auto sm:ml-0">
               <button
-                key={tab.id}
                 type="button"
-                onClick={() => {
-                  setSelectedFilter(tab.id);
-                  if (tab.id === "my-handled") {
-                    setSelectedHRFilter("my-handled");
-                  }
-                }}
-                className={`px-3 py-1.5 rounded-xl font-bold transition cursor-pointer whitespace-nowrap ${
-                  selectedFilter === tab.id
-                    ? "bg-slate-900 text-white"
-                    : tab.highlight
-                    ? "bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100"
-                    : "bg-slate-100 text-slate-600 hover:bg-slate-200/80"
+                onClick={() => setViewMode("grid")}
+                title="Grid View"
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
+                  viewMode === "grid" ? "bg-white text-slate-900 shadow-xs" : "text-slate-500 hover:text-slate-800"
                 }`}
               >
-                {tab.label}
+                <LayoutGrid size={13} />
+                <span>Cards</span>
               </button>
-            ))}
-
-            {(selectedHRFilter !== "all" || selectedSubsidiary !== "all" || selectedBranchFilter !== "all" || searchQuery) && (
               <button
                 type="button"
-                onClick={() => {
-                  setSearchQuery("");
-                  setSelectedFilter("all");
-                  setSelectedSubsidiary("all");
-                  setSelectedHRFilter("all");
-                  setSelectedBranchFilter("all");
-                }}
-                className="text-xs font-bold text-rose-600 hover:text-rose-700 hover:underline px-1.5 py-1 shrink-0 cursor-pointer"
+                onClick={() => setViewMode("table")}
+                title="Table View"
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
+                  viewMode === "table" ? "bg-white text-slate-900 shadow-xs" : "text-slate-500 hover:text-slate-800"
+                }`}
               >
-                Reset
+                <List size={13} />
+                <span>Table</span>
               </button>
-            )}
+            </div>
           </div>
         </div>
       </div>
@@ -927,7 +966,7 @@ export default function EmployeeDirectoryPanel({
           </button>
         </div>
       ) : viewMode === "grid" ? (
-        /* Card Grid View */
+        /* Executive Card Grid View */
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredProfiles.map((prof) => {
             const email = prof.email?.toLowerCase() || "";
@@ -944,164 +983,157 @@ export default function EmployeeDirectoryPanel({
             return (
               <div
                 key={prof.id || prof.email}
-                className={`bg-white rounded-2xl p-5 border transition shadow-xs flex flex-col justify-between gap-4 ${
+                className={`bg-white rounded-2xl border transition shadow-xs flex flex-col justify-between overflow-hidden ${
                   isHandledByMe
-                    ? "border-emerald-300 ring-1 ring-emerald-500/20"
+                    ? "border-emerald-300 ring-1 ring-emerald-500/15"
                     : isOnline
-                    ? "border-emerald-200/90 hover:border-emerald-300 ring-1 ring-emerald-500/10"
-                    : "border-slate-200/80 hover:border-slate-300"
+                    ? "border-slate-200 hover:border-emerald-300 hover:shadow-sm"
+                    : "border-slate-200/80 hover:border-slate-300 hover:shadow-sm"
                 }`}
               >
-                <div>
-                  {/* Top Bar: Avatar & Badges */}
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="relative">
-                      <div className={`w-12 h-12 rounded-2xl font-black text-sm flex items-center justify-center shadow-xs ${
-                        isOnline ? "bg-slate-900 text-emerald-400" : "bg-slate-800 text-slate-300"
-                      }`}>
-                        {initials}
+                {/* Card Header & Identity */}
+                <div className="p-5 pb-4 space-y-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      {/* Avatar */}
+                      <div className="relative">
+                        <div className={`w-11 h-11 rounded-xl font-extrabold text-xs flex items-center justify-center shadow-2xs ${
+                          isOnline ? "bg-slate-900 text-emerald-400" : "bg-slate-800 text-slate-300"
+                        }`}>
+                          {initials}
+                        </div>
+                        {isOnline ? (
+                          <span className="absolute -bottom-1 -right-1 flex h-3 w-3">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500 ring-2 ring-white"></span>
+                          </span>
+                        ) : (
+                          <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full ring-2 ring-white bg-slate-300"></span>
+                        )}
                       </div>
-                      {isOnline ? (
-                        <span className="absolute -bottom-1 -right-1 flex h-3.5 w-3.5">
-                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                          <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-emerald-500 ring-2 ring-white"></span>
-                        </span>
-                      ) : (
-                        <span className="absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full ring-2 ring-white bg-slate-300"></span>
-                      )}
+
+                      {/* Name & Role */}
+                      <div className="min-w-0">
+                        <h4 className="text-sm font-bold text-slate-900 truncate flex items-center gap-1.5">
+                          {displayName}
+                          {isCurrentUser && (
+                            <span className="text-[9px] font-black uppercase text-emerald-700 bg-emerald-100 px-1.5 py-0.2 rounded border border-emerald-200">
+                              You
+                            </span>
+                          )}
+                        </h4>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <span className="text-[11px] font-semibold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200/60 truncate">
+                            {role}
+                          </span>
+                        </div>
+                      </div>
                     </div>
 
-                    <div className="flex flex-col items-end gap-1">
-                      {isHandledByMe && (
-                        <span className="inline-flex items-center gap-1 text-[9px] font-black px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
-                          <UserCheck size={10} className="text-emerald-700" /> My Assigned
+                    {/* Status Badges */}
+                    <div className="flex flex-col items-end gap-1 shrink-0">
+                      {prof.is_approved ? (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200/70">
+                          <ShieldCheck size={10} className="text-emerald-600" /> Approved
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
+                          <Clock size={10} className="text-amber-600" /> Pending
                         </span>
                       )}
 
-                      <div className="flex items-center gap-1">
-                        {isOnline ? (
-                          <span className="inline-flex items-center gap-1 text-[9px] font-black px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                            {isCurrentUser ? "Active (You)" : "Active Now"}
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 text-[9px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 border border-slate-200">
-                            <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
-                            Offline
-                          </span>
-                        )}
-
-                        {prof.is_approved ? (
-                          <span className="inline-flex items-center gap-1 text-[9px] font-bold text-emerald-700 bg-emerald-50/60 px-2 py-0.5 rounded-full border border-emerald-200/60">
-                            <ShieldCheck size={10} className="text-emerald-600" /> Approved
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 text-[9px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
-                            <Clock size={10} className="text-amber-600" /> Pending
-                          </span>
-                        )}
-                      </div>
+                      {isHandledByMe && (
+                        <span className="inline-flex items-center gap-1 text-[9px] font-bold text-emerald-800 bg-emerald-100/70 px-2 py-0.5 rounded-full border border-emerald-300/60">
+                          <UserCheck size={9} className="text-emerald-700" /> My Assigned
+                        </span>
+                      )}
                     </div>
                   </div>
 
-                  {/* Profile Details */}
-                  <div className="mt-3 space-y-1.5">
-                    <h4 className="text-sm font-extrabold text-slate-900 truncate flex items-center gap-1.5">
-                      {displayName}
-                      {isCurrentUser && (
-                        <span className="text-[8px] font-black uppercase text-emerald-700 bg-emerald-100 px-1 py-0.2 rounded border border-emerald-200">
-                          You
-                        </span>
-                      )}
-                    </h4>
-                    <p className="text-xs text-slate-500 truncate flex items-center gap-1.5">
-                      <Mail size={12} className="text-slate-400 shrink-0" /> {prof.email}
+                  {/* Metadata List */}
+                  <div className="pt-2.5 border-t border-slate-100 space-y-1.5 text-xs">
+                    <p className="text-slate-500 truncate flex items-center gap-2">
+                      <Mail size={13} className="text-slate-400 shrink-0" />
+                      <span className="truncate">{prof.email}</span>
                     </p>
-
-                    <div className="pt-2 flex flex-col gap-1 text-[11px] text-slate-600 border-t border-slate-100">
-                      <span className="flex items-center gap-1.5 truncate">
-                        <Building2 size={12} className="text-slate-400 shrink-0" />
-                        <span className="font-semibold text-slate-800 truncate">{company}</span>
+                    <p className="text-slate-600 font-medium truncate flex items-center gap-2">
+                      <Building2 size={13} className="text-slate-400 shrink-0" />
+                      <span className="truncate">{company}</span>
+                    </p>
+                    <p className="text-slate-600 truncate flex items-center gap-2">
+                      <MapPin size={13} className="text-emerald-600 shrink-0" />
+                      <span className="truncate">{branch}</span>
+                    </p>
+                    <p className="text-slate-600 truncate flex items-center gap-2">
+                      <UserCheck size={13} className="text-slate-400 shrink-0" />
+                      <span className="text-[11px] truncate">
+                        HR Handler:{" "}
+                        <strong className={assignedHR.toLowerCase().includes("unassigned") ? "text-amber-600 font-semibold" : "text-slate-800 font-bold"}>
+                          {assignedHR.toLowerCase().includes("unassigned") ? "Unassigned" : assignedHR}
+                        </strong>
                       </span>
-
-                      <span className="flex items-center gap-1.5 text-slate-500 font-medium">
-                        <Briefcase size={12} className="text-slate-400 shrink-0" />
-                        <span>{role}</span>
-                      </span>
-
-                      <span className="flex items-center gap-1.5 text-slate-600 font-medium">
-                        <MapPin size={12} className="text-emerald-600 shrink-0" />
-                        <span className="bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200/80 text-[10px] text-slate-700">
-                          {branch}
-                        </span>
-                      </span>
-
-                      <span className="flex items-center gap-1.5 text-slate-600 font-medium mt-0.5">
-                        <UserCheck size={12} className="text-slate-400 shrink-0" />
-                        <span className="text-[10px] text-slate-600 truncate">
-                          HR: <strong className={assignedHR.toLowerCase().includes("unassigned") ? "text-amber-600 font-semibold" : "text-slate-800 font-bold"}>
-                            {assignedHR.toLowerCase().includes("unassigned") ? "Unassigned" : assignedHR}
-                          </strong>
-                        </span>
-                      </span>
-                    </div>
+                    </p>
                   </div>
                 </div>
 
-                {/* Card Action Buttons */}
-                <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-1.5">
-                  {canManageProfiles && (
+                {/* Card Action Footer */}
+                <div className="px-5 py-3 bg-slate-50/70 border-t border-slate-100 flex items-center justify-between gap-2">
+                  {canManageProfiles ? (
                     <button
                       type="button"
                       onClick={() => handleToggleApproval(prof)}
-                      className={`flex-1 py-1.5 px-2 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                      className={`py-1.5 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs ${
                         prof.is_approved
-                          ? "bg-slate-100 hover:bg-slate-200/80 text-slate-700"
-                          : "bg-emerald-600 hover:bg-emerald-500 text-white shadow-xs shadow-emerald-600/20"
+                          ? "bg-white border border-slate-200 text-slate-600 hover:text-rose-600 hover:border-rose-200 hover:bg-rose-50"
+                          : "bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/20"
                       }`}
                     >
                       {prof.is_approved ? (
                         <>
-                          <ShieldAlert size={13} className="text-slate-500" /> Revoke
+                          <ShieldAlert size={12} className="text-slate-400" />
+                          <span>Revoke</span>
                         </>
                       ) : (
                         <>
-                          <CheckCircle2 size={13} /> Approve
+                          <CheckCircle2 size={12} />
+                          <span>Approve</span>
                         </>
                       )}
                     </button>
-                  )}
+                  ) : <div />}
 
-                  {canManageProfiles && (
+                  <div className="flex items-center gap-1.5">
+                    {canManageProfiles && (
+                      <button
+                        type="button"
+                        onClick={() => handleOpenEdit(prof)}
+                        title="Edit Profile"
+                        className="p-1.5 rounded-xl border border-slate-200 bg-white text-slate-600 hover:text-emerald-700 hover:border-emerald-300 hover:bg-emerald-50/50 transition cursor-pointer"
+                      >
+                        <Edit3 size={13} />
+                      </button>
+                    )}
+
                     <button
                       type="button"
-                      onClick={() => handleOpenEdit(prof)}
-                      title="Edit Employee Details & HR Allocation"
-                      className="p-1.5 rounded-xl border border-slate-200 bg-white text-slate-600 hover:text-emerald-700 hover:border-emerald-300 hover:bg-emerald-50/50 transition cursor-pointer"
+                      onClick={() => copyActivationInstructions(prof.email, prof.id)}
+                      title="Copy Setup Instructions"
+                      className="p-1.5 rounded-xl border border-slate-200 bg-white text-slate-500 hover:text-emerald-700 hover:border-emerald-300 hover:bg-emerald-50/50 transition cursor-pointer"
                     >
-                      <Edit3 size={14} />
+                      {copiedId === prof.id ? <Check size={13} className="text-emerald-600" /> : <Copy size={13} />}
                     </button>
-                  )}
 
-                  <button
-                    type="button"
-                    onClick={() => copyActivationInstructions(prof.email, prof.id)}
-                    title="Copy First-Time Setup Instructions"
-                    className="p-1.5 rounded-xl border border-slate-200 text-slate-500 hover:text-emerald-700 hover:border-emerald-200 hover:bg-emerald-50/50 transition cursor-pointer"
-                  >
-                    {copiedId === prof.id ? <Check size={14} className="text-emerald-600" /> : <Copy size={14} />}
-                  </button>
-
-                  {canManageProfiles && (
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteEmployee(prof)}
-                      title="Remove from Directory"
-                      className="p-1.5 rounded-xl border border-slate-200 text-slate-400 hover:text-rose-600 hover:border-rose-200 hover:bg-rose-50 transition cursor-pointer"
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  )}
+                    {canManageProfiles && (
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteEmployee(prof)}
+                        title="Remove from Directory"
+                        className="p-1.5 rounded-xl border border-slate-200 bg-white text-slate-400 hover:text-rose-600 hover:border-rose-200 hover:bg-rose-50 transition cursor-pointer"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             );
