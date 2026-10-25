@@ -5,7 +5,7 @@ import {
   Megaphone, Award, Calendar, LogOut,
   BriefcaseBusiness, FileText, Sparkles, BarChart3,
   Database, RefreshCw, CheckCircle2, AlertCircle, Clock,
-  Bot, Layers, Home, X, CheckCheck, Menu, UserCheck, ShieldAlert
+  Bot, Layers, Home, X, CheckCheck, Menu, UserCheck
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import ProfileModal from "../components/ProfileModal";
@@ -15,16 +15,14 @@ import GrossReportPanel from "../components/GrossReportPanel";
 import EmployeeDirectoryPanel from "../components/EmployeeDirectoryPanel";
 import WeatherWidget from "../components/WeatherWidget";
 import MemoGeneratorPanel from "../components/MemoGeneratorPanel";
-import IncidentReportPanel from "../components/IncidentReportPanel";
 import SupervisorsAttendancePanel from "../components/SupervisorsAttendancePanel";
-import RolePermissionMatrixPanel from "../components/RolePermissionMatrixPanel";
 import AiAssistantDrawer from "../components/AiAssistantDrawer";
 import AiAgentAvatar from "../components/AiAgentAvatar";
 import AiAssistantGirlWidget from "../components/AiAssistantGirlWidget";
 import MondayStyleSidebar from "../components/MondayStyleSidebar";
 import HomeWorkspaceView from "../components/HomeWorkspaceView";
 import TeamChatMessengerModal from "../components/TeamChatMessengerModal";
-import { mergeProfilesWithStored, deleteStoredEmployee, fetchEmployeesFromDatabase } from "../lib/employeeStorage";
+import { mergeProfilesWithStored, deleteStoredEmployee } from "../lib/employeeStorage";
 import {
   getChatThreadKey,
   getStoredChatMap,
@@ -206,14 +204,6 @@ const WORKSPACE_TAB_DEFS = {
     activeIconClass: "text-emerald-400",
     inactiveIconClass: "text-slate-600"
   },
-  incident_reports: {
-    id: "incident_reports",
-    label: "Incident Reports & NTE",
-    icon: ShieldAlert,
-    activeClass: "bg-rose-600 text-white ring-2 ring-rose-300",
-    activeIconClass: "text-white",
-    inactiveIconClass: "text-rose-600"
-  },
   memo: {
     id: "memo",
     label: "Memo Generator",
@@ -243,14 +233,6 @@ const WORKSPACE_TAB_DEFS = {
     label: "Supervisors Attendance",
     icon: UserCheck,
     activeClass: "bg-[#008559] text-white ring-2 ring-emerald-300",
-    activeIconClass: "text-white",
-    inactiveIconClass: "text-emerald-600"
-  },
-  permission_matrix: {
-    id: "permission_matrix",
-    label: "Role Permission Matrix",
-    icon: ShieldCheck,
-    activeClass: "bg-emerald-700 text-white ring-2 ring-emerald-300",
     activeIconClass: "text-white",
     inactiveIconClass: "text-emerald-600"
   }
@@ -670,11 +652,10 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
     }
   };
 
-  // Fetch profiles and employee directory from Supabase database
+  // Fetch profiles from database
   const fetchProfiles = async () => {
     try {
       setLoadingProfiles(true);
-      await fetchEmployeesFromDatabase();
       const { data, error } = await supabase
         .from("profiles")
         .select("*")
@@ -794,9 +775,6 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
         fetchMemos();
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, () => {
-        fetchProfiles();
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "employees" }, () => {
         fetchProfiles();
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "chat_messages" }, async () => {
@@ -1630,6 +1608,10 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
                 onRefresh={fetchProfiles}
                 onUpdateProfile={handleUpdateProfile}
                 onDeleteProfile={handleDeleteProfile}
+                onOpenPermissions={() => {
+                  setActiveView("workspace");
+                  setWorkspaceTab("permission_matrix");
+                }}
               />
             ) : (
               <>
@@ -1915,16 +1897,6 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
             />
           )}
 
-          {/* TAB: INCIDENT REPORTS & NOTICE TO EXPLAIN (NTE) */}
-          {workspaceTab === "incident_reports" && (
-            <IncidentReportPanel
-              currentUser={currentUser}
-              profiles={supabaseProfiles}
-              onClose={() => handleCloseWorkspaceTab(null, "incident_reports")}
-              onOpenAiBuddy={() => setAiDrawerOpen(true)}
-            />
-          )}
-
           {/* TAB 1: OFFICIAL MEMO GENERATOR */}
           {workspaceTab === "memo" && (
             <MemoGeneratorPanel
@@ -1990,14 +1962,6 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
           {/* TAB 5: SUPERVISORS ATTENDANCE */}
           {workspaceTab === "supervisors_attendance" && (
             <SupervisorsAttendancePanel onClose={() => handleCloseWorkspaceTab(null, "supervisors_attendance")} />
-          )}
-
-          {/* TAB 6: ROLE & ACCOUNT CAPABILITIES MATRIX */}
-          {workspaceTab === "permission_matrix" && (
-            <RolePermissionMatrixPanel
-              currentUser={currentUser}
-              onClose={() => handleCloseWorkspaceTab(null, "permission_matrix")}
-            />
           )}
         </div>
       </div>

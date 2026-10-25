@@ -125,6 +125,9 @@ export async function fetchEmployeesFromDatabase() {
             name: emp.name || emailKey.split("@")[0].replace(/[._]/g, " ").replace(/\b\w/g, (l) => l.toUpperCase()),
             company: emp.company || "Simpal Group of Companies",
             role: emp.role || "Team Member",
+            branch: emp.branch || "",
+            assigned_hr: emp.assigned_hr || "",
+            phone: emp.phone || "",
             is_approved: typeof emp.is_approved === "boolean" ? emp.is_approved : true,
             created_at: emp.created_at || new Date().toISOString()
           });
@@ -250,6 +253,9 @@ export async function saveStoredEmployee(employee) {
     name: employee.name || existing.name || targetEmail.split("@")[0].replace(/[._]/g, " ").replace(/\b\w/g, (l) => l.toUpperCase()),
     company: employee.company || existing.company || "Simpal Group of Companies",
     role: employee.role || existing.role || "Team Member",
+    branch: employee.branch || existing.branch || "",
+    assigned_hr: employee.assigned_hr || existing.assigned_hr || "",
+    phone: employee.phone || existing.phone || "",
     is_approved: typeof employee.is_approved === "boolean" ? employee.is_approved : true,
     created_at: existing.created_at || employee.created_at || new Date().toISOString(),
     updated_at: new Date().toISOString()
@@ -444,6 +450,9 @@ export function mergeProfilesWithStored(supabaseProfiles = []) {
       name: existing?.name || sp.name || sp.email.split("@")[0].replace(/[._]/g, " ").replace(/\b\w/g, (l) => l.toUpperCase()),
       company: existing?.company || sp.company || "Simpal Group of Companies",
       role: existing?.role || sp.role || "Team Member",
+      branch: sp.branch || existing?.branch || "",
+      assigned_hr: sp.assigned_hr || existing?.assigned_hr || "",
+      phone: sp.phone || existing?.phone || "",
       is_approved: isApproved,
       created_at: sp.created_at || existing?.created_at || new Date().toISOString()
     });

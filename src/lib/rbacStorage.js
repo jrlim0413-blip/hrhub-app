@@ -17,8 +17,8 @@ const CLOUD_SETTINGS_KEY = "hrhub_rbac_matrix_master";
 export const STANDARD_ROLE_TIERS = [
   {
     id: "system_admin",
-    name: "SYSTEM ADMINISTRATOR & EXECUTIVE",
-    description: "Corporate executive officers and system super-administrators with global governance authority.",
+    name: "HR ADMINISTRATOR & EXECUTIVE",
+    description: "Corporate executive officers and HR administrators with global personnel and governance authority.",
     color: "emerald",
     badgeBg: "bg-emerald-50 text-emerald-800 border-emerald-200"
   },
@@ -87,6 +87,13 @@ export const WORKSPACE_TABS_CONFIG = [
     label: "Enterprise Personnel Directory & 201 Registry",
     code: "WORKSPACE TAB: PERSONNEL • VIEW_EMPLOYEE_DIRECTORY",
     description: "Centralized staff 201 records, organizational entity assignments, and emergency contact registry.",
+    sidebarTabId: "agents"
+  },
+  {
+    id: "employee_pre_registration",
+    label: "Personnel Pre-Registration & Credential Onboarding",
+    code: "WORKSPACE TAB: PERSONNEL • PRE_REGISTER_EMPLOYEE",
+    description: "Authority to register new employee credentials, assign company entities, and initiate First-Time Setup accounts. Exclusively for HR Administrator by default.",
     sidebarTabId: "agents"
   },
   {
@@ -230,6 +237,13 @@ export const IN_TAB_FEATURES_CONFIG = [
     belongsToLabel: "Enterprise Personnel Directory",
     description: "Revokes system credentials for resigned, offboarded, or suspended personnel."
   },
+  {
+    id: "pre_register_employee",
+    label: "Pre-Register New Personnel (Onboarding Action)",
+    parentTab: "agents",
+    belongsToLabel: "Enterprise Personnel Directory (HR Administrator Exclusive)",
+    description: "Authorizes the Pre-Register Employee button and access to the onboarding modal. Exclusively enabled for HR Administrator by default, with per-account override support."
+  },
 
   // 7. Supervisors Attendance Log Features
   {
@@ -274,6 +288,7 @@ export const FACTORY_ROLE_TIER_PERMISSIONS = {
     memo: true,
     gross: true,
     agents: true,
+    employee_pre_registration: true,
     supervisors_attendance: true,
     permission_matrix: true,
     // Features
@@ -292,6 +307,7 @@ export const FACTORY_ROLE_TIER_PERMISSIONS = {
     export_financial_csv: true,
     generate_remittance_slips: true,
     provision_employee_records: true,
+    pre_register_employee: true,
     decommission_personnel: true,
     log_supervisor_checkin: true,
     export_attendance_timesheets: true,
@@ -306,6 +322,7 @@ export const FACTORY_ROLE_TIER_PERMISSIONS = {
     memo: true,
     gross: false,
     agents: true,
+    employee_pre_registration: false,
     supervisors_attendance: true,
     permission_matrix: false,
     // Features
@@ -324,6 +341,7 @@ export const FACTORY_ROLE_TIER_PERMISSIONS = {
     export_financial_csv: false,
     generate_remittance_slips: false,
     provision_employee_records: true,
+    pre_register_employee: false,
     decommission_personnel: false,
     log_supervisor_checkin: true,
     export_attendance_timesheets: true,
@@ -338,6 +356,7 @@ export const FACTORY_ROLE_TIER_PERMISSIONS = {
     memo: true,
     gross: true,
     agents: true,
+    employee_pre_registration: false,
     supervisors_attendance: true,
     permission_matrix: false,
     // Features
@@ -356,6 +375,7 @@ export const FACTORY_ROLE_TIER_PERMISSIONS = {
     export_financial_csv: true,
     generate_remittance_slips: true,
     provision_employee_records: false,
+    pre_register_employee: false,
     decommission_personnel: false,
     log_supervisor_checkin: true,
     export_attendance_timesheets: true,
@@ -370,6 +390,7 @@ export const FACTORY_ROLE_TIER_PERMISSIONS = {
     memo: true,
     gross: true,
     agents: false,
+    employee_pre_registration: false,
     supervisors_attendance: false,
     permission_matrix: false,
     // Features
@@ -388,6 +409,7 @@ export const FACTORY_ROLE_TIER_PERMISSIONS = {
     export_financial_csv: false,
     generate_remittance_slips: true,
     provision_employee_records: false,
+    pre_register_employee: false,
     decommission_personnel: false,
     log_supervisor_checkin: false,
     export_attendance_timesheets: false,
@@ -404,12 +426,13 @@ export function classifyEmployeeRoleTier(employee) {
   const role = (employee?.role || "").toLowerCase().trim();
   const company = (employee?.company || "").toLowerCase().trim();
 
-  // 1. System Administrator
+  // 1. System Administrator / HR Administrator
   if (
     email === "admin@hrhub.com" ||
     email === "jay@simpalgroup.com" ||
     email === "efilfonimda@gmail.com" ||
-    role.includes("admin") ||
+    role === "hr administrator" ||
+    role.includes("administrator") ||
     role.includes("executive") ||
     role.includes("super")
   ) {
@@ -492,6 +515,18 @@ export function getRbacMatrixData() {
     if (raw) {
       const parsed = JSON.parse(raw);
       if (parsed && parsed.roleTiers) {
+        // Backfill any newly added capability keys from factory defaults
+        Object.keys(FACTORY_ROLE_TIER_PERMISSIONS).forEach((tierId) => {
+          if (!parsed.roleTiers[tierId]) {
+            parsed.roleTiers[tierId] = { ...FACTORY_ROLE_TIER_PERMISSIONS[tierId] };
+          } else {
+            Object.keys(FACTORY_ROLE_TIER_PERMISSIONS[tierId]).forEach((capKey) => {
+              if (typeof parsed.roleTiers[tierId][capKey] === "undefined") {
+                parsed.roleTiers[tierId][capKey] = FACTORY_ROLE_TIER_PERMISSIONS[tierId][capKey];
+              }
+            });
+          }
+        });
         return parsed;
       }
     }
