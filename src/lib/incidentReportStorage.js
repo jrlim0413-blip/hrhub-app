@@ -88,6 +88,13 @@ export function normalizeIncidentReport(d) {
     metaFromLog.department_name ||
     "Finance & Cashier Operations";
 
+  const employeeId =
+    d.employeeId ||
+    d.employee_id ||
+    metaFromLog.employeeId ||
+    metaFromLog.employee_id ||
+    "";
+
   const phoneNumber =
     d.phoneNumber ||
     d.phone_number ||
@@ -108,6 +115,35 @@ export function normalizeIncidentReport(d) {
     d.branch_location ||
     metaFromLog.branch ||
     "Purok Daisy, New Isabela, Tacurong City, Sultan Kudarat";
+
+  const location =
+    d.location ||
+    metaFromLog.location ||
+    branch;
+
+  const witnesses =
+    d.witnesses ||
+    metaFromLog.witnesses ||
+    "";
+
+  const rawViolations = d.violations ?? metaFromLog.violations;
+  const violations = Array.isArray(rawViolations)
+    ? rawViolations
+    : typeof rawViolations === "string"
+    ? [rawViolations]
+    : ["Company Policies and Procedures", "Cash Handling / Collection"];
+
+  const otherViolation = d.otherViolation || d.other_violation || metaFromLog.otherViolation || "";
+  const violationRemarks = d.violationRemarks || d.violation_remarks || metaFromLog.violationRemarks || "";
+
+  const rawAttachments = d.attachments ?? metaFromLog.attachments;
+  const attachments = Array.isArray(rawAttachments)
+    ? rawAttachments
+    : typeof rawAttachments === "string"
+    ? [rawAttachments]
+    : ["Reports / Logs", "System Records / CCTV (if any)"];
+
+  const otherAttachments = d.otherAttachments || d.other_attachments || metaFromLog.otherAttachments || "";
 
   const auditDates = d.auditDates || d.audit_dates || metaFromLog.auditDates || "";
   const auditedBy = d.auditedBy || d.audited_by || metaFromLog.auditedBy || "CFO Admin Staff, Ms. Rollyn Beatrice Simpal and Ms. Hygiene Reusora";
@@ -275,7 +311,20 @@ export function normalizeIncidentReport(d) {
     // 7. Signed Decision Proof & Case Closure
     decisionSignedProof: d.decisionSignedProof || d.decision_signed_proof || metaFromLog.decisionSignedProof || "",
     decisionSignedProofName: d.decisionSignedProofName || d.decision_signed_proof_name || metaFromLog.decisionSignedProofName || "",
-    decisionSignedAt: d.decisionSignedAt || d.decision_signed_at || metaFromLog.decisionSignedAt || ""
+    decisionSignedAt: d.decisionSignedAt || d.decision_signed_at || metaFromLog.decisionSignedAt || "",
+
+    // 8. Authentic IR Form Fields (Lucky Betplay / Corporate standard)
+    employeeId,
+    location,
+    witnesses,
+    violations,
+    otherViolation,
+    violationRemarks,
+    attachments,
+    otherAttachments,
+    approvedByName: d.approvedByName || d.approved_by_name || metaFromLog.approvedByName || receiverHrName,
+    approvedByTitle: d.approvedByTitle || d.approved_by_title || metaFromLog.approvedByTitle || "HRMD Manager (Head Office)",
+    approvedBySignature: d.approvedBySignature || d.approved_by_signature || metaFromLog.approvedBySignature || ""
   };
 }
 
@@ -630,7 +679,18 @@ export async function saveIncidentReport(report) {
         adminDecisionIssuedAt: updatedReport.adminDecisionIssuedAt,
         decisionSignedProof: updatedReport.decisionSignedProof,
         decisionSignedProofName: updatedReport.decisionSignedProofName,
-        decisionSignedAt: updatedReport.decisionSignedAt
+        decisionSignedAt: updatedReport.decisionSignedAt,
+        employeeId: updatedReport.employeeId || "",
+        location: updatedReport.location || updatedReport.branch || "",
+        witnesses: updatedReport.witnesses || "",
+        violations: updatedReport.violations || [],
+        otherViolation: updatedReport.otherViolation || "",
+        violationRemarks: updatedReport.violationRemarks || "",
+        attachments: updatedReport.attachments || [],
+        otherAttachments: updatedReport.otherAttachments || "",
+        approvedByName: updatedReport.approvedByName || "",
+        approvedByTitle: updatedReport.approvedByTitle || "",
+        approvedBySignature: updatedReport.approvedBySignature || ""
       }
     };
 

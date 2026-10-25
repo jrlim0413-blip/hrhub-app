@@ -43,7 +43,8 @@ import {
   MessageSquare,
   Reply,
   Video,
-  ExternalLink
+  ExternalLink,
+  Users
 } from "lucide-react";
 import {
   fetchIncidentReports,
@@ -183,10 +184,18 @@ export default function IncidentReportPanel({
     employeePosition: "Cashier",
     department: "Finance & Cashier Operations",
     phoneNumber: "+63 917 842 9102",
-    branch: "Purok Daisy, New Isabela, Tacurong City, Sultan Kudarat",
+    branch: "Tacurong Branch",
+    location: "Tacurong Branch",
     dateOfIncident: new Date().toISOString().slice(0, 10),
     dateReported: new Date().toISOString().slice(0, 10),
     incidentTime: "16:30 PM",
+    factualDescription: "",
+    witnesses: "",
+    violations: ["Company Policies and Procedures", "Cash Handling / Collection"],
+    otherViolation: "",
+    violationRemarks: "",
+    attachments: ["Reports / Logs", "System Records / CCTV (if any)"],
+    otherAttachments: "",
     policeNotified: "NO",
     incidentCategory: "Cash Shortage & Non-observance of SOPs",
     auditDates: new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }),
@@ -203,7 +212,10 @@ export default function IncidentReportPanel({
     preparerTitle: initialSenderHr.title,
     operationsManagerSignature: "",
     operationsManagerName: "Operations Manager",
-    operationsManagerTitle: "Operations Manager"
+    operationsManagerTitle: "Operations Manager",
+    approvedByName: initialSgcHr.name,
+    approvedByTitle: `${initialSgcHr.title} (Head Office)`,
+    approvedBySignature: ""
   });
 
   // When Originating Subsidiary Company changes, dynamically lookup the assigned HR from Employee Directory
@@ -361,6 +373,30 @@ export default function IncidentReportPanel({
     });
   }, [reports, activeFilter, effectiveRole, searchQuery]);
 
+  // Toggle violation checkbox in IR create form
+  const handleToggleViolation = (item) => {
+    setIrForm((prev) => {
+      const list = Array.isArray(prev.violations) ? prev.violations : [];
+      if (list.includes(item)) {
+        return { ...prev, violations: list.filter((v) => v !== item) };
+      } else {
+        return { ...prev, violations: [...list, item] };
+      }
+    });
+  };
+
+  // Toggle attachment checkbox in IR create form
+  const handleToggleAttachment = (item) => {
+    setIrForm((prev) => {
+      const list = Array.isArray(prev.attachments) ? prev.attachments : [];
+      if (list.includes(item)) {
+        return { ...prev, attachments: list.filter((a) => a !== item) };
+      } else {
+        return { ...prev, attachments: [...list, item] };
+      }
+    });
+  };
+
   // Open Create IR Modal
   const handleOpenCreateModal = () => {
     const targetComp = effectiveRole.company || "5A Royal Gaming OPC";
@@ -384,10 +420,18 @@ export default function IncidentReportPanel({
       employeePosition: "Cashier",
       department: "Finance & Cashier Operations",
       phoneNumber: "+63 917 842 9102",
-      branch: "Purok Daisy, New Isabela, Tacurong City, Sultan Kudarat",
+      branch: "Tacurong Branch",
+      location: "Tacurong Branch",
       dateOfIncident: new Date().toISOString().slice(0, 10),
       dateReported: new Date().toISOString().slice(0, 10),
       incidentTime: "16:30 PM",
+      factualDescription: "During surprise drawer reconciliation audit, a physical cash shortage was uncovered. The personnel on duty could not produce balancing vouchers or valid justification for the discrepancy.",
+      witnesses: "",
+      violations: ["Company Policies and Procedures", "Cash Handling / Collection"],
+      otherViolation: "",
+      violationRemarks: "",
+      attachments: ["Reports / Logs", "System Records / CCTV (if any)"],
+      otherAttachments: "",
       policeNotified: "NO",
       incidentCategory: "Cash Shortage & Non-observance of SOPs",
       auditDates: new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }),
@@ -398,7 +442,16 @@ export default function IncidentReportPanel({
       incidentCauses: "Non-observance of Cashier Standard Operating Procedures (SOPs), unauthorized credit extensions, and failure to reconcile daily cash float before shift closure.",
       followUpRecommendations: "Immediate transmittal to Simpal Group of Companies (SGC) Head Office HRMD for formal Notice to Explain (NTE) issuance under Article 297 Labor Code.",
       additionalNotes: "All physical cash count discrepancy sheets and borrower signed slips have been submitted and attached to the audit file.",
-      evidenceNotes: ""
+      evidenceNotes: "",
+      preparerSignature: "",
+      preparerName: currentUser?.name || assigned.name,
+      preparerTitle: currentUser?.role || assigned.title,
+      operationsManagerSignature: "",
+      operationsManagerName: "Operations Manager",
+      operationsManagerTitle: "Operations Manager",
+      approvedByName: sgcHr.name,
+      approvedByTitle: `${sgcHr.title} (Head Office)`,
+      approvedBySignature: ""
     });
     setIsCreateModalOpen(true);
   };
@@ -419,6 +472,7 @@ export default function IncidentReportPanel({
     });
 
     const findingsText =
+      irForm.factualDescription?.trim() ||
       irForm.specificFindings?.trim() ||
       irForm.fullIncidentNarrative?.trim() ||
       "During surprise drawer reconciliation audit, a physical cash shortage was uncovered. The personnel on duty could not produce balancing vouchers or valid justification for the discrepancy.";
@@ -2249,39 +2303,53 @@ export default function IncidentReportPanel({
                 </div>
               </div>
 
-              {/* SECTION 1: EMPLOYEE DETAILS */}
+              {/* SECTION 1: EMPLOYEE INFORMATION */}
               <div className="space-y-4">
-                <div className="text-center">
-                  <h3 className="text-sm font-extrabold uppercase tracking-wider text-slate-800">
-                    EMPLOYEE DETAILS
-                  </h3>
-                  <div className="w-12 h-0.5 bg-[#96c158] mx-auto mt-1 rounded-full" />
+                <div className="bg-[#153459] text-white px-4 py-2 rounded-xl font-black text-xs uppercase tracking-wider flex items-center gap-2">
+                  <User size={15} />
+                  <span>EMPLOYEE INFORMATION</span>
                 </div>
 
-                <div className="space-y-3.5">
-                  {/* NAME */}
-                  <div>
-                    <label className="block text-[11px] font-extrabold uppercase tracking-wide text-slate-700 mb-1">
-                      NAME <span className="text-rose-600">*</span>
-                    </label>
-                    <div className="relative">
-                      <CreditCard size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-3.5">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                    {/* FULL NAME */}
+                    <div>
+                      <label className="block text-[11px] font-extrabold uppercase tracking-wide text-slate-700 mb-1">
+                        FULL NAME <span className="text-rose-600">*</span>
+                      </label>
+                      <div className="relative">
+                        <CreditCard size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                        <input
+                          type="text"
+                          required
+                          placeholder="e.g. MA. CATHRINA PANIZARES"
+                          value={irForm.employeeName}
+                          onChange={(e) => setIrForm({ ...irForm, employeeName: e.target.value.toUpperCase() })}
+                          className="w-full pl-10 pr-3.5 py-2.5 text-xs rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#153459] font-bold text-slate-900 transition"
+                        />
+                      </div>
+                    </div>
+
+                    {/* EMPLOYEE ID */}
+                    <div>
+                      <label className="block text-[11px] font-extrabold uppercase tracking-wide text-slate-700 mb-1">
+                        EMPLOYEE ID
+                      </label>
                       <input
                         type="text"
-                        required
-                        placeholder="e.g. MA. CATHRINA PANIZARES"
-                        value={irForm.employeeName}
-                        onChange={(e) => setIrForm({ ...irForm, employeeName: e.target.value.toUpperCase() })}
-                        className="w-full pl-10 pr-3.5 py-2.5 text-xs rounded-xl border border-slate-200 bg-slate-100/70 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#96c158] font-bold text-slate-900 transition"
+                        placeholder="e.g. EMP-2026-084"
+                        value={irForm.employeeId}
+                        onChange={(e) => setIrForm({ ...irForm, employeeId: e.target.value })}
+                        className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#153459] text-slate-900 transition font-medium"
                       />
                     </div>
                   </div>
 
-                  {/* DEPARTMENT & PHONE NUMBER */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                    {/* DEPARTMENT / UNIT */}
                     <div>
                       <label className="block text-[11px] font-extrabold uppercase tracking-wide text-slate-700 mb-1">
-                        DEPARTMENT
+                        DEPARTMENT / UNIT
                       </label>
                       <div className="relative">
                         <Building2 size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -2290,11 +2358,45 @@ export default function IncidentReportPanel({
                           placeholder="e.g. Finance & Cashier Operations"
                           value={irForm.department}
                           onChange={(e) => setIrForm({ ...irForm, department: e.target.value })}
-                          className="w-full pl-10 pr-3.5 py-2.5 text-xs rounded-xl border border-slate-200 bg-slate-100/70 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#96c158] text-slate-900 transition"
+                          className="w-full pl-10 pr-3.5 py-2.5 text-xs rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#153459] text-slate-900 transition"
                         />
                       </div>
                     </div>
 
+                    {/* POSITION */}
+                    <div>
+                      <label className="block text-[11px] font-extrabold uppercase tracking-wide text-slate-700 mb-1">
+                        POSITION
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Cashier"
+                        value={irForm.employeePosition}
+                        onChange={(e) => setIrForm({ ...irForm, employeePosition: e.target.value })}
+                        className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#153459] text-slate-900 transition"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                    {/* AREA / BRANCH */}
+                    <div>
+                      <label className="block text-[11px] font-extrabold uppercase tracking-wide text-slate-700 mb-1">
+                        AREA / BRANCH
+                      </label>
+                      <div className="relative">
+                        <MapPin size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                        <input
+                          type="text"
+                          placeholder="e.g. Tacurong Branch"
+                          value={irForm.branch}
+                          onChange={(e) => setIrForm({ ...irForm, branch: e.target.value, location: e.target.value })}
+                          className="w-full pl-10 pr-3.5 py-2.5 text-xs rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#153459] text-slate-900 transition"
+                        />
+                      </div>
+                    </div>
+
+                    {/* PHONE NUMBER */}
                     <div>
                       <label className="block text-[11px] font-extrabold uppercase tracking-wide text-slate-700 mb-1">
                         PHONE NUMBER
@@ -2306,59 +2408,27 @@ export default function IncidentReportPanel({
                           placeholder="e.g. +63 917 842 9102"
                           value={irForm.phoneNumber}
                           onChange={(e) => setIrForm({ ...irForm, phoneNumber: e.target.value })}
-                          className="w-full pl-10 pr-3.5 py-2.5 text-xs rounded-xl border border-slate-200 bg-slate-100/70 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#96c158] text-slate-900 transition"
+                          className="w-full pl-10 pr-3.5 py-2.5 text-xs rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#153459] text-slate-900 transition"
                         />
                       </div>
-                    </div>
-                  </div>
-
-                  {/* POSITION & BRANCH */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                    <div>
-                      <label className="block text-[11px] font-extrabold uppercase tracking-wide text-slate-700 mb-1">
-                        POSITION / DESIGNATION
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="e.g. Cashier"
-                        value={irForm.employeePosition}
-                        onChange={(e) => setIrForm({ ...irForm, employeePosition: e.target.value })}
-                        className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 bg-slate-100/70 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#96c158] text-slate-900 transition"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-[11px] font-extrabold uppercase tracking-wide text-slate-700 mb-1">
-                        BRANCH / AREA LOCATION
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="e.g. Purok Daisy, New Isabela, Tacurong City, Sultan Kudarat"
-                        value={irForm.branch}
-                        onChange={(e) => setIrForm({ ...irForm, branch: e.target.value })}
-                        className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 bg-slate-100/70 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#96c158] text-slate-900 transition"
-                      />
                     </div>
                   </div>
                 </div>
               </div>
 
-              {/* SECTION 2: DESCRIPTION OF INCIDENT */}
-              <div className="space-y-4 pt-2">
-                <div className="text-center">
-                  <h3 className="text-sm font-extrabold uppercase tracking-wider text-slate-800">
-                    DESCRIPTION OF INCIDENT
-                  </h3>
-                  <div className="w-12 h-0.5 bg-[#96c158] mx-auto mt-1 rounded-full" />
+              {/* SECTION 2: INCIDENT DETAILS */}
+              <div className="space-y-4 pt-1">
+                <div className="bg-[#153459] text-white px-4 py-2 rounded-xl font-black text-xs uppercase tracking-wider flex items-center gap-2">
+                  <FileText size={15} />
+                  <span>INCIDENT DETAILS</span>
                 </div>
 
-                {/* 2-Column Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-[200px_1fr] gap-4">
-                  {/* Left Column */}
-                  <div className="space-y-3">
+                <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-4">
+                  {/* Date, Time, Location */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
                     <div>
                       <label className="block text-[11px] font-extrabold uppercase tracking-wide text-slate-700 mb-1">
-                        DATE
+                        DATE OF INCIDENT
                       </label>
                       <div className="relative">
                         <Calendar size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -2366,7 +2436,23 @@ export default function IncidentReportPanel({
                           type="date"
                           value={irForm.dateOfIncident}
                           onChange={(e) => setIrForm({ ...irForm, dateOfIncident: e.target.value })}
-                          className="w-full pl-9 pr-2.5 py-2 text-xs rounded-xl border border-slate-200 bg-slate-100/70 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#96c158] text-slate-900"
+                          className="w-full pl-9 pr-2.5 py-2 text-xs rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#153459] text-slate-900"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-extrabold uppercase tracking-wide text-slate-700 mb-1">
+                        TIME OF INCIDENT
+                      </label>
+                      <div className="relative">
+                        <Clock size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                        <input
+                          type="text"
+                          placeholder="e.g. 16:30 PM"
+                          value={irForm.incidentTime}
+                          onChange={(e) => setIrForm({ ...irForm, incidentTime: e.target.value })}
+                          className="w-full pl-9 pr-2.5 py-2 text-xs rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#153459] text-slate-900"
                         />
                       </div>
                     </div>
@@ -2380,136 +2466,190 @@ export default function IncidentReportPanel({
                         <input
                           type="text"
                           placeholder="e.g. Tacurong Branch"
-                          value={irForm.branch}
-                          onChange={(e) => setIrForm({ ...irForm, branch: e.target.value })}
-                          className="w-full pl-9 pr-2.5 py-2 text-xs rounded-xl border border-slate-200 bg-slate-100/70 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#96c158] text-slate-900"
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-[11px] font-extrabold uppercase tracking-wide text-slate-700 mb-1">
-                        TIME
-                      </label>
-                      <div className="relative">
-                        <Clock size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                        <input
-                          type="text"
-                          placeholder="e.g. 16:30 PM"
-                          value={irForm.incidentTime}
-                          onChange={(e) => setIrForm({ ...irForm, incidentTime: e.target.value })}
-                          className="w-full pl-9 pr-2.5 py-2 text-xs rounded-xl border border-slate-200 bg-slate-100/70 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#96c158] text-slate-900"
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-[11px] font-extrabold uppercase tracking-wide text-slate-700 mb-1.5">
-                        POLICE NOTIFIED
-                      </label>
-                      <div className="flex items-center gap-4 text-xs font-bold text-slate-700 pt-0.5">
-                        <label className="inline-flex items-center gap-1.5 cursor-pointer">
-                          <input
-                            type="radio"
-                            name="policeNotified"
-                            value="YES"
-                            checked={irForm.policeNotified === "YES"}
-                            onChange={() => setIrForm({ ...irForm, policeNotified: "YES" })}
-                            className="text-[#96c158] focus:ring-[#96c158]"
-                          />
-                          <span>YES</span>
-                        </label>
-                        <label className="inline-flex items-center gap-1.5 cursor-pointer">
-                          <input
-                            type="radio"
-                            name="policeNotified"
-                            value="NO"
-                            checked={irForm.policeNotified === "NO"}
-                            onChange={() => setIrForm({ ...irForm, policeNotified: "NO" })}
-                            className="text-[#96c158] focus:ring-[#96c158]"
-                          />
-                          <span>NO</span>
-                        </label>
-                      </div>
-                    </div>
-
-                    {/* Cash Shortage Amount */}
-                    <div>
-                      <label className="block text-[11px] font-extrabold uppercase tracking-wide text-slate-700 mb-1">
-                        SHORTAGE (PHP)
-                      </label>
-                      <div className="relative">
-                        <DollarSign size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-rose-500" />
-                        <input
-                          type="text"
-                          placeholder="e.g. 12,102.00"
-                          value={irForm.cashShortageAmount}
-                          onChange={(e) => setIrForm({ ...irForm, cashShortageAmount: e.target.value })}
-                          className="w-full pl-9 pr-2.5 py-2 text-xs rounded-xl border border-slate-200 bg-slate-100/70 focus:bg-white focus:outline-none focus:ring-2 focus:ring-rose-500 font-bold text-rose-700"
+                          value={irForm.location}
+                          onChange={(e) => setIrForm({ ...irForm, location: e.target.value })}
+                          className="w-full pl-9 pr-2.5 py-2 text-xs rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#153459] text-slate-900"
                         />
                       </div>
                     </div>
                   </div>
 
-                  {/* Right Column: INCIDENT DETAILS (Large Box) */}
-                  <div className="flex flex-col">
+                  {/* Factual Description of the Incident */}
+                  <div>
                     <label className="block text-[11px] font-extrabold uppercase tracking-wide text-slate-700 mb-1">
-                      INCIDENT DETAILS
+                      FACTUAL DESCRIPTION OF THE INCIDENT <span className="text-rose-600">*</span>
                     </label>
                     <textarea
-                      rows={8}
-                      placeholder="How the incident occurred, factors leading to it, what took place. Be as specific as possible."
-                      value={irForm.specificFindings}
-                      onChange={(e) => setIrForm({ ...irForm, specificFindings: e.target.value })}
-                      className="w-full flex-1 p-3.5 text-xs rounded-2xl border border-slate-200 bg-slate-100/70 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#96c158] text-slate-900 leading-relaxed custom-scrollbar transition"
+                      rows={5}
+                      required
+                      placeholder="Detailed chronological narrative of what occurred, factors leading to it, and specific findings..."
+                      value={irForm.factualDescription || irForm.specificFindings}
+                      onChange={(e) => setIrForm({ ...irForm, factualDescription: e.target.value, specificFindings: e.target.value, fullIncidentNarrative: e.target.value })}
+                      className="w-full p-3.5 text-xs rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#153459] text-slate-900 leading-relaxed custom-scrollbar transition font-medium"
                     />
-                    <p className="text-[10px] text-slate-400 mt-1.5 italic">
-                      How the incident occurred, factors leading to it, what took place. Be as specific as possible.
+                    <p className="text-[10px] text-slate-400 mt-1 italic">
+                      State precisely the date, time, actions taken, discrepancy found, and personnel involved.
                     </p>
                   </div>
-                </div>
 
-                {/* Causes & Recommendations */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                  {/* Witnesses (if any) */}
                   <div>
                     <label className="block text-[11px] font-extrabold uppercase tracking-wide text-slate-700 mb-1">
-                      INCIDENT CAUSES
+                      WITNESSES (IF ANY)
                     </label>
-                    <textarea
-                      rows={3}
-                      placeholder="Root cause, lapses in SOPs, unauthorized credit extensions..."
-                      value={irForm.incidentCauses}
-                      onChange={(e) => setIrForm({ ...irForm, incidentCauses: e.target.value })}
-                      className="w-full p-3 text-xs rounded-xl border border-slate-200 bg-slate-100/70 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#96c158] text-slate-900 leading-relaxed transition"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-[11px] font-extrabold uppercase tracking-wide text-slate-700 mb-1">
-                      FOLLOW UP RECOMMENDATIONS
-                    </label>
-                    <textarea
-                      rows={3}
-                      placeholder="Transmittal to Simpal Group of Companies Head Office for formal Notice to Explain (NTE)..."
-                      value={irForm.followUpRecommendations}
-                      onChange={(e) => setIrForm({ ...irForm, followUpRecommendations: e.target.value })}
-                      className="w-full p-3 text-xs rounded-xl border border-slate-200 bg-slate-100/70 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#96c158] text-slate-900 leading-relaxed transition"
+                    <input
+                      type="text"
+                      placeholder="e.g. John Doe (Supervisor), Jane Smith (Area Auditor)"
+                      value={irForm.witnesses}
+                      onChange={(e) => setIrForm({ ...irForm, witnesses: e.target.value })}
+                      className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#153459] text-slate-900 transition"
                     />
                   </div>
                 </div>
+              </div>
 
-                {/* ADDITIONAL NOTES */}
-                <div>
-                  <label className="block text-[11px] font-extrabold uppercase tracking-wide text-slate-700 mb-1">
-                    ADDITIONAL NOTES
-                  </label>
-                  <textarea
-                    rows={2}
-                    placeholder="Attach audit count sheets, signed IOUs, or witness slips..."
-                    value={irForm.additionalNotes}
-                    onChange={(e) => setIrForm({ ...irForm, additionalNotes: e.target.value })}
-                    className="w-full p-3 text-xs rounded-xl border border-slate-200 bg-slate-100/70 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#96c158] text-slate-900 leading-relaxed transition"
-                  />
+              {/* SECTION 3: VIOLATION (Exact Corporate Layout) */}
+              <div className="space-y-4 pt-1">
+                <div 
+                  className="bg-[#c81e1e] text-white px-4 py-2 font-black text-xs uppercase tracking-wider flex items-center gap-2 rounded-t-xl"
+                  style={{ clipPath: "polygon(0 0, 100% 0, 95% 100%, 0 100%)", paddingRight: "30px" }}
+                >
+                  <AlertTriangle size={15} />
+                  <span>VIOLATION</span>
+                </div>
+
+                <div className="p-4 rounded-b-2xl rounded-tr-2xl bg-[#fff5f5] border border-[#fecaca] shadow-2xs space-y-4">
+                  <p className="text-xs italic font-semibold text-slate-700">
+                    Please indicate the specific policy, rule, or standard that was violated:
+                  </p>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3.5">
+                    {/* Column 1 */}
+                    <div className="space-y-2.5 p-3 rounded-xl bg-white/80 border border-rose-100">
+                      {[
+                        "Company Policies and Procedures",
+                        "STL Operations and Draw Process",
+                        "Sales / Booth Operations",
+                        "Ticket Management"
+                      ].map((item) => {
+                        const isChecked = Array.isArray(irForm.violations) && irForm.violations.includes(item);
+                        return (
+                          <label
+                            key={item}
+                            onClick={() => handleToggleViolation(item)}
+                            className="flex items-center gap-2.5 text-xs text-slate-800 font-medium cursor-pointer select-none hover:text-[#c81e1e] transition"
+                          >
+                            <div className={`w-4 h-4 rounded-xs border-2 flex items-center justify-center shrink-0 transition ${isChecked ? "bg-[#c81e1e] border-[#c81e1e] text-white" : "bg-white border-slate-400"}`}>
+                              {isChecked && <Check size={12} strokeWidth={3} />}
+                            </div>
+                            <span className="leading-snug">{item}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+
+                    {/* Column 2 */}
+                    <div className="space-y-2.5 p-3 rounded-xl bg-white/80 border border-rose-100">
+                      {[
+                        "Cash Handling / Collection",
+                        "Data Privacy / Confidentiality",
+                        "Attendance / Punctuality",
+                        "Code of Conduct"
+                      ].map((item) => {
+                        const isChecked = Array.isArray(irForm.violations) && irForm.violations.includes(item);
+                        return (
+                          <label
+                            key={item}
+                            onClick={() => handleToggleViolation(item)}
+                            className="flex items-center gap-2.5 text-xs text-slate-800 font-medium cursor-pointer select-none hover:text-[#c81e1e] transition"
+                          >
+                            <div className={`w-4 h-4 rounded-xs border-2 flex items-center justify-center shrink-0 transition ${isChecked ? "bg-[#c81e1e] border-[#c81e1e] text-white" : "bg-white border-slate-400"}`}>
+                              {isChecked && <Check size={12} strokeWidth={3} />}
+                            </div>
+                            <span className="leading-snug">{item}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+
+                    {/* Column 3: Other & Remarks */}
+                    <div className="space-y-3 p-3 rounded-xl bg-white/80 border border-rose-100">
+                      <div>
+                        <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                          Other (please specify)
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="Specific breach or policy..."
+                          value={irForm.otherViolation}
+                          onChange={(e) => setIrForm({ ...irForm, otherViolation: e.target.value })}
+                          className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 bg-white text-slate-900 focus:ring-1 focus:ring-[#c81e1e]"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                          Remarks (if any)
+                        </label>
+                        <textarea
+                          rows={3}
+                          placeholder="Additional context or remarks..."
+                          value={irForm.violationRemarks}
+                          onChange={(e) => setIrForm({ ...irForm, violationRemarks: e.target.value })}
+                          className="w-full p-2.5 text-xs rounded-lg border border-slate-200 bg-white text-slate-900 focus:ring-1 focus:ring-[#c81e1e] leading-relaxed"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* SECTION 4: ATTACHMENTS / EVIDENCE */}
+              <div className="space-y-4 pt-1">
+                <div className="bg-[#153459] text-white px-4 py-2 rounded-xl font-black text-xs uppercase tracking-wider flex items-center gap-2">
+                  <Paperclip size={15} />
+                  <span>ATTACHMENTS / EVIDENCE</span>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {/* Column 1 */}
+                    <div className="space-y-2.5">
+                      {[
+                        "Photos (if any)",
+                        "Reports / Logs",
+                        "System Records / CCTV (if any)"
+                      ].map((item) => {
+                        const isChecked = Array.isArray(irForm.attachments) && irForm.attachments.includes(item);
+                        return (
+                          <label
+                            key={item}
+                            onClick={() => handleToggleAttachment(item)}
+                            className="flex items-center gap-2.5 text-xs text-slate-800 font-medium cursor-pointer select-none hover:text-[#153459] transition"
+                          >
+                            <div className={`w-4 h-4 rounded-xs border-2 flex items-center justify-center shrink-0 transition ${isChecked ? "bg-[#153459] border-[#153459] text-white" : "bg-white border-slate-400"}`}>
+                              {isChecked && <Check size={12} strokeWidth={3} />}
+                            </div>
+                            <span>{item}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+
+                    {/* Column 2 */}
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                        Other (please specify)
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Audit reconciliation discrepancy sheet"
+                        value={irForm.otherAttachments}
+                        onChange={(e) => setIrForm({ ...irForm, otherAttachments: e.target.value })}
+                        className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 bg-slate-50 focus:bg-white text-slate-900"
+                      />
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -2786,383 +2926,487 @@ export default function IncidentReportPanel({
 
             {/* Authentic Printable Document Container */}
             <div className="flex-1 overflow-y-auto p-4 sm:p-8 bg-slate-100/70 flex justify-center custom-scrollbar">
-              <div className="bg-white w-full max-w-[760px] p-0 shadow-md border border-slate-200 rounded-sm print:p-0 print:border-none print:shadow-none text-slate-900 font-sans relative overflow-hidden flex flex-col justify-between min-h-[960px]">
-                {/* Top Green Banner */}
-                <div className="bg-[#96c158] text-white py-5 px-6 text-center">
-                  <h1 className="text-2xl sm:text-3xl font-black uppercase tracking-wider text-white">
-                    INCIDENT REPORT
-                  </h1>
+              <div className="bg-white w-full max-w-[840px] p-6 sm:p-10 shadow-xl border border-slate-200 rounded-sm print:p-0 print:border-none print:shadow-none text-slate-900 font-sans relative overflow-hidden flex flex-col justify-between min-h-[1100px]">
+                {/* Top Right Corner Geometric Diagonal Stripes */}
+                <div className="absolute top-0 right-0 w-36 h-28 pointer-events-none overflow-hidden no-print">
+                  <svg className="w-full h-full" viewBox="0 0 144 112" fill="none">
+                    <polygon points="60,0 144,0 144,84" fill="#0f2b48" />
+                    <polygon points="38,0 52,0 144,72 144,84" fill="#c81e1e" />
+                    <polygon points="22,0 30,0 134,112 126,112" fill="#0f2b48" />
+                  </svg>
                 </div>
 
-                {/* Document Body */}
-                <div className="p-8 sm:p-12 space-y-8 flex-1">
-                  {/* 1. EMPLOYEE DETAILS */}
-                  <div className="space-y-4">
-                    <h2 className="text-center text-sm sm:text-base font-extrabold uppercase tracking-wider text-slate-800">
-                      EMPLOYEE DETAILS
-                    </h2>
+                <div className="space-y-5 relative z-10">
+                  {/* ============================================================== */}
+                  {/* HEADER SECTION: LOGO + TITLE + REPORT NO / DATE FILED BOX      */}
+                  {/* ============================================================== */}
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-slate-200">
+                    {/* Left: Company Logo & Branding */}
+                    <div className="flex items-center gap-3">
+                      {/* Stylized Sun Logo */}
+                      <div className="relative w-12 h-12 flex items-center justify-center shrink-0">
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          {[0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330].map((deg) => (
+                            <div
+                              key={deg}
+                              className="absolute w-1 h-12 bg-amber-400 rounded-full"
+                              style={{ transform: `rotate(${deg}deg)` }}
+                            />
+                          ))}
+                          <div className="w-7 h-7 rounded-full bg-white relative z-10 border border-amber-300 flex items-center justify-center">
+                            <div className="grid grid-cols-2 gap-0.5">
+                              <div className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+                              <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                              <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                              <div className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
 
-                    <div className="space-y-3">
                       <div>
-                        <div className="text-[10px] font-black uppercase tracking-wider text-slate-700 mb-1">
-                          NAME
-                        </div>
-                        <div className="w-full px-3.5 py-2.5 rounded-xl bg-slate-100/80 border border-slate-200 text-xs sm:text-sm font-bold text-slate-900 flex items-center gap-2.5">
-                          <CreditCard size={15} className="text-slate-400 shrink-0" />
-                          <span>{selectedReport.employeeName}</span>
-                          <span className="text-xs text-slate-500 font-medium ml-auto">
-                            ({selectedReport.employeePosition || "Staff"} • {selectedReport.senderCompany || selectedReport.company})
+                        <h2 className="text-lg sm:text-xl font-black tracking-tight text-[#c81e1e] uppercase leading-none">
+                          {selectedReport.senderCompany || selectedReport.company || "LUCKY BETPLAY"}
+                        </h2>
+                        <div className="flex items-center gap-1.5 mt-1">
+                          <div className="w-3.5 h-0.5 bg-[#0f2b48]" />
+                          <span className="text-[9px] font-black uppercase tracking-[0.22em] text-[#0f2b48]">
+                            CORPORATION
                           </span>
+                          <div className="w-3.5 h-0.5 bg-[#0f2b48]" />
                         </div>
                       </div>
+                    </div>
 
-                      {/* DEPARTMENT & PHONE NUMBER */}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                        <div>
-                          <div className="text-[10px] font-black uppercase tracking-wider text-slate-700 mb-1">
-                            DEPARTMENT
-                          </div>
-                          <div className="w-full px-3.5 py-2.5 rounded-xl bg-slate-100/80 border border-slate-200 text-xs font-semibold text-slate-800 flex items-center gap-2">
-                            <Building2 size={14} className="text-slate-400 shrink-0" />
-                            <span>{selectedReport.department || "Finance & Cashier Operations"}</span>
-                          </div>
-                        </div>
-
-                        <div>
-                          <div className="text-[10px] font-black uppercase tracking-wider text-slate-700 mb-1">
-                            PHONE NUMBER
-                          </div>
-                          <div className="w-full px-3.5 py-2.5 rounded-xl bg-slate-100/80 border border-slate-200 text-xs font-semibold text-slate-800 flex items-center gap-2">
-                            <Smartphone size={14} className="text-slate-400 shrink-0" />
-                            <span>{selectedReport.phoneNumber || "+63 917 842 9102"}</span>
-                          </div>
-                        </div>
+                    {/* Center: Main Title Block */}
+                    <div className="border-l-2 border-[#0f2b48] pl-4 sm:pl-5 my-auto">
+                      <h1 className="text-xl sm:text-2xl font-black uppercase tracking-wider text-[#0f2b48] leading-none">
+                        INCIDENT REPORT
+                      </h1>
+                      <div className="text-[11px] sm:text-xs font-semibold uppercase tracking-[0.25em] text-slate-600 mt-0.5">
+                        EMPLOYEE VIOLATION
                       </div>
+                      <p className="text-[10px] italic text-slate-500 mt-0.5">
+                        A safe and respectful workplace is everyone's responsibility.
+                      </p>
+                    </div>
 
-                      {/* POSITION / DESIGNATION & BRANCH / AREA LOCATION */}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                        <div>
-                          <div className="text-[10px] font-black uppercase tracking-wider text-slate-700 mb-1">
-                            POSITION / DESIGNATION
-                          </div>
-                          <div className="w-full px-3.5 py-2.5 rounded-xl bg-slate-100/80 border border-slate-200 text-xs font-semibold text-slate-800 flex items-center gap-2">
-                            <Briefcase size={14} className="text-slate-400 shrink-0" />
-                            <span>{selectedReport.employeePosition || "Cashier"}</span>
-                          </div>
-                        </div>
-
-                        <div>
-                          <div className="text-[10px] font-black uppercase tracking-wider text-slate-700 mb-1">
-                            BRANCH / AREA LOCATION
-                          </div>
-                          <div className="w-full px-3.5 py-2.5 rounded-xl bg-slate-100/80 border border-slate-200 text-xs font-semibold text-slate-800 flex items-center gap-2">
-                            <MapPin size={14} className="text-slate-400 shrink-0" />
-                            <span className="truncate">{selectedReport.branch || selectedReport.branchLocation || "Purok Daisy, New Isabela, Tacurong City, Sultan Kudarat"}</span>
-                          </div>
-                        </div>
+                    {/* Right: Report No. & Date Filed Box */}
+                    <div className="bg-[#f0f4f9] border border-[#d2e0ee] rounded-md p-2.5 min-w-[180px] text-xs font-semibold text-slate-800 space-y-1.5 shrink-0 self-start sm:self-center">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] uppercase font-bold text-slate-500 min-w-[70px]">Report No. :</span>
+                        <span className="font-mono font-bold text-[#0f2b48] border-b border-slate-300 flex-1 pb-0.5">
+                          {selectedReport.caseNumber}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] uppercase font-bold text-slate-500 min-w-[70px]">Date Filed :</span>
+                        <span className="font-semibold text-slate-800 border-b border-slate-300 flex-1 pb-0.5">
+                          {selectedReport.dateReported || selectedReport.createdAt?.slice(0, 10)}
+                        </span>
                       </div>
                     </div>
                   </div>
 
-                  {/* 2. DESCRIPTION OF INCIDENT */}
-                  <div className="space-y-4">
-                    <h2 className="text-center text-sm sm:text-base font-extrabold uppercase tracking-wider text-slate-800">
-                      DESCRIPTION OF INCIDENT
-                    </h2>
+                  {/* ============================================================== */}
+                  {/* 1. EMPLOYEE INFORMATION                                        */}
+                  {/* ============================================================== */}
+                  <div className="space-y-0">
+                    <div className="bg-[#153459] text-white px-3.5 py-1.5 rounded-t-md font-black text-xs uppercase tracking-wider flex items-center gap-2">
+                      <User size={14} className="text-white" />
+                      <span>EMPLOYEE INFORMATION</span>
+                    </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-[180px_1fr] gap-4">
-                      {/* Left Side */}
-                      <div className="space-y-3">
-                        <div>
-                          <div className="text-[10px] font-black uppercase tracking-wider text-slate-700 mb-1">
-                            DATE
-                          </div>
-                          <div className="w-full px-3 py-2 rounded-xl bg-slate-100/80 border border-slate-200 text-xs font-bold text-slate-800 flex items-center gap-2">
-                            <Calendar size={13} className="text-slate-400 shrink-0" />
-                            <span>{selectedReport.dateOfIncident || selectedReport.auditDates}</span>
-                          </div>
-                        </div>
-
-                        <div>
-                          <div className="text-[10px] font-black uppercase tracking-wider text-slate-700 mb-1">
-                            LOCATION
-                          </div>
-                          <div className="w-full px-3 py-2 rounded-xl bg-slate-100/80 border border-slate-200 text-xs font-bold text-slate-800 flex items-center gap-2">
-                            <MapPin size={13} className="text-slate-400 shrink-0" />
-                            <span className="truncate">{selectedReport.branch || "Tacurong Branch"}</span>
-                          </div>
-                        </div>
-
-                        <div>
-                          <div className="text-[10px] font-black uppercase tracking-wider text-slate-700 mb-1">
-                            TIME
-                          </div>
-                          <div className="w-full px-3 py-2 rounded-xl bg-slate-100/80 border border-slate-200 text-xs font-bold text-slate-800 flex items-center gap-2">
-                            <Clock size={13} className="text-slate-400 shrink-0" />
-                            <span>{selectedReport.incidentTime || "16:30 PM"}</span>
-                          </div>
-                        </div>
-
-                        <div>
-                          <div className="text-[10px] font-black uppercase tracking-wider text-slate-700 mb-1">
-                            POLICE NOTIFIED
-                          </div>
-                          <div className="flex items-center gap-3 text-xs font-bold text-slate-700 pt-1">
-                            <span className="inline-flex items-center gap-1">
-                              <span
-                                className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${
-                                  selectedReport.policeNotified === "YES"
-                                    ? "border-[#96c158] bg-[#96c158]"
-                                    : "border-slate-300"
-                                }`}
-                              >
-                                {selectedReport.policeNotified === "YES" && (
-                                  <span className="w-1.5 h-1.5 rounded-full bg-white" />
-                                )}
-                              </span>
-                              <span>YES</span>
+                    <div className="bg-[#f4f7fb] border border-t-0 border-[#d0dbe7] rounded-b-md p-3.5 sm:p-4 text-xs">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2.5">
+                        {/* Left Column */}
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[11px] font-semibold text-slate-700 min-w-[85px]">Full Name :</span>
+                            <span className="font-bold text-slate-900 border-b border-slate-300 flex-1 pb-0.5">
+                              {selectedReport.employeeName}
                             </span>
-                            <span className="inline-flex items-center gap-1">
-                              <span
-                                className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${
-                                  selectedReport.policeNotified !== "YES"
-                                    ? "border-[#96c158] bg-[#96c158]"
-                                    : "border-slate-300"
-                                }`}
-                              >
-                                {selectedReport.policeNotified !== "YES" && (
-                                  <span className="w-1.5 h-1.5 rounded-full bg-white" />
-                                )}
-                              </span>
-                              <span>NO</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[11px] font-semibold text-slate-700 min-w-[85px]">Employee ID :</span>
+                            <span className="font-semibold text-slate-900 border-b border-slate-300 flex-1 pb-0.5">
+                              {selectedReport.employeeId || "—"}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[11px] font-semibold text-slate-700 min-w-[85px]">Position :</span>
+                            <span className="font-semibold text-slate-900 border-b border-slate-300 flex-1 pb-0.5">
+                              {selectedReport.employeePosition || "Cashier"}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Right Column */}
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[11px] font-semibold text-slate-700 min-w-[115px]">Department / Unit :</span>
+                            <span className="font-semibold text-slate-900 border-b border-slate-300 flex-1 pb-0.5">
+                              {selectedReport.department || "Finance & Operations"}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[11px] font-semibold text-slate-700 min-w-[115px]">Area / Branch :</span>
+                            <span className="font-semibold text-slate-900 border-b border-slate-300 flex-1 pb-0.5 truncate">
+                              {selectedReport.branch || selectedReport.branchLocation || "Tacurong Branch"}
                             </span>
                           </div>
                         </div>
                       </div>
-
-                      {/* Right Side: INCIDENT DETAILS BOX */}
-                      <div className="flex flex-col">
-                        <div className="text-[10px] font-black uppercase tracking-wider text-slate-700 mb-1">
-                          INCIDENT DETAILS
-                        </div>
-                        <div className="w-full flex-1 p-3.5 rounded-2xl bg-slate-100/80 border border-slate-200 text-xs text-slate-800 leading-relaxed text-justify min-h-[160px] whitespace-pre-wrap">
-                          {selectedReport.specificFindings ||
-                            selectedReport.specific_findings ||
-                            selectedReport.fullIncidentNarrative ||
-                            selectedReport.full_incident_narrative ||
-                            "During surprise drawer reconciliation audit, a physical cash shortage was uncovered. The personnel on duty could not produce balancing vouchers or valid justification for the discrepancy."}
-                        </div>
-                        <div className="text-[9px] text-slate-400 mt-1 italic">
-                          How the incident occurred, factors leading to it, what took place. Be as specific as possible.
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Causes and Recommendations Boxes */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
-                      <div>
-                        <div className="text-[10px] font-black uppercase tracking-wider text-slate-700 mb-1">
-                          INCIDENT CAUSES
-                        </div>
-                        <div className="w-full p-3 rounded-xl bg-slate-100/80 border border-slate-200 text-xs text-slate-800 leading-relaxed min-h-[70px] whitespace-pre-wrap">
-                          {selectedReport.incidentCauses ||
-                            selectedReport.incident_causes ||
-                            "Non-observance of Cashier Standard Operating Procedures (SOPs) and unauthorized transactions."}
-                        </div>
-                      </div>
-
-                      <div>
-                        <div className="text-[10px] font-black uppercase tracking-wider text-slate-700 mb-1">
-                          FOLLOW UP RECOMMENDATIONS
-                        </div>
-                        <div className="w-full p-3 rounded-xl bg-slate-100/80 border border-slate-200 text-xs text-slate-800 leading-relaxed min-h-[70px] whitespace-pre-wrap">
-                          {selectedReport.followUpRecommendations ||
-                            selectedReport.follow_up_recommendations ||
-                            "Transmitted to Simpal Group of Companies (Head Office HRMD) for formal Notice to Explain (NTE) under Article 297 Labor Code."}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Additional Notes Box */}
-                    <div>
-                      <div className="text-[10px] font-black uppercase tracking-wider text-slate-700 mb-1">
-                        ADDITIONAL NOTES
-                      </div>
-                      <div className="w-full p-3 rounded-xl bg-slate-100/80 border border-slate-200 text-xs text-slate-800 leading-relaxed min-h-[50px] whitespace-pre-wrap">
-                        {selectedReport.additionalNotes ||
-                          selectedReport.additional_notes ||
-                          selectedReport.evidenceNotes ||
-                          "All physical cash count discrepancy sheets and borrower signed slips have been submitted and attached to the audit file."}
-                      </div>
                     </div>
                   </div>
 
-                  {/* 3. FOR OFFICIAL USE ONLY (Head Office Only) */}
-                  {effectiveRole.isHeadOffice && (
-                    <div className="space-y-4 pt-2">
-                    <h2 className="text-center text-sm sm:text-base font-extrabold uppercase tracking-wider text-slate-800">
-                      FOR OFFICIAL USE ONLY
-                    </h2>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      {/* REPORT RECEIVED BY (SGC Head Office) */}
-                      <div className="p-3 rounded-xl bg-[#eef7e5] border border-[#d8eac2]">
-                        <div className="text-[10px] font-black uppercase tracking-wider text-[#55782a] mb-1">
-                          REPORT RECEIVED BY (SGC HEAD OFFICE HRMD)
-                        </div>
-                        <div className="flex items-center gap-2 text-xs font-bold text-slate-900">
-                          <User size={14} className="text-[#55782a] shrink-0" />
-                          <span>{selectedReport.reportReceivedBy || `${selectedReport.assignedCentralHrName || "JEVINCE JAYE S. JUBAY, CHRP"} (HRMD Manager - SGC)`}</span>
-                        </div>
-                      </div>
-
-                      {/* DATE */}
-                      <div className="p-3 rounded-xl bg-[#eef7e5] border border-[#d8eac2]">
-                        <div className="text-[10px] font-black uppercase tracking-wider text-[#55782a] mb-1">
-                          DATE RECEIVED
-                        </div>
-                        <div className="flex items-center gap-2 text-xs font-bold text-slate-900">
-                          <Calendar size={14} className="text-[#55782a] shrink-0" />
-                          <span>{selectedReport.reportReceivedDate || selectedReport.dateReported || "September 28, 2026"}</span>
-                        </div>
-                      </div>
+                  {/* ============================================================== */}
+                  {/* 2. INCIDENT DETAILS                                            */}
+                  {/* ============================================================== */}
+                  <div className="space-y-0">
+                    <div className="bg-[#153459] text-white px-3.5 py-1.5 rounded-t-md font-black text-xs uppercase tracking-wider flex items-center gap-2">
+                      <FileText size={14} className="text-white" />
+                      <span>INCIDENT DETAILS</span>
                     </div>
 
-                    <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1">
-                      <span>
-                        <strong>Sender:</strong> {selectedReport.senderCompany || selectedReport.company} HR ({selectedReport.senderHrName || selectedReport.reportingHrName})
-                      </span>
-                      <span>
-                        <strong>Receiver:</strong> Simpal Group of Companies (Head Office HRMD)
-                      </span>
-                    </div>
-                  </div>
-                )}
-
-                  {/* OFFICIAL ENDORSEMENT SIGNATURES: PREPARED BY & OPERATIONS MANAGER */}
-                    <div className="p-4 rounded-2xl bg-[#f8fafc] border border-slate-200 space-y-3 mt-3">
-                      <div className="text-[10px] font-black uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
-                        <FileSignature size={13} className="text-[#8cb84a]" />
-                        <span>Management Endorsement & Transmittal Signatures</span>
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        {/* Column 1: Prepared By */}
-                        <div className="p-3 rounded-xl bg-white border border-slate-200 flex flex-col items-center text-center">
-                          <span className="text-[9px] font-black uppercase tracking-wider text-slate-400 mb-1">
-                            PREPARED BY (BRANCH HR / REPORTER)
+                    <div className="bg-[#f4f7fb] border border-t-0 border-[#d0dbe7] rounded-b-md p-3.5 sm:p-4 text-xs space-y-3.5">
+                      {/* Row 1: Date, Time, Location */}
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div className="flex items-center gap-2">
+                          <Calendar size={14} className="text-[#153459] shrink-0" />
+                          <span className="text-[11px] font-semibold text-slate-700">Date of Incident :</span>
+                          <span className="font-semibold text-slate-900 border-b border-slate-300 flex-1 pb-0.5">
+                            {selectedReport.dateOfIncident || selectedReport.auditDates || "—"}
                           </span>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <Clock size={14} className="text-[#153459] shrink-0" />
+                          <span className="text-[11px] font-semibold text-slate-700">Time of Incident :</span>
+                          <span className="font-semibold text-slate-900 border-b border-slate-300 flex-1 pb-0.5">
+                            {selectedReport.incidentTime || "16:30 PM"}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <MapPin size={14} className="text-[#153459] shrink-0" />
+                          <span className="text-[11px] font-semibold text-slate-700">Location :</span>
+                          <span className="font-semibold text-slate-900 border-b border-slate-300 flex-1 pb-0.5 truncate">
+                            {selectedReport.location || selectedReport.branch || "Tacurong Branch"}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Row 2: Factual Description of the Incident */}
+                      <div className="space-y-1.5">
+                        <div className="flex items-center gap-2 text-[11px] font-bold text-slate-800">
+                          <FileText size={13} className="text-[#153459]" />
+                          <span>Factual Description of the Incident:</span>
+                        </div>
+                        <div
+                          className="w-full p-2.5 text-xs text-slate-900 leading-[26px] min-h-[90px] whitespace-pre-wrap rounded-sm"
+                          style={{
+                            backgroundImage: "linear-gradient(to bottom, transparent 25px, #d1d5db 26px)",
+                            backgroundSize: "100% 26px"
+                          }}
+                        >
+                          {selectedReport.factualDescription || selectedReport.specificFindings || selectedReport.fullIncidentNarrative || "During surprise drawer reconciliation audit, a physical cash shortage was uncovered. The personnel on duty could not produce balancing vouchers or valid justification for the discrepancy."}
+                        </div>
+                      </div>
+
+                      {/* Row 3: Witnesses (if any) */}
+                      <div className="space-y-1.5 pt-1">
+                        <div className="flex items-center gap-2 text-[11px] font-bold text-slate-800">
+                          <Users size={13} className="text-[#153459]" />
+                          <span>Witnesses (if any):</span>
+                        </div>
+                        <div
+                          className="w-full p-2.5 text-xs text-slate-900 leading-[26px] min-h-[55px] whitespace-pre-wrap rounded-sm"
+                          style={{
+                            backgroundImage: "linear-gradient(to bottom, transparent 25px, #d1d5db 26px)",
+                            backgroundSize: "100% 26px"
+                          }}
+                        >
+                          {selectedReport.witnesses || "None reported / Attached to internal audit file."}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* ============================================================== */}
+                  {/* 3. VIOLATION (Exact Corporate Look)                            */}
+                  {/* ============================================================== */}
+                  <div className="space-y-0">
+                    <div className="flex items-center">
+                      <div
+                        className="bg-[#c81e1e] text-white px-4 py-1.5 font-black text-xs uppercase tracking-wider flex items-center gap-2 rounded-t-md"
+                        style={{ clipPath: "polygon(0 0, 100% 0, 92% 100%, 0 100%)", paddingRight: "28px" }}
+                      >
+                        <AlertTriangle size={14} className="text-white shrink-0" />
+                        <span>VIOLATION</span>
+                      </div>
+                    </div>
+
+                    <div className="bg-[#fef2f2] border border-[#fecaca] rounded-b-md p-3.5 sm:p-4 text-xs space-y-3">
+                      <p className="text-[11px] italic font-semibold text-slate-700">
+                        Please indicate the specific policy, rule, or standard that was violated.
+                      </p>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 pt-1">
+                        {/* Column 1 */}
+                        <div className="space-y-2">
+                          {[
+                            "Company Policies and Procedures",
+                            "STL Operations and Draw Process",
+                            "Sales / Booth Operations",
+                            "Ticket Management"
+                          ].map((item) => {
+                            const isChecked = Array.isArray(selectedReport.violations)
+                              ? selectedReport.violations.includes(item)
+                              : true;
+                            return (
+                              <div key={item} className="flex items-center gap-2.5 text-[11px] text-slate-800 font-medium">
+                                <div className={`w-4 h-4 rounded-xs border-2 flex items-center justify-center shrink-0 ${isChecked ? "bg-[#153459] border-[#153459] text-white" : "bg-white border-slate-400"}`}>
+                                  {isChecked && <Check size={12} strokeWidth={3} />}
+                                </div>
+                                <span>{item}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        {/* Column 2 */}
+                        <div className="space-y-2">
+                          {[
+                            "Cash Handling / Collection",
+                            "Data Privacy / Confidentiality",
+                            "Attendance / Punctuality",
+                            "Code of Conduct"
+                          ].map((item) => {
+                            const isChecked = Array.isArray(selectedReport.violations)
+                              ? selectedReport.violations.includes(item)
+                              : true;
+                            return (
+                              <div key={item} className="flex items-center gap-2.5 text-[11px] text-slate-800 font-medium">
+                                <div className={`w-4 h-4 rounded-xs border-2 flex items-center justify-center shrink-0 ${isChecked ? "bg-[#153459] border-[#153459] text-white" : "bg-white border-slate-400"}`}>
+                                  {isChecked && <Check size={12} strokeWidth={3} />}
+                                </div>
+                                <span>{item}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        {/* Column 3: Other & Remarks */}
+                        <div className="space-y-2.5 border-t md:border-t-0 md:border-l border-rose-200 pt-2 md:pt-0 md:pl-4">
+                          <div className="flex items-center gap-2 text-[11px]">
+                            <div className={`w-4 h-4 rounded-xs border-2 flex items-center justify-center shrink-0 ${selectedReport.otherViolation ? "bg-[#153459] border-[#153459] text-white" : "bg-white border-slate-400"}`}>
+                              {selectedReport.otherViolation && <Check size={12} strokeWidth={3} />}
+                            </div>
+                            <span className="font-semibold text-slate-700 whitespace-nowrap">Other (please specify)</span>
+                          </div>
+                          <div className="border-b border-slate-300 pb-0.5 text-xs text-slate-900 font-semibold min-h-[18px]">
+                            {selectedReport.otherViolation || ""}
+                          </div>
+
+                          <div className="pt-1">
+                            <div className="text-[10px] font-bold text-slate-700 mb-1">Remarks (if any):</div>
+                            <div
+                              className="w-full p-1.5 text-xs text-slate-800 leading-[24px] min-h-[48px] whitespace-pre-wrap"
+                              style={{
+                                backgroundImage: "linear-gradient(to bottom, transparent 23px, #cbd5e1 24px)",
+                                backgroundSize: "100% 24px"
+                              }}
+                            >
+                              {selectedReport.violationRemarks || (selectedReport.cashShortageAmount ? `Incurred unaccounted cash shortage of PHP ${selectedReport.cashShortageAmount}.` : "")}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* ============================================================== */}
+                  {/* 4. ATTACHMENTS / EVIDENCE                                      */}
+                  {/* ============================================================== */}
+                  <div className="space-y-0">
+                    <div className="bg-[#153459] text-white px-3.5 py-1.5 rounded-t-md font-black text-xs uppercase tracking-wider flex items-center gap-2">
+                      <Paperclip size={14} className="text-white" />
+                      <span>ATTACHMENTS / EVIDENCE</span>
+                    </div>
+
+                    <div className="bg-[#f4f7fb] border border-t-0 border-[#d0dbe7] rounded-b-md p-3.5 sm:p-4 text-xs">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {/* Column 1 */}
+                        <div className="space-y-2">
+                          {[
+                            "Photos (if any)",
+                            "Reports / Logs",
+                            "System Records / CCTV (if any)"
+                          ].map((item) => {
+                            const isChecked = Array.isArray(selectedReport.attachments)
+                              ? selectedReport.attachments.includes(item)
+                              : true;
+                            return (
+                              <div key={item} className="flex items-center gap-2.5 text-[11px] text-slate-800 font-medium">
+                                <div className={`w-4 h-4 rounded-xs border-2 flex items-center justify-center shrink-0 ${isChecked ? "bg-[#153459] border-[#153459] text-white" : "bg-white border-slate-400"}`}>
+                                  {isChecked && <Check size={12} strokeWidth={3} />}
+                                </div>
+                                <span>{item}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        {/* Column 2 */}
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-2 text-[11px]">
+                            <div className={`w-4 h-4 rounded-xs border-2 flex items-center justify-center shrink-0 ${selectedReport.otherAttachments ? "bg-[#153459] border-[#153459] text-white" : "bg-white border-slate-400"}`}>
+                              {selectedReport.otherAttachments && <Check size={12} strokeWidth={3} />}
+                            </div>
+                            <span className="font-semibold text-slate-700">Other (please specify)</span>
+                          </div>
+                          <div
+                            className="w-full p-1.5 text-xs text-slate-800 leading-[24px] min-h-[48px] whitespace-pre-wrap"
+                            style={{
+                              backgroundImage: "linear-gradient(to bottom, transparent 23px, #cbd5e1 24px)",
+                              backgroundSize: "100% 24px"
+                            }}
+                          >
+                            {selectedReport.otherAttachments || selectedReport.additionalNotes || "Attached physical audit reconciliation count discrepancy sheet."}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* ============================================================== */}
+                  {/* 5. SIGNATURES / ENDORSEMENTS (Prepared By, Reviewed, Approved) */}
+                  {/* ============================================================== */}
+                  <div className="bg-[#f4f7fb] border border-[#d0dbe7] rounded-md p-4 text-xs">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                      {/* 1. Prepared by */}
+                      <div className="space-y-2">
+                        <span className="text-[11px] font-bold text-slate-800 block">Prepared by:</span>
+                        <div className="h-16 flex items-center justify-center border-b border-slate-300 pb-1">
                           {selectedReport.preparerSignature ? (
                             <img
                               src={selectedReport.preparerSignature}
-                              alt="Preparer Signature"
-                              className="max-h-14 object-contain mb-1"
+                              alt="Preparer E-Sig"
+                              className="max-h-14 object-contain"
                             />
                           ) : (
-                            <div className="h-12 flex items-center justify-center text-[11px] text-slate-400 italic">
-                              (Affixed on file)
-                            </div>
+                            <span className="text-[11px] text-slate-400 italic">(Signed on file)</span>
                           )}
-                          <div className="w-48 h-px bg-slate-300 mt-1 mb-1" />
-                          <strong className="text-xs font-black text-slate-900">
-                            {selectedReport.preparerName || selectedReport.reportingHrName || selectedReport.senderHrName}
-                          </strong>
-                          <span className="text-[10px] text-slate-500 font-medium">
-                            {selectedReport.preparerTitle || selectedReport.reportingHrTitle || "Branch HR Admin"}
-                          </span>
                         </div>
+                        <div className="text-center pt-0.5">
+                          <div className="text-[11px] font-extrabold text-slate-900 uppercase">
+                            {selectedReport.preparerName || selectedReport.senderHrName}
+                          </div>
+                          <div className="text-[10px] text-slate-500 font-medium">
+                            Name / Position ({selectedReport.preparerTitle || "Branch HR"})
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1.5 pt-1 border-t border-slate-200 text-[10px]">
+                          <span className="text-slate-500 font-semibold">Date:</span>
+                          <span className="text-slate-900 font-medium">{selectedReport.dateReported || selectedReport.createdAt?.slice(0, 10)}</span>
+                        </div>
+                      </div>
 
-                        {/* Column 2: Noted & Endorsed By */}
-                        <div className="p-3 rounded-xl bg-white border border-slate-200 flex flex-col items-center text-center">
-                          <span className="text-[9px] font-black uppercase tracking-wider text-slate-400 mb-1">
-                            NOTED & ENDORSED BY (OPERATIONS MANAGER)
-                          </span>
+                      {/* 2. Reviewed by */}
+                      <div className="space-y-2">
+                        <span className="text-[11px] font-bold text-slate-800 block">Reviewed by:</span>
+                        <div className="h-16 flex items-center justify-center border-b border-slate-300 pb-1">
                           {selectedReport.operationsManagerSignature ? (
                             <img
                               src={selectedReport.operationsManagerSignature}
-                              alt="Operations Manager Signature"
-                              className="max-h-14 object-contain mb-1"
+                              alt="Manager E-Sig"
+                              className="max-h-14 object-contain"
                             />
                           ) : (
-                            <div className="h-12 flex items-center justify-center text-[11px] text-slate-400 italic">
-                              (Affixed on file)
-                            </div>
+                            <span className="text-[11px] text-slate-400 italic">(Signed on file)</span>
                           )}
-                          <div className="w-48 h-px bg-slate-300 mt-1 mb-1" />
-                          <strong className="text-xs font-black text-slate-900">
+                        </div>
+                        <div className="text-center pt-0.5">
+                          <div className="text-[11px] font-extrabold text-slate-900 uppercase">
                             {selectedReport.operationsManagerName || "Operations Manager"}
-                          </strong>
-                          <span className="text-[10px] text-slate-500 font-medium">
-                            {selectedReport.operationsManagerTitle || "Operations Manager / Area Manager"}
-                          </span>
+                          </div>
+                          <div className="text-[10px] text-slate-500 font-medium">
+                            Name / Position ({selectedReport.operationsManagerTitle || "Area Operations Manager"})
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1.5 pt-1 border-t border-slate-200 text-[10px]">
+                          <span className="text-slate-500 font-semibold">Date:</span>
+                          <span className="text-slate-900 font-medium">{selectedReport.dateReported || selectedReport.createdAt?.slice(0, 10)}</span>
+                        </div>
+                      </div>
+
+                      {/* 3. Approved by */}
+                      <div className="space-y-2">
+                        <span className="text-[11px] font-bold text-slate-800 block">Approved by:</span>
+                        <div className="h-16 flex items-center justify-center border-b border-slate-300 pb-1">
+                          {selectedReport.approvedBySignature ? (
+                            <img
+                              src={selectedReport.approvedBySignature}
+                              alt="Approver E-Sig"
+                              className="max-h-14 object-contain"
+                            />
+                          ) : (
+                            <span className="text-[11px] text-slate-400 italic">(Simpal Group of Companies HRMD)</span>
+                          )}
+                        </div>
+                        <div className="text-center pt-0.5">
+                          <div className="text-[11px] font-extrabold text-slate-900 uppercase">
+                            {selectedReport.approvedByName || selectedReport.receiverHrName || "JEVINCE JAYE S. JUBAY, CHRP"}
+                          </div>
+                          <div className="text-[10px] text-slate-500 font-medium">
+                            Name / Position ({selectedReport.approvedByTitle || "HRMD Manager"})
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1.5 pt-1 border-t border-slate-200 text-[10px]">
+                          <span className="text-slate-500 font-semibold">Date:</span>
+                          <span className="text-slate-900 font-medium">{selectedReport.reportReceivedDate || selectedReport.dateReported || selectedReport.createdAt?.slice(0, 10)}</span>
                         </div>
                       </div>
                     </div>
-
-                    {/* 4. RESPONDENT (EMPLOYEE) ACKNOWLEDGMENT & SIGNATURE CONFORME */}
-                    {Boolean(selectedReport.respondentSignature) && (
-                      <div className="p-4 rounded-2xl bg-white border-2 border-slate-300 shadow-xs space-y-3 mt-4">
-                        <div className="flex items-center justify-between flex-wrap gap-2">
-                          <div className="flex items-center gap-2">
-                            <div className="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center font-bold">
-                              <FileSignature size={16} />
-                            </div>
-                            <div>
-                              <h4 className="text-xs font-black uppercase tracking-wider text-slate-900">
-                                RESPONDENT CONFORME & PROOF OF RECEIPT
-                              </h4>
-                              <p className="text-[10px] text-slate-500">
-                                Philippine Due Process Requirement • Employee Service & Signed Acknowledgment
-                              </p>
-                            </div>
-                          </div>
-
-                          <span className="px-2.5 py-1 rounded-md text-[10px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-300 inline-flex items-center gap-1">
-                            <CheckCheck size={12} className="text-emerald-700" />
-                            <span>OFFICIALLY SIGNED & RECEIVED</span>
-                          </span>
-                        </div>
-
-                        <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-700 leading-relaxed italic">
-                          "I hereby acknowledge receipt of a copy of this Incident Report and take notice of the allegations, audit findings, and attachments. I understand that formal administrative proceedings will follow under company due process rules."
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2 border-t border-slate-100 items-center">
-                          <div className="md:col-span-1 flex flex-col items-center justify-center p-2 rounded-xl bg-slate-50 border border-slate-200">
-                            <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold mb-1">Affixed Digital Signature</span>
-                            <img
-                              src={selectedReport.respondentSignature}
-                              alt="Respondent Signature"
-                              className="max-h-16 object-contain"
-                            />
-                          </div>
-                          <div className="md:col-span-2 space-y-1 text-xs">
-                            <div>
-                              <span className="text-[10px] uppercase font-bold text-slate-400 block">Respondent Name</span>
-                              <strong className="text-slate-900 font-extrabold">{selectedReport.respondentSignedName || selectedReport.employeeName}</strong>
-                            </div>
-                            <div>
-                              <span className="text-[10px] uppercase font-bold text-slate-400 block">Date & Time Received</span>
-                              <span className="text-slate-700 font-medium">{selectedReport.respondentSignedAt || "Recorded upon signing"}</span>
-                            </div>
-                            {selectedReport.respondentRemarks && (
-                              <div>
-                                <span className="text-[10px] uppercase font-bold text-slate-400 block">Remarks by Respondent</span>
-                                <span className="text-slate-600 italic">"{selectedReport.respondentRemarks}"</span>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    )}
                   </div>
 
-                {/* Bottom Green Banner */}
-                <div className="bg-[#96c158] text-white py-3.5 px-6 text-center shrink-0">
-                  <h3 className="text-sm font-black uppercase tracking-wider">
-                    {selectedReport.senderCompany || selectedReport.company || "5A ROYAL GAMING OPC"}
-                  </h3>
-                  <p className="text-[10px] text-white/90">Employee Incident Report</p>
+                  {/* RESPONDENT ACKNOWLEDGMENT (Only shown if signed conformed) */}
+                  {Boolean(selectedReport.respondentSignature) && (
+                    <div className="p-4 rounded-xl bg-white border border-slate-300 shadow-2xs space-y-2">
+                      <div className="flex items-center justify-between text-[11px]">
+                        <span className="font-extrabold uppercase text-slate-800">Respondent Conforme (Signed Receipt)</span>
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">Officially Signed</span>
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <img src={selectedReport.respondentSignature} alt="Respondent Signature" className="max-h-12 object-contain" />
+                        <div className="text-xs">
+                          <strong className="text-slate-900 block">{selectedReport.respondentSignedName || selectedReport.employeeName}</strong>
+                          <span className="text-[10px] text-slate-500">{selectedReport.respondentSignedAt || "Signed receipt"}</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* ============================================================== */}
+                {/* FOOTER: CONFIDENTIAL + GEOMETRIC ACCENT STRIPES               */}
+                {/* ============================================================== */}
+                <div className="relative pt-6 pb-2 mt-4 border-t border-slate-200">
+                  <div className="flex items-center justify-center gap-3 text-[10px] font-black uppercase tracking-[0.25em] text-slate-500">
+                    <div className="w-16 h-px bg-slate-400" />
+                    <span>CONFIDENTIAL — INTERNAL USE ONLY</span>
+                    <div className="w-16 h-px bg-slate-400" />
+                  </div>
+
+                  {/* Bottom Right Corner Geometric Stripes */}
+                  <div className="absolute bottom-0 right-0 w-36 h-20 pointer-events-none overflow-hidden no-print">
+                    <svg className="w-full h-full" viewBox="0 0 144 80" fill="none">
+                      <polygon points="144,0 144,80 60,80" fill="#0f2b48" />
+                      <polygon points="144,12 144,24 52,80 38,80" fill="#c81e1e" />
+                      <polygon points="134,0 126,0 22,80 30,80" fill="#0f2b48" />
+                    </svg>
+                  </div>
                 </div>
               </div>
             </div>
