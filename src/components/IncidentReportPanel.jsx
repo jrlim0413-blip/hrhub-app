@@ -1759,29 +1759,6 @@ export default function IncidentReportPanel({
                       <span>View IR Form</span>
                     </button>
 
-                    {/* Respondent / Employee Acknowledgment & Signature */}
-                    {report.respondentSignature ? (
-                      <button
-                        type="button"
-                        onClick={() => handleOpenSignModal(report)}
-                        className="px-3 py-2 rounded-xl text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-300 hover:bg-emerald-100 transition cursor-pointer inline-flex items-center gap-1.5 shadow-2xs"
-                        title="View or update respondent signed acknowledgment"
-                      >
-                        <CheckCheck size={14} className="text-emerald-600" />
-                        <span>IR Signed</span>
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => handleOpenSignModal(report)}
-                        className="px-3.5 py-2 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-600 text-slate-950 shadow-xs transition cursor-pointer inline-flex items-center gap-1.5 animate-pulse"
-                        title="Receive and sign Incident Report (affix digital signature)"
-                      >
-                        <FileSignature size={14} />
-                        <span>✍️ Receive & Sign IR</span>
-                      </button>
-                    )}
-
                     {/* 1. SGC HEAD OFFICE EVALUATION OF IR (Pending Stage) */}
                     {effectiveRole.isHeadOffice && isPendingSgc && (
                       <div className="flex items-center gap-1.5 flex-wrap">
@@ -2674,58 +2651,60 @@ export default function IncidentReportPanel({
                 </div>
               </div>
 
-              {/* SECTION 3: FOR OFFICIAL USE ONLY */}
-              <div className="space-y-4 pt-2">
-                <div className="text-center">
-                  <h3 className="text-sm font-extrabold uppercase tracking-wider text-slate-800">
-                    FOR OFFICIAL USE ONLY
-                  </h3>
-                  <div className="w-12 h-0.5 bg-[#96c158] mx-auto mt-1 rounded-full" />
-                </div>
+              {/* SECTION 3: FOR OFFICIAL USE ONLY (Head Office Only) */}
+              {effectiveRole.isHeadOffice && (
+                <div className="space-y-4 pt-2">
+                  <div className="text-center">
+                    <h3 className="text-sm font-extrabold uppercase tracking-wider text-slate-800">
+                      FOR OFFICIAL USE ONLY
+                    </h3>
+                    <div className="w-12 h-0.5 bg-[#96c158] mx-auto mt-1 rounded-full" />
+                  </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* REPORT RECEIVED BY (SGC Head Office) */}
-                  <div className="p-3 rounded-xl bg-[#eef7e5] border border-[#d8eac2]">
-                    <label className="block text-[10px] font-extrabold uppercase tracking-wide text-[#55782a] mb-1">
-                      REPORT RECEIVED BY (SGC HEAD OFFICE HRMD)
-                    </label>
-                    <div className="relative">
-                      <User size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#55782a]" />
-                      <input
-                        type="text"
-                        value={irForm.reportReceivedBy}
-                        onChange={(e) => setIrForm({ ...irForm, reportReceivedBy: e.target.value })}
-                        className="w-full pl-9 pr-3 py-2 text-xs rounded-lg border border-[#cbe3b0] bg-white font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#96c158]"
-                      />
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* REPORT RECEIVED BY (SGC Head Office) */}
+                    <div className="p-3 rounded-xl bg-[#eef7e5] border border-[#d8eac2]">
+                      <label className="block text-[10px] font-extrabold uppercase tracking-wide text-[#55782a] mb-1">
+                        REPORT RECEIVED BY (SGC HEAD OFFICE HRMD)
+                      </label>
+                      <div className="relative">
+                        <User size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#55782a]" />
+                        <input
+                          type="text"
+                          value={irForm.reportReceivedBy}
+                          onChange={(e) => setIrForm({ ...irForm, reportReceivedBy: e.target.value })}
+                          className="w-full pl-9 pr-3 py-2 text-xs rounded-lg border border-[#cbe3b0] bg-white font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#96c158]"
+                        />
+                      </div>
+                    </div>
+
+                    {/* DATE */}
+                    <div className="p-3 rounded-xl bg-[#eef7e5] border border-[#d8eac2]">
+                      <label className="block text-[10px] font-extrabold uppercase tracking-wide text-[#55782a] mb-1">
+                        DATE RECEIVED
+                      </label>
+                      <div className="relative">
+                        <Calendar size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#55782a]" />
+                        <input
+                          type="text"
+                          value={irForm.reportReceivedDate}
+                          onChange={(e) => setIrForm({ ...irForm, reportReceivedDate: e.target.value })}
+                          className="w-full pl-9 pr-3 py-2 text-xs rounded-lg border border-[#cbe3b0] bg-white font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#96c158]"
+                        />
+                      </div>
                     </div>
                   </div>
 
-                  {/* DATE */}
-                  <div className="p-3 rounded-xl bg-[#eef7e5] border border-[#d8eac2]">
-                    <label className="block text-[10px] font-extrabold uppercase tracking-wide text-[#55782a] mb-1">
-                      DATE RECEIVED
-                    </label>
-                    <div className="relative">
-                      <Calendar size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#55782a]" />
-                      <input
-                        type="text"
-                        value={irForm.reportReceivedDate}
-                        onChange={(e) => setIrForm({ ...irForm, reportReceivedDate: e.target.value })}
-                        className="w-full pl-9 pr-3 py-2 text-xs rounded-lg border border-[#cbe3b0] bg-white font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#96c158]"
-                      />
-                    </div>
+                  <div className="flex items-center justify-between text-xs text-slate-500 pt-1 px-1">
+                    <span>
+                      <strong>Filed By:</strong> {irForm.reportingHrName} ({irForm.company} HR)
+                    </span>
+                    <span>
+                      <strong>Designated Receiver:</strong> Simpal Group of Companies (Head Office HRMD)
+                    </span>
                   </div>
                 </div>
-
-                <div className="flex items-center justify-between text-xs text-slate-500 pt-1 px-1">
-                  <span>
-                    <strong>Filed By:</strong> {irForm.reportingHrName} ({irForm.company} HR)
-                  </span>
-                  <span>
-                    <strong>Designated Receiver:</strong> Simpal Group of Companies (Head Office HRMD)
-                  </span>
-                </div>
-              </div>
+              )}
 
               {/* Bottom Green Banner */}
               <div className="bg-[#96c158] text-white py-2.5 px-4 rounded-xl text-center shadow-xs">
@@ -3018,8 +2997,9 @@ export default function IncidentReportPanel({
                     </div>
                   </div>
 
-                  {/* 3. FOR OFFICIAL USE ONLY */}
-                  <div className="space-y-4 pt-2">
+                  {/* 3. FOR OFFICIAL USE ONLY (Head Office Only) */}
+                  {effectiveRole.isHeadOffice && (
+                    <div className="space-y-4 pt-2">
                     <h2 className="text-center text-sm sm:text-base font-extrabold uppercase tracking-wider text-slate-800">
                       FOR OFFICIAL USE ONLY
                     </h2>
@@ -3056,8 +3036,10 @@ export default function IncidentReportPanel({
                         <strong>Receiver:</strong> Simpal Group of Companies (Head Office HRMD)
                       </span>
                     </div>
+                  </div>
+                )}
 
-                    {/* OFFICIAL ENDORSEMENT SIGNATURES: PREPARED BY & OPERATIONS MANAGER */}
+                  {/* OFFICIAL ENDORSEMENT SIGNATURES: PREPARED BY & OPERATIONS MANAGER */}
                     <div className="p-4 rounded-2xl bg-[#f8fafc] border border-slate-200 space-y-3 mt-3">
                       <div className="text-[10px] font-black uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
                         <FileSignature size={13} className="text-[#8cb84a]" />
@@ -3118,44 +3100,33 @@ export default function IncidentReportPanel({
                     </div>
 
                     {/* 4. RESPONDENT (EMPLOYEE) ACKNOWLEDGMENT & SIGNATURE CONFORME */}
-                    <div className="p-4 rounded-2xl bg-white border-2 border-slate-300 shadow-xs space-y-3 mt-4">
-                      <div className="flex items-center justify-between flex-wrap gap-2">
-                        <div className="flex items-center gap-2">
-                          <div className="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center font-bold">
-                            <FileSignature size={16} />
+                    {Boolean(selectedReport.respondentSignature) && (
+                      <div className="p-4 rounded-2xl bg-white border-2 border-slate-300 shadow-xs space-y-3 mt-4">
+                        <div className="flex items-center justify-between flex-wrap gap-2">
+                          <div className="flex items-center gap-2">
+                            <div className="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center font-bold">
+                              <FileSignature size={16} />
+                            </div>
+                            <div>
+                              <h4 className="text-xs font-black uppercase tracking-wider text-slate-900">
+                                RESPONDENT CONFORME & PROOF OF RECEIPT
+                              </h4>
+                              <p className="text-[10px] text-slate-500">
+                                Philippine Due Process Requirement • Employee Service & Signed Acknowledgment
+                              </p>
+                            </div>
                           </div>
-                          <div>
-                            <h4 className="text-xs font-black uppercase tracking-wider text-slate-900">
-                              RESPONDENT CONFORME & PROOF OF RECEIPT
-                            </h4>
-                            <p className="text-[10px] text-slate-500">
-                              Philippine Due Process Requirement • Employee Service & Signed Acknowledgment
-                            </p>
-                          </div>
-                        </div>
 
-                        {selectedReport.respondentSignature ? (
                           <span className="px-2.5 py-1 rounded-md text-[10px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-300 inline-flex items-center gap-1">
                             <CheckCheck size={12} className="text-emerald-700" />
                             <span>OFFICIALLY SIGNED & RECEIVED</span>
                           </span>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => handleOpenSignModal(selectedReport)}
-                            className="px-3 py-1.5 rounded-lg text-xs font-bold bg-amber-500 hover:bg-amber-600 text-slate-950 shadow-xs transition cursor-pointer inline-flex items-center gap-1.5"
-                          >
-                            <PenTool size={13} />
-                            <span>✍️ Affix Respondent Signature Now</span>
-                          </button>
-                        )}
-                      </div>
+                        </div>
 
-                      <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-700 leading-relaxed italic">
-                        "I hereby acknowledge receipt of a copy of this Incident Report and take notice of the allegations, audit findings, and attachments. I understand that formal administrative proceedings will follow under company due process rules."
-                      </div>
+                        <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-700 leading-relaxed italic">
+                          "I hereby acknowledge receipt of a copy of this Incident Report and take notice of the allegations, audit findings, and attachments. I understand that formal administrative proceedings will follow under company due process rules."
+                        </div>
 
-                      {selectedReport.respondentSignature ? (
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2 border-t border-slate-100 items-center">
                           <div className="md:col-span-1 flex flex-col items-center justify-center p-2 rounded-xl bg-slate-50 border border-slate-200">
                             <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold mb-1">Affixed Digital Signature</span>
@@ -3182,22 +3153,9 @@ export default function IncidentReportPanel({
                             )}
                           </div>
                         </div>
-                      ) : (
-                        <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-between gap-3 text-xs text-amber-900">
-                          <span>Awaiting physical or digital signature of respondent <strong>{selectedReport.employeeName}</strong>.</span>
-                          <button
-                            type="button"
-                            onClick={() => handleOpenSignModal(selectedReport)}
-                            className="px-3 py-1 rounded-lg text-xs font-bold bg-amber-600 text-white hover:bg-amber-700 transition cursor-pointer inline-flex items-center gap-1"
-                          >
-                            <PenTool size={12} />
-                            <span>Sign IR</span>
-                          </button>
-                        </div>
-                      )}
-                    </div>
+                      </div>
+                    )}
                   </div>
-                </div>
 
                 {/* Bottom Green Banner */}
                 <div className="bg-[#96c158] text-white py-3.5 px-6 text-center shrink-0">
