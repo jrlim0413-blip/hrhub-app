@@ -45,7 +45,17 @@ import {
   Video,
   ExternalLink,
   Users,
-  Save
+  Save,
+  UploadCloud,
+  Download,
+  ZoomIn,
+  ZoomOut,
+  FileEdit,
+  Sparkles,
+  ChevronDown,
+  ChevronUp,
+  FolderArchive,
+  History
 } from "lucide-react";
 import {
   fetchIncidentReports,
@@ -58,6 +68,14 @@ import {
   saveDefaultIrSignatories,
   loadDefaultIrSignatories
 } from "../lib/incidentReportStorage";
+import {
+  saveNteProofToBucket,
+  getNteProofFromBucket,
+  deleteNteProofFromBucket,
+  saveExplanationProofToBucket,
+  getExplanationProofFromBucket,
+  optimizeImageForStorage
+} from "../lib/nteProofBucketStorage";
 import { processSignatureToTransparentPng } from "../lib/signatureImageProcessor";
 import { supabase } from "../lib/supabase";
 import {
@@ -74,12 +92,64 @@ import {
   setVoiceMuted
 } from "../lib/voiceAnnouncer";
 
+// Helper: Convert Numeric Amount to Formal Words (e.g., 1445 -> "One Thousand Four Hundred Forty-Five Pesos (PHP 1,445.00)")
+function numberToEnglishWords(num) {
+  if (num === 0) return "Zero";
+  const ones = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"];
+  const tens = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"];
+  const scales = ["", "Thousand", "Million", "Billion"];
+
+  function convertHundreds(n) {
+    let str = "";
+    if (n >= 100) {
+      str += ones[Math.floor(n / 100)] + " Hundred ";
+      n %= 100;
+    }
+    if (n >= 20) {
+      str += tens[Math.floor(n / 10)];
+      if (n % 10 > 0) {
+        str += "-" + ones[n % 10];
+      }
+      str += " ";
+    } else if (n > 0) {
+      str += ones[n] + " ";
+    }
+    return str.trim();
+  }
+
+  let words = "";
+  let scaleIndex = 0;
+  let integerPart = Math.floor(Math.abs(num));
+
+  while (integerPart > 0) {
+    const chunk = integerPart % 1000;
+    if (chunk !== 0) {
+      const chunkStr = convertHundreds(chunk);
+      words = chunkStr + (scales[scaleIndex] ? " " + scales[scaleIndex] : "") + (words ? " " + words : "");
+    }
+    integerPart = Math.floor(integerPart / 1000);
+    scaleIndex++;
+  }
+  return words.trim();
+}
+
+function formatPesosInWords(amount) {
+  const numeric = typeof amount === "number" ? amount : parseFloat(String(amount || "").replace(/[^0-9.]/g, ""));
+  if (isNaN(numeric) || numeric <= 0) return "";
+  const integerPart = Math.floor(numeric);
+  const cents = Math.round((numeric - integerPart) * 100);
+  const words = numberToEnglishWords(integerPart);
+  const centsText = cents > 0 ? ` and ${cents}/100` : "";
+  const formattedFigure = Number(numeric).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return `${words}${centsText} Pesos (PHP ${formattedFigure})`;
+}
+
 // Standard Philippine Legal & Company Due Process Constants
 const DEFAULT_COMPANY_ADDRESS =
   "Purok Daisy, New Isabela, Tacurong City, Sultan Kudarat, Philippines";
 const DEFAULT_COMPANY_EMAIL = "imsoroglohr@gmail.com";
 
-const SUBSIDIARY_OPTIONS = [
+export const SUBSIDIARY_OPTIONS = [
   "5A Royal Gaming OPC",
   "Lucky Betplay Corporation",
   "Simpal Construction (SIMCON)",
@@ -87,6 +157,39 @@ const SUBSIDIARY_OPTIONS = [
   "Glowing Fortune",
   "Simpal Group of Companies"
 ];
+
+// Official Company / Entity Logo & Branding Mapping
+export const COMPANY_LOGO_MAP = {
+  "5A Royal Gaming OPC": "/logos/5A.png",
+  "Glowing Fortune OPC": "/logos/GLOW.png",
+  "Glowing Fortune": "/logos/GLOW.png",
+  "Imperial Gaming OPC": "/logos/IMP.png",
+  "Lucky Betplay Corporation": "/logos/LB.png",
+  "Simpal Group of Companies": "/logos/SGC.png",
+  "Simpal Construction (SIMCON)": "/logos/SIM.png"
+};
+
+export function resolveEntityLogo(companyName, fallback = "/logos/5A.png") {
+  const norm = String(companyName || "").toLowerCase().trim();
+  if (norm.includes("5a") || norm.includes("royal gaming")) return "/logos/5A.png";
+  if (norm.includes("glow") || norm.includes("glowing fortune")) return "/logos/GLOW.png";
+  if (norm.includes("imp") || norm.includes("imperial")) return "/logos/IMP.png";
+  if (norm.includes("lucky") || norm.includes("betplay") || norm.includes("lb")) return "/logos/LB.png";
+  if (norm.includes("simcon") || norm.includes("construction")) return "/logos/SIM.png";
+  if (norm.includes("simpal") || norm.includes("sgc") || norm.includes("group of companies")) return "/logos/SGC.png";
+  return fallback;
+}
+
+export function resolveCompanyOfficialName(companyName, fallback = "5A ROYAL GAMING OPC") {
+  const norm = String(companyName || "").toLowerCase().trim();
+  if (norm.includes("5a") || norm.includes("royal gaming")) return "5A ROYAL GAMING OPC";
+  if (norm.includes("glow") || norm.includes("glowing fortune")) return "GLOWING FORTUNE OPC";
+  if (norm.includes("imp") || norm.includes("imperial")) return "IMPERIAL GAMING OPC";
+  if (norm.includes("lucky") || norm.includes("betplay") || norm.includes("lb")) return "LUCKY BETPLAY CORPORATION";
+  if (norm.includes("simcon") || norm.includes("construction")) return "SIMPAL CONSTRUCTION (SIMCON)";
+  if (norm.includes("simpal") || norm.includes("sgc") || norm.includes("group of companies")) return "SIMPAL GROUP OF COMPANIES";
+  return String(companyName || fallback).toUpperCase();
+}
 
 export default function IncidentReportPanel({
   currentUser,
@@ -104,7 +207,8 @@ export default function IncidentReportPanel({
   const [isPermissionMatrixOpen, setIsPermissionMatrixOpen] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isIrViewerOpen, setIsIrViewerOpen] = useState(false);
-  const [irPaperFormat, setIrPaperFormat] = useState("A4"); // "A4" (Standard) | "LONG" (Long)
+  const [irPaperFormat, setIrPaperFormat] = useState("A4"); // "A4" (Standard) | "SHORT" (Letter) | "LONG" (Long)
+  const [ntePaperFormat, setNtePaperFormat] = useState("A4"); // "A4" (Standard) | "SHORT" (Letter) | "LONG" (Long)
   const [isNteViewerOpen, setIsNteViewerOpen] = useState(false);
   const [isNteDraftModalOpen, setIsNteDraftModalOpen] = useState(false);
   const [isExplanationModalOpen, setIsExplanationModalOpen] = useState(false);
@@ -124,48 +228,147 @@ export default function IncidentReportPanel({
   const [filingRemarksInput, setFilingRemarksInput] = useState("Reviewed by SGC Head Office HRMD. Noted and retained for 201 file records. Minor discrepancy resolved on-site without formal disciplinary proceeding.");
 
   const [isUploadNteProofModalOpen, setIsUploadNteProofModalOpen] = useState(false);
-  const [nteProofData, setNteProofData] = useState({ fileData: "", fileName: "", dateServed: new Date().toISOString().slice(0, 10), remarks: "" });
-
-  const [isWarningModalOpen, setIsWarningModalOpen] = useState(false);
-  const [warningForm, setWarningForm] = useState({
-    penalty: "1st Written Warning & Reprimand",
-    subject: "",
-    body: "",
-    signatoryName: "JEVINCE JAYE S. JUBAY, CHRP",
-    signatoryTitle: "HRMD Manager"
+  const [isViewSignedNteProofModalOpen, setIsViewSignedNteProofModalOpen] = useState(false);
+  const [activeProofRecord, setActiveProofRecord] = useState(null);
+  const [activeExplanationRecord, setActiveExplanationRecord] = useState(null);
+  const [activeProofViewerTab, setActiveProofViewerTab] = useState("SIGNED_NTE"); // "SIGNED_NTE" | "EXPLANATION_DOC"
+  const [isLoadingProof, setIsLoadingProof] = useState(false);
+  const [proofZoomLevel, setProofZoomLevel] = useState(1);
+  const [uploadActiveTab, setUploadActiveTab] = useState("ALL"); // "ALL" | "SIGNED_NTE" | "EXPLANATION"
+  const [nteProofData, setNteProofData] = useState({ fileData: "", fileName: "", fileSize: 0, dateServed: new Date().toISOString().slice(0, 10), remarks: "" });
+  const [explanationProofData, setExplanationProofData] = useState({
+    fileData: "",
+    fileName: "",
+    fileSize: 0,
+    dateSubmitted: new Date().toISOString().slice(0, 10),
+    explanationText: ""
   });
 
+  const [isWarningModalOpen, setIsWarningModalOpen] = useState(false);
+  const [isWarningViewerOpen, setIsWarningViewerOpen] = useState(false);
+  const [warningPaperFormat, setWarningPaperFormat] = useState("A4"); // "A4" | "SHORT" | "LONG" | "LEGAL"
+  const [warningForm, setWarningForm] = useState({
+    penalty: "Final Stern Warning",
+    companyName: "5A ROYAL GAMING OPC",
+    companyAddress: DEFAULT_COMPANY_ADDRESS,
+    companyEmail: DEFAULT_COMPANY_EMAIL,
+    warningDate: new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }),
+    employeeName: "",
+    subject: "Notice of Warning",
+    explanationDate: "",
+    incidentReference: "",
+    codeOfConductViolation: "Article IV – Section 18. Offenses Related to Job Performance and Productivity",
+    bodyParagraph1: "",
+    bodyParagraph2: "",
+    bodyParagraph3: "",
+    bodyParagraph4: "Please be guided accordingly.",
+    signatoryName: "JEVINCE JAYE S. JUBAY, CHRP",
+    signatoryTitle: "HRMD Manager",
+    signatoryCompany: "5A Royal Gaming OPC",
+    receivedByName: ""
+  });
+
+  const [isNoiViewerOpen, setIsNoiViewerOpen] = useState(false);
+  const [noiPaperFormat, setNoiPaperFormat] = useState("A4"); // "A4" | "SHORT" | "LONG" | "LEGAL"
   const [isNoiModalOpen, setIsNoiModalOpen] = useState(false);
   const [noiForm, setNoiForm] = useState({
+    date: "OCTOBER 12, 2026",
+    toEmployee: "",
+    subject: "Notice of Investigation",
+    hearingDate: "October 14, 2026",
+    hearingTime: "2:30 PM",
+    hearingMode: "via Zoom Meeting",
     zoomMeetingTopic: "",
-    zoomMeetingDate: "",
-    zoomMeetingTime: "10:00 AM PST",
     zoomMeetingLink: "",
     zoomMeetingId: "",
     zoomPasscode: "",
     hearingCommittee: "SGC Due Process Committee & HRMD",
-    noiRemarks: "You are required to attend this administrative investigation hearing. You may be accompanied by a representative or legal counsel of your choice in accordance with DOLE Department Order No. 147-15."
+    paragraph1: "",
+    violation1Article: "Article IV – Section 18. Offenses Related to Job Performance and Productivity.",
+    violation1Clause: "(a) Non-observance of Standard Operating Procedures.",
+    violation1Desc: "– willful or unintentional non-observance of standard operating procedures for direct or indirect personal gain is classified as serious offense and shall accordingly be meted penalties for serious offense.",
+    violation2Article: "Section 16. Offenses Against Good Personal Behavior and Conduct",
+    violation2Clause: "(f) Drunkenness.",
+    violation2Desc: "Reporting for work under the influence of liquor or drinking alcoholic beverages during work hours (except on official functions).",
+    paragraph2: "You are entitled to counsel of your choice during this investigation. You may also bring your witness(es) if any. Please be guided that failure on your part to comply with this Notice of Investigation shall be considered submitted for a resolution based on the evidence on record.",
+    witnessDay: "12th",
+    witnessMonthYear: "October 2026",
+    witnessPlace: "Tacurong City, Sultan Kudarat, Philippines",
+    signatoryName: "JEVINCE JAYE S. JUBAY, CHRP",
+    signatoryTitle: "HRMD Manager",
+    signatoryCompany: "5A Royal Gaming OPC",
+    footerText: `HR 201 File & Records ${new Date().getFullYear()}`
   });
 
+  const [isAdminDecisionViewerOpen, setIsAdminDecisionViewerOpen] = useState(false);
+  const [adminDecisionPaperFormat, setAdminDecisionPaperFormat] = useState("A4"); // "A4" | "SHORT" | "LONG" | "LEGAL"
   const [isAdminDecisionModalOpen, setIsAdminDecisionModalOpen] = useState(false);
   const [adminDecisionForm, setAdminDecisionForm] = useState({
-    subject: "",
-    findings: "Guilty of Non-observance of Cashier Standard Operating Procedures and Discrepancy",
-    penalty: "Written Warning & Restitution of Unaccounted Funds",
-    body: "",
+    date: "October 21, 2026",
+    toEmployee: "",
+    subject: "DECISION OF ADMINISTRATIVE CASE",
+    introLine: "This is concerning your administrative case on;",
+    bullet1Article: "Section 16. Offenses Against Good Personal Behavior and Conduct.",
+    bullet1Desc: "(f) Drunkenness. Reporting for work under the influence of liquor or drinking alcoholic beverages during work hours (except on official functions) is classified as serious offense.",
+    bullet2Article: "Section 18. Offenses Related to Job Performance and Productivity",
+    bullet2Desc: "(a) Non-observance of Standard Operating Procedures. Willful or unintentional non-observance of standard operating procedures for direct or indirect personal gain is classified as serious offense and shall accordingly be meted penalties for serious offense.",
+    paragraph1: "After reviewing the facts and circumstances surrounding the case, Management has determined that there is substantial basis to establish your accountability for the aforementioned violations. Management further notes that this is a repeated occurrence of the same or similar violation, notwithstanding prior reminders, and corrective measures previously undertaken.",
+    sanctionLevel: "Final Stern Warning",
+    paragraph2: "In view thereof, please be informed that this shall serve as your “Final Stern Warning”. Any further violations of company policies may result in the immediate termination of your employment.",
+    paragraph3: "Please be guided accordingly.",
     signatoryName: "JEVINCE JAYE S. JUBAY, CHRP",
-    signatoryTitle: "HRMD Manager"
+    signatoryTitle: "HRMD Manager",
+    signatoryCompany: "5A Royal Gaming OPC",
+    footerText: `HR 201 File & Records ${new Date().getFullYear()}`
   });
 
-  const [isUploadDecisionProofModalOpen, setIsUploadDecisionProofModalOpen] = useState(false);
-  const [decisionProofData, setDecisionProofData] = useState({ fileData: "", fileName: "", dateServed: new Date().toISOString().slice(0, 10), remarks: "" });
-
   const [isZoomViewerOpen, setIsZoomViewerOpen] = useState(false);
+  const [isTransmitting, setIsTransmitting] = useState(false);
+  const [transmittingMessage, setTransmittingMessage] = useState("");
+  const [openDossierCaseId, setOpenDossierCaseId] = useState(null);
+
+  // Auto-dismiss Dossier popovers on outside clicks
+  useEffect(() => {
+    const handleGlobalClick = (e) => {
+      if (!e.target.closest(".dossier-dropdown-container")) {
+        setOpenDossierCaseId(null);
+      }
+    };
+    document.addEventListener("click", handleGlobalClick);
+    return () => document.removeEventListener("click", handleGlobalClick);
+  }, []);
 
   // Compute effective role & capabilities STRICTLY based on the logged-in account (currentUser)
   const effectiveRole = useMemo(() => {
     return resolveUserHrRole(currentUser, profiles);
   }, [currentUser, profiles]);
+
+  // Dynamic entity branding strictly aligned with logged-in account
+  const loggedInCompany = effectiveRole?.company || currentUser?.company || "5A Royal Gaming OPC";
+  const loggedInLogo = resolveEntityLogo(loggedInCompany);
+
+  // Dynamic paper logo resolver:
+  // If user is branch HR, strictly use their logged-in company logo.
+  // If user is Head Office (SGC), check if report/memo specifies a subsidiary, otherwise default to loggedInLogo.
+  const getPaperLogo = (docCompany = null) => {
+    if (!effectiveRole.isHeadOffice) {
+      return loggedInLogo;
+    }
+    if (docCompany) {
+      return resolveEntityLogo(docCompany, loggedInLogo);
+    }
+    return loggedInLogo;
+  };
+
+  const getPaperCompanyName = (docCompany = null) => {
+    if (!effectiveRole.isHeadOffice) {
+      return resolveCompanyOfficialName(loggedInCompany);
+    }
+    if (docCompany) {
+      return resolveCompanyOfficialName(docCompany, loggedInCompany);
+    }
+    return resolveCompanyOfficialName(loggedInCompany);
+  };
 
   // Form states for creating a new Incident Report (Subsidiary HR -> SGC HRMD)
   const initialCompany = effectiveRole.isHeadOffice ? "5A Royal Gaming OPC" : effectiveRole.company;
@@ -193,6 +396,7 @@ export default function IncidentReportPanel({
     location: "Tacurong Branch",
     dateOfIncident: new Date().toISOString().slice(0, 10),
     dateReported: new Date().toISOString().slice(0, 10),
+    typeOfIncident: "Cash Shortage & Non-observance of SOPs",
     incidentTime: "16:30 PM",
     factualDescription: "",
     witnesses: "",
@@ -246,26 +450,32 @@ export default function IncidentReportPanel({
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastSyncedTime, setLastSyncedTime] = useState("");
   const prevPendingCountRef = useRef(null);
+  const isFetchingRef = useRef(false);
 
-  // Load records (with optional silent background mode)
+  // Load records (with optional silent background mode and concurrency protection)
   const loadRecords = async (isSilent = false) => {
+    if (isFetchingRef.current) return;
+    isFetchingRef.current = true;
     if (!isSilent) setIsRefreshing(true);
     try {
       const data = await fetchIncidentReports();
-      setReports(data);
-      setLastSyncedTime(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
+      if (Array.isArray(data)) {
+        setReports(data);
+        setLastSyncedTime(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
 
-      // Voice notification for Head Office when incoming report arrives
-      const incomingCount = data.filter((r) => r.status === "SUBMITTED_TO_CENTRAL_HR").length;
-      if (effectiveRole.isHeadOffice && prevPendingCountRef.current !== null) {
-        if (incomingCount > prevPendingCountRef.current) {
-          playAiVoiceAnnouncement("New Incident Report incoming from branch HR! Awaiting Notice to Explain evaluation.");
+        // Voice notification for Head Office when incoming report arrives
+        const incomingCount = data.filter((r) => r.status === "SUBMITTED_TO_CENTRAL_HR").length;
+        if (effectiveRole.isHeadOffice && prevPendingCountRef.current !== null) {
+          if (incomingCount > prevPendingCountRef.current) {
+            playAiVoiceAnnouncement("New Incident Report incoming from branch HR! Awaiting Notice to Explain evaluation.");
+          }
         }
+        prevPendingCountRef.current = incomingCount;
       }
-      prevPendingCountRef.current = incomingCount;
     } catch (err) {
       console.warn("Failed to load incident reports:", err);
     } finally {
+      isFetchingRef.current = false;
       if (!isSilent) {
         setLoading(false);
         setIsRefreshing(false);
@@ -273,7 +483,7 @@ export default function IncidentReportPanel({
     }
   };
 
-  // Real-time synchronization: Supabase postgres_changes + BroadcastChannel + Auto-polling
+  // Real-time synchronization: Supabase postgres_changes + BroadcastChannel + Window Focus + Resilient Polling
   useEffect(() => {
     loadRecords(false);
 
@@ -283,7 +493,7 @@ export default function IncidentReportPanel({
       setLastSyncedTime(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
     });
 
-    // 2. Supabase Realtime channel subscription
+    // 2. Supabase Realtime channel subscription (dedicated to incident_reports table)
     let realtimeChannel = null;
     try {
       if (supabase) {
@@ -292,24 +502,24 @@ export default function IncidentReportPanel({
           .on("postgres_changes", { event: "*", schema: "public", table: "incident_reports" }, () => {
             loadRecords(true);
           })
-          .on("postgres_changes", { event: "*", schema: "public", table: "user_settings" }, (payload) => {
-            if (payload.new?.user_id === "master_incident_reports_hub") {
-              loadRecords(true);
-            }
-          })
           .subscribe();
       }
     } catch (realtimeErr) {
       console.debug("Realtime channel subscription notice:", realtimeErr?.message);
     }
 
-    // 3. Resilient background auto-polling (every 3.5 seconds)
+    // 3. Instant sync whenever user refocuses tab / window
+    const handleWindowFocus = () => loadRecords(true);
+    window.addEventListener("focus", handleWindowFocus);
+
+    // 4. Gentle background safety polling (every 25 seconds)
     const pollInterval = setInterval(() => {
       loadRecords(true);
-    }, 3500);
+    }, 25000);
 
     return () => {
       clearInterval(pollInterval);
+      window.removeEventListener("focus", handleWindowFocus);
       unsubBroadcast();
       if (realtimeChannel && supabase) {
         supabase.removeChannel(realtimeChannel);
@@ -481,6 +691,7 @@ export default function IncidentReportPanel({
       location: "Tacurong Branch",
       dateOfIncident: new Date().toISOString().slice(0, 10),
       dateReported: new Date().toISOString().slice(0, 10),
+      typeOfIncident: "Cash Shortage & Non-observance of SOPs",
       incidentTime: "16:30 PM",
       factualDescription: "During surprise drawer reconciliation audit, a physical cash shortage was uncovered. The personnel on duty could not produce balancing vouchers or valid justification for the discrepancy.",
       witnesses: "",
@@ -550,6 +761,8 @@ export default function IncidentReportPanel({
       caseNumber: caseId,
       status: "SUBMITTED_TO_CENTRAL_HR", // Transmitted to Head Office (Simpal Group of Companies)
       ...irForm,
+      typeOfIncident: irForm.typeOfIncident || irForm.incidentCategory || "Cash Shortage & Non-observance of SOPs",
+      type_of_incident: irForm.typeOfIncident || irForm.incidentCategory || "Cash Shortage & Non-observance of SOPs",
       specificFindings: findingsText,
       fullIncidentNarrative: findingsText,
       specific_findings: findingsText,
@@ -608,15 +821,25 @@ export default function IncidentReportPanel({
       ]
     };
 
-    const saved = await saveIncidentReport(newReport);
-    await loadRecords();
-    setIsCreateModalOpen(false);
-    setSelectedReport(saved || newReport);
-    setIsIrViewerOpen(true);
+    setIsTransmitting(true);
+    setTransmittingMessage("Transmitting Incident Report to Simpal Group of Companies (Head Office HRMD)...");
+    try {
+      const saved = await saveIncidentReport(newReport);
+      await loadRecords();
+      setIsCreateModalOpen(false);
+      setSelectedReport(saved || newReport);
+      setIsIrViewerOpen(true);
 
-    // AI Voice Announcement
-    const announcement = `Transmitted! Incident report for ${irForm.employeeName} has been officially sent from ${irForm.company} to Simpal Group of Companies Head Office for Notice to Explain evaluation.`;
-    playAiVoiceAnnouncement(announcement);
+      // AI Voice Announcement
+      const announcement = `Transmitted! Incident report for ${irForm.employeeName} has been officially sent from ${irForm.company} to Simpal Group of Companies Head Office for Notice to Explain evaluation.`;
+      playAiVoiceAnnouncement(announcement);
+    } catch (err) {
+      console.error("Transmittal error:", err);
+      alert("Failed to transmit incident report. Please try again.");
+    } finally {
+      setIsTransmitting(false);
+      setTransmittingMessage("");
+    }
   };
 
   // Simpal Group of Companies (SGC HRMD) Evaluates & Issues NTE (Returns to Originating Company)
@@ -817,14 +1040,23 @@ export default function IncidentReportPanel({
       ]
     };
 
-    await saveIncidentReport(updated);
-    await loadRecords();
-    if (selectedReport && selectedReport.id === updated.id) {
-      setSelectedReport(updated);
+    setIsTransmitting(true);
+    setTransmittingMessage("Saving and stamping employee conforme signature...");
+    try {
+      await saveIncidentReport(updated);
+      await loadRecords();
+      if (selectedReport && selectedReport.id === updated.id) {
+        setSelectedReport(updated);
+      }
+      setIsSignReceiptModalOpen(false);
+      playAiVoiceAnnouncement(`Incident Report receipt confirmed and digitally signed by ${signReportTarget.employeeName}. Conforme stamped onto official case file.`);
+    } catch (err) {
+      console.error("Signature save error:", err);
+      alert("Failed to save digital signature. Please try again.");
+    } finally {
+      setIsTransmitting(false);
+      setTransmittingMessage("");
     }
-
-    setIsSignReceiptModalOpen(false);
-    playAiVoiceAnnouncement(`Incident Report receipt confirmed and digitally signed by ${signReportTarget.employeeName}. Conforme stamped onto official case file.`);
   };
 
   // Helper: Read and compress signature image file to lightweight transparent PNG DataURL
@@ -912,95 +1144,500 @@ export default function IncidentReportPanel({
           id: `act-file-${Date.now()}`,
           timestamp: new Date().toISOString(),
           action: "IR_FILED_FOR_RECORD",
-          actor: `${effectiveRole.reportingName} (SGC Head Office HRMD)`,
+          actor: `${effectiveRole.reportingName || effectiveRole.userName || currentUser?.name || "Head Office HR"} (SGC Head Office HRMD)`,
           message: `Incident Report added to 201 filings for record purposes only. Notes: "${filingRemarksInput}"`
         }
       ]
     };
 
-    await saveIncidentReport(updated);
-    await loadRecords();
-    setIsAddToFilingsModalOpen(false);
-    setSelectedReport(updated);
-    playAiVoiceAnnouncement(`Incident Report for ${selectedReport.employeeName} has been officially added to 201 filings.`);
+    setIsTransmitting(true);
+    setTransmittingMessage("Retaining case in 201 personnel records...");
+    try {
+      await saveIncidentReport(updated);
+      await loadRecords();
+      setIsAddToFilingsModalOpen(false);
+      setSelectedReport(updated);
+      playAiVoiceAnnouncement(`Incident Report for ${selectedReport.employeeName} has been officially added to 201 filings.`);
+    } catch (err) {
+      console.error("Filing save error:", err);
+      alert("Failed to save filing. Please try again.");
+    } finally {
+      setIsTransmitting(false);
+      setTransmittingMessage("");
+    }
   };
 
-  // 2. Branch HR: Upload Employee Signed NTE Proof of Receipt
-  const handleOpenUploadNteProof = (report) => {
+  // 2. Branch HR ONLY: Upload Employee Signed NTE Proof & Employee Written Explanation
+  const handleOpenUploadNteProof = async (report, initialUploadFocus = "ALL") => {
+    if (effectiveRole.isHeadOffice) {
+      alert("Notice: SGC Head Office evaluates cases. Only Branch HR is authorized to serve and upload the employee's signed NTE acknowledgment copy and employee written explanation.");
+      return;
+    }
     setSelectedReport(report);
+    setUploadActiveTab(initialUploadFocus);
+
+    // Initial NTE Proof data
+    let initialNteData = report.nteSignedProof || "";
+    let initialNteName = report.nteSignedProofName || "";
+    let initialNteDate = report.nteServedAt || new Date().toISOString().slice(0, 10);
+    try {
+      const bucketRecord = await getNteProofFromBucket(report.id);
+      if (bucketRecord?.fileData) {
+        initialNteData = bucketRecord.fileData;
+        initialNteName = bucketRecord.fileName || initialNteName;
+        initialNteDate = bucketRecord.dateServed || initialNteDate;
+      }
+    } catch {
+      // fallback
+    }
+
     setNteProofData({
-      fileData: report.nteSignedProof || "",
-      fileName: report.nteSignedProofName || "",
-      dateServed: new Date().toISOString().slice(0, 10),
-      remarks: "Employee personally served physical copy of NTE and affixed signature acknowledging receipt."
+      fileData: initialNteData,
+      fileName: initialNteName,
+      fileSize: 0,
+      dateServed: initialNteDate,
+      remarks: "Employee personally served physical copy of NTE on-site and affixed signature acknowledging receipt."
     });
+
+    // Initial Explanation Proof data
+    let initialExpData = report.explanationProof || "";
+    let initialExpName = report.explanationProofName || "";
+    let initialExpDate = report.explanationReceivedAt || new Date().toISOString().slice(0, 10);
+    let initialExpText = report.explanationText || "";
+    try {
+      const expBucketRecord = await getExplanationProofFromBucket(report.id);
+      if (expBucketRecord) {
+        if (expBucketRecord.fileData) initialExpData = expBucketRecord.fileData;
+        if (expBucketRecord.fileName) initialExpName = expBucketRecord.fileName;
+        if (expBucketRecord.dateSubmitted) initialExpDate = expBucketRecord.dateSubmitted;
+        if (expBucketRecord.explanationText) initialExpText = expBucketRecord.explanationText;
+      }
+    } catch {
+      // fallback
+    }
+
+    setExplanationProofData({
+      fileData: initialExpData,
+      fileName: initialExpName,
+      fileSize: 0,
+      dateSubmitted: initialExpDate,
+      explanationText: initialExpText
+    });
+
     setIsUploadNteProofModalOpen(true);
   };
 
   const handleSaveNteProof = async () => {
     if (!selectedReport) return;
-    if (!nteProofData.fileData) {
-      alert("Please upload the scanned copy or photo of the employee's signed Notice to Explain.");
+    if (effectiveRole.isHeadOffice) {
+      alert("Unauthorized: Head Office cannot upload Branch HR proof.");
       return;
     }
 
-    const timestampStr = new Date().toLocaleString("en-US", {
-      month: "long",
-      day: "numeric",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: true
-    });
+    const hasNteFile = Boolean(nteProofData.fileData);
+    const hasExpFileOrText = Boolean(explanationProofData.fileData || (explanationProofData.explanationText && explanationProofData.explanationText.trim()));
 
-    const updated = {
-      ...selectedReport,
-      status: "NTE_SERVED_ACKNOWLEDGED",
-      nteSignedProof: nteProofData.fileData,
-      nteSignedProofName: nteProofData.fileName,
-      nteServedAt: nteProofData.dateServed || timestampStr,
-      activityLog: [
-        ...(selectedReport.activityLog || []),
-        {
-          id: `act-nte-proof-${Date.now()}`,
-          timestamp: new Date().toISOString(),
-          action: "NTE_SIGNED_PROOF_UPLOADED",
-          actor: `${effectiveRole.reportingName} (${selectedReport.company || selectedReport.senderCompany} HR)`,
-          message: `Employee signed Notice to Explain proof of receipt uploaded by Branch HR (${nteProofData.fileName || "scanned copy"}). Awaiting written explanation.`
+    if (!hasNteFile && !hasExpFileOrText) {
+      alert("Please upload the required documents: Received & Signed NTE Proof and Employee In-Written Explanation.");
+      return;
+    }
+
+    setIsTransmitting(true);
+    setTransmittingMessage("Uploading dual submissions & synchronizing to Head Office SGC bucket...");
+    try {
+      const timestampStr = new Date().toLocaleString("en-US", {
+        month: "long",
+        day: "numeric",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: true
+      });
+
+      const hrName =
+        effectiveRole.userName ||
+        effectiveRole.reportingName ||
+        currentUser?.name ||
+        selectedReport.senderHrName ||
+        selectedReport.reportingHrName ||
+        "Branch HR";
+      const hrCompany =
+        selectedReport.company ||
+        selectedReport.senderCompany ||
+        effectiveRole.company ||
+        "Lucky Betplay Corporation";
+      const servingHrLabel = `${hrName} (${hrCompany} HR)`;
+
+      // 1. Process Signed NTE proof
+      let nteFinalUrl = selectedReport.nteSignedProof || "";
+      let nteBucketKey = selectedReport.nteSignedProofKey || "";
+      let nteFileName = selectedReport.nteSignedProofName || "";
+      let nteDateServed = nteProofData.dateServed || selectedReport.nteServedAt || timestampStr;
+
+      if (hasNteFile) {
+        let optimizedNteData = nteProofData.fileData;
+        if (optimizedNteData.startsWith("data:image/")) {
+          try {
+            const compressed = await optimizeImageForStorage(nteProofData.fileData, 1200, 0.72);
+            if (compressed) optimizedNteData = compressed;
+          } catch (e) {
+            console.warn("NTE optimization fallback:", e);
+          }
         }
-      ]
-    };
 
-    await saveIncidentReport(updated);
-    await loadRecords();
-    setIsUploadNteProofModalOpen(false);
-    setSelectedReport(updated);
-    playAiVoiceAnnouncement(`Signed Notice to Explain proof of receipt uploaded successfully.`);
+        const bucketResult = await saveNteProofToBucket(selectedReport.id, {
+          caseNumber: selectedReport.caseNumber,
+          fileData: optimizedNteData,
+          fileName: nteProofData.fileName || "signed_nte_proof.jpg",
+          fileType: optimizedNteData.startsWith("data:application/pdf") ? "application/pdf" : "image/jpeg",
+          fileSize: nteProofData.fileSize || 0,
+          dateServed: nteDateServed,
+          uploadedBy: servingHrLabel,
+          company: hrCompany
+        });
+
+        nteFinalUrl = bucketResult.cloudUrl || optimizedNteData;
+        nteBucketKey = bucketResult.bucketKey;
+        nteFileName = bucketResult.fileName;
+      }
+
+      // 2. Process Employee In-Written Explanation proof & text
+      let expFinalUrl = selectedReport.explanationProof || "";
+      let expBucketKey = selectedReport.explanationProofKey || "";
+      let expFileName = selectedReport.explanationProofName || "";
+      let expDateSubmitted = explanationProofData.dateSubmitted || selectedReport.explanationReceivedAt || timestampStr;
+      const expText = explanationProofData.explanationText ? explanationProofData.explanationText.trim() : (selectedReport.explanationText || "");
+
+      if (hasExpFileOrText) {
+        let optimizedExpData = explanationProofData.fileData || "";
+        if (optimizedExpData.startsWith("data:image/")) {
+          try {
+            const compressed = await optimizeImageForStorage(optimizedExpData, 1200, 0.72);
+            if (compressed) optimizedExpData = compressed;
+          } catch (e) {
+            console.warn("Explanation optimization fallback:", e);
+          }
+        }
+
+        const expBucketResult = await saveExplanationProofToBucket(selectedReport.id, {
+          caseNumber: selectedReport.caseNumber,
+          fileData: optimizedExpData,
+          fileName: explanationProofData.fileName || "employee_written_explanation.jpg",
+          fileType: optimizedExpData.startsWith("data:application/pdf") ? "application/pdf" : "image/jpeg",
+          fileSize: explanationProofData.fileSize || 0,
+          dateSubmitted: expDateSubmitted,
+          uploadedBy: servingHrLabel,
+          company: hrCompany,
+          explanationText: expText
+        });
+
+        expFinalUrl = expBucketResult.cloudUrl || optimizedExpData;
+        expBucketKey = expBucketResult.bucketKey;
+        expFileName = expBucketResult.fileName;
+      }
+
+      // Determine lifecycle status
+      const hasExplanationNow = Boolean(expFinalUrl || expText);
+      const hasSignedNteNow = Boolean(nteFinalUrl || selectedReport.hasSignedNteProof);
+      const newStatus = hasExplanationNow ? "EXPLANATION_RECEIVED" : "NTE_SERVED_ACKNOWLEDGED";
+
+      const logItems = [];
+      if (hasSignedNteNow) logItems.push("Received & Signed NTE Proof");
+      if (hasExplanationNow) logItems.push("Employee In-Written Explanation Letter");
+
+      const updated = {
+        ...selectedReport,
+        status: newStatus,
+        // Signed NTE
+        hasSignedNteProof: hasSignedNteNow,
+        nteSignedProofKey: nteBucketKey,
+        nteSignedProofName: nteFileName,
+        nteServedAt: nteDateServed,
+        nteServedBy: servingHrLabel,
+        nteSignedProof: nteFinalUrl,
+        // In-Written Explanation
+        hasExplanationProof: hasExplanationNow,
+        explanationProof: expFinalUrl,
+        explanationProofName: expFileName,
+        explanationProofKey: expBucketKey,
+        explanationText: expText,
+        explanationReceivedAt: expDateSubmitted,
+        explanationSubmittedBy: servingHrLabel,
+        activityLog: [
+          ...(selectedReport.activityLog || []),
+          {
+            id: `act-dual-proof-${Date.now()}`,
+            timestamp: new Date().toISOString(),
+            action: hasExplanationNow ? "EXPLANATION_AND_SIGNED_NTE_SUBMITTED" : "NTE_SIGNED_PROOF_UPLOADED",
+            actor: servingHrLabel,
+            message: `Branch HR uploaded returned documents to Head Office SGC: ${logItems.join(" & ")}. ${hasExplanationNow ? "Transmitted to SGC Head Office for administrative evaluation." : "Awaiting employee written explanation."}`
+          }
+        ]
+      };
+
+      await saveIncidentReport(updated);
+      await loadRecords();
+      setIsUploadNteProofModalOpen(false);
+      setSelectedReport(updated);
+
+      const announcement = hasExplanationNow
+        ? `Received & signed Notice to Explain and Employee written explanation successfully submitted to Head Office for case ${selectedReport.caseNumber}.`
+        : `Signed Notice to Explain proof uploaded successfully for case ${selectedReport.caseNumber}.`;
+      playAiVoiceAnnouncement(announcement);
+    } catch (err) {
+      console.error("NTE proof upload error:", err);
+      alert("Failed to upload proof. Please try again.");
+    } finally {
+      setIsTransmitting(false);
+      setTransmittingMessage("");
+    }
   };
+
+  // 3. View Signed NTE Proof & Employee Written Explanation (Head Office Audit & Branch HR)
+  const handleOpenViewSignedNteProof = async (report, initialTab = "SIGNED_NTE") => {
+    setSelectedReport(report);
+    setActiveProofViewerTab(initialTab);
+    setProofZoomLevel(1);
+    setIsViewSignedNteProofModalOpen(true);
+    setIsLoadingProof(true);
+
+    try {
+      // 1. Fetch Signed NTE proof
+      let bucketRecord = await getNteProofFromBucket(report.id);
+      if (!bucketRecord && report.caseNumber) {
+        bucketRecord = await getNteProofFromBucket(report.caseNumber);
+      }
+      if (!bucketRecord && report.nteSignedProofKey) {
+        bucketRecord = await getNteProofFromBucket(report.nteSignedProofKey);
+      }
+
+      const nteFileData =
+        (bucketRecord && bucketRecord.fileData) ||
+        report.nteSignedProof ||
+        "";
+
+      const nteFileName =
+        (bucketRecord && bucketRecord.fileName) ||
+        report.nteSignedProofName ||
+        `Signed_NTE_${report.caseNumber || "Case"}.jpg`;
+
+      const nteDateServed =
+        (bucketRecord && bucketRecord.dateServed) ||
+        report.nteServedAt ||
+        "Recorded on-site";
+
+      const rawUploadedBy =
+        (bucketRecord && bucketRecord.uploadedBy) ||
+        report.nteServedBy ||
+        "";
+      const nteUploadedBy =
+        rawUploadedBy && !rawUploadedBy.includes("undefined")
+          ? rawUploadedBy
+          : `${report.senderHrName || "Branch HR"} (${report.senderCompany || report.company || "Lucky Betplay Corporation"} HR)`;
+
+      setActiveProofRecord({
+        reportId: report.id,
+        caseNumber: report.caseNumber,
+        fileData: nteFileData,
+        fileName: nteFileName,
+        dateServed: nteDateServed,
+        uploadedBy: nteUploadedBy,
+        uploadedAt: (bucketRecord && bucketRecord.uploadedAt) || report.updatedAt || "",
+        company: report.company || report.senderCompany
+      });
+
+      // 2. Fetch Employee Written Explanation proof
+      let expBucketRecord = await getExplanationProofFromBucket(report.id);
+      if (!expBucketRecord && report.caseNumber) {
+        expBucketRecord = await getExplanationProofFromBucket(report.caseNumber);
+      }
+      if (!expBucketRecord && report.explanationProofKey) {
+        expBucketRecord = await getExplanationProofFromBucket(report.explanationProofKey);
+      }
+
+      const expFileData =
+        (expBucketRecord && expBucketRecord.fileData) ||
+        report.explanationProof ||
+        "";
+
+      const expFileName =
+        (expBucketRecord && expBucketRecord.fileName) ||
+        report.explanationProofName ||
+        `Explanation_Letter_${report.caseNumber || "Case"}.jpg`;
+
+      const expDateSubmitted =
+        (expBucketRecord && expBucketRecord.dateSubmitted) ||
+        report.explanationReceivedAt ||
+        "Recorded on-site";
+
+      const expText =
+        (expBucketRecord && expBucketRecord.explanationText) ||
+        report.explanationText ||
+        "";
+
+      const expUploadedBy =
+        (expBucketRecord && expBucketRecord.uploadedBy) ||
+        report.explanationSubmittedBy ||
+        nteUploadedBy;
+
+      setActiveExplanationRecord({
+        reportId: report.id,
+        caseNumber: report.caseNumber,
+        fileData: expFileData,
+        fileName: expFileName,
+        dateSubmitted: expDateSubmitted,
+        uploadedBy: expUploadedBy,
+        explanationText: expText,
+        uploadedAt: (expBucketRecord && expBucketRecord.uploadedAt) || report.updatedAt || "",
+        company: report.company || report.senderCompany
+      });
+
+      // Determine initial tab smartly
+      if (initialTab === "EXPLANATION_DOC") {
+        setActiveProofViewerTab("EXPLANATION_DOC");
+      } else if (!nteFileData && (expFileData || expText)) {
+        setActiveProofViewerTab("EXPLANATION_DOC");
+      } else {
+        setActiveProofViewerTab("SIGNED_NTE");
+      }
+    } catch (err) {
+      console.warn("Failed to retrieve proofs from bucket:", err);
+      const rawUploadedBy = report.nteServedBy || "";
+      const uploadedBy =
+        rawUploadedBy && !rawUploadedBy.includes("undefined")
+          ? rawUploadedBy
+          : `${report.senderHrName || "Branch HR"} (${report.senderCompany || report.company || "Lucky Betplay Corporation"} HR)`;
+
+      setActiveProofRecord({
+        reportId: report.id,
+        caseNumber: report.caseNumber,
+        fileData: report.nteSignedProof || "",
+        fileName: report.nteSignedProofName || "signed_nte_proof.jpg",
+        dateServed: report.nteServedAt || "Recorded on-site",
+        uploadedBy,
+        uploadedAt: report.updatedAt || "",
+        company: report.company || report.senderCompany
+      });
+      setActiveExplanationRecord({
+        reportId: report.id,
+        caseNumber: report.caseNumber,
+        fileData: report.explanationProof || "",
+        fileName: report.explanationProofName || "employee_written_explanation.jpg",
+        dateSubmitted: report.explanationReceivedAt || "Recorded on-site",
+        uploadedBy: report.explanationSubmittedBy || uploadedBy,
+        explanationText: report.explanationText || "",
+        uploadedAt: report.updatedAt || "",
+        company: report.company || report.senderCompany
+      });
+    } finally {
+      setIsLoadingProof(false);
+    }
+  };
+
 
   // 3. Head Office Discretion 2A: Issue Notice of Warning
   const handleOpenWarningModal = (report) => {
     setSelectedReport(report);
+    const dateFormatted = report.warningIssuedAt || new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+    const expDate = report.explanationReceivedAt || report.explanationDate || report.nteDate || "March 22, 2026";
+    const empName = (report.employeeName || "IBRAHIM BAGEL").toUpperCase();
+    const company = report.warningCompanyName || report.senderCompany || report.company || "5A ROYAL GAMING OPC";
+    const compAddress = report.warningCompanyAddress || "Purok Daisy, New Isabela, Tacurong City, Sultan Kudarat, Philippines";
+    const compEmail = report.warningCompanyEmail || "imsoroglohr@gmail.com";
+    
+    const rawAmt = report.shortageAmount || report.drawerShortage || report.cashShortage || 1445;
+    const shortageWords = formatPesosInWords(rawAmt);
+    
+    const defaultP1 = report.warningParagraph1 || `This is to acknowledge receipt of your written explanation dated ${expDate}, with reference to the incident involving a cash shortage in the amount of ${shortageWords}.`;
+    const defaultViolation = report.warningViolationClause || "Article IV \u2013 Section 18. Offenses Related to Job Performance and Productivity";
+    const defaultP2 = report.warningParagraph2 || `After careful review, it has been determined that your actions constitute a violation of ${defaultViolation} as stated in the company\u2019s Code of Conduct.`;
+    const defaultP3 = report.warningParagraph3 || `In view of this, please be informed that this shall serve as your \u201cFinal Stern Warning\u201d. Any further violations of company policies may result in the immediate termination of your employment.`;
+    const defaultP4 = report.warningParagraph4 || "Please be guided accordingly.";
+    
     setWarningForm({
-      penalty: "1st Written Warning & Reprimand",
-      subject: `FORMAL NOTICE OF WARNING — RE: INCIDENT INVESTIGATION FOR ${(report.employeeName || "EMPLOYEE").toUpperCase()}`,
-      body: `After comprehensive evaluation of the Incident Report, drawer audit discrepancy records, and the written explanation submitted, the Management of Simpal Group of Companies has determined that your conduct warrants an official disciplinary warning.\n\nYou are hereby issued this Written Warning for non-observance of Cashier Standard Operating Procedures (SOPs) and drawer balancing guidelines. Any further non-compliance or future discrepancy shall result in more severe penalties, up to and including suspension or termination of employment under Company Policy and Philippine Labor Code Article 297.`,
-      signatoryName: report.assignedCentralHrName || "JEVINCE JAYE S. JUBAY, CHRP",
-      signatoryTitle: report.assignedCentralHrTitle || "HRMD Manager"
+      date: dateFormatted,
+      toEmployee: empName,
+      subject: report.warningNoticeSubject || "Notice of Warning",
+      penalty: report.warningNoticePenalty || "Final Stern Warning",
+      companyName: company,
+      companyAddress: compAddress,
+      companyEmail: compEmail,
+      explanationDate: expDate,
+      shortageAmount: rawAmt,
+      violationClause: defaultViolation,
+      paragraph1: defaultP1,
+      paragraph2: defaultP2,
+      paragraph3: defaultP3,
+      paragraph4: defaultP4,
+      signatoryName: report.warningSignatoryName || report.assignedCentralHrName || "JEVINCE JAYE S. JUBAY, CHRP",
+      signatoryTitle: report.warningSignatoryTitle || report.assignedCentralHrTitle || "HRMD Manager",
+      signatoryCompany: report.warningSignatoryCompany || company,
+      footerText: report.warningFooterText || `HR 201 File & Records ${new Date().getFullYear()}`
     });
     setIsWarningModalOpen(true);
   };
 
+  const handleViewWarningDocument = (report) => {
+    setSelectedReport(report);
+    const dateFormatted = report.warningIssuedAt || new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+    const expDate = report.explanationReceivedAt || report.explanationDate || report.nteDate || "March 22, 2026";
+    const empName = (report.employeeName || "IBRAHIM BAGEL").toUpperCase();
+    const company = report.warningCompanyName || report.senderCompany || report.company || "5A ROYAL GAMING OPC";
+    const compAddress = report.warningCompanyAddress || "Purok Daisy, New Isabela, Tacurong City, Sultan Kudarat, Philippines";
+    const compEmail = report.warningCompanyEmail || "imsoroglohr@gmail.com";
+    
+    const rawAmt = report.shortageAmount || report.drawerShortage || report.cashShortage || 1445;
+    const shortageWords = formatPesosInWords(rawAmt);
+    
+    const defaultP1 = report.warningParagraph1 || `This is to acknowledge receipt of your written explanation dated ${expDate}, with reference to the incident involving a cash shortage in the amount of ${shortageWords}.`;
+    const defaultViolation = report.warningViolationClause || "Article IV \u2013 Section 18. Offenses Related to Job Performance and Productivity";
+    const defaultP2 = report.warningParagraph2 || `After careful review, it has been determined that your actions constitute a violation of ${defaultViolation} as stated in the company\u2019s Code of Conduct.`;
+    const defaultP3 = report.warningParagraph3 || `In view of this, please be informed that this shall serve as your \u201cFinal Stern Warning\u201d. Any further violations of company policies may result in the immediate termination of your employment.`;
+    const defaultP4 = report.warningParagraph4 || "Please be guided accordingly.";
+    
+    setWarningForm({
+      date: dateFormatted,
+      toEmployee: empName,
+      subject: report.warningNoticeSubject || "Notice of Warning",
+      penalty: report.warningNoticePenalty || "Final Stern Warning",
+      companyName: company,
+      companyAddress: compAddress,
+      companyEmail: compEmail,
+      explanationDate: expDate,
+      shortageAmount: rawAmt,
+      violationClause: defaultViolation,
+      paragraph1: defaultP1,
+      paragraph2: defaultP2,
+      paragraph3: defaultP3,
+      paragraph4: defaultP4,
+      signatoryName: report.warningSignatoryName || report.assignedCentralHrName || "JEVINCE JAYE S. JUBAY, CHRP",
+      signatoryTitle: report.warningSignatoryTitle || report.assignedCentralHrTitle || "HRMD Manager",
+      signatoryCompany: report.warningSignatoryCompany || company,
+      footerText: report.warningFooterText || `HR 201 File & Records ${new Date().getFullYear()}`
+    });
+    setIsWarningViewerOpen(true);
+  };
+
   const handleIssueNoticeOfWarning = async () => {
     if (!selectedReport) return;
-    const dateFormatted = new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
     const updated = {
       ...selectedReport,
       status: "NOTICE_OF_WARNING_ISSUED",
       warningNoticeSubject: warningForm.subject,
       warningNoticePenalty: warningForm.penalty,
-      warningNoticeBody: warningForm.body,
-      warningIssuedAt: dateFormatted,
+      warningIssuedAt: warningForm.date,
+      warningCompanyName: warningForm.companyName,
+      warningCompanyAddress: warningForm.companyAddress,
+      warningCompanyEmail: warningForm.companyEmail,
+      warningParagraph1: warningForm.paragraph1,
+      warningParagraph2: warningForm.paragraph2,
+      warningParagraph3: warningForm.paragraph3,
+      warningParagraph4: warningForm.paragraph4,
+      warningViolationClause: warningForm.violationClause,
+      warningSignatoryName: warningForm.signatoryName,
+      warningSignatoryTitle: warningForm.signatoryTitle,
+      warningSignatoryCompany: warningForm.signatoryCompany,
+      warningFooterText: warningForm.footerText,
       activityLog: [
         ...(selectedReport.activityLog || []),
         {
@@ -1012,126 +1649,302 @@ export default function IncidentReportPanel({
         }
       ]
     };
-    await saveIncidentReport(updated);
-    await loadRecords();
-    setIsWarningModalOpen(false);
-    setSelectedReport(updated);
-    playAiVoiceAnnouncement(`Notice of Warning has been issued by Head Office for ${selectedReport.employeeName}. Returned to branch HR.`);
+    setIsTransmitting(true);
+    setTransmittingMessage("Transmitting formal Notice of Warning to Branch HR...");
+    try {
+      await saveIncidentReport(updated);
+      await loadRecords();
+      setIsWarningModalOpen(false);
+      setSelectedReport(updated);
+      setIsWarningViewerOpen(true);
+      playAiVoiceAnnouncement(`Notice of Warning has been issued by Head Office for ${selectedReport.employeeName}. Returned to branch HR.`);
+    } catch (err) {
+      console.error("Warning transmittal error:", err);
+      alert("Failed to issue notice of warning. Please try again.");
+    } finally {
+      setIsTransmitting(false);
+      setTransmittingMessage("");
+    }
   };
 
   // 4. Head Office Discretion 2B: Notice of Investigation (NOI) with REQUIRED Zoom Meeting Schedule
   const handleOpenNoiModal = (report) => {
     setSelectedReport(report);
-    const hearingDate = new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10);
+    const dateFormatted = report.noiIssuedAt || new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }).toUpperCase();
+    const defaultHearingDate = report.zoomMeetingDate || "October 14, 2026";
+    const defaultHearingTime = report.zoomMeetingTime || "2:30 PM";
+    const defaultHearingMode = report.zoomMeetingMode || "via Zoom Meeting";
+    const empName = (report.employeeName || "MICHAEL SIMPAL").toUpperCase();
+
+    const defP1 = report.noiParagraph1 || `A notice of investigation is one of the requisites by the law to hear and explain your side, you are hereby directed to attend, submit your supporting documents, and bring a counsel of your own choice on ${defaultHearingDate}, ${defaultHearingTime} ${defaultHearingMode}, for the acts allegedly committed in violation of:`;
+
     setNoiForm({
-      zoomMeetingTopic: `Administrative Investigation Hearing: Case ${report.caseNumber} - ${report.employeeName}`,
-      zoomMeetingDate: hearingDate,
-      zoomMeetingTime: "10:00 AM PST",
-      zoomMeetingLink: `https://zoom.us/j/${Math.floor(80000000000 + Math.random() * 9000000000)}?pwd=SGC${new Date().getFullYear()}`,
-      zoomMeetingId: `${Math.floor(812 + Math.random() * 100)} ${Math.floor(1000 + Math.random() * 9000)} ${Math.floor(1000 + Math.random() * 9000)}`,
-      zoomPasscode: `SGC${new Date().getFullYear()}`,
-      hearingCommittee: "SGC Due Process Committee, Legal Counsel & Central HRMD",
-      noiRemarks: "You are hereby formally directed to attend the Administrative Hearing via Zoom on the schedule stated below. In accordance with DOLE Department Order No. 147-15, you have the right to be assisted by a representative, lawyer, or union officer if you so desire. Your attendance is mandatory to present your complete evidence and testimony."
+      date: dateFormatted,
+      toEmployee: empName,
+      subject: report.noiSubject || "Notice of Investigation",
+      hearingDate: defaultHearingDate,
+      hearingTime: defaultHearingTime,
+      hearingMode: defaultHearingMode,
+      zoomMeetingTopic: report.zoomMeetingTopic || `Administrative Investigation Hearing: Case ${report.caseNumber} - ${empName}`,
+      zoomMeetingLink: report.zoomMeetingLink || `https://zoom.us/j/${Math.floor(80000000000 + Math.random() * 9000000000)}?pwd=SGC${new Date().getFullYear()}`,
+      zoomMeetingId: report.zoomMeetingId || `${Math.floor(812 + Math.random() * 100)} ${Math.floor(1000 + Math.random() * 9000)} ${Math.floor(1000 + Math.random() * 9000)}`,
+      zoomPasscode: report.zoomPasscode || `SGC${new Date().getFullYear()}`,
+      hearingCommittee: report.hearingCommittee || "SGC Due Process Committee & Central HRMD",
+      paragraph1: defP1,
+      violation1Article: report.noiViolation1Article || "Article IV \u2013 Section 18. Offenses Related to Job Performance and Productivity.",
+      violation1Clause: report.noiViolation1Clause || "(a) Non-observance of Standard Operating Procedures.",
+      violation1Desc: report.noiViolation1Desc || "\u2013 willful or unintentional non-observance of standard operating procedures for direct or indirect personal gain is classified as serious offense and shall accordingly be meted penalties for serious offense.",
+      violation2Article: report.noiViolation2Article || "Section 16. Offenses Against Good Personal Behavior and Conduct",
+      violation2Clause: report.noiViolation2Clause || "(f) Drunkenness.",
+      violation2Desc: report.noiViolation2Desc || "Reporting for work under the influence of liquor or drinking alcoholic beverages during work hours (except on official functions).",
+      paragraph2: report.noiParagraph2 || "You are entitled to counsel of your choice during this investigation. You may also bring your witness(es) if any. Please be guided that failure on your part to comply with this Notice of Investigation shall be considered submitted for a resolution based on the evidence on record.",
+      witnessDay: report.noiWitnessDay || "12th",
+      witnessMonthYear: report.noiWitnessMonthYear || "October 2026",
+      witnessPlace: report.noiWitnessPlace || "Tacurong City, Sultan Kudarat, Philippines",
+      signatoryName: report.noiSignatoryName || "JEVINCE JAYE S. JUBAY, CHRP",
+      signatoryTitle: report.noiSignatoryTitle || "HRMD Manager",
+      signatoryCompany: report.noiSignatoryCompany || "5A Royal Gaming OPC",
+      footerText: report.noiFooterText || `HR 201 File & Records ${new Date().getFullYear()}`
     });
     setIsNoiModalOpen(true);
   };
 
+  const handleViewNoiDocument = (report) => {
+    setSelectedReport(report);
+    const dateFormatted = report.noiIssuedAt || new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }).toUpperCase();
+    const defaultHearingDate = report.zoomMeetingDate || "October 14, 2026";
+    const defaultHearingTime = report.zoomMeetingTime || "2:30 PM";
+    const defaultHearingMode = report.zoomMeetingMode || "via Zoom Meeting";
+    const empName = (report.employeeName || "MICHAEL SIMPAL").toUpperCase();
+
+    const defP1 = report.noiParagraph1 || `A notice of investigation is one of the requisites by the law to hear and explain your side, you are hereby directed to attend, submit your supporting documents, and bring a counsel of your own choice on ${defaultHearingDate}, ${defaultHearingTime} ${defaultHearingMode}, for the acts allegedly committed in violation of:`;
+
+    setNoiForm({
+      date: dateFormatted,
+      toEmployee: empName,
+      subject: report.noiSubject || "Notice of Investigation",
+      hearingDate: defaultHearingDate,
+      hearingTime: defaultHearingTime,
+      hearingMode: defaultHearingMode,
+      zoomMeetingTopic: report.zoomMeetingTopic || `Administrative Investigation Hearing: Case ${report.caseNumber} - ${empName}`,
+      zoomMeetingLink: report.zoomMeetingLink || `https://zoom.us/j/${Math.floor(80000000000 + Math.random() * 9000000000)}?pwd=SGC${new Date().getFullYear()}`,
+      zoomMeetingId: report.zoomMeetingId || `${Math.floor(812 + Math.random() * 100)} ${Math.floor(1000 + Math.random() * 9000)} ${Math.floor(1000 + Math.random() * 9000)}`,
+      zoomPasscode: report.zoomPasscode || `SGC${new Date().getFullYear()}`,
+      hearingCommittee: report.hearingCommittee || "SGC Due Process Committee & Central HRMD",
+      paragraph1: defP1,
+      violation1Article: report.noiViolation1Article || "Article IV \u2013 Section 18. Offenses Related to Job Performance and Productivity.",
+      violation1Clause: report.noiViolation1Clause || "(a) Non-observance of Standard Operating Procedures.",
+      violation1Desc: report.noiViolation1Desc || "\u2013 willful or unintentional non-observance of standard operating procedures for direct or indirect personal gain is classified as serious offense and shall accordingly be meted penalties for serious offense.",
+      violation2Article: report.noiViolation2Article || "Section 16. Offenses Against Good Personal Behavior and Conduct",
+      violation2Clause: report.noiViolation2Clause || "(f) Drunkenness.",
+      violation2Desc: report.noiViolation2Desc || "Reporting for work under the influence of liquor or drinking alcoholic beverages during work hours (except on official functions).",
+      paragraph2: report.noiParagraph2 || "You are entitled to counsel of your choice during this investigation. You may also bring your witness(es) if any. Please be guided that failure on your part to comply with this Notice of Investigation shall be considered submitted for a resolution based on the evidence on record.",
+      witnessDay: report.noiWitnessDay || "12th",
+      witnessMonthYear: report.noiWitnessMonthYear || "October 2026",
+      witnessPlace: report.noiWitnessPlace || "Tacurong City, Sultan Kudarat, Philippines",
+      signatoryName: report.noiSignatoryName || "JEVINCE JAYE S. JUBAY, CHRP",
+      signatoryTitle: report.noiSignatoryTitle || "HRMD Manager",
+      signatoryCompany: report.noiSignatoryCompany || "5A Royal Gaming OPC",
+      footerText: report.noiFooterText || `HR 201 File & Records ${new Date().getFullYear()}`
+    });
+    setIsNoiViewerOpen(true);
+  };
+
   const handleIssueNoi = async () => {
     if (!selectedReport) return;
-    if (!noiForm.zoomMeetingLink || !noiForm.zoomMeetingDate || !noiForm.zoomMeetingTime) {
-      alert("Please provide the required Zoom Meeting Date, Time, and Meeting Link.");
-      return;
-    }
-    const dateFormatted = new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
     const updated = {
       ...selectedReport,
       status: "NOI_ISSUED",
+      noiSubject: noiForm.subject,
+      noiIssuedAt: noiForm.date,
       zoomMeetingTopic: noiForm.zoomMeetingTopic,
-      zoomMeetingDate: noiForm.zoomMeetingDate,
-      zoomMeetingTime: noiForm.zoomMeetingTime,
+      zoomMeetingDate: noiForm.hearingDate,
+      zoomMeetingTime: noiForm.hearingTime,
+      zoomMeetingMode: noiForm.hearingMode,
       zoomMeetingLink: noiForm.zoomMeetingLink,
       zoomMeetingId: noiForm.zoomMeetingId,
       zoomPasscode: noiForm.zoomPasscode,
       hearingCommittee: noiForm.hearingCommittee,
-      noiRemarks: noiForm.noiRemarks,
-      noiIssuedAt: dateFormatted,
+      noiParagraph1: noiForm.paragraph1,
+      noiViolation1Article: noiForm.violation1Article,
+      noiViolation1Clause: noiForm.violation1Clause,
+      noiViolation1Desc: noiForm.violation1Desc,
+      noiViolation2Article: noiForm.violation2Article,
+      noiViolation2Clause: noiForm.violation2Clause,
+      noiViolation2Desc: noiForm.violation2Desc,
+      noiParagraph2: noiForm.paragraph2,
+      noiWitnessDay: noiForm.witnessDay,
+      noiWitnessMonthYear: noiForm.witnessMonthYear,
+      noiWitnessPlace: noiForm.witnessPlace,
+      noiSignatoryName: noiForm.signatoryName,
+      noiSignatoryTitle: noiForm.signatoryTitle,
+      noiSignatoryCompany: noiForm.signatoryCompany,
+      noiFooterText: noiForm.footerText,
       activityLog: [
         ...(selectedReport.activityLog || []),
         {
           id: `act-noi-${Date.now()}`,
           timestamp: new Date().toISOString(),
           action: "NOI_ISSUED_WITH_ZOOM_SCHEDULE",
-          actor: `SGC Due Process Committee & HRMD`,
-          message: `Issued formal Notice of Investigation (NOI) with scheduled Zoom hearing on ${noiForm.zoomMeetingDate} at ${noiForm.zoomMeetingTime}. Zoom Meeting ID: ${noiForm.zoomMeetingId}.`
+          actor: `${noiForm.signatoryName} (${noiForm.signatoryTitle})`,
+          message: `Issued formal Notice of Investigation (NOI) with scheduled hearing on ${noiForm.hearingDate} at ${noiForm.hearingTime} ${noiForm.hearingMode}. Zoom Meeting ID: ${noiForm.zoomMeetingId}.`
         }
       ]
     };
-    await saveIncidentReport(updated);
-    await loadRecords();
-    setIsNoiModalOpen(false);
-    setSelectedReport(updated);
-    playAiVoiceAnnouncement(`Notice of Investigation officially issued with Zoom hearing schedule for ${selectedReport.employeeName}. Transmitted to branch HR and employee.`);
+    setIsTransmitting(true);
+    setTransmittingMessage("Scheduling Zoom Hearing & issuing Notice of Investigation...");
+    try {
+      await saveIncidentReport(updated);
+      await loadRecords();
+      setIsNoiModalOpen(false);
+      setSelectedReport(updated);
+      setIsNoiViewerOpen(true);
+      playAiVoiceAnnouncement(`Notice of Investigation officially issued with hearing schedule for ${selectedReport.employeeName}.`);
+    } catch (err) {
+      console.error("NOI issue error:", err);
+      alert("Failed to issue NOI. Please try again.");
+    } finally {
+      setIsTransmitting(false);
+      setTransmittingMessage("");
+    }
   };
 
   // 5. Post-NOI: Decision on Administrative Case
   const handleOpenAdminDecisionModal = (report) => {
     setSelectedReport(report);
+    const dateFormatted = report.adminDecisionIssuedAt || "October 21, 2026";
+    const empName = (report.employeeName || "MICHAEL SIMPAL").toUpperCase();
+
+    const bullet1Art = report.adminDecisionBullet1Article || report.noiViolation2Article || "Section 16. Offenses Against Good Personal Behavior and Conduct.";
+    const bullet1D = report.adminDecisionBullet1Desc || (report.noiViolation2Clause && report.noiViolation2Desc
+      ? `${report.noiViolation2Clause} ${report.noiViolation2Desc} is classified as serious offense.`
+      : "(f) Drunkenness. Reporting for work under the influence of liquor or drinking alcoholic beverages during work hours (except on official functions) is classified as serious offense.");
+
+    const bullet2Art = report.adminDecisionBullet2Article || report.noiViolation1Article || "Section 18. Offenses Related to Job Performance and Productivity";
+    const bullet2D = report.adminDecisionBullet2Desc || (report.noiViolation1Clause && report.noiViolation1Desc
+      ? `${report.noiViolation1Clause} ${report.noiViolation1Desc}`
+      : "(a) Non-observance of Standard Operating Procedures. Willful or unintentional non-observance of standard operating procedures for direct or indirect personal gain is classified as serious offense and shall accordingly be meted penalties for serious offense.");
+
+    const defaultP1 = report.adminDecisionParagraph1 || "After reviewing the facts and circumstances surrounding the case, Management has determined that there is substantial basis to establish your accountability for the aforementioned violations. Management further notes that this is a repeated occurrence of the same or similar violation, notwithstanding prior reminders, and corrective measures previously undertaken.";
+    const sanction = report.adminDecisionPenalty || "Final Stern Warning";
+    const defaultP2 = report.adminDecisionParagraph2 || `In view thereof, please be informed that this shall serve as your \u201c${sanction}\u201d. Any further violations of company policies may result in the immediate termination of your employment.`;
+    const defaultP3 = report.adminDecisionParagraph3 || "Please be guided accordingly.";
+
     setAdminDecisionForm({
-      subject: `DECISION ON ADMINISTRATIVE CASE — CASE NO: ${report.caseNumber} (${report.employeeName.toUpperCase()})`,
-      findings: "Guilty of Non-observance of Cashier Standard Operating Procedures (SOPs) and Failure to Balance Cash Float",
-      penalty: "3-Day Suspension Without Pay & Mandatory Restitution of Funds",
-      body: `After due deliberation of the findings of the Administrative Hearing conducted via Zoom on ${report.zoomMeetingDate || "scheduled date"}, taking into account the incident narrative, drawer audit discrepancy sheets, and the respondent's verbal and written submissions, the SGC Due Process Committee hereby issues its official Decision:\n\n1. The Respondent is found ADMINISTRATIVELY LIABLE for deviation from standard cash custody procedures.\n2. In accordance with the Company Employees Code of Conduct and Labor Code Due Process standards, the respondent is meted the sanction of Suspension Without Pay and required to settle the outstanding shortage amount through authorized salary installment deductions.\n\nThis decision is final, executory, and entered into the employee's permanent 201 personnel records.`,
-      signatoryName: report.assignedCentralHrName || "JEVINCE JAYE S. JUBAY, CHRP",
-      signatoryTitle: report.assignedCentralHrTitle || "HRMD Manager"
+      date: dateFormatted,
+      toEmployee: empName,
+      subject: report.adminDecisionSubject || "DECISION OF ADMINISTRATIVE CASE",
+      introLine: report.adminDecisionIntroLine || "This is concerning your administrative case on;",
+      bullet1Article: bullet1Art,
+      bullet1Desc: bullet1D,
+      bullet2Article: bullet2Art,
+      bullet2Desc: bullet2D,
+      paragraph1: defaultP1,
+      sanctionLevel: sanction,
+      paragraph2: defaultP2,
+      paragraph3: defaultP3,
+      signatoryName: report.adminDecisionSignatoryName || report.assignedCentralHrName || "JEVINCE JAYE S. JUBAY, CHRP",
+      signatoryTitle: report.adminDecisionSignatoryTitle || report.assignedCentralHrTitle || "HRMD Manager",
+      signatoryCompany: report.adminDecisionSignatoryCompany || report.company || loggedInCompany || "5A Royal Gaming OPC",
+      footerText: report.adminDecisionFooterText || `HR 201 File & Records ${new Date().getFullYear()}`
     });
     setIsAdminDecisionModalOpen(true);
   };
 
+  const handleViewAdminDecisionDocument = (report) => {
+    setSelectedReport(report);
+    const dateFormatted = report.adminDecisionIssuedAt || "October 21, 2026";
+    const empName = (report.employeeName || "MICHAEL SIMPAL").toUpperCase();
+
+    const bullet1Art = report.adminDecisionBullet1Article || report.noiViolation2Article || "Section 16. Offenses Against Good Personal Behavior and Conduct.";
+    const bullet1D = report.adminDecisionBullet1Desc || (report.noiViolation2Clause && report.noiViolation2Desc
+      ? `${report.noiViolation2Clause} ${report.noiViolation2Desc} is classified as serious offense.`
+      : "(f) Drunkenness. Reporting for work under the influence of liquor or drinking alcoholic beverages during work hours (except on official functions) is classified as serious offense.");
+
+    const bullet2Art = report.adminDecisionBullet2Article || report.noiViolation1Article || "Section 18. Offenses Related to Job Performance and Productivity";
+    const bullet2D = report.adminDecisionBullet2Desc || (report.noiViolation1Clause && report.noiViolation1Desc
+      ? `${report.noiViolation1Clause} ${report.noiViolation1Desc}`
+      : "(a) Non-observance of Standard Operating Procedures. Willful or unintentional non-observance of standard operating procedures for direct or indirect personal gain is classified as serious offense and shall accordingly be meted penalties for serious offense.");
+
+    const defaultP1 = report.adminDecisionParagraph1 || "After reviewing the facts and circumstances surrounding the case, Management has determined that there is substantial basis to establish your accountability for the aforementioned violations. Management further notes that this is a repeated occurrence of the same or similar violation, notwithstanding prior reminders, and corrective measures previously undertaken.";
+    const sanction = report.adminDecisionPenalty || "Final Stern Warning";
+    const defaultP2 = report.adminDecisionParagraph2 || `In view thereof, please be informed that this shall serve as your \u201c${sanction}\u201d. Any further violations of company policies may result in the immediate termination of your employment.`;
+    const defaultP3 = report.adminDecisionParagraph3 || "Please be guided accordingly.";
+
+    setAdminDecisionForm({
+      date: dateFormatted,
+      toEmployee: empName,
+      subject: report.adminDecisionSubject || "DECISION OF ADMINISTRATIVE CASE",
+      introLine: report.adminDecisionIntroLine || "This is concerning your administrative case on;",
+      bullet1Article: bullet1Art,
+      bullet1Desc: bullet1D,
+      bullet2Article: bullet2Art,
+      bullet2Desc: bullet2D,
+      paragraph1: defaultP1,
+      sanctionLevel: sanction,
+      paragraph2: defaultP2,
+      paragraph3: defaultP3,
+      signatoryName: report.adminDecisionSignatoryName || report.assignedCentralHrName || "JEVINCE JAYE S. JUBAY, CHRP",
+      signatoryTitle: report.adminDecisionSignatoryTitle || report.assignedCentralHrTitle || "HRMD Manager",
+      signatoryCompany: report.adminDecisionSignatoryCompany || report.company || loggedInCompany || "5A Royal Gaming OPC",
+      footerText: report.adminDecisionFooterText || `HR 201 File & Records ${new Date().getFullYear()}`
+    });
+    setIsAdminDecisionViewerOpen(true);
+  };
+
   const handleIssueAdminDecision = async () => {
     if (!selectedReport) return;
-    const dateFormatted = new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
     const updated = {
       ...selectedReport,
       status: "ADMIN_DECISION_ISSUED",
       adminDecisionSubject: adminDecisionForm.subject,
-      adminDecisionFindings: adminDecisionForm.findings,
-      adminDecisionPenalty: adminDecisionForm.penalty,
-      adminDecisionBody: adminDecisionForm.body,
-      adminDecisionIssuedAt: dateFormatted,
+      adminDecisionIssuedAt: adminDecisionForm.date,
+      adminDecisionPenalty: adminDecisionForm.sanctionLevel,
+      adminDecisionIntroLine: adminDecisionForm.introLine,
+      adminDecisionBullet1Article: adminDecisionForm.bullet1Article,
+      adminDecisionBullet1Desc: adminDecisionForm.bullet1Desc,
+      adminDecisionBullet2Article: adminDecisionForm.bullet2Article,
+      adminDecisionBullet2Desc: adminDecisionForm.bullet2Desc,
+      adminDecisionParagraph1: adminDecisionForm.paragraph1,
+      adminDecisionParagraph2: adminDecisionForm.paragraph2,
+      adminDecisionParagraph3: adminDecisionForm.paragraph3,
+      adminDecisionSignatoryName: adminDecisionForm.signatoryName,
+      adminDecisionSignatoryTitle: adminDecisionForm.signatoryTitle,
+      adminDecisionSignatoryCompany: adminDecisionForm.signatoryCompany,
+      adminDecisionFooterText: adminDecisionForm.footerText,
       activityLog: [
         ...(selectedReport.activityLog || []),
         {
           id: `act-decision-${Date.now()}`,
           timestamp: new Date().toISOString(),
           action: "ADMIN_DECISION_ISSUED",
-          actor: `${adminDecisionForm.signatoryName} (SGC Head Office HRMD)`,
-          message: `Head Office issued official Decision on Administrative Case (${adminDecisionForm.penalty}). Sent to Branch HR for personal serving and signed employee acknowledgment.`
+          actor: `${adminDecisionForm.signatoryName} (${adminDecisionForm.signatoryTitle})`,
+          message: `Head Office promulgated official Decision on Administrative Case (${adminDecisionForm.sanctionLevel}). Sent to Branch HR for personal serving and signed employee acknowledgment.`
         }
       ]
     };
-    await saveIncidentReport(updated);
-    await loadRecords();
-    setIsAdminDecisionModalOpen(false);
-    setSelectedReport(updated);
-    playAiVoiceAnnouncement(`Decision on Administrative Case issued by Head Office. Returned to branch HR for serving and final employee acknowledgment.`);
+    setIsTransmitting(true);
+    setTransmittingMessage("Promulgating Decision on Administrative Case to Branch HR...");
+    try {
+      await saveIncidentReport(updated);
+      await loadRecords();
+      setIsAdminDecisionModalOpen(false);
+      setSelectedReport(updated);
+      setIsAdminDecisionViewerOpen(true);
+      playAiVoiceAnnouncement(`Decision on Administrative Case issued by Head Office for ${selectedReport.employeeName}. Returned to branch HR for serving and employee acknowledgment.`);
+    } catch (err) {
+      console.error("Admin decision error:", err);
+      alert("Failed to promulgate decision. Please try again.");
+    } finally {
+      setIsTransmitting(false);
+      setTransmittingMessage("");
+    }
   };
 
-  // 6. Branch HR: Upload Employee Signed Decision Proof & Close Case
-  const handleOpenUploadDecisionProof = (report) => {
-    setSelectedReport(report);
-    setDecisionProofData({
-      fileData: report.decisionSignedProof || "",
-      fileName: report.decisionSignedProofName || "",
-      dateServed: new Date().toISOString().slice(0, 10),
-      remarks: "Employee personally served copy of Administrative Case Decision, signed acknowledgment copy affixed."
-    });
-    setIsUploadDecisionProofModalOpen(true);
-  };
-
-  const handleSaveDecisionProofAndCloseCase = async () => {
-    if (!selectedReport) return;
-    if (!decisionProofData.fileData) {
-      alert("Please upload the signed copy of the Administrative Decision signed by the employee.");
+  // 6. Direct Case Closure (No file upload required for Decision)
+  const handleCloseCaseDirectly = async (report) => {
+    if (!report) return;
+    if (!window.confirm(`Close and archive Case ${report.caseNumber} for ${report.employeeName} in HR 201 File?`)) {
       return;
     }
 
@@ -1145,28 +1958,35 @@ export default function IncidentReportPanel({
     });
 
     const updated = {
-      ...selectedReport,
+      ...report,
       status: "CASE_CLOSED",
-      decisionSignedProof: decisionProofData.fileData,
-      decisionSignedProofName: decisionProofData.fileName,
-      decisionSignedAt: decisionProofData.dateServed || timestampStr,
+      decisionClosedAt: timestampStr,
       activityLog: [
-        ...(selectedReport.activityLog || []),
+        ...(report.activityLog || []),
         {
           id: `act-closed-${Date.now()}`,
           timestamp: new Date().toISOString(),
-          action: "CASE_CLOSED_DUE_PROCESS_COMPLETED",
-          actor: `${effectiveRole.reportingName} (${selectedReport.company || selectedReport.senderCompany} HR)`,
-          message: `Employee signed copy of the Administrative Decision successfully uploaded. Case is now officially CLOSED and ARCHIVED in compliance with Philippine Due Process.`
+          action: "CASE_CLOSED",
+          actor: `${effectiveRole.reportingName || effectiveRole.userName || currentUser?.name || "HR Admin"}`,
+          message: `Administrative Case officially CLOSED and ARCHIVED in HR 201 File.`
         }
       ]
     };
 
-    await saveIncidentReport(updated);
-    await loadRecords();
-    setIsUploadDecisionProofModalOpen(false);
-    setSelectedReport(updated);
-    playAiVoiceAnnouncement(`Administrative decision signed and acknowledged by employee. Case is officially closed and archived.`);
+    setIsTransmitting(true);
+    setTransmittingMessage("Closing and archiving case in 201 file...");
+    try {
+      await saveIncidentReport(updated);
+      await loadRecords();
+      setSelectedReport(updated);
+      playAiVoiceAnnouncement(`Case ${report.caseNumber} is now officially closed and archived in HR 201 records.`);
+    } catch (err) {
+      console.error("Close case error:", err);
+      alert("Failed to close case. Please try again.");
+    } finally {
+      setIsTransmitting(false);
+      setTransmittingMessage("");
+    }
   };
 
   // Purge test / mock data to start with pure live process
@@ -1200,14 +2020,24 @@ export default function IncidentReportPanel({
       ]
     };
 
-    await saveIncidentReport(updated);
-    await loadRecords();
-    setIsNteDraftModalOpen(false);
-    setSelectedReport(updated);
+    setIsTransmitting(true);
+    setTransmittingMessage("Issuing official Notice to Explain (NTE) to Branch HR...");
+    try {
+      await saveIncidentReport(updated);
+      await loadRecords();
+      setIsNteDraftModalOpen(false);
+      setSelectedReport(updated);
 
-    // Voice announcement
-    const announcement = `Approved and returned! Official Notice to Explain has been issued by Simpal Group of Companies Head Office and dispatched back to ${senderCompany} HR ${senderHrName}. Please serve the document to ${updated.employeeName}.`;
-    playAiVoiceAnnouncement(announcement);
+      // Voice announcement
+      const announcement = `Approved and returned! Official Notice to Explain has been issued by Simpal Group of Companies Head Office and dispatched back to ${senderCompany} HR ${senderHrName}. Please serve the document to ${updated.employeeName}.`;
+      playAiVoiceAnnouncement(announcement);
+    } catch (err) {
+      console.error("NTE transmittal error:", err);
+      alert("Failed to issue Notice to Explain. Please try again.");
+    } finally {
+      setIsTransmitting(false);
+      setTransmittingMessage("");
+    }
   };
 
   // Subsidiary Company HR marks NTE as Served to Employee
@@ -1232,13 +2062,23 @@ export default function IncidentReportPanel({
       ]
     };
 
-    await saveIncidentReport(updated);
-    await loadRecords();
-    if (selectedReport?.id === report.id) setSelectedReport(updated);
+    setIsTransmitting(true);
+    setTransmittingMessage("Updating NTE service status...");
+    try {
+      await saveIncidentReport(updated);
+      await loadRecords();
+      if (selectedReport?.id === report.id) setSelectedReport(updated);
 
-    // Voice announcement
-    const announcement = `Notice to Explain has been officially served to ${report.employeeName} by ${senderComp} HR. The one-working-day explanation period has commenced.`;
-    playAiVoiceAnnouncement(announcement);
+      // Voice announcement
+      const announcement = `Notice to Explain has been officially served to ${report.employeeName} by ${senderComp} HR. The one-working-day explanation period has commenced.`;
+      playAiVoiceAnnouncement(announcement);
+    } catch (err) {
+      console.error("Serve NTE error:", err);
+      alert("Failed to mark NTE as served. Please try again.");
+    } finally {
+      setIsTransmitting(false);
+      setTransmittingMessage("");
+    }
   };
 
   // Log written explanation received from employee
@@ -1264,13 +2104,23 @@ export default function IncidentReportPanel({
       ]
     };
 
-    await saveIncidentReport(updated);
-    await loadRecords();
-    setIsExplanationModalOpen(false);
+    setIsTransmitting(true);
+    setTransmittingMessage("Transmitting explanation notes to Head Office SGC...");
+    try {
+      await saveIncidentReport(updated);
+      await loadRecords();
+      setIsExplanationModalOpen(false);
 
-    // Voice announcement
-    const announcement = `Employee written explanation has been received and transmitted to Simpal Group of Companies Head Office for administrative ruling on case ${report.caseNumber}.`;
-    playAiVoiceAnnouncement(announcement);
+      // Voice announcement
+      const announcement = `Employee written explanation has been received and transmitted to Simpal Group of Companies Head Office for administrative ruling on case ${report.caseNumber}.`;
+      playAiVoiceAnnouncement(announcement);
+    } catch (err) {
+      console.error("Log explanation error:", err);
+      alert("Failed to transmit explanation notes. Please try again.");
+    } finally {
+      setIsTransmitting(false);
+      setTransmittingMessage("");
+    }
   };
 
   // View Authentic NTE Document
@@ -1285,86 +2135,215 @@ export default function IncidentReportPanel({
     setIsIrViewerOpen(true);
   };
 
-  // Print Document Trigger: Dynamically supports Standard (A4) and Long paper formats in 1 page
-  const handlePrintDocument = () => {
-    const isA4 = irPaperFormat === "A4";
-    const pageSize = isA4 ? "A4 portrait" : "8.5in 13in portrait";
-    const paperWidth = isA4 ? "210mm" : "8.5in";
-    const paperHeight = isA4 ? "297mm" : "13in";
-    const printPadding = isA4 ? "7mm 9mm 6mm 9mm" : "9mm 11mm 7mm 11mm";
+  // Print Document Trigger: Dynamically supports IR, NTE, Notice of Warning, Notice of Investigation, and Decision of Administrative Case in Standard (A4), Short (Letter 8.5x11), Long (Folio 8.5x13), and Legal paper formats with guaranteed 1-Page Coupon Bond Fit
+  const handlePrintDocument = (targetType = null) => {
+    const isPrintingAdminDecision = targetType === "adminDecision" || (isAdminDecisionViewerOpen && !isIrViewerOpen && !isNteViewerOpen && !isWarningViewerOpen && !isNoiViewerOpen);
+    const isPrintingNoi = targetType === "noi" || (isNoiViewerOpen && !isIrViewerOpen && !isNteViewerOpen && !isWarningViewerOpen && !isAdminDecisionViewerOpen);
+    const isPrintingWarning = targetType === "warning" || (isWarningViewerOpen && !isIrViewerOpen && !isNteViewerOpen && !isNoiViewerOpen && !isAdminDecisionViewerOpen);
+    const isPrintingNte = targetType === "nte" || (isNteViewerOpen && !isIrViewerOpen && !isWarningViewerOpen && !isNoiViewerOpen && !isAdminDecisionViewerOpen);
+    const paperFormat = isPrintingAdminDecision ? adminDecisionPaperFormat : isPrintingNoi ? noiPaperFormat : isPrintingWarning ? warningPaperFormat : isPrintingNte ? ntePaperFormat : irPaperFormat;
+    const printableId = isPrintingAdminDecision
+      ? "printable-admin-decision-document-sheet"
+      : isPrintingNoi
+        ? "printable-noi-document-sheet"
+        : isPrintingWarning
+          ? "printable-warning-document-sheet"
+          : isPrintingNte
+            ? "printable-nte-document-sheet"
+            : "printable-incident-report-sheet";
 
-    const styleId = "dynamic-bond-paper-print-style";
-    let styleEl = document.getElementById(styleId);
-    if (!styleEl) {
-      styleEl = document.createElement("style");
-      styleEl.id = styleId;
-      document.head.appendChild(styleEl);
+    const isA4 = paperFormat === "A4";
+    const isShort = paperFormat === "SHORT";
+    const isLegal = paperFormat === "LEGAL";
+    const isLong = paperFormat === "LONG";
+
+    // Set exact page size for @page print rule (W3C CSS compliant length notation)
+    const pageSize = isA4
+      ? "A4 portrait"
+      : isShort
+        ? "8.5in 11in"
+        : isLegal
+          ? "8.5in 14in"
+          : "8.5in 13in";
+
+    const paperWidth = isA4 ? "210mm" : "8.5in";
+    const paperHeight = isA4 ? "297mm" : isShort ? "11in" : isLegal ? "14in" : "13in";
+
+    const printableEl = document.getElementById(printableId);
+    if (!printableEl) {
+      window.print();
+      return;
     }
-    styleEl.innerHTML = `
-      @page {
-        size: ${pageSize} !important;
-        margin: 0 !important;
-      }
-      @media print {
-        html, body {
-          width: ${paperWidth} !important;
-          height: ${paperHeight} !important;
-          max-height: ${paperHeight} !important;
-          margin: 0 !important;
-          padding: 0 !important;
-          background: #ffffff !important;
-          overflow: hidden !important;
-          -webkit-print-color-adjust: exact !important;
-          print-color-adjust: exact !important;
-        }
-        body * {
-          visibility: hidden !important;
-        }
-        .no-print,
-        .no-print * {
-          display: none !important;
-          visibility: hidden !important;
-        }
-        #printable-incident-report-sheet,
-        #printable-incident-report-sheet * {
-          visibility: visible !important;
-        }
-        #printable-incident-report-sheet {
-          position: fixed !important;
-          left: 0 !important;
-          top: 0 !important;
-          width: ${paperWidth} !important;
-          height: ${paperHeight} !important;
-          max-width: ${paperWidth} !important;
-          max-height: ${paperHeight} !important;
-          box-sizing: border-box !important;
-          margin: 0 !important;
-          padding: ${printPadding} !important;
-          background: #ffffff !important;
-          border: none !important;
-          box-shadow: none !important;
-          border-radius: 0 !important;
-          transform: none !important;
-          overflow: hidden !important;
-          page-break-inside: avoid !important;
-          break-inside: avoid !important;
-          page-break-after: avoid !important;
-          break-after: avoid !important;
-          z-index: 999999 !important;
-        }
-      }
+
+    // Dynamic scale computation to fit exactly 1 coupon bond page without spill
+    const targetHeightPx = isShort ? 1000 : isA4 ? 1070 : isLegal ? 1280 : 1190;
+    const actualHeightPx = printableEl.scrollHeight || printableEl.offsetHeight || 920;
+    
+    let printScale = 1;
+    if (actualHeightPx > targetHeightPx) {
+      printScale = Math.min(1, Math.max(0.68, Number((targetHeightPx / actualHeightPx).toFixed(3))));
+    } else if (isShort) {
+      printScale = 0.94;
+    }
+    const printWidthPct = Number((100 / printScale).toFixed(2));
+
+    // Dedicated clean print iframe (isolates from screen modals, headers, and scrollbars)
+    let iframe = document.getElementById("dedicated-hr-print-iframe");
+    if (iframe) {
+      try { document.body.removeChild(iframe); } catch (e) {}
+    }
+    iframe = document.createElement("iframe");
+    iframe.id = "dedicated-hr-print-iframe";
+    iframe.style.position = "fixed";
+    iframe.style.right = "0";
+    iframe.style.bottom = "0";
+    iframe.style.width = "0";
+    iframe.style.height = "0";
+    iframe.style.border = "none";
+    iframe.style.zIndex = "-9999";
+    document.body.appendChild(iframe);
+
+    // Extract all styles (Tailwind, fonts, custom rules)
+    const headStyles = Array.from(document.querySelectorAll("link[rel='stylesheet'], style"))
+      .map((node) => node.outerHTML)
+      .join("\n");
+
+    const clonedEl = printableEl.cloneNode(true);
+    // Strip fixed screen heights so it flows naturally in the 1-page wrapper
+    clonedEl.style.minHeight = "auto";
+    clonedEl.style.height = "auto";
+    clonedEl.style.maxHeight = "none";
+    clonedEl.style.width = "100%";
+    clonedEl.style.maxWidth = "100%";
+    clonedEl.style.margin = "0";
+    clonedEl.style.boxShadow = "none";
+    clonedEl.style.border = "none";
+    clonedEl.style.borderRadius = "0";
+
+    const printPadding = isPrintingAdminDecision || isPrintingNoi || isPrintingWarning
+      ? (isShort ? "6mm 14mm 5mm 14mm" : isA4 ? "8mm 14mm 6mm 14mm" : "10mm 16mm 8mm 16mm")
+      : isPrintingNte
+        ? (isShort ? "5mm 10mm 4mm 10mm" : isA4 ? "6mm 12mm 5mm 12mm" : "8mm 12mm 6mm 12mm")
+        : (isShort ? "3mm 6mm 2mm 6mm" : isA4 ? "4mm 7mm 3mm 7mm" : "5mm 8mm 4mm 8mm");
+
+    const printHtml = `
+      <!DOCTYPE html>
+      <html lang="en">
+      <head>
+        <meta charset="utf-8" />
+        <title>HR Hub Official Document - ${paperFormat}</title>
+        ${headStyles}
+        <style>
+          @page {
+            size: ${pageSize} !important;
+            margin: 0 !important;
+          }
+          *, *::before, *::after {
+            box-sizing: border-box !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          html, body {
+            margin: 0 !important;
+            padding: 0 !important;
+            width: ${paperWidth} !important;
+            height: ${paperHeight} !important;
+            max-width: ${paperWidth} !important;
+            max-height: ${paperHeight} !important;
+            background: #ffffff !important;
+            overflow: hidden !important;
+            font-family: 'Figtree', 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+          }
+          .bond-paper-print-wrapper {
+            width: ${paperWidth} !important;
+            height: ${paperHeight} !important;
+            max-width: ${paperWidth} !important;
+            max-height: ${paperHeight} !important;
+            margin: 0 auto !important;
+            padding: ${printPadding} !important;
+            box-sizing: border-box !important;
+            background: #ffffff !important;
+            position: relative !important;
+            overflow: hidden !important;
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+            page-break-after: avoid !important;
+            break-after: avoid !important;
+            page-break-before: avoid !important;
+            break-before: avoid !important;
+          }
+          .bond-paper-scaler {
+            width: ${printWidthPct}% !important;
+            height: 100% !important;
+            box-sizing: border-box !important;
+            transform: scale(${printScale}) !important;
+            transform-origin: top left !important;
+            display: flex !important;
+            flex-direction: column !important;
+            justify-content: space-between !important;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="bond-paper-print-wrapper">
+          <div class="bond-paper-scaler">
+            ${clonedEl.innerHTML}
+          </div>
+        </div>
+      </body>
+      </html>
     `;
 
-    document.body.classList.add("printing-incident-report");
-    setTimeout(() => {
-      window.print();
-      setTimeout(() => {
-        document.body.classList.remove("printing-incident-report");
-        if (styleEl) {
-          styleEl.remove();
+    try {
+      const iframeDoc = iframe.contentWindow.document;
+      iframeDoc.open();
+      iframeDoc.write(printHtml);
+      iframeDoc.close();
+
+      const triggerPrint = () => {
+        try {
+          iframe.contentWindow.focus();
+          iframe.contentWindow.print();
+        } catch (e) {
+          console.warn("Iframe print error:", e);
+          window.print();
         }
-      }, 1000);
-    }, 150);
+        setTimeout(() => {
+          if (document.body.contains(iframe)) {
+            document.body.removeChild(iframe);
+          }
+        }, 4000);
+      };
+
+      // Ensure images in iframe are fully loaded before printing
+      const checkAndPrint = () => {
+        const imgs = Array.from(iframeDoc.images || []);
+        if (imgs.length === 0) {
+          setTimeout(triggerPrint, 250);
+          return;
+        }
+        const promises = imgs.map((img) => {
+          if (img.complete) return Promise.resolve();
+          return new Promise((resolve) => {
+            img.onload = resolve;
+            img.onerror = resolve;
+          });
+        });
+        Promise.all(promises).then(() => {
+          setTimeout(triggerPrint, 250);
+        });
+      };
+
+      if (iframeDoc.readyState === "complete") {
+        checkAndPrint();
+      } else {
+        iframe.onload = checkAndPrint;
+        setTimeout(triggerPrint, 800);
+      }
+    } catch (err) {
+      console.warn("Iframe print fallback to window.print:", err);
+      window.print();
+    }
   };
 
   // Pending counts for live hero indicators
@@ -1480,11 +2459,10 @@ export default function IncidentReportPanel({
               <button
                 type="button"
                 onClick={handleToggleVoice}
-                className={`inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-bold border transition cursor-pointer ${
-                  voiceMutedState
-                    ? "bg-white/10 text-white/80 border-white/20 hover:bg-white/20"
-                    : "bg-emerald-500 text-slate-950 font-black border-emerald-400 shadow-md shadow-emerald-500/30"
-                }`}
+                className={`inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-bold border transition cursor-pointer ${voiceMutedState
+                  ? "bg-white/10 text-white/80 border-white/20 hover:bg-white/20"
+                  : "bg-emerald-500 text-slate-950 font-black border-emerald-400 shadow-md shadow-emerald-500/30"
+                  }`}
               >
                 {voiceMutedState ? <VolumeX size={15} /> : <Volume2 size={15} className="animate-pulse" />}
                 <span>{voiceMutedState ? "Voice Muted" : "Head Office AI Voice Active"}</span>
@@ -1556,11 +2534,10 @@ export default function IncidentReportPanel({
               <button
                 type="button"
                 onClick={handleToggleVoice}
-                className={`inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-bold border transition cursor-pointer ${
-                  voiceMutedState
-                    ? "bg-white/10 text-white/80 border-white/20 hover:bg-white/20"
-                    : "bg-white text-[#55782a] font-black shadow-md"
-                }`}
+                className={`inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-bold border transition cursor-pointer ${voiceMutedState
+                  ? "bg-white/10 text-white/80 border-white/20 hover:bg-white/20"
+                  : "bg-white text-[#55782a] font-black shadow-md"
+                  }`}
               >
                 {voiceMutedState ? <VolumeX size={15} /> : <Volume2 size={15} className="animate-pulse" />}
                 <span>{voiceMutedState ? "Voice Muted" : "Branch AI Voice Active"}</span>
@@ -1719,17 +2696,15 @@ export default function IncidentReportPanel({
                 key={tab.id}
                 type="button"
                 onClick={() => setActiveFilter(tab.id)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-2 cursor-pointer shrink-0 ${
-                  active
-                    ? "bg-slate-900 text-white shadow-xs"
-                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                }`}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-2 cursor-pointer shrink-0 ${active
+                  ? "bg-slate-900 text-white shadow-xs"
+                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                  }`}
               >
                 <span>{tab.label}</span>
                 <span
-                  className={`px-1.5 py-0.2 rounded-full text-[10px] font-extrabold ${
-                    active ? "bg-white/20 text-white" : tab.badgeColor || "bg-slate-200 text-slate-700"
-                  }`}
+                  className={`px-1.5 py-0.2 rounded-full text-[10px] font-extrabold ${active ? "bg-white/20 text-white" : tab.badgeColor || "bg-slate-200 text-slate-700"
+                    }`}
                 >
                   {tab.count}
                 </span>
@@ -1815,90 +2790,259 @@ export default function IncidentReportPanel({
               const receiverComp = report.receiverCompany || "Simpal Group of Companies";
               const receiverHr = report.receiverHrName || report.assignedCentralHrName || "JEVINCE JAYE S. JUBAY, CHRP";
 
+              // Compute completed historical documents for this case (Step Dossier)
+              const pastDossier = [];
+
+              // 1. Initial Incident Report (always completed once case moves past pending evaluation)
+              if (!isPendingSgc) {
+                pastDossier.push({
+                  id: "ir",
+                  title: "Incident Report (IR Form)",
+                  subtitle: `Initial filing by ${senderComp}`,
+                  statusText: "Submitted",
+                  statusColor: "text-emerald-700 bg-emerald-50 border-emerald-200",
+                  icon: FileText,
+                  iconColor: "text-[#7ea741]",
+                  onClick: () => handleViewIrDocument(report)
+                });
+              }
+
+              // 2. Official Notice to Explain (NTE)
+              const hasNteDoc = report.hasNte || report.nteIssuedAt || isNteIssued || isNteAcknowledged || isServed || isExplanation || isWarning || isNoi || isAdminDecision || isClosed;
+              if (hasNteDoc && !isNteIssued && !isServed) {
+                pastDossier.push({
+                  id: "nte",
+                  title: "Notice to Explain (NTE)",
+                  subtitle: `Issued ${report.nteIssuedAt || "by Head Office"}`,
+                  statusText: "Served",
+                  statusColor: "text-blue-700 bg-blue-50 border-blue-200",
+                  icon: FileText,
+                  iconColor: "text-slate-800",
+                  onClick: () => handleViewNteDocument(report)
+                });
+              }
+
+              // 3. Signed NTE & Employee Written Explanation
+              const hasDualProof = report.hasSignedNteProof || report.hasExplanationProof || report.nteSignedProof || report.explanationProof || isNteAcknowledged || isExplanation;
+              const isPastExplanation = isWarning || isNoi || isAdminDecision || isClosed;
+              if (hasDualProof && isPastExplanation) {
+                pastDossier.push({
+                  id: "explanation",
+                  title: "Signed NTE & Written Explanation",
+                  subtitle: "Branch HR serving proof & employee letter",
+                  statusText: "Verified Proof",
+                  statusColor: "text-teal-700 bg-teal-50 border-teal-200",
+                  icon: FileCheck,
+                  iconColor: "text-teal-600",
+                  onClick: () => {
+                    const initialTab = (report.hasSignedNteProof || report.nteSignedProof || report.nteSignedProofKey) ? "SIGNED_NTE" : "EXPLANATION_DOC";
+                    handleOpenViewSignedNteProof(report, initialTab);
+                  }
+                });
+              }
+
+              // 4. Notice of Investigation (if NOI was conducted and case moved forward)
+              const hasNoiRecord = report.noiIssuedAt || report.noiSubject || report.zoomMeetingDate;
+              if ((isAdminDecision || isClosed) && hasNoiRecord) {
+                pastDossier.push({
+                  id: "noi",
+                  title: "Notice of Investigation Memo",
+                  subtitle: `Zoom Hearing • ${report.zoomMeetingDate || "Conducted"}`,
+                  statusText: "Hearing Record",
+                  statusColor: "text-indigo-700 bg-indigo-50 border-indigo-200",
+                  icon: Scale,
+                  iconColor: "text-indigo-600",
+                  onClick: () => handleViewNoiDocument(report)
+                });
+              }
+
+              // 5. Notice of Warning (if warning was issued and case is archived/closed)
+              if (isClosed && (report.warningIssuedAt || report.warningNoticePenalty)) {
+                pastDossier.push({
+                  id: "warning",
+                  title: "Notice of Warning Memo",
+                  subtitle: report.warningNoticePenalty || "Final Stern Warning",
+                  statusText: "Sanction Issued",
+                  statusColor: "text-amber-700 bg-amber-50 border-amber-200",
+                  icon: AlertTriangle,
+                  iconColor: "text-amber-600",
+                  onClick: () => handleViewWarningDocument(report)
+                });
+              }
+
+              // 6. Decision of Administrative Case (if case is closed)
+              if (isClosed && (report.adminDecisionIssuedAt || report.adminDecisionSubject || report.adminDecisionSanction)) {
+                pastDossier.push({
+                  id: "adminDecision",
+                  title: "Decision of Administrative Case",
+                  subtitle: `Sanction: ${report.adminDecisionSanction || "Final Stern Warning"}`,
+                  statusText: "Resolution",
+                  statusColor: "text-rose-700 bg-rose-50 border-rose-200",
+                  icon: Scale,
+                  iconColor: "text-rose-600",
+                  onClick: () => handleViewAdminDecisionDocument(report)
+                });
+              }
+
+              // Compute 5 Due Process Levels status & states:
+              let currentLevelNumber = 1;
+              if (isPendingSgc || isFiledForRecord) {
+                currentLevelNumber = 1;
+              } else if (isNteIssued || isServed) {
+                currentLevelNumber = 2;
+              } else if (isNteAcknowledged || isExplanation) {
+                currentLevelNumber = 3;
+              } else if (isWarning || isNoi) {
+                currentLevelNumber = 4;
+              } else if (isAdminDecision || isClosed) {
+                currentLevelNumber = 5;
+              }
+
+              const levelPercent = isClosed
+                ? 100
+                : isAdminDecision
+                  ? 95
+                  : isWarning || isNoi
+                    ? 80
+                    : isNteAcknowledged || isExplanation
+                      ? 60
+                      : isNteIssued || isServed
+                        ? 40
+                        : 20;
+
+              // Level 1: Incident Filing (IR)
+              const isLv1Done = !isPendingSgc;
+              const isLv1Active = isPendingSgc;
+
+              // Level 2: Notice to Explain (NTE)
+              const hasNteIssued = report.hasNte || report.nteIssuedAt || isNteIssued || isNteAcknowledged || isServed || isExplanation || isWarning || isNoi || isAdminDecision || isClosed;
+              const isLv2Done = hasNteIssued && !isNteIssued && !isServed;
+              const isLv2Active = isNteIssued || isServed;
+
+              // Level 3: Explanation & Evidence
+              const hasExplanation = report.hasSignedNteProof || report.hasExplanationProof || report.nteSignedProof || report.explanationProof || isExplanation || isWarning || isNoi || isAdminDecision || isClosed;
+              const isLv3Done = hasExplanation && !isNteAcknowledged && (isWarning || isNoi || isAdminDecision || isClosed);
+              const isLv3Active = isNteAcknowledged || isExplanation || ((isNteIssued || isServed) && !isLv3Done);
+
+              // Level 4: Investigation / Hearing
+              const isLv4Done = isAdminDecision || isClosed;
+              const isLv4Active = isWarning || isNoi;
+
+              // Level 5: Administrative Decision & Closure
+              const isLv5Done = isClosed;
+              const isLv5Active = isAdminDecision;
+
               return (
                 <div
                   key={report.id}
-                  className="p-4 md:p-5 hover:bg-slate-50/80 transition flex flex-col lg:flex-row lg:items-center justify-between gap-4"
+                  className="p-4 sm:p-5 hover:bg-slate-50/60 transition flex flex-col xl:flex-row items-stretch justify-between gap-5 relative border-b border-slate-100 last:border-b-0"
                 >
-                  {/* Left Side */}
-                  <div className="space-y-2 flex-1 min-w-0">
+                  {/* ========================================================================= */}
+                  {/* ZONE 1 (LEFT ~60%): EMPLOYEE, INCIDENT DETAILS & SENDER-RECEIVER ROUTING  */}
+                  {/* ========================================================================= */}
+                  <div className="space-y-3 flex-1 min-w-0 pr-0 xl:pr-3">
+                    {/* Header Row: Case ID, Entity Tag, AI Voice & Status Badge */}
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200">
-                        {report.caseNumber}
+                      <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg bg-slate-900 text-white shadow-2xs">
+                        <span className="font-mono text-xs font-bold tracking-wide">
+                          {report.caseNumber}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const summary = `Case ${report.caseNumber}. Issued by ${senderComp} HR ${senderHr} for ${report.employeeName}. Sent to ${receiverComp} Head Office HRMD. Current stage: Level ${currentLevelNumber} of 5. Status: ${isPendingSgc
+                              ? "Awaiting Head Office SGC Notice to Explain issuance."
+                              : isNteIssued
+                                ? "Notice to Explain has been issued by SGC and returned to branch HR for serving."
+                                : isServed
+                                  ? "Notice to Explain has been served to employee."
+                                  : isExplanation
+                                    ? "Written explanation received."
+                                    : isWarning
+                                      ? "Notice of Warning issued."
+                                      : isNoi
+                                        ? "Notice of Investigation hearing scheduled."
+                                        : isAdminDecision
+                                          ? "Decision on Administrative Case issued."
+                                          : "Case closed and archived."
+                              }`;
+                            playAiVoiceAnnouncement(summary);
+                          }}
+                          title="Listen to case summary via AI Buddy"
+                          className="p-0.5 rounded text-slate-300 hover:text-white transition cursor-pointer"
+                        >
+                          <Volume2 size={13} />
+                        </button>
+                      </div>
+
+                      {/* Entity Branding Badge */}
+                      <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-slate-100 text-slate-800 border border-slate-200">
+                        <img
+                          src={getPaperLogo(report.company || senderComp)}
+                          alt={report.company || senderComp}
+                          className="w-3.5 h-3.5 object-contain"
+                          onError={(e) => { e.target.style.display = "none"; }}
+                        />
+                        <span className="text-[11px] font-bold text-slate-800">{report.company || senderComp}</span>
+                      </div>
+
+                      {/* Due Process Stage Capsule */}
+                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold border ${
+                        isClosed
+                          ? "bg-emerald-50 text-emerald-800 border-emerald-300"
+                          : isAdminDecision
+                            ? "bg-rose-50 text-rose-800 border-rose-300 animate-pulse"
+                            : isWarning
+                              ? "bg-amber-50 text-amber-900 border-amber-300"
+                              : isNoi
+                                ? "bg-indigo-50 text-indigo-800 border-indigo-300 animate-pulse"
+                                : isExplanation
+                                  ? "bg-purple-50 text-purple-800 border-purple-300"
+                                  : isNteAcknowledged
+                                    ? "bg-teal-50 text-teal-800 border-teal-300"
+                                    : isServed
+                                      ? "bg-blue-50 text-blue-800 border-blue-300"
+                                      : isNteIssued
+                                        ? "bg-amber-50 text-amber-800 border-amber-300 animate-pulse"
+                                        : isFiledForRecord
+                                          ? "bg-slate-100 text-slate-700 border-slate-300"
+                                          : "bg-amber-50 text-amber-700 border-amber-200"
+                      }`}>
+                        {isClosed && <CheckCheck size={12} className="text-emerald-700" />}
+                        {isAdminDecision && <Scale size={12} className="text-rose-600" />}
+                        {isNoi && <Scale size={12} className="text-indigo-600" />}
+                        {isWarning && <AlertTriangle size={12} className="text-amber-700" />}
+                        {isExplanation && <CheckCircle2 size={12} className="text-purple-600" />}
+                        {(isNteIssued || isServed || isPendingSgc) && <Clock size={12} className="text-amber-600" />}
+                        <span>
+                          {isClosed
+                            ? "✅ Closed & 201 Archived"
+                            : isAdminDecision
+                              ? "Level 5: Decision Promulgated"
+                              : isNoi
+                                ? "Level 4: Formal Hearing (NOI)"
+                                : isWarning
+                                  ? "Level 4: Notice of Warning"
+                                  : isExplanation
+                                    ? "Level 3: Explanation Evaluated"
+                                    : isNteAcknowledged
+                                      ? "Level 3: Awaiting Written Answer"
+                                      : isServed
+                                        ? "Level 2: Active 120h Explanation"
+                                        : isNteIssued
+                                          ? "Level 2: NTE Dispatched to Branch"
+                                          : isFiledForRecord
+                                            ? "Level 1: 201 Record Only"
+                                            : "Level 1: Transmitted Incident"}
+                        </span>
                       </span>
 
-                      {/* Status Badges with role awareness */}
-                      {isPendingSgc && (
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200">
-                          <Clock size={12} />
-                          {effectiveRole.isHeadOffice
-                            ? "📥 Incoming IR: Transmitted from " + senderComp
-                            : "📤 Outbox: Transmitted to SGC Head Office"}
-                        </span>
-                      )}
-                      {isFiledForRecord && (
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-100 text-slate-700 border border-slate-300">
-                          <CheckCircle2 size={12} className="text-slate-500" />
-                          📁 Filed for 201 Record Only
-                        </span>
-                      )}
-                      {isNteIssued && (
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 animate-pulse">
-                          <CheckCircle2 size={12} />
-                          {effectiveRole.isHeadOffice
-                            ? "NTE Issued ➔ Dispatched to " + senderComp
-                            : "📥 Returned from Head Office SGC (Awaiting Signed Proof)"}
-                        </span>
-                      )}
-                      {isNteAcknowledged && (
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-teal-50 text-teal-800 border border-teal-200">
-                          <CheckCheck size={12} className="text-teal-600" />
-                          ✅ NTE Served & Signed (Proof Uploaded)
-                        </span>
-                      )}
-                      {isServed && (
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200">
-                          <Clock size={12} />
-                          Served to Employee (Active 5-Day Period)
-                        </span>
-                      )}
-                      {isExplanation && (
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-purple-50 text-purple-700 border border-purple-200">
-                          <CheckCircle2 size={12} />
-                          Written Explanation Received (Awaiting SGC Evaluation)
-                        </span>
-                      )}
-                      {isWarning && (
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-900 border border-amber-300">
-                          <AlertTriangle size={12} className="text-amber-700" />
-                          ⚠️ Notice of Warning Issued
-                        </span>
-                      )}
-                      {isNoi && (
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-indigo-50 text-indigo-800 border border-indigo-200 animate-pulse">
-                          <Scale size={12} className="text-indigo-600" />
-                          🔍 Formal Investigation (NOI via Zoom)
-                        </span>
-                      )}
-                      {isAdminDecision && (
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-rose-50 text-rose-800 border border-rose-300">
-                          <FileText size={12} className="text-rose-600" />
-                          ⚖️ Decision on Administrative Case Issued
-                        </span>
-                      )}
-                      {isClosed && (
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-900 border border-emerald-300">
-                          <CheckCheck size={12} className="text-emerald-700" />
-                          ✅ Case Closed & Archived
-                        </span>
-                      )}
-
-                      <span className="text-[11px] text-slate-400">
-                        Incident Date: {report.dateOfIncident || report.auditDates}
+                      <span className="text-[11px] text-slate-400 ml-auto xl:ml-0">
+                        Incident Date: <strong>{report.dateOfIncident || report.auditDates}</strong>
                       </span>
                     </div>
 
-                    {/* Employee & Subject */}
+                    {/* Employee Profile Header */}
                     <div>
                       <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
                         <span>{report.employeeName}</span>
@@ -1917,9 +3061,10 @@ export default function IncidentReportPanel({
                         </span>
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-100 font-semibold text-slate-700 border border-slate-200/80">
                           <MapPin size={11} className="text-slate-400" />
-                          <span className="truncate max-w-[260px]">{report.branch || "Tacurong Branch"}</span>
+                          <span className="truncate max-w-[280px]">{report.branch || "Tacurong Branch"}</span>
                         </span>
                       </div>
+
                       <p className="text-xs text-rose-700 font-semibold mt-0.5 flex items-center gap-1.5">
                         <AlertTriangle size={13} />
                         <span>Category: {report.incidentCategory}</span>
@@ -1932,11 +3077,11 @@ export default function IncidentReportPanel({
 
                       {/* Transmitted Incident Details Preview */}
                       {(report.specificFindings || report.specific_findings || report.fullIncidentNarrative) && (
-                        <div className="mt-1.5 p-2 rounded-lg bg-slate-50 border border-slate-200/90 text-xs text-slate-700 leading-relaxed max-w-2xl">
+                        <div className="mt-2 p-3 rounded-xl bg-slate-50 border border-slate-200/90 text-xs text-slate-700 leading-relaxed">
                           <span className="font-extrabold text-[10px] uppercase tracking-wider text-slate-500 block mb-0.5">
                             INCIDENT DETAILS:
                           </span>
-                          <p className="line-clamp-2 italic text-slate-800">
+                          <p className="line-clamp-3 italic text-slate-800">
                             "{report.specificFindings || report.specific_findings || report.fullIncidentNarrative}"
                           </p>
                         </div>
@@ -1961,277 +3106,614 @@ export default function IncidentReportPanel({
                     </div>
                   </div>
 
-                  {/* Right Side: Role-Aware Actions */}
-                  <div className="flex items-center gap-2 flex-wrap shrink-0">
-                    {/* Voice Summary */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const summary = `Case ${report.caseNumber}. Issued by ${senderComp} HR ${senderHr} for ${report.employeeName}. Sent to ${receiverComp} Head Office HRMD. Status: ${
-                          isPendingSgc
-                            ? "Awaiting Head Office SGC Notice to Explain issuance."
-                            : isNteIssued
-                            ? "Notice to Explain has been issued by SGC and returned to branch HR for serving."
-                            : isServed
-                            ? "Notice to Explain has been served to employee."
-                            : "Written explanation received."
-                        }`;
-                        playAiVoiceAnnouncement(summary);
-                      }}
-                      title="Speak summary via AI Buddy"
-                      className="p-2 rounded-xl text-slate-500 hover:text-emerald-700 hover:bg-emerald-50 border border-slate-200 transition cursor-pointer"
-                    >
-                      <Volume2 size={16} />
-                    </button>
-
-                    {/* View Incident Report Form (Green button) */}
-                    <button
-                      type="button"
-                      onClick={() => handleViewIrDocument(report)}
-                      className="px-3.5 py-2 rounded-xl text-xs font-bold bg-[#8cb84a] hover:bg-[#7ea741] text-white shadow-xs transition cursor-pointer inline-flex items-center gap-1.5"
-                    >
-                      <FileText size={14} />
-                      <span>View IR Form</span>
-                    </button>
-
-                    {/* 1. SGC HEAD OFFICE EVALUATION OF IR (Pending Stage) */}
-                    {effectiveRole.isHeadOffice && isPendingSgc && (
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        {/* Option A: Add to Filings only */}
-                        <button
-                          type="button"
-                          onClick={() => handleOpenAddToFilings(report)}
-                          className="px-3.5 py-2 rounded-xl text-xs font-black bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 shadow-2xs transition cursor-pointer inline-flex items-center gap-1.5 active:scale-98"
-                          title="SGC Head Office Discretion: File for 201 records only without disciplinary proceeding"
-                        >
-                          <span>📁 Add to Filings</span>
-                        </button>
-
-                        {/* Option B: Proceed to Notice to Explain */}
-                        <button
-                          type="button"
-                          onClick={() => handleOpenDraftNte(report)}
-                          className="px-4 py-2 rounded-xl text-xs font-black bg-amber-500 hover:bg-amber-600 text-slate-950 shadow-md transition cursor-pointer inline-flex items-center gap-1.5 active:scale-98"
-                          title="SGC Head Office Discretion: Issue official Notice to Explain (NTE)"
-                        >
-                          <Scale size={14} />
-                          <span>⚖️ Proceed to Notice to Explain</span>
-                        </button>
+                  {/* ========================================================================= */}
+                  {/* ZONE 2 (RIGHT ~40%): DUE PROCESS LEVELS VISUAL TIMELINE & ACTION DOCK      */}
+                  {/* ========================================================================= */}
+                  <div className="w-full xl:w-[410px] 2xl:w-[450px] shrink-0 bg-white rounded-2xl border border-slate-200/90 shadow-xs p-3.5 sm:p-4 flex flex-col justify-between self-stretch">
+                    <div>
+                      {/* Box Header: Pipeline Title & Level Counter */}
+                      <div className="flex items-center justify-between gap-2 mb-2 pb-2 border-b border-slate-100">
+                        <div className="flex items-center gap-1.5">
+                          <Scale size={14} className="text-slate-800" />
+                          <span className="text-[11px] font-black uppercase tracking-wider text-slate-900">
+                            Due Process Levels
+                          </span>
+                        </div>
+                        <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full border ${
+                          isClosed
+                            ? "bg-emerald-50 text-emerald-800 border-emerald-300"
+                            : isAdminDecision
+                              ? "bg-rose-50 text-rose-800 border-rose-300"
+                              : isWarning || isNoi
+                                ? "bg-indigo-50 text-indigo-800 border-indigo-300"
+                                : isExplanation || isNteAcknowledged
+                                  ? "bg-purple-50 text-purple-800 border-purple-300"
+                                  : isNteIssued || isServed
+                                    ? "bg-amber-50 text-amber-800 border-amber-300"
+                                    : "bg-slate-100 text-slate-700 border-slate-300"
+                        }`}>
+                          {isClosed ? "✓ Completed (5/5)" : `Level ${currentLevelNumber} of 5`}
+                        </span>
                       </div>
-                    )}
 
-                    {/* Subsidiary HR when pending: Indicates it is in Head Office hands */}
-                    {!effectiveRole.isHeadOffice && isPendingSgc && (
-                      <span className="px-3 py-2 rounded-xl text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200 inline-flex items-center gap-1.5">
-                        <Clock size={13} />
-                        <span>Awaiting Head Office (SGC) Evaluation</span>
-                      </span>
-                    )}
+                      {/* Visual Progress Bar */}
+                      <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden mb-3 border border-slate-200/60">
+                        <div
+                          className={`h-full transition-all duration-500 rounded-full ${
+                            isClosed
+                              ? "bg-emerald-500"
+                              : isAdminDecision
+                                ? "bg-rose-600"
+                                : isWarning || isNoi
+                                  ? "bg-indigo-600"
+                                  : isExplanation || isNteAcknowledged
+                                    ? "bg-purple-600"
+                                    : isNteIssued || isServed
+                                      ? "bg-amber-500"
+                                      : "bg-slate-400"
+                          }`}
+                          style={{ width: `${levelPercent}%` }}
+                        />
+                      </div>
 
-                    {/* 2. FILED FOR RECORD VIEW */}
-                    {isFiledForRecord && (
-                      <button
-                        type="button"
-                        onClick={() =>
-                          alert(
-                            `📁 201 FILING RECORD NOTES:\n\nFiled On: ${
-                              report.filedAt || "Recorded"
-                            }\nRemarks: ${
-                              report.filingRemarks ||
+                      {/* 5-Level Vertical Timeline */}
+                      <div className="relative pl-6 space-y-2.5 before:absolute before:left-[10px] before:top-2 before:bottom-2 before:w-[2px] before:bg-slate-200">
+                        {/* Level 1: Incident Filing */}
+                        <div className="relative flex items-center justify-between gap-2">
+                          <div className={`absolute -left-6 top-0.5 w-[22px] h-[22px] rounded-full flex items-center justify-center text-[10px] font-black border transition ${
+                            isLv1Done
+                              ? "bg-emerald-500 text-white border-emerald-600 shadow-2xs"
+                              : isLv1Active
+                                ? "bg-amber-500 text-white border-amber-600 animate-pulse"
+                                : "bg-white text-slate-400 border-slate-300"
+                          }`}>
+                            {isLv1Done ? <Check size={12} strokeWidth={3} /> : "1"}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="text-xs font-bold text-slate-900 leading-tight">
+                              Lv 1: Incident Filing (IR)
+                            </div>
+                            <div className="text-[10px] text-slate-500 truncate">
+                              {senderComp} • {report.dateOfIncident || "Logged"}
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleViewIrDocument(report)}
+                            className="px-2 py-0.5 rounded text-[10px] font-bold bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 shadow-2xs transition cursor-pointer shrink-0 inline-flex items-center gap-1"
+                            title="Inspect Initial Incident Report"
+                          >
+                            <Eye size={11} className="text-slate-500" />
+                            <span>View IR</span>
+                          </button>
+                        </div>
+
+                        {/* Level 2: Notice to Explain (NTE) */}
+                        <div className="relative flex items-center justify-between gap-2">
+                          <div className={`absolute -left-6 top-0.5 w-[22px] h-[22px] rounded-full flex items-center justify-center text-[10px] font-black border transition ${
+                            isLv2Done
+                              ? "bg-emerald-500 text-white border-emerald-600 shadow-2xs"
+                              : isLv2Active
+                                ? "bg-amber-500 text-white border-amber-600 animate-pulse"
+                                : "bg-white text-slate-400 border-slate-300"
+                          }`}>
+                            {isLv2Done ? <Check size={12} strokeWidth={3} /> : "2"}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="text-xs font-bold text-slate-900 leading-tight flex items-center gap-1">
+                              <span>Lv 2: Notice to Explain (NTE)</span>
+                              {isLv2Active && (
+                                <span className="text-[9px] font-black px-1.5 py-0.2 rounded bg-amber-100 text-amber-800">
+                                  Active 120h
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-[10px] text-slate-500 truncate">
+                              {hasNteIssued ? `Issued ${report.nteIssuedAt || "by SGC"}` : "Pending SGC evaluation"}
+                            </div>
+                          </div>
+                          {hasNteIssued ? (
+                            <button
+                              type="button"
+                              onClick={() => handleViewNteDocument(report)}
+                              className="px-2 py-0.5 rounded text-[10px] font-bold bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 shadow-2xs transition cursor-pointer shrink-0 inline-flex items-center gap-1"
+                              title="Inspect Official Notice to Explain"
+                            >
+                              <Eye size={11} className="text-slate-500" />
+                              <span>View NTE</span>
+                            </button>
+                          ) : (
+                            <span className="text-[10px] text-slate-400 italic">Pending</span>
+                          )}
+                        </div>
+
+                        {/* Level 3: Explanation & Evidence */}
+                        <div className="relative flex items-center justify-between gap-2">
+                          <div className={`absolute -left-6 top-0.5 w-[22px] h-[22px] rounded-full flex items-center justify-center text-[10px] font-black border transition ${
+                            isLv3Done
+                              ? "bg-emerald-500 text-white border-emerald-600 shadow-2xs"
+                              : isLv3Active
+                                ? "bg-purple-600 text-white border-purple-700 animate-pulse"
+                                : "bg-white text-slate-400 border-slate-300"
+                          }`}>
+                            {isLv3Done ? <Check size={12} strokeWidth={3} /> : "3"}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="text-xs font-bold text-slate-900 leading-tight flex items-center gap-1">
+                              <span>Lv 3: Signed NTE & Answer</span>
+                              {isNteAcknowledged && (
+                                <span className="text-[9px] font-black px-1.5 py-0.2 rounded bg-teal-100 text-teal-800">
+                                  1/2 Done
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-[10px] text-slate-500 truncate">
+                              {hasExplanation
+                                ? "Serving proof & employee answer attached"
+                                : "Signed copy & written explanation"}
+                            </div>
+                          </div>
+                          {hasExplanation ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const initialTab = (report.hasSignedNteProof || report.nteSignedProof || report.nteSignedProofKey) ? "SIGNED_NTE" : "EXPLANATION_DOC";
+                                handleOpenViewSignedNteProof(report, initialTab);
+                              }}
+                              className="px-2 py-0.5 rounded text-[10px] font-bold bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 shadow-2xs transition cursor-pointer shrink-0 inline-flex items-center gap-1"
+                              title="Inspect signed NTE proof & employee explanation letter"
+                            >
+                              <FileCheck size={11} className="text-teal-600" />
+                              <span>Proof</span>
+                            </button>
+                          ) : (
+                            <span className="text-[10px] text-slate-400 italic">Pending</span>
+                          )}
+                        </div>
+
+                        {/* Level 4: Investigation / Hearing / Warning */}
+                        <div className="relative flex items-center justify-between gap-2">
+                          <div className={`absolute -left-6 top-0.5 w-[22px] h-[22px] rounded-full flex items-center justify-center text-[10px] font-black border transition ${
+                            isLv4Done
+                              ? "bg-emerald-500 text-white border-emerald-600 shadow-2xs"
+                              : isLv4Active
+                                ? (isWarning ? "bg-amber-500 text-white border-amber-600 animate-pulse" : "bg-indigo-600 text-white border-indigo-700 animate-pulse")
+                                : "bg-white text-slate-400 border-slate-300"
+                          }`}>
+                            {isLv4Done ? <Check size={12} strokeWidth={3} /> : "4"}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="text-xs font-bold text-slate-900 leading-tight flex items-center gap-1">
+                              <span>Lv 4: Investigation / Hearing</span>
+                              {isNoi && (
+                                <span className="text-[9px] font-black px-1.5 py-0.2 rounded bg-indigo-100 text-indigo-800">
+                                  Zoom Hearing
+                                </span>
+                              )}
+                              {isWarning && (
+                                <span className="text-[9px] font-black px-1.5 py-0.2 rounded bg-amber-100 text-amber-800">
+                                  Warning
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-[10px] text-slate-500 truncate">
+                              {isWarning
+                                ? "Notice of Warning issued"
+                                : hasNoiRecord
+                                  ? `NOI Zoom • ${report.zoomMeetingDate || "Conducted"}`
+                                  : (isAdminDecision || isClosed)
+                                    ? "Executive Due Process Evaluation"
+                                    : "Formal hearing committee evaluation"}
+                            </div>
+                          </div>
+                          {isWarning ? (
+                            <button
+                              type="button"
+                              onClick={() => handleViewWarningDocument(report)}
+                              className="px-2 py-0.5 rounded text-[10px] font-bold bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 shadow-2xs transition cursor-pointer shrink-0 inline-flex items-center gap-1"
+                              title="View Notice of Warning"
+                            >
+                              <AlertTriangle size={11} className="text-amber-600" />
+                              <span>Warning</span>
+                            </button>
+                          ) : hasNoiRecord ? (
+                            <div className="flex items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => handleViewNoiDocument(report)}
+                                className="px-2 py-0.5 rounded text-[10px] font-bold bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 shadow-2xs transition cursor-pointer shrink-0 inline-flex items-center gap-1"
+                                title="View Notice of Investigation"
+                              >
+                                <Scale size={11} className="text-indigo-600" />
+                                <span>NOI</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSelectedReport(report);
+                                  setIsZoomViewerOpen(true);
+                                }}
+                                className="p-1 rounded text-[10px] font-bold bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 shadow-2xs transition cursor-pointer shrink-0"
+                                title="Zoom Meeting Schedule"
+                              >
+                                <Video size={11} />
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="text-[10px] text-slate-400 italic">
+                              {(isAdminDecision || isClosed) ? "Evaluated" : "Pending"}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Level 5: Administrative Decision & Closure */}
+                        <div className="relative flex items-center justify-between gap-2">
+                          <div className={`absolute -left-6 top-0.5 w-[22px] h-[22px] rounded-full flex items-center justify-center text-[10px] font-black border transition ${
+                            isLv5Done
+                              ? "bg-emerald-600 text-white border-emerald-700 shadow-2xs"
+                              : isLv5Active
+                                ? "bg-rose-600 text-white border-rose-700 animate-pulse"
+                                : "bg-white text-slate-400 border-slate-300"
+                          }`}>
+                            {isLv5Done ? <CheckCheck size={12} strokeWidth={2.5} /> : "5"}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="text-xs font-bold text-slate-900 leading-tight flex items-center gap-1">
+                              <span>Lv 5: Decision & Closure</span>
+                              {isAdminDecision && (
+                                <span className="text-[9px] font-black px-1.5 py-0.2 rounded bg-rose-100 text-rose-800">
+                                  Promulgated
+                                </span>
+                              )}
+                              {isClosed && (
+                                <span className="text-[9px] font-black px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800">
+                                  Closed
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-[10px] text-slate-500 truncate">
+                              {isClosed
+                                ? "Case Closed & 201 Archived"
+                                : isAdminDecision
+                                  ? `Sanction: ${report.adminDecisionSanction || report.adminDecisionPenalty || "Stern Warning"}`
+                                  : "2nd Notice — Administrative Ruling"}
+                            </div>
+                          </div>
+                          {(isAdminDecision || isClosed) ? (
+                            <button
+                              type="button"
+                              onClick={() => handleViewAdminDecisionDocument(report)}
+                              className="px-2 py-0.5 rounded text-[10px] font-bold bg-white hover:bg-slate-100 text-rose-800 border border-rose-200 shadow-2xs transition cursor-pointer shrink-0 inline-flex items-center gap-1"
+                              title="View Decision of Administrative Case"
+                            >
+                              <Scale size={11} className="text-rose-600" />
+                              <span>Decision</span>
+                            </button>
+                          ) : (
+                            <span className="text-[10px] text-slate-400 italic">Pending</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* ========================================================================= */}
+                    {/* BOTTOM ACTION DOCK: ROLE-AWARE ACTIONS FOR CURRENT ACTIVE STAGE           */}
+                    {/* ========================================================================= */}
+                    <div className="mt-3.5 pt-3 border-t border-slate-100 space-y-2">
+                      <div className="flex items-center justify-between text-[10px] font-extrabold uppercase tracking-wider text-slate-500">
+                        <span>Current Stage Action:</span>
+                        <span className="text-slate-400 font-mono text-[9px]">{report.caseNumber}</span>
+                      </div>
+
+                      {/* 1. STAGE: PENDING SGC EVALUATION */}
+                      {isPendingSgc && (
+                        <div className="space-y-1.5">
+                          {effectiveRole.isHeadOffice ? (
+                            <>
+                              <div className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenAddToFilings(report)}
+                                  className="flex-1 py-1.5 px-2.5 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 transition cursor-pointer inline-flex items-center justify-center gap-1 shadow-2xs"
+                                  title="SGC Head Office Discretion: File for 201 records only"
+                                >
+                                  <span>📁 File Only</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenDraftNte(report)}
+                                  className="flex-2 py-1.5 px-3 rounded-xl text-xs font-black bg-amber-500 hover:bg-amber-600 text-slate-950 shadow-md transition cursor-pointer inline-flex items-center justify-center gap-1.5 active:scale-98"
+                                  title="SGC Head Office Discretion: Issue official Notice to Explain (NTE)"
+                                >
+                                  <Scale size={13} />
+                                  <span>⚖️ Issue Notice to Explain</span>
+                                </button>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleCloseCaseDirectly(report)}
+                                className="w-full py-1.5 px-2 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs transition cursor-pointer inline-flex items-center justify-center gap-1 active:scale-98"
+                                title="Close and archive this incident report directly in HR 201 File"
+                              >
+                                <CheckCheck size={13} />
+                                <span>Close & Archive Case</span>
+                              </button>
+                            </>
+                          ) : (
+                            <div className="space-y-1.5">
+                              <span className="block text-center py-1.5 px-2.5 rounded-xl text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                                Awaiting Head Office (SGC) Evaluation
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => handleCloseCaseDirectly(report)}
+                                className="w-full py-1.5 px-2 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs transition cursor-pointer inline-flex items-center justify-center gap-1 active:scale-98"
+                                title="Close and archive this incident report in HR 201 File"
+                              >
+                                <CheckCheck size={13} />
+                                <span>Close & Archive Case</span>
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* 2. STAGE: FILED FOR RECORD ONLY */}
+                      {isFiledForRecord && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            alert(
+                              `📁 201 FILING RECORD NOTES:\n\nFiled On: ${report.filedAt || "Recorded"
+                              }\nRemarks: ${report.filingRemarks ||
                               "Retained in HR 201 files for record purposes only."
-                            }`
-                          )
-                        }
-                        className="px-3 py-2 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 transition cursor-pointer inline-flex items-center gap-1.5"
-                      >
-                        <span>📁 View Filing Notes</span>
-                      </button>
-                    )}
+                              }`
+                            )
+                          }
+                          className="w-full py-2 px-3 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 transition cursor-pointer inline-flex items-center justify-center gap-1.5"
+                        >
+                          <span>📁 View Filing Notes</span>
+                        </button>
+                      )}
 
-                    {/* 3. NTE ISSUED STAGE: View NTE + Branch HR Upload Signed Proof */}
-                    {(isNteIssued || isNteAcknowledged || isServed || isExplanation || isWarning || isNoi || isAdminDecision || isClosed) && (
-                      <button
-                        type="button"
-                        onClick={() => handleViewNteDocument(report)}
-                        className="px-3.5 py-2 rounded-xl text-xs font-bold bg-slate-900 hover:bg-slate-800 text-white shadow-xs transition cursor-pointer inline-flex items-center gap-1.5"
-                      >
-                        <Eye size={14} />
-                        <span>View Official NTE</span>
-                      </button>
-                    )}
+                      {/* 3. STAGE: NTE ISSUED / SERVED */}
+                      {(isNteIssued || isServed) && (
+                        <div className="space-y-1.5">
+                          <button
+                            type="button"
+                            onClick={() => handleViewNteDocument(report)}
+                            className="w-full py-2 px-3 rounded-xl text-xs font-bold bg-slate-900 hover:bg-slate-800 text-white shadow-xs transition cursor-pointer inline-flex items-center justify-center gap-1.5"
+                          >
+                            <Eye size={14} />
+                            <span>View Official NTE Document</span>
+                          </button>
 
-                    {/* Branch HR: Upload Employee-Signed NTE Proof of Receipt */}
-                    {isNteIssued && (
-                      <button
-                        type="button"
-                        onClick={() => handleOpenUploadNteProof(report)}
-                        className="px-4 py-2 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-600/25 transition cursor-pointer inline-flex items-center gap-1.5 active:scale-98 animate-pulse"
-                        title="Upload photo or scan of the employee's signed copy acknowledging receipt of the NTE"
-                      >
-                        <FileSignature size={14} />
-                        <span>📤 Upload Signed NTE Proof</span>
-                      </button>
-                    )}
+                          {/* Branch HR Upload Submissions */}
+                          {!effectiveRole.isHeadOffice && (!report.hasSignedNteProof || !report.hasExplanationProof) && (
+                            <button
+                              type="button"
+                              onClick={() => handleOpenUploadNteProof(report, "ALL")}
+                              className="w-full py-2 px-3 rounded-xl text-xs font-black bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 text-white shadow-md shadow-emerald-600/25 transition cursor-pointer inline-flex items-center justify-center gap-2 active:scale-98 animate-pulse"
+                              title="Branch HR: Upload received & signed NTE copy and employee written explanation"
+                            >
+                              <UploadCloud size={14} />
+                              <span>
+                                {report.hasSignedNteProof
+                                  ? "Upload Written Answer (1/2 Done)"
+                                  : report.hasExplanationProof
+                                    ? "Upload Signed NTE Proof (1/2 Done)"
+                                    : "Upload Signed NTE & Answer"}
+                              </span>
+                            </button>
+                          )}
 
-                    {/* Branch HR: Log Employee Written Explanation once signed proof is uploaded or served */}
-                    {(isNteAcknowledged || isServed) && (
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        {report.nteSignedProof && (
+                          {effectiveRole.isHeadOffice && !report.hasSignedNteProof && !report.hasExplanationProof && (
+                            <span className="block text-center py-1.5 px-2.5 rounded-xl text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-200">
+                              Awaiting Branch HR Signed Copy & Answer
+                            </span>
+                          )}
+                        </div>
+                      )}
+
+                      {/* 4. STAGE: EXPLANATION SUBMITTED */}
+                      {isExplanation && (
+                        <div className="space-y-1.5">
                           <button
                             type="button"
                             onClick={() => {
-                              setSelectedReport(report);
-                              setIsUploadNteProofModalOpen(true);
+                              const initialTab = (report.hasSignedNteProof || report.nteSignedProof || report.nteSignedProofKey)
+                                ? "SIGNED_NTE"
+                                : "EXPLANATION_DOC";
+                              handleOpenViewSignedNteProof(report, initialTab);
                             }}
-                            className="px-3 py-2 rounded-xl text-xs font-bold bg-teal-50 text-teal-800 border border-teal-200 hover:bg-teal-100 transition cursor-pointer inline-flex items-center gap-1"
-                            title="View employee signed NTE receipt proof"
+                            className="w-full py-2 px-3 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs transition cursor-pointer inline-flex items-center justify-center gap-1.5 active:scale-98"
+                            title="Inspect received and signed NTE acknowledgment proof & employee written explanation"
                           >
-                            <Paperclip size={13} className="text-teal-600" />
-                            <span>Signed NTE Proof</span>
+                            <FileCheck size={14} />
+                            <span>📄 View Signed NTE & Explanation</span>
                           </button>
-                        )}
 
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSelectedReport(report);
-                            setIsExplanationModalOpen(true);
-                          }}
-                          className="px-3.5 py-2 rounded-xl text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white shadow-xs transition cursor-pointer inline-flex items-center gap-1.5"
-                        >
-                          <FileCheck size={14} />
-                          <span>📝 Log Explanation ➔ SGC</span>
-                        </button>
-                      </div>
-                    )}
+                          {effectiveRole.isHeadOffice ? (
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => handleOpenWarningModal(report)}
+                                className="flex-1 py-1.5 px-2.5 rounded-xl text-xs font-black bg-amber-500 hover:bg-amber-600 text-slate-950 shadow-xs transition cursor-pointer inline-flex items-center justify-center gap-1"
+                                title="SGC Head Office Discretion: End proceeding with Notice of Warning"
+                              >
+                                <AlertTriangle size={13} />
+                                <span>Issue Warning</span>
+                              </button>
 
-                    {/* 4. SGC HEAD OFFICE EVALUATION OF EXPLANATION */}
-                    {isExplanation && effectiveRole.isHeadOffice && (
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        {/* Option A: Issue Notice of Warning */}
-                        <button
-                          type="button"
-                          onClick={() => handleOpenWarningModal(report)}
-                          className="px-3.5 py-2 rounded-xl text-xs font-black bg-amber-500 hover:bg-amber-600 text-slate-950 shadow-xs transition cursor-pointer inline-flex items-center gap-1.5"
-                          title="SGC Head Office Discretion: End proceeding with Notice of Warning"
-                        >
-                          <AlertTriangle size={14} />
-                          <span>⚠️ Issue Notice of Warning</span>
-                        </button>
+                              <button
+                                type="button"
+                                onClick={() => handleOpenNoiModal(report)}
+                                className="flex-1 py-1.5 px-2.5 rounded-xl text-xs font-black bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-600/25 transition cursor-pointer inline-flex items-center justify-center gap-1"
+                                title="SGC Head Office Discretion: Proceed to formal Notice of Investigation and schedule Zoom hearing"
+                              >
+                                <Scale size={13} />
+                                <span>Proceed to NOI</span>
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="block text-center py-1.5 px-2.5 rounded-xl text-xs font-bold bg-purple-50 text-purple-800 border border-purple-200">
+                              Under SGC Head Office Evaluation
+                            </span>
+                          )}
+                        </div>
+                      )}
 
-                        {/* Option B: Proceed to Notice of Investigation (NOI) with required Zoom Schedule */}
-                        <button
-                          type="button"
-                          onClick={() => handleOpenNoiModal(report)}
-                          className="px-4 py-2 rounded-xl text-xs font-black bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-600/25 transition cursor-pointer inline-flex items-center gap-1.5"
-                          title="SGC Head Office Discretion: Proceed to formal Notice of Investigation and schedule Zoom hearing"
-                        >
-                          <Scale size={14} />
-                          <span>🔍 Proceed to NOI (Zoom Hearing)</span>
-                        </button>
-                      </div>
-                    )}
-
-                    {isExplanation && !effectiveRole.isHeadOffice && (
-                      <span className="px-3 py-2 rounded-xl text-xs font-bold bg-purple-50 text-purple-800 border border-purple-200 inline-flex items-center gap-1.5">
-                        <Clock size={13} />
-                        <span>Under SGC Head Office Evaluation</span>
-                      </span>
-                    )}
-
-                    {/* 5. NOTICE OF WARNING ISSUED */}
-                    {isWarning && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSelectedReport(report);
-                          setIsWarningModalOpen(true);
-                        }}
-                        className="px-3.5 py-2 rounded-xl text-xs font-bold bg-amber-100 hover:bg-amber-200 text-amber-950 border border-amber-300 transition cursor-pointer inline-flex items-center gap-1.5"
-                      >
-                        <AlertTriangle size={14} className="text-amber-700" />
-                        <span>⚠️ View Warning Notice</span>
-                      </button>
-                    )}
-
-                    {/* 6. NOTICE OF INVESTIGATION (NOI) & ZOOM HEARING */}
-                    {isNoi && (
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        {/* View Zoom Schedule button */}
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSelectedReport(report);
-                            setIsZoomViewerOpen(true);
-                          }}
-                          className="px-3.5 py-2 rounded-xl text-xs font-black bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-600/20 transition cursor-pointer inline-flex items-center gap-1.5"
-                          title="View Zoom Meeting Schedule & Join Link"
-                        >
-                          <span>🎥 View Zoom Hearing Schedule</span>
-                        </button>
-
-                        {/* SGC Head Office can issue Decision of Administrative Case */}
-                        {effectiveRole.isHeadOffice && (
+                      {/* 5. STAGE: NOTICE OF WARNING ISSUED */}
+                      {isWarning && (
+                        <div className="space-y-1.5">
                           <button
                             type="button"
-                            onClick={() => handleOpenAdminDecisionModal(report)}
-                            className="px-4 py-2 rounded-xl text-xs font-black bg-rose-600 hover:bg-rose-700 text-white shadow-md shadow-rose-600/25 transition cursor-pointer inline-flex items-center gap-1.5"
+                            onClick={() => handleViewWarningDocument(report)}
+                            className="w-full py-2 px-3 rounded-xl text-xs font-black bg-amber-500 hover:bg-amber-600 text-slate-950 shadow-xs transition cursor-pointer inline-flex items-center justify-center gap-1.5"
+                            title="View & Print official Notice of Warning document"
                           >
-                            <Scale size={14} />
-                            <span>⚖️ Issue Decision on Admin Case</span>
+                            <Printer size={14} />
+                            <span>⚠️ View & Print Warning Memo</span>
                           </button>
-                        )}
-                      </div>
-                    )}
+                          <div className="flex items-center gap-2">
+                            {effectiveRole.isHeadOffice && (
+                              <button
+                                type="button"
+                                onClick={() => handleOpenWarningModal(report)}
+                                className="flex-1 py-1.5 px-2.5 rounded-xl text-xs font-bold bg-white hover:bg-amber-50 text-amber-900 border border-amber-300 transition cursor-pointer inline-flex items-center justify-center gap-1 shadow-2xs"
+                                title="Edit or adjust warning memo details"
+                              >
+                                <FileEdit size={13} />
+                                <span>Edit Memo</span>
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => handleCloseCaseDirectly(report)}
+                              className="flex-1 py-1.5 px-2 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs transition cursor-pointer inline-flex items-center justify-center gap-1 active:scale-98"
+                              title="Close and archive this case in HR 201 File after Warning"
+                            >
+                              <CheckCheck size={13} />
+                              <span>Close & Archive Case</span>
+                            </button>
+                          </div>
+                        </div>
+                      )}
 
-                    {/* 7. DECISION ON ADMINISTRATIVE CASE ISSUED */}
-                    {isAdminDecision && (
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSelectedReport(report);
-                            setIsAdminDecisionModalOpen(true);
-                          }}
-                          className="px-3.5 py-2 rounded-xl text-xs font-bold bg-slate-900 hover:bg-slate-800 text-white transition cursor-pointer inline-flex items-center gap-1.5"
-                        >
-                          <FileText size={14} />
-                          <span>View Admin Decision</span>
-                        </button>
+                      {/* 6. STAGE: NOTICE OF INVESTIGATION (NOI) */}
+                      {isNoi && (
+                        <div className="space-y-1.5">
+                          <button
+                            type="button"
+                            onClick={() => handleViewNoiDocument(report)}
+                            className="w-full py-2 px-3 rounded-xl text-xs font-black bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-600/20 transition cursor-pointer inline-flex items-center justify-center gap-1.5 active:scale-95"
+                            title="View & Print Official Notice of Investigation (NOI)"
+                          >
+                            <Printer size={14} />
+                            <span>📄 View & Print NOI Memo</span>
+                          </button>
 
-                        {/* Branch HR serves decision to employee & uploads employee-signed copy to CLOSE CASE */}
-                        <button
-                          type="button"
-                          onClick={() => handleOpenUploadDecisionProof(report)}
-                          className="px-4 py-2 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white shadow-md transition cursor-pointer inline-flex items-center gap-1.5 animate-pulse"
-                          title="Branch HR serves decision to employee, gets employee signature, and uploads proof to close case"
-                        >
-                          <FileSignature size={14} />
-                          <span>📤 Upload Signed Decision & Close Case</span>
-                        </button>
-                      </div>
-                    )}
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedReport(report);
+                                setIsZoomViewerOpen(true);
+                              }}
+                              className="flex-1 py-1.5 px-2.5 rounded-xl text-xs font-bold bg-indigo-50 hover:bg-indigo-100 text-indigo-900 border border-indigo-200 transition cursor-pointer inline-flex items-center justify-center gap-1"
+                              title="View Zoom Meeting Schedule & Join Link"
+                            >
+                              <Video size={13} className="text-indigo-600" />
+                              <span>Zoom Link</span>
+                            </button>
 
-                    {/* 8. CASE CLOSED */}
-                    {isClosed && (
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSelectedReport(report);
-                            if (report.decisionSignedProof) {
-                              setIsUploadDecisionProofModalOpen(true);
-                            } else {
-                              setIsAdminDecisionModalOpen(true);
-                            }
-                          }}
-                          className="px-3.5 py-2 rounded-xl text-xs font-black bg-emerald-50 text-emerald-900 border border-emerald-300 hover:bg-emerald-100 transition cursor-pointer inline-flex items-center gap-1.5"
-                        >
-                          <CheckCheck size={14} className="text-emerald-700" />
-                          <span>✅ View Closed Case & Signed Proof</span>
-                        </button>
-                      </div>
-                    )}
+                            {effectiveRole.isHeadOffice && (
+                              <button
+                                type="button"
+                                onClick={() => handleOpenNoiModal(report)}
+                                className="flex-1 py-1.5 px-2.5 rounded-xl text-xs font-bold bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 transition cursor-pointer inline-flex items-center justify-center gap-1"
+                                title="Edit or adjust NOI details"
+                              >
+                                <FileEdit size={13} />
+                                <span>Edit Memo</span>
+                              </button>
+                            )}
+                          </div>
+
+                          {effectiveRole.isHeadOffice && (
+                            <button
+                              type="button"
+                              onClick={() => handleOpenAdminDecisionModal(report)}
+                              className="w-full py-2 px-3 rounded-xl text-xs font-black bg-rose-600 hover:bg-rose-700 text-white shadow-md shadow-rose-600/25 transition cursor-pointer inline-flex items-center justify-center gap-1.5 active:scale-98"
+                            >
+                              <Scale size={14} />
+                              <span>⚖️ Issue Decision on Admin Case</span>
+                            </button>
+                          )}
+                        </div>
+                      )}
+
+                      {/* 7. STAGE: DECISION ON ADMINISTRATIVE CASE ISSUED */}
+                      {isAdminDecision && (
+                        <div className="space-y-1.5">
+                          {/* Primary View & Print button */}
+                          <button
+                            type="button"
+                            onClick={() => handleViewAdminDecisionDocument(report)}
+                            className="w-full py-2 px-3 rounded-xl text-xs font-black bg-rose-600 hover:bg-rose-700 text-white shadow-md shadow-rose-600/20 transition cursor-pointer inline-flex items-center justify-center gap-1.5 active:scale-95"
+                            title="View & Print Official Decision of Administrative Case"
+                          >
+                            <Printer size={14} />
+                            <span>⚖️ View & Print Admin Decision</span>
+                          </button>
+
+                          <div className="flex items-center gap-2">
+                            {effectiveRole.isHeadOffice && (
+                              <button
+                                type="button"
+                                onClick={() => handleOpenAdminDecisionModal(report)}
+                                className="flex-1 py-1.5 px-2 rounded-xl text-xs font-bold bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 transition cursor-pointer inline-flex items-center justify-center gap-1 shadow-2xs"
+                                title="Edit or adjust decision memo details"
+                              >
+                                <FileEdit size={13} />
+                                <span>Edit Memo</span>
+                              </button>
+                            )}
+
+                            {/* Direct Close & Archive Case without file upload */}
+                            <button
+                              type="button"
+                              onClick={() => handleCloseCaseDirectly(report)}
+                              className="flex-1 py-1.5 px-2 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs transition cursor-pointer inline-flex items-center justify-center gap-1 active:scale-98"
+                              title="Close and archive this case in HR 201 File without requiring proof upload"
+                            >
+                              <CheckCheck size={13} />
+                              <span>Close & Archive Case</span>
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* 8. STAGE: CASE CLOSED */}
+                      {isClosed && (
+                        <div className="space-y-1.5">
+                          <button
+                            type="button"
+                            onClick={() => handleViewAdminDecisionDocument(report)}
+                            className="w-full py-2 px-3 rounded-xl text-xs font-black bg-white hover:bg-slate-50 text-slate-800 border border-slate-300 transition cursor-pointer inline-flex items-center justify-center gap-1.5 shadow-2xs"
+                            title="View Official Decision of Administrative Case Document"
+                          >
+                            <Printer size={14} className="text-slate-600" />
+                            <span>⚖️ View Decision Document</span>
+                          </button>
+
+                          <div className="w-full py-1.5 px-3 rounded-xl text-xs font-bold bg-emerald-50 text-emerald-900 border border-emerald-200 flex items-center justify-center gap-1.5">
+                            <CheckCheck size={14} className="text-emerald-700" />
+                            <span>Case Closed & Archived in 201 File</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               );
@@ -2245,7 +3727,7 @@ export default function IncidentReportPanel({
       {/* ========================================================================= */}
       {isPermissionMatrixOpen && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-3 md:p-6 overflow-y-auto">
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-4xl w-full max-h-[92vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-5xl w-full max-h-[92vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
             <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50 shrink-0">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-slate-900 text-emerald-400 flex items-center justify-center font-bold">
@@ -2416,13 +3898,13 @@ export default function IncidentReportPanel({
       {/* ========================================================================= */}
       {isCreateModalOpen && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 md:p-6 overflow-y-auto">
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-3xl w-full max-h-[94vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-5xl w-full max-h-[94vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
             {/* Top Green Banner */}
             <div className="bg-[#96c158] text-white px-6 py-4 flex items-center justify-between shrink-0 shadow-sm">
               <div className="flex items-center gap-3">
                 <img
-                  src="/logos/lucky_betplay_sun.png"
-                  alt="Lucky Betplay Logo"
+                  src={getPaperLogo(irForm.company || irForm.senderCompany)}
+                  alt="Company Logo"
                   className="w-10 h-10 object-contain bg-white rounded-lg p-0.5 shadow-xs shrink-0"
                 />
                 <div>
@@ -2612,11 +4094,11 @@ export default function IncidentReportPanel({
                 </div>
 
                 <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-4">
-                  {/* Date, Time, Location */}
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+                  {/* Date of Incident & Type of Incident (Location removed to avoid redundancy) */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                     <div>
                       <label className="block text-[11px] font-extrabold uppercase tracking-wide text-slate-700 mb-1">
-                        DATE OF INCIDENT
+                        DATE OF INCIDENT <span className="text-rose-600">*</span>
                       </label>
                       <div className="relative">
                         <Calendar size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -2624,40 +4106,35 @@ export default function IncidentReportPanel({
                           type="date"
                           value={irForm.dateOfIncident}
                           onChange={(e) => setIrForm({ ...irForm, dateOfIncident: e.target.value })}
-                          className="w-full pl-9 pr-2.5 py-2 text-xs rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#153459] text-slate-900"
+                          className="w-full pl-9 pr-2.5 py-2 text-xs rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#153459] text-slate-900 font-semibold"
                         />
                       </div>
                     </div>
 
                     <div>
                       <label className="block text-[11px] font-extrabold uppercase tracking-wide text-slate-700 mb-1">
-                        TIME OF INCIDENT
+                        TYPE OF INCIDENT <span className="text-rose-600">*</span>
                       </label>
                       <div className="relative">
-                        <Clock size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                        <AlertTriangle size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-amber-500" />
                         <input
                           type="text"
-                          placeholder="e.g. 16:30 PM"
-                          value={irForm.incidentTime}
-                          onChange={(e) => setIrForm({ ...irForm, incidentTime: e.target.value })}
-                          className="w-full pl-9 pr-2.5 py-2 text-xs rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#153459] text-slate-900"
+                          list="incident-type-presets-list"
+                          placeholder="e.g. Cash Shortage & Non-observance of SOPs"
+                          value={irForm.typeOfIncident || irForm.incidentCategory || ""}
+                          onChange={(e) => setIrForm({ ...irForm, typeOfIncident: e.target.value, incidentCategory: e.target.value })}
+                          className="w-full pl-9 pr-2.5 py-2 text-xs rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#153459] text-slate-900 font-semibold"
                         />
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-[11px] font-extrabold uppercase tracking-wide text-slate-700 mb-1">
-                        LOCATION
-                      </label>
-                      <div className="relative">
-                        <MapPin size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                        <input
-                          type="text"
-                          placeholder="e.g. Tacurong Branch"
-                          value={irForm.location}
-                          onChange={(e) => setIrForm({ ...irForm, location: e.target.value })}
-                          className="w-full pl-9 pr-2.5 py-2 text-xs rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#153459] text-slate-900"
-                        />
+                        <datalist id="incident-type-presets-list">
+                          <option value="Cash Shortage & Non-observance of SOPs" />
+                          <option value="Drawer Discrepancy & Unaccounted Cash" />
+                          <option value="Gross Neglect of Duty / Non-observance of SOPs" />
+                          <option value="Habitual Tardiness & Unauthorized Absence (AWOL)" />
+                          <option value="Insubordination / Willful Disobedience" />
+                          <option value="Breach of Trust & Confidentiality" />
+                          <option value="Misappropriation of Company Funds" />
+                          <option value="Misconduct / Policy Violation" />
+                        </datalist>
                       </div>
                     </div>
                   </div>
@@ -2698,7 +4175,7 @@ export default function IncidentReportPanel({
 
               {/* SECTION 3: VIOLATION (Exact Corporate Layout) */}
               <div className="space-y-4 pt-1">
-                <div 
+                <div
                   className="bg-[#c81e1e] text-white px-4 py-2 font-black text-xs uppercase tracking-wider flex items-center gap-2 rounded-t-xl"
                   style={{ clipPath: "polygon(0 0, 100% 0, 95% 100%, 0 100%)", paddingRight: "30px" }}
                 >
@@ -2860,7 +4337,7 @@ export default function IncidentReportPanel({
                     <div className="flex items-center justify-between">
                       <label className="text-[11px] font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
                         <User size={13} className="text-slate-500" />
-                        <span>Prepared By (Reporter / HR)</span>
+                        <span>Prepared By (HR)</span>
                       </label>
                       {irForm.preparerSignature && (
                         <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
@@ -2939,11 +4416,10 @@ export default function IncidentReportPanel({
                                 key={scale}
                                 type="button"
                                 onClick={() => setIrForm(prev => ({ ...prev, preparerSignatureScale: scale }))}
-                                className={`px-2 py-0.5 rounded text-[10px] font-bold transition cursor-pointer ${
-                                  Math.abs((irForm.preparerSignatureScale || 1.25) - scale) < 0.05
-                                    ? "bg-[#153459] text-white shadow-2xs"
-                                    : "bg-slate-200 hover:bg-slate-300 text-slate-700"
-                                }`}
+                                className={`px-2 py-0.5 rounded text-[10px] font-bold transition cursor-pointer ${Math.abs((irForm.preparerSignatureScale || 1.25) - scale) < 0.05
+                                  ? "bg-[#153459] text-white shadow-2xs"
+                                  : "bg-slate-200 hover:bg-slate-300 text-slate-700"
+                                  }`}
                               >
                                 {scale === 1.0 ? "1x" : scale === 1.3 ? "1.3x" : "1.6x"}
                               </button>
@@ -3058,11 +4534,10 @@ export default function IncidentReportPanel({
                                 key={scale}
                                 type="button"
                                 onClick={() => setIrForm(prev => ({ ...prev, operationsManagerSignatureScale: scale }))}
-                                className={`px-2 py-0.5 rounded text-[10px] font-bold transition cursor-pointer ${
-                                  Math.abs((irForm.operationsManagerSignatureScale || 1.25) - scale) < 0.05
-                                    ? "bg-[#153459] text-white shadow-2xs"
-                                    : "bg-slate-200 hover:bg-slate-300 text-slate-700"
-                                }`}
+                                className={`px-2 py-0.5 rounded text-[10px] font-bold transition cursor-pointer ${Math.abs((irForm.operationsManagerSignatureScale || 1.25) - scale) < 0.05
+                                  ? "bg-[#153459] text-white shadow-2xs"
+                                  : "bg-slate-200 hover:bg-slate-300 text-slate-700"
+                                  }`}
                               >
                                 {scale === 1.0 ? "1x" : scale === 1.3 ? "1.3x" : "1.6x"}
                               </button>
@@ -3100,9 +4575,9 @@ export default function IncidentReportPanel({
                     <CheckCircle2 size={16} className="text-emerald-600 shrink-0" />
                     <span className="text-xs text-emerald-950 font-medium">
                       {defaultsSavedSuccess ? (
-                        <strong className="text-emerald-700">✓ Naka-save na bilang Default Signatories sa Database!</strong>
+                        <strong className="text-emerald-700">✓ Successfully saved as Default E-Signatories in the database!</strong>
                       ) : (
-                        <span>I-set bilang default signatories para automatic nang may e-signature at pangalan sa bawat susunod na IR.</span>
+                        <span>Set as Default Signatories so that the e-signatures and names will automatically appear on every subsequent IR.</span>
                       )}
                     </span>
                   </div>
@@ -3205,41 +4680,67 @@ export default function IncidentReportPanel({
       {/* MODAL 2: AUTHENTIC INCIDENT REPORT (IR) DOCUMENT VIEWER & PRINT           */}
       {/* ========================================================================= */}
       {isIrViewerOpen && selectedReport && (
-        <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-sm flex items-start justify-center p-2 sm:p-4 md:p-6 overflow-y-auto">
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-4xl w-full h-[90vh] sm:h-[92vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200 my-auto">
+        <div className="fixed inset-0 z-50 bg-slate-900/75 backdrop-blur-sm flex items-start justify-center p-2 sm:p-4 md:p-6 overflow-y-auto">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-6xl w-full h-[95vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200 my-auto">
             {/* Modal Controls Bar - COMPLETELY HIDDEN WHEN PRINTING */}
-            <div className="px-5 py-3 border-b border-slate-200 bg-slate-100 flex flex-wrap items-center justify-between gap-3 shrink-0 no-print">
-              <div className="flex items-center gap-2.5">
-                <span className="font-mono text-xs font-bold bg-white px-2 py-0.5 rounded border border-slate-300 text-slate-800">
+            <div className="px-5 py-2.5 border-b border-slate-200 bg-slate-50 flex flex-wrap items-center justify-between gap-3 shrink-0 no-print shadow-2xs">
+              <div className="flex flex-wrap items-center gap-2.5">
+                <span className="font-mono text-xs font-black bg-slate-900 text-white px-2.5 py-1 rounded-md shadow-2xs">
                   {selectedReport.caseNumber}
                 </span>
-                <span className="text-xs font-bold text-slate-700">Official Incident Report Form</span>
+                <span className="text-xs font-black text-slate-800 tracking-tight hidden sm:inline">
+                  Official Incident Report Form
+                </span>
 
-                {/* Seamless Format Toggle (Standard A4 default / Long option) */}
+                {/* Seamless Format Toggle (Short / Standard A4 / Long / Legal) */}
                 <div className="flex items-center bg-slate-200/90 p-0.5 rounded-lg text-xs font-semibold ml-1">
                   <button
                     type="button"
-                    onClick={() => setIrPaperFormat("A4")}
-                    className={`px-2.5 py-1 rounded-md transition cursor-pointer ${
-                      irPaperFormat === "A4"
-                        ? "bg-white text-slate-900 shadow-xs font-bold"
-                        : "text-slate-600 hover:text-slate-900"
-                    }`}
+                    onClick={() => setIrPaperFormat("SHORT")}
+                    className={`px-2.5 py-1 rounded-md transition cursor-pointer ${irPaperFormat === "SHORT"
+                      ? "bg-white text-slate-900 shadow-xs font-bold"
+                      : "text-slate-600 hover:text-slate-900"
+                      }`}
                   >
-                    Standard
+                    Short (8.5×11)
                   </button>
                   <button
                     type="button"
                     onClick={() => setIrPaperFormat("LONG")}
-                    className={`px-2.5 py-1 rounded-md transition cursor-pointer ${
-                      irPaperFormat === "LONG"
-                        ? "bg-white text-slate-900 shadow-xs font-bold"
-                        : "text-slate-600 hover:text-slate-900"
-                    }`}
+                    className={`px-2.5 py-1 rounded-md transition cursor-pointer ${irPaperFormat === "LONG"
+                      ? "bg-white text-slate-900 shadow-xs font-bold"
+                      : "text-slate-600 hover:text-slate-900"
+                      }`}
                   >
-                    Long
+                    Long (8.5×13)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIrPaperFormat("A4")}
+                    className={`px-2.5 py-1 rounded-md transition cursor-pointer ${irPaperFormat === "A4"
+                      ? "bg-white text-slate-900 shadow-xs font-bold"
+                      : "text-slate-600 hover:text-slate-900"
+                      }`}
+                  >
+                    Standard (A4)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIrPaperFormat("LEGAL")}
+                    className={`px-2.5 py-1 rounded-md transition cursor-pointer ${irPaperFormat === "LEGAL"
+                      ? "bg-white text-slate-900 shadow-xs font-bold"
+                      : "text-slate-600 hover:text-slate-900"
+                      }`}
+                  >
+                    Legal (8.5×14)
                   </button>
                 </div>
+
+                {/* 1-Page Auto-Fit Active Indicator */}
+                <span className="hidden xl:inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                  Auto 1-Page Fit ({irPaperFormat === "SHORT" ? "Short: 8.5×11in" : irPaperFormat === "LONG" ? "Long: 8.5×13in" : irPaperFormat === "A4" ? "A4: 210×297mm" : "Legal: 8.5×14in"})
+                </span>
               </div>
 
               <div className="flex items-center gap-2">
@@ -3251,26 +4752,40 @@ export default function IncidentReportPanel({
                     playAiVoiceAnnouncement(speech);
                   }}
                   title="Listen to official document reading"
-                  className="px-3 py-1.5 rounded-lg text-xs font-bold bg-white border border-slate-200 hover:bg-[#eef7e5] text-slate-700 hover:text-[#55782a] transition cursor-pointer inline-flex items-center gap-1.5"
+                  className="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-white border border-slate-200 hover:bg-[#eef7e5] text-slate-700 hover:text-[#55782a] transition cursor-pointer inline-flex items-center gap-1.5 shadow-2xs"
                 >
                   <Volume2 size={14} />
-                  <span>Listen (Voice)</span>
+                  <span>Listen</span>
+                </button>
+
+                {/* Direct Close & Archive Case button */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsIrViewerOpen(false);
+                    handleCloseCaseDirectly(selectedReport);
+                  }}
+                  className="px-3 py-1.5 rounded-lg text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs transition cursor-pointer inline-flex items-center gap-1.5 active:scale-95"
+                  title="Close and archive this case directly in HR 201 File"
+                >
+                  <CheckCheck size={14} />
+                  <span>Close Case</span>
                 </button>
 
                 {/* Print button */}
                 <button
                   type="button"
-                  onClick={handlePrintDocument}
-                  className="px-4 py-1.5 rounded-lg text-xs font-bold bg-[#8cb84a] hover:bg-[#7ea741] text-white transition cursor-pointer inline-flex items-center gap-1.5 shadow-sm active:scale-95"
+                  onClick={() => handlePrintDocument("ir")}
+                  className="px-3.5 py-1.5 rounded-lg text-xs font-black bg-slate-900 hover:bg-slate-800 text-white transition cursor-pointer inline-flex items-center gap-1.5 shadow-sm active:scale-95 ring-1 ring-slate-950/20"
                 >
-                  <Printer size={15} />
+                  <Printer size={14} className="text-emerald-400" />
                   <span>Print Document</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={() => setIsIrViewerOpen(false)}
-                  className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200 transition cursor-pointer"
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200 transition cursor-pointer ml-1"
                 >
                   <X size={18} />
                 </button>
@@ -3278,17 +4793,27 @@ export default function IncidentReportPanel({
             </div>
 
             {/* Authentic Printable Document Container */}
-            <div className="flex-1 min-h-0 overflow-y-auto p-3 sm:p-6 pb-24 sm:pb-36 bg-slate-300/60 flex justify-center custom-scrollbar">
-              <div 
+            <div className="flex-1 min-h-0 overflow-auto p-3 sm:p-6 pb-12 bg-slate-200/80 flex justify-center items-start custom-scrollbar">
+              <div
                 id="printable-incident-report-sheet"
-                className={`bg-white w-full shadow-2xl border border-slate-300 rounded-xs text-slate-900 font-sans relative flex flex-col justify-between transition-all duration-150 ${
-                  irPaperFormat === "A4"
-                    ? "max-w-[794px] min-h-[1123px] p-5 sm:p-7"
-                    : "max-w-[816px] min-h-[1248px] p-6 sm:p-9"
-                }`}
+                style={{
+                  width: irPaperFormat === "A4" ? "210mm" : "8.5in",
+                  minWidth: irPaperFormat === "A4" ? "210mm" : "8.5in",
+                  maxWidth: irPaperFormat === "A4" ? "210mm" : "8.5in",
+                  minHeight: irPaperFormat === "A4" ? "297mm" : irPaperFormat === "SHORT" ? "11in" : irPaperFormat === "LEGAL" ? "14in" : "13in",
+                  boxSizing: "border-box",
+                }}
+                className={`bg-white shadow-2xl ring-1 ring-slate-900/10 rounded-xs text-slate-900 font-sans relative shrink-0 flex flex-col justify-between transition-all duration-150 print:p-0 print:border-none print:shadow-none print:ring-0 ${irPaperFormat === "SHORT"
+                  ? "p-3.5 sm:p-4 md:p-5"
+                  : irPaperFormat === "A4"
+                    ? "p-4 sm:p-6"
+                    : irPaperFormat === "LEGAL"
+                      ? "p-6 sm:p-8"
+                      : "p-5 sm:p-7"
+                  }`}
               >
                 {/* Top Right Corner Geometric Diagonal Stripes */}
-                <div className="absolute top-0 right-0 w-32 h-24 pointer-events-none overflow-hidden">
+                <div className="absolute top-0 right-0 w-28 h-20 sm:w-32 sm:h-24 pointer-events-none overflow-hidden">
                   <svg className="w-full h-full" viewBox="0 0 144 112" fill="none">
                     <polygon points="60,0 144,0 144,84" fill="#0f2b48" />
                     <polygon points="38,0 52,0 144,72 144,84" fill="#c81e1e" />
@@ -3296,57 +4821,64 @@ export default function IncidentReportPanel({
                   </svg>
                 </div>
 
-                <div className="space-y-2.5 sm:space-y-3 relative z-10">
+                {/* Background Watermark */}
+                <div className="absolute inset-0 flex items-center justify-center opacity-[0.035] pointer-events-none select-none">
+                  <img src={getPaperLogo(selectedReport?.senderCompany || selectedReport?.company)} alt="watermark" className="w-[110mm] max-w-[400px] h-auto object-contain" />
+                </div>
+
+                <div className={`relative z-10 ${irPaperFormat === "SHORT"
+                  ? "space-y-1.5 sm:space-y-2"
+                  : irPaperFormat === "A4"
+                    ? "space-y-2 sm:space-y-2.5"
+                    : "space-y-2.5 sm:space-y-3"
+                  }`}>
                   {/* ============================================================== */}
                   {/* HEADER SECTION: LOGO + TITLE + REPORT NO / DATE FILED BOX      */}
                   {/* ============================================================== */}
-                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-2.5 border-b border-slate-200">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 pb-2 border-b border-slate-200">
                     {/* Left: Company Logo & Branding */}
-                    <div className="flex items-center gap-3">
-                      {/* Official Lucky Betplay Sun Logo */}
+                    <div className="flex items-center gap-2.5 sm:gap-3">
                       <img
-                        src="/logos/lucky_betplay_sun.png"
-                        alt="Lucky Betplay Corporation Logo"
-                        className="w-14 h-14 sm:w-16 sm:h-16 object-contain shrink-0"
+                        src={getPaperLogo(selectedReport?.senderCompany || selectedReport?.company)}
+                        alt="Company Logo"
+                        className={`${irPaperFormat === "SHORT" ? "w-12 h-12" : "w-13 h-13 sm:w-15 sm:h-15"} object-contain shrink-0`}
                       />
 
                       <div>
-                        <h2 className="text-base sm:text-lg font-black tracking-tight text-[#c81e1e] uppercase leading-none">
-                          {selectedReport.senderCompany || selectedReport.company || "LUCKY BETPLAY"}
+                        <h2 className="text-sm sm:text-base font-black tracking-tight text-slate-900 uppercase leading-none">
+                          {getPaperCompanyName(selectedReport?.senderCompany || selectedReport?.company)}
                         </h2>
                         <div className="flex items-center gap-1 mt-1">
-                          <div className="w-3 h-0.5 bg-[#0f2b48]" />
-                          <span className="text-[9px] font-black uppercase tracking-[0.22em] text-[#0f2b48]">
-                            CORPORATION
+                          <span className="text-[9px] font-black uppercase tracking-wider text-slate-600">
+                            INCIDENT REPORT FILING
                           </span>
-                          <div className="w-3 h-0.5 bg-[#0f2b48]" />
                         </div>
                       </div>
                     </div>
 
                     {/* Center: Main Title Block */}
-                    <div className="border-l-2 border-[#0f2b48] pl-3 sm:pl-4 my-auto">
-                      <h1 className="text-lg sm:text-xl font-black uppercase tracking-wider text-[#0f2b48] leading-none">
+                    <div className="border-l-2 border-[#0f2b48] pl-2.5 sm:pl-3.5 my-auto">
+                      <h1 className={`${irPaperFormat === "SHORT" ? "text-base sm:text-lg" : "text-lg sm:text-xl"} font-black uppercase tracking-wider text-[#0f2b48] leading-none`}>
                         INCIDENT REPORT
                       </h1>
-                      <div className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-[0.25em] text-slate-600 mt-0.5">
+                      <div className="text-[9.5px] sm:text-[10.5px] font-semibold uppercase tracking-[0.22em] text-slate-600 mt-0.5">
                         EMPLOYEE VIOLATION
                       </div>
-                      <p className="text-[9px] sm:text-[10px] italic text-slate-500 mt-0.5">
+                      <p className="text-[8.5px] sm:text-[9.5px] italic text-slate-500 mt-0.5">
                         A safe and respectful workplace is everyone's responsibility.
                       </p>
                     </div>
 
                     {/* Right: Report No. & Date Filed Box */}
-                    <div className="bg-[#f0f4f9] border border-[#d2e0ee] rounded-md p-2 min-w-[170px] text-[11px] font-semibold text-slate-800 space-y-1 shrink-0 self-start sm:self-center">
+                    <div className={`bg-[#f0f4f9] border border-[#d2e0ee] rounded-md ${irPaperFormat === "SHORT" ? "p-1.5 min-w-[155px]" : "p-2 min-w-[165px]"} text-[10.5px] font-semibold text-slate-800 space-y-0.5 shrink-0 self-start sm:self-center`}>
                       <div className="flex items-center gap-1.5">
-                        <span className="text-[9px] uppercase font-bold text-slate-500 min-w-[65px]">Report No. :</span>
+                        <span className="text-[9px] uppercase font-bold text-slate-500 min-w-[62px]">Report No. :</span>
                         <span className="font-mono font-bold text-[#0f2b48] border-b border-slate-300 flex-1 pb-0.5">
                           {selectedReport.caseNumber}
                         </span>
                       </div>
                       <div className="flex items-center gap-1.5">
-                        <span className="text-[9px] uppercase font-bold text-slate-500 min-w-[65px]">Date Filed :</span>
+                        <span className="text-[9px] uppercase font-bold text-slate-500 min-w-[62px]">Date Filed :</span>
                         <span className="font-semibold text-slate-800 border-b border-slate-300 flex-1 pb-0.5">
                           {selectedReport.dateReported || selectedReport.createdAt?.slice(0, 10)}
                         </span>
@@ -3354,33 +4886,51 @@ export default function IncidentReportPanel({
                     </div>
                   </div>
 
+                  {/* Official Head Office Transmittal & Contact Routing Strip */}
+                  <div className={`bg-[#f0f4f9] border border-[#d2e0ee] rounded-md ${irPaperFormat === "SHORT" ? "px-2.5 py-1 text-[9.5px]" : "px-3 py-1.5 text-[10px]"} flex flex-wrap items-center justify-between gap-1.5`}>
+                    <div className="flex items-center gap-1.5 text-slate-700">
+                      <span className="font-extrabold text-[#0f2b48] uppercase tracking-wide">Transmitted to Head Office HRMD:</span>
+                      <span className="font-semibold text-slate-900">Simpal Group of Companies</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-slate-700">
+                      <Mail size={11} className="text-[#c81e1e]" />
+                      <span className="font-extrabold text-[#0f2b48]">Head Office Email:</span>
+                      <a href="mailto:imsoroglohr@gmail.com" className="font-bold text-[#c81e1e] hover:underline font-mono">
+                        imsoroglohr@gmail.com
+                      </a>
+                    </div>
+                    <span className="text-[8.5px] font-bold uppercase tracking-wider text-slate-500">
+                      Official Transmittal Record
+                    </span>
+                  </div>
+
                   {/* ============================================================== */}
                   {/* 1. EMPLOYEE INFORMATION                                        */}
                   {/* ============================================================== */}
                   <div className="space-y-0">
-                    <div className="bg-[#153459] text-white px-3 py-1 rounded-t-md font-black text-[11px] uppercase tracking-wider flex items-center gap-1.5">
-                      <User size={13} className="text-white" />
+                    <div className="bg-[#153459] text-white px-2.5 py-0.5 rounded-t-md font-black text-[10.5px] uppercase tracking-wider flex items-center gap-1.5">
+                      <User size={12} className="text-white" />
                       <span>EMPLOYEE INFORMATION</span>
                     </div>
 
-                    <div className="bg-[#f4f7fb] border border-t-0 border-[#d0dbe7] rounded-b-md p-2.5 sm:p-3 text-[11px]">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-1.5">
+                    <div className={`bg-[#f4f7fb] border border-t-0 border-[#d0dbe7] rounded-b-md ${irPaperFormat === "SHORT" ? "p-2 text-[10px]" : "p-2.5 sm:p-3 text-[10.5px]"}`}>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-1">
                         {/* Left Column */}
-                        <div className="space-y-1.5">
+                        <div className="space-y-1">
                           <div className="flex items-center gap-2">
-                            <span className="text-[10px] font-semibold text-slate-700 min-w-[80px]">Full Name :</span>
+                            <span className="text-[9.5px] font-semibold text-slate-700 min-w-[75px]">Full Name :</span>
                             <span className="font-bold text-slate-900 border-b border-slate-300 flex-1 pb-0.5">
                               {selectedReport.employeeName}
                             </span>
                           </div>
                           <div className="flex items-center gap-2">
-                            <span className="text-[10px] font-semibold text-slate-700 min-w-[80px]">Employee ID :</span>
+                            <span className="text-[9.5px] font-semibold text-slate-700 min-w-[75px]">Employee ID :</span>
                             <span className="font-semibold text-slate-900 border-b border-slate-300 flex-1 pb-0.5">
                               {selectedReport.employeeId || "—"}
                             </span>
                           </div>
                           <div className="flex items-center gap-2">
-                            <span className="text-[10px] font-semibold text-slate-700 min-w-[80px]">Position :</span>
+                            <span className="text-[9.5px] font-semibold text-slate-700 min-w-[75px]">Position :</span>
                             <span className="font-semibold text-slate-900 border-b border-slate-300 flex-1 pb-0.5">
                               {selectedReport.employeePosition || "Cashier"}
                             </span>
@@ -3388,15 +4938,15 @@ export default function IncidentReportPanel({
                         </div>
 
                         {/* Right Column */}
-                        <div className="space-y-1.5">
+                        <div className="space-y-1">
                           <div className="flex items-center gap-2">
-                            <span className="text-[10px] font-semibold text-slate-700 min-w-[105px]">Department / Unit :</span>
+                            <span className="text-[9.5px] font-semibold text-slate-700 min-w-[95px]">Department / Unit :</span>
                             <span className="font-semibold text-slate-900 border-b border-slate-300 flex-1 pb-0.5">
-                              {selectedReport.department || "Finance & Operations"}
+                              {selectedReport.department || "Finance & Cashier Operations"}
                             </span>
                           </div>
                           <div className="flex items-center gap-2">
-                            <span className="text-[10px] font-semibold text-slate-700 min-w-[105px]">Area / Branch :</span>
+                            <span className="text-[9.5px] font-semibold text-slate-700 min-w-[95px]">Area / Branch :</span>
                             <span className="font-semibold text-slate-900 border-b border-slate-300 flex-1 pb-0.5 truncate">
                               {selectedReport.branch || selectedReport.branchLocation || "Tacurong Branch"}
                             </span>
@@ -3410,50 +4960,42 @@ export default function IncidentReportPanel({
                   {/* 2. INCIDENT DETAILS                                            */}
                   {/* ============================================================== */}
                   <div className="space-y-0">
-                    <div className="bg-[#153459] text-white px-3 py-1 rounded-t-md font-black text-[11px] uppercase tracking-wider flex items-center gap-1.5">
-                      <FileText size={13} className="text-white" />
+                    <div className="bg-[#153459] text-white px-2.5 py-0.5 rounded-t-md font-black text-[10.5px] uppercase tracking-wider flex items-center gap-1.5">
+                      <FileText size={12} className="text-white" />
                       <span>INCIDENT DETAILS</span>
                     </div>
 
-                    <div className="bg-[#f4f7fb] border border-t-0 border-[#d0dbe7] rounded-b-md p-2.5 sm:p-3 text-[11px] space-y-2">
-                      {/* Row 1: Date, Time, Location */}
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className={`bg-[#f4f7fb] border border-t-0 border-[#d0dbe7] rounded-b-md ${irPaperFormat === "SHORT" ? "p-2 space-y-1.5 text-[10px]" : "p-2.5 sm:p-3 space-y-2 text-[10.5px]"}`}>
+                      {/* Row 1: Date of Incident & Type of Incident */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                         <div className="flex items-center gap-1.5">
-                          <Calendar size={13} className="text-[#153459] shrink-0" />
-                          <span className="text-[10px] font-semibold text-slate-700">Date of Incident :</span>
-                          <span className="font-semibold text-slate-900 border-b border-slate-300 flex-1 pb-0.5 text-[11px]">
+                          <Calendar size={12} className="text-[#153459] shrink-0" />
+                          <span className="text-[9.5px] font-semibold text-slate-700">Date of Incident :</span>
+                          <span className="font-semibold text-slate-900 border-b border-slate-300 flex-1 pb-0.5 text-[10.5px]">
                             {selectedReport.dateOfIncident || selectedReport.auditDates || "—"}
                           </span>
                         </div>
 
                         <div className="flex items-center gap-1.5">
-                          <Clock size={13} className="text-[#153459] shrink-0" />
-                          <span className="text-[10px] font-semibold text-slate-700">Time of Incident :</span>
-                          <span className="font-semibold text-slate-900 border-b border-slate-300 flex-1 pb-0.5 text-[11px]">
-                            {selectedReport.incidentTime || "16:30 PM"}
-                          </span>
-                        </div>
-
-                        <div className="flex items-center gap-1.5">
-                          <MapPin size={13} className="text-[#153459] shrink-0" />
-                          <span className="text-[10px] font-semibold text-slate-700">Location :</span>
-                          <span className="font-semibold text-slate-900 border-b border-slate-300 flex-1 pb-0.5 truncate text-[11px]">
-                            {selectedReport.location || selectedReport.branch || "Tacurong Branch"}
+                          <AlertTriangle size={12} className="text-[#c81e1e] shrink-0" />
+                          <span className="text-[9.5px] font-semibold text-slate-700">Type of Incident :</span>
+                          <span className="font-semibold text-slate-900 border-b border-slate-300 flex-1 pb-0.5 truncate text-[10.5px]">
+                            {selectedReport.typeOfIncident || selectedReport.incidentCategory || "Cash Shortage & Non-observance of SOPs"}
                           </span>
                         </div>
                       </div>
 
                       {/* Row 2: Factual Description of the Incident */}
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-1.5 text-[10.5px] font-bold text-slate-800">
-                          <FileText size={12} className="text-[#153459]" />
+                      <div className="space-y-0.5">
+                        <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-800">
+                          <FileText size={11} className="text-[#153459]" />
                           <span>Factual Description of the Incident:</span>
                         </div>
                         <div
-                          className="w-full p-2 text-xs text-slate-900 leading-[20px] min-h-[58px] whitespace-pre-wrap rounded-xs"
+                          className={`w-full p-1.5 sm:p-2 text-[10.5px] sm:text-[11px] text-slate-900 leading-[18px] ${irPaperFormat === "SHORT" ? "min-h-[42px]" : "min-h-[48px]"} whitespace-pre-wrap rounded-xs`}
                           style={{
-                            backgroundImage: "linear-gradient(to bottom, transparent 19px, #d1d5db 20px)",
-                            backgroundSize: "100% 20px"
+                            backgroundImage: "linear-gradient(to bottom, transparent 17px, #d1d5db 18px)",
+                            backgroundSize: "100% 18px"
                           }}
                         >
                           {selectedReport.factualDescription || selectedReport.specificFindings || selectedReport.fullIncidentNarrative || "During surprise drawer reconciliation audit, a physical cash shortage was uncovered. The personnel on duty could not produce balancing vouchers or valid justification for the discrepancy."}
@@ -3461,16 +5003,16 @@ export default function IncidentReportPanel({
                       </div>
 
                       {/* Row 3: Witnesses (if any) */}
-                      <div className="space-y-1 pt-0.5">
-                        <div className="flex items-center gap-1.5 text-[10.5px] font-bold text-slate-800">
-                          <Users size={12} className="text-[#153459]" />
+                      <div className="space-y-0.5">
+                        <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-800">
+                          <Users size={11} className="text-[#153459]" />
                           <span>Witnesses (if any):</span>
                         </div>
                         <div
-                          className="w-full p-2 text-xs text-slate-900 leading-[19px] min-h-[38px] whitespace-pre-wrap rounded-xs"
+                          className={`w-full p-1.5 sm:p-2 text-[10.5px] sm:text-[11px] text-slate-900 leading-[18px] ${irPaperFormat === "SHORT" ? "min-h-[26px]" : "min-h-[30px]"} whitespace-pre-wrap rounded-xs`}
                           style={{
-                            backgroundImage: "linear-gradient(to bottom, transparent 18px, #d1d5db 19px)",
-                            backgroundSize: "100% 19px"
+                            backgroundImage: "linear-gradient(to bottom, transparent 17px, #d1d5db 18px)",
+                            backgroundSize: "100% 18px"
                           }}
                         >
                           {selectedReport.witnesses || "None reported / Attached to internal audit file."}
@@ -3485,22 +5027,22 @@ export default function IncidentReportPanel({
                   <div className="space-y-0">
                     <div className="flex items-center">
                       <div
-                        className="bg-[#c81e1e] text-white px-3.5 py-1 font-black text-[11px] uppercase tracking-wider flex items-center gap-1.5 rounded-t-md"
-                        style={{ clipPath: "polygon(0 0, 100% 0, 92% 100%, 0 100%)", paddingRight: "24px" }}
+                        className="bg-[#c81e1e] text-white px-3 py-0.5 font-black text-[10.5px] uppercase tracking-wider flex items-center gap-1.5 rounded-t-md"
+                        style={{ clipPath: "polygon(0 0, 100% 0, 92% 100%, 0 100%)", paddingRight: "22px" }}
                       >
-                        <AlertTriangle size={13} className="text-white shrink-0" />
+                        <AlertTriangle size={12} className="text-white shrink-0" />
                         <span>VIOLATION</span>
                       </div>
                     </div>
 
-                    <div className="bg-[#fef2f2] border border-[#fecaca] rounded-b-md p-2.5 sm:p-3 text-[10.5px] space-y-2">
-                      <p className="text-[10px] italic font-semibold text-slate-700">
+                    <div className={`bg-[#fef2f2] border border-[#fecaca] rounded-b-md ${irPaperFormat === "SHORT" ? "p-2 space-y-1.5 text-[9.5px]" : "p-2.5 sm:p-3 space-y-2 text-[10px]"}`}>
+                      <p className="text-[9.5px] italic font-semibold text-slate-700">
                         Please indicate the specific policy, rule, or standard that was violated.
                       </p>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 pt-0.5">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 pt-0.5">
                         {/* Column 1 */}
-                        <div className="space-y-1.5">
+                        <div className="space-y-1">
                           {[
                             "Company Policies and Procedures",
                             "STL Operations and Draw Process",
@@ -3511,9 +5053,9 @@ export default function IncidentReportPanel({
                               ? selectedReport.violations.includes(item)
                               : true;
                             return (
-                              <div key={item} className="flex items-center gap-2 text-[10.5px] text-slate-800 font-medium">
+                              <div key={item} className="flex items-center gap-1.5 text-[10px] text-slate-800 font-medium">
                                 <div className={`w-3.5 h-3.5 rounded-xs border-2 flex items-center justify-center shrink-0 ${isChecked ? "bg-[#153459] border-[#153459] text-white" : "bg-white border-slate-400"}`}>
-                                  {isChecked && <Check size={11} strokeWidth={3} />}
+                                  {isChecked && <Check size={10} strokeWidth={3} />}
                                 </div>
                                 <span>{item}</span>
                               </div>
@@ -3522,7 +5064,7 @@ export default function IncidentReportPanel({
                         </div>
 
                         {/* Column 2 */}
-                        <div className="space-y-1.5">
+                        <div className="space-y-1">
                           {[
                             "Cash Handling / Collection",
                             "Data Privacy / Confidentiality",
@@ -3533,9 +5075,9 @@ export default function IncidentReportPanel({
                               ? selectedReport.violations.includes(item)
                               : true;
                             return (
-                              <div key={item} className="flex items-center gap-2 text-[10.5px] text-slate-800 font-medium">
+                              <div key={item} className="flex items-center gap-1.5 text-[10px] text-slate-800 font-medium">
                                 <div className={`w-3.5 h-3.5 rounded-xs border-2 flex items-center justify-center shrink-0 ${isChecked ? "bg-[#153459] border-[#153459] text-white" : "bg-white border-slate-400"}`}>
-                                  {isChecked && <Check size={11} strokeWidth={3} />}
+                                  {isChecked && <Check size={10} strokeWidth={3} />}
                                 </div>
                                 <span>{item}</span>
                               </div>
@@ -3544,24 +5086,24 @@ export default function IncidentReportPanel({
                         </div>
 
                         {/* Column 3: Other & Remarks */}
-                        <div className="space-y-2 border-t md:border-t-0 md:border-l border-rose-200 pt-1.5 md:pt-0 md:pl-3">
-                          <div className="flex items-center gap-2 text-[10.5px]">
+                        <div className="space-y-1 border-t md:border-t-0 md:border-l border-rose-200 pt-1 md:pt-0 md:pl-2.5">
+                          <div className="flex items-center gap-1.5 text-[9.5px]">
                             <div className={`w-3.5 h-3.5 rounded-xs border-2 flex items-center justify-center shrink-0 ${selectedReport.otherViolation ? "bg-[#153459] border-[#153459] text-white" : "bg-white border-slate-400"}`}>
-                              {selectedReport.otherViolation && <Check size={11} strokeWidth={3} />}
+                              {selectedReport.otherViolation && <Check size={10} strokeWidth={3} />}
                             </div>
                             <span className="font-semibold text-slate-700 whitespace-nowrap">Other (please specify)</span>
                           </div>
-                          <div className="border-b border-slate-300 pb-0.5 text-[11px] text-slate-900 font-semibold min-h-[16px]">
+                          <div className="border-b border-slate-300 pb-0.5 text-[10.5px] text-slate-900 font-semibold min-h-[15px]">
                             {selectedReport.otherViolation || ""}
                           </div>
 
                           <div className="pt-0.5">
-                            <div className="text-[9.5px] font-bold text-slate-700 mb-0.5">Remarks (if any):</div>
+                            <div className="text-[9px] font-bold text-slate-700 mb-0.5">Remarks (if any):</div>
                             <div
-                              className="w-full p-1.5 text-xs text-slate-800 leading-[18px] min-h-[36px] whitespace-pre-wrap"
+                              className={`w-full p-1 text-[10.5px] text-slate-800 leading-[17px] ${irPaperFormat === "SHORT" ? "min-h-[24px]" : "min-h-[28px]"} whitespace-pre-wrap`}
                               style={{
-                                backgroundImage: "linear-gradient(to bottom, transparent 17px, #cbd5e1 18px)",
-                                backgroundSize: "100% 18px"
+                                backgroundImage: "linear-gradient(to bottom, transparent 16px, #cbd5e1 17px)",
+                                backgroundSize: "100% 17px"
                               }}
                             >
                               {selectedReport.violationRemarks || (selectedReport.cashShortageAmount ? `Incurred unaccounted cash shortage of PHP ${selectedReport.cashShortageAmount}.` : "")}
@@ -3576,15 +5118,15 @@ export default function IncidentReportPanel({
                   {/* 4. ATTACHMENTS / EVIDENCE                                      */}
                   {/* ============================================================== */}
                   <div className="space-y-0">
-                    <div className="bg-[#153459] text-white px-3 py-1 rounded-t-md font-black text-[11px] uppercase tracking-wider flex items-center gap-1.5">
-                      <Paperclip size={13} className="text-white" />
+                    <div className="bg-[#153459] text-white px-2.5 py-0.5 rounded-t-md font-black text-[10.5px] uppercase tracking-wider flex items-center gap-1.5">
+                      <Paperclip size={12} className="text-white" />
                       <span>ATTACHMENTS / EVIDENCE</span>
                     </div>
 
-                    <div className="bg-[#f4f7fb] border border-t-0 border-[#d0dbe7] rounded-b-md p-2.5 sm:p-3 text-[10.5px]">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div className={`bg-[#f4f7fb] border border-t-0 border-[#d0dbe7] rounded-b-md ${irPaperFormat === "SHORT" ? "p-2 text-[9.5px]" : "p-2.5 sm:p-3 text-[10px]"}`}>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
                         {/* Column 1 */}
-                        <div className="space-y-1.5">
+                        <div className="space-y-1">
                           {[
                             "Photos (if any)",
                             "Reports / Logs",
@@ -3594,9 +5136,9 @@ export default function IncidentReportPanel({
                               ? selectedReport.attachments.includes(item)
                               : true;
                             return (
-                              <div key={item} className="flex items-center gap-2 text-[10.5px] text-slate-800 font-medium">
+                              <div key={item} className="flex items-center gap-1.5 text-[10px] text-slate-800 font-medium">
                                 <div className={`w-3.5 h-3.5 rounded-xs border-2 flex items-center justify-center shrink-0 ${isChecked ? "bg-[#153459] border-[#153459] text-white" : "bg-white border-slate-400"}`}>
-                                  {isChecked && <Check size={11} strokeWidth={3} />}
+                                  {isChecked && <Check size={10} strokeWidth={3} />}
                                 </div>
                                 <span>{item}</span>
                               </div>
@@ -3605,18 +5147,18 @@ export default function IncidentReportPanel({
                         </div>
 
                         {/* Column 2 */}
-                        <div className="space-y-1.5">
-                          <div className="flex items-center gap-2 text-[10.5px]">
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-1.5 text-[9.5px]">
                             <div className={`w-3.5 h-3.5 rounded-xs border-2 flex items-center justify-center shrink-0 ${selectedReport.otherAttachments ? "bg-[#153459] border-[#153459] text-white" : "bg-white border-slate-400"}`}>
-                              {selectedReport.otherAttachments && <Check size={11} strokeWidth={3} />}
+                              {selectedReport.otherAttachments && <Check size={10} strokeWidth={3} />}
                             </div>
                             <span className="font-semibold text-slate-700">Other (please specify)</span>
                           </div>
                           <div
-                            className="w-full p-1.5 text-xs text-slate-800 leading-[18px] min-h-[32px] whitespace-pre-wrap"
+                            className={`w-full p-1 text-[10.5px] text-slate-800 leading-[17px] ${irPaperFormat === "SHORT" ? "min-h-[22px]" : "min-h-[26px]"} whitespace-pre-wrap`}
                             style={{
-                              backgroundImage: "linear-gradient(to bottom, transparent 17px, #cbd5e1 18px)",
-                              backgroundSize: "100% 18px"
+                              backgroundImage: "linear-gradient(to bottom, transparent 16px, #cbd5e1 17px)",
+                              backgroundSize: "100% 17px"
                             }}
                           >
                             {selectedReport.otherAttachments || selectedReport.additionalNotes || "Attached physical audit reconciliation count discrepancy sheet."}
@@ -3633,67 +5175,67 @@ export default function IncidentReportPanel({
                     // In Head Office account, "Approved by" is completely removed per user request
                     const showApprovedBy = !effectiveRole.isHeadOffice && Boolean(selectedReport.approvedBySignature);
                     return (
-                      <div className="bg-[#f4f7fb] border border-[#d0dbe7] rounded-md p-2.5 sm:p-3 text-xs">
-                        <div className={`grid grid-cols-1 ${showApprovedBy ? "sm:grid-cols-3" : "sm:grid-cols-2"} gap-4 sm:gap-6`}>
+                      <div className={`bg-[#f4f7fb] border border-[#d0dbe7] rounded-md ${irPaperFormat === "SHORT" ? "p-2 text-[10px]" : "p-2.5 sm:p-3 text-[10.5px]"}`}>
+                        <div className={`grid grid-cols-1 ${showApprovedBy ? "sm:grid-cols-3" : "sm:grid-cols-2"} gap-3 sm:gap-4`}>
                           {/* 1. Prepared by */}
-                          <div className="space-y-1.5">
-                            <span className="text-[10.5px] font-bold text-slate-800 block">Prepared by:</span>
-                            <div className="h-14 sm:h-16 flex items-center justify-center border-b border-slate-300 pb-0.5 overflow-hidden">
+                          <div className="space-y-1">
+                            <span className="text-[10px] font-bold text-slate-800 block">Prepared by:</span>
+                            <div className="h-10 sm:h-12 flex items-center justify-center border-b border-slate-300 pb-0.5 overflow-hidden">
                               {selectedReport.preparerSignature ? (
                                 <img
                                   src={selectedReport.preparerSignature}
                                   alt="Preparer E-Sig"
                                   style={{
-                                    transform: `scale(${selectedReport.preparerSignatureScale || 1.25})`,
+                                    transform: `scale(${selectedReport.preparerSignatureScale || 1.15})`,
                                     transformOrigin: "center"
                                   }}
-                                  className="max-h-12 object-contain transition-transform"
+                                  className="max-h-9 sm:max-h-10 object-contain transition-transform"
                                 />
                               ) : (
-                                <span className="text-[10px] text-slate-400 italic">(Signed on file)</span>
+                                <span className="text-[9.5px] text-slate-400 italic">(Signed on file)</span>
                               )}
                             </div>
                             <div className="text-center pt-0.5">
-                              <div className="text-[10.5px] font-extrabold text-slate-900 uppercase">
+                              <div className="text-[10px] font-extrabold text-slate-900 uppercase">
                                 {selectedReport.preparerName || selectedReport.senderHrName}
                               </div>
-                              <div className="text-[9.5px] text-slate-500 font-medium">
+                              <div className="text-[9px] text-slate-500 font-medium">
                                 Name / Position ({selectedReport.preparerTitle || "Branch HR"})
                               </div>
                             </div>
-                            <div className="flex items-center gap-1.5 pt-0.5 border-t border-slate-200 text-[9.5px]">
+                            <div className="flex items-center gap-1.5 pt-0.5 border-t border-slate-200 text-[9px]">
                               <span className="text-slate-500 font-semibold">Date:</span>
                               <span className="text-slate-900 font-medium">{selectedReport.dateReported || selectedReport.createdAt?.slice(0, 10)}</span>
                             </div>
                           </div>
 
                           {/* 2. Reviewed by */}
-                          <div className="space-y-1.5">
-                            <span className="text-[10.5px] font-bold text-slate-800 block">Reviewed by:</span>
-                            <div className="h-14 sm:h-16 flex items-center justify-center border-b border-slate-300 pb-0.5 overflow-hidden">
+                          <div className="space-y-1">
+                            <span className="text-[10px] font-bold text-slate-800 block">Noted by:</span>
+                            <div className="h-10 sm:h-12 flex items-center justify-center border-b border-slate-300 pb-0.5 overflow-hidden">
                               {selectedReport.operationsManagerSignature ? (
                                 <img
                                   src={selectedReport.operationsManagerSignature}
                                   alt="Manager E-Sig"
                                   style={{
-                                    transform: `scale(${selectedReport.operationsManagerSignatureScale || 1.25})`,
+                                    transform: `scale(${selectedReport.operationsManagerSignatureScale || 1.15})`,
                                     transformOrigin: "center"
                                   }}
-                                  className="max-h-12 object-contain transition-transform"
+                                  className="max-h-9 sm:max-h-10 object-contain transition-transform"
                                 />
                               ) : (
-                                <span className="text-[10px] text-slate-400 italic">(Signed on file)</span>
+                                <span className="text-[9.5px] text-slate-400 italic">(Signed on file)</span>
                               )}
                             </div>
                             <div className="text-center pt-0.5">
-                              <div className="text-[10.5px] font-extrabold text-slate-900 uppercase">
+                              <div className="text-[10px] font-extrabold text-slate-900 uppercase">
                                 {selectedReport.operationsManagerName || "Operations Manager"}
                               </div>
-                              <div className="text-[9.5px] text-slate-500 font-medium">
+                              <div className="text-[9px] text-slate-500 font-medium">
                                 Name / Position ({selectedReport.operationsManagerTitle || "Area Operations Manager"})
                               </div>
                             </div>
-                            <div className="flex items-center gap-1.5 pt-0.5 border-t border-slate-200 text-[9.5px]">
+                            <div className="flex items-center gap-1.5 pt-0.5 border-t border-slate-200 text-[9px]">
                               <span className="text-slate-500 font-semibold">Date:</span>
                               <span className="text-slate-900 font-medium">{selectedReport.dateReported || selectedReport.createdAt?.slice(0, 10)}</span>
                             </div>
@@ -3701,28 +5243,28 @@ export default function IncidentReportPanel({
 
                           {/* 3. Approved by (Strictly omitted in Head Office account view) */}
                           {showApprovedBy && (
-                            <div className="space-y-1.5">
-                              <span className="text-[10.5px] font-bold text-slate-800 block">Approved by:</span>
-                              <div className="h-14 sm:h-16 flex items-center justify-center border-b border-slate-300 pb-0.5 overflow-hidden">
+                            <div className="space-y-1">
+                              <span className="text-[10px] font-bold text-slate-800 block">Approved by:</span>
+                              <div className="h-10 sm:h-12 flex items-center justify-center border-b border-slate-300 pb-0.5 overflow-hidden">
                                 {selectedReport.approvedBySignature ? (
                                   <img
                                     src={selectedReport.approvedBySignature}
                                     alt="Approver E-Sig"
-                                    className="max-h-12 object-contain"
+                                    className="max-h-9 sm:max-h-10 object-contain"
                                   />
                                 ) : (
-                                  <span className="text-[10px] text-slate-400 italic">(Simpal Group of Companies HRMD)</span>
+                                  <span className="text-[9.5px] text-slate-400 italic">(Simpal Group of Companies HRMD)</span>
                                 )}
                               </div>
                               <div className="text-center pt-0.5">
-                                <div className="text-[10.5px] font-extrabold text-slate-900 uppercase">
+                                <div className="text-[10px] font-extrabold text-slate-900 uppercase">
                                   {selectedReport.approvedByName || selectedReport.receiverHrName || "JEVINCE JAYE S. JUBAY, CHRP"}
                                 </div>
-                                <div className="text-[9.5px] text-slate-500 font-medium">
+                                <div className="text-[9px] text-slate-500 font-medium">
                                   Name / Position ({selectedReport.approvedByTitle || "HRMD Manager"})
                                 </div>
                               </div>
-                              <div className="flex items-center gap-1.5 pt-0.5 border-t border-slate-200 text-[9.5px]">
+                              <div className="flex items-center gap-1.5 pt-0.5 border-t border-slate-200 text-[9px]">
                                 <span className="text-slate-500 font-semibold">Date:</span>
                                 <span className="text-slate-900 font-medium">{selectedReport.reportReceivedDate || selectedReport.dateReported || selectedReport.createdAt?.slice(0, 10)}</span>
                               </div>
@@ -3735,16 +5277,16 @@ export default function IncidentReportPanel({
 
                   {/* RESPONDENT ACKNOWLEDGMENT (Only shown if signed conformed) */}
                   {Boolean(selectedReport.respondentSignature) && (
-                    <div className="p-2.5 sm:p-3 rounded-xl bg-white border border-slate-300 shadow-2xs space-y-1.5">
-                      <div className="flex items-center justify-between text-[10.5px]">
+                    <div className="p-2 rounded-lg bg-white border border-slate-300 shadow-2xs space-y-1 text-[9.5px]">
+                      <div className="flex items-center justify-between">
                         <span className="font-extrabold uppercase text-slate-800">Respondent Conforme (Signed Receipt)</span>
-                        <span className="px-2 py-0.5 rounded text-[9.5px] font-bold bg-emerald-100 text-emerald-800">Officially Signed</span>
+                        <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-100 text-emerald-800">Officially Signed</span>
                       </div>
-                      <div className="flex items-center gap-3">
-                        <img src={selectedReport.respondentSignature} alt="Respondent Signature" className="max-h-10 object-contain" />
-                        <div className="text-xs">
-                          <strong className="text-slate-900 block text-[11px]">{selectedReport.respondentSignedName || selectedReport.employeeName}</strong>
-                          <span className="text-[9.5px] text-slate-500">{selectedReport.respondentSignedAt || "Signed receipt"}</span>
+                      <div className="flex items-center gap-2.5">
+                        <img src={selectedReport.respondentSignature} alt="Respondent Signature" className="max-h-8 object-contain" />
+                        <div className="text-[10px]">
+                          <strong className="text-slate-900 block text-[10.5px]">{selectedReport.respondentSignedName || selectedReport.employeeName}</strong>
+                          <span className="text-[9px] text-slate-500">{selectedReport.respondentSignedAt || "Signed receipt"}</span>
                         </div>
                       </div>
                     </div>
@@ -3754,15 +5296,17 @@ export default function IncidentReportPanel({
                 {/* ============================================================== */}
                 {/* FOOTER: CONFIDENTIAL + GEOMETRIC ACCENT STRIPES               */}
                 {/* ============================================================== */}
-                <div className="relative pt-2.5 pb-1 mt-2 border-t border-slate-200">
-                  <div className="flex items-center justify-center gap-3 text-[9px] font-black uppercase tracking-[0.25em] text-slate-500">
-                    <div className="w-14 h-px bg-slate-400" />
+                <div className="relative pt-2 pb-0.5 mt-1 border-t border-slate-200">
+                  <div className="flex flex-wrap items-center justify-center gap-2 text-[8.5px] sm:text-[9px] font-black uppercase tracking-[0.2em] text-slate-500">
+                    <div className="w-8 sm:w-10 h-px bg-slate-400" />
                     <span>CONFIDENTIAL — INTERNAL USE ONLY</span>
-                    <div className="w-14 h-px bg-slate-400" />
+                    <span>•</span>
+                    <span>HEAD OFFICE HRMD: <a href="mailto:imsoroglohr@gmail.com" className="text-[#0f2b48] lowercase font-mono hover:underline">imsoroglohr@gmail.com</a></span>
+                    <div className="w-8 sm:w-10 h-px bg-slate-400" />
                   </div>
 
                   {/* Bottom Right Corner Geometric Stripes */}
-                  <div className="absolute bottom-0 right-0 w-28 h-16 pointer-events-none overflow-hidden">
+                  <div className="absolute bottom-0 right-0 w-24 h-14 sm:w-28 sm:h-16 pointer-events-none overflow-hidden">
                     <svg className="w-full h-full" viewBox="0 0 144 80" fill="none">
                       <polygon points="144,0 144,80 60,80" fill="#0f2b48" />
                       <polygon points="144,12 144,24 52,80 38,80" fill="#c81e1e" />
@@ -3781,7 +5325,7 @@ export default function IncidentReportPanel({
       {/* ========================================================================= */}
       {isNteDraftModalOpen && selectedReport && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-3 md:p-6 overflow-y-auto">
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-3xl w-full max-h-[92vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-5xl w-full max-h-[92vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
             <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-amber-50/60 shrink-0">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-amber-600 text-white flex items-center justify-center font-bold">
@@ -3829,118 +5373,6 @@ export default function IncidentReportPanel({
                     selectedReport.fullIncidentNarrative ||
                     selectedReport.full_incident_narrative ||
                     "During surprise drawer reconciliation audit, a physical cash shortage was uncovered. The personnel on duty could not produce balancing vouchers or valid justification for the discrepancy."}
-                </div>
-              </div>
-
-              {/* Professional Manual Due Process & Legal Reference Suite */}
-              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 shadow-2xs space-y-3">
-                <div className="flex items-center justify-between flex-wrap gap-2">
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-lg bg-amber-600 text-white flex items-center justify-center font-bold">
-                      <Scale size={18} />
-                    </div>
-                    <div>
-                      <h4 className="text-xs font-black uppercase tracking-wider text-slate-900">
-                        Human HR Due Process & Legal Citation Suite
-                      </h4>
-                      <p className="text-[11px] text-slate-500">
-                        Full manual editorial control. Type your text freely or click quick reference chips to insert standard statutory clauses.
-                      </p>
-                    </div>
-                  </div>
-                  <span className="px-2.5 py-1 rounded-md text-[10px] font-extrabold bg-amber-100 text-amber-900 border border-amber-300">
-                    MANUAL DRAFTING
-                  </span>
-                </div>
-
-                {/* Quick Insert Buttons for Code of Conduct */}
-                <div className="space-y-1.5 pt-2 border-t border-slate-200">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-600 block">
-                    Quick Reference: Insert Code of Conduct Grounds
-                  </span>
-                  <div className="flex flex-wrap gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const coc = document.getElementById("nte-code-of-conduct");
-                        if (coc) {
-                          coc.value = `Employees Code of Conduct — Offenses Involving Dishonesty, Cash Shortages & Fiduciary Trust:\n"Any employee who causes or incurs unaccounted shortages, unremitted collections, failure to balance assigned cash floats, or circumvents standard financial control mechanisms shall be subjected to formal administrative disciplinary action."`;
-                        }
-                      }}
-                      className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-white hover:bg-amber-50 text-slate-700 border border-slate-200 hover:border-amber-400 transition cursor-pointer"
-                    >
-                      + Dishonesty & Cash Shortage
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const coc = document.getElementById("nte-code-of-conduct");
-                        if (coc) {
-                          coc.value = `Employees Code of Conduct — Offenses Involving Negligence & Procedural Non-Compliance:\n"Gross or habitual failure to follow established Standard Operating Procedures (SOPs), cash-handling manuals, or daily drawer reconciliation policies."`;
-                        }
-                      }}
-                      className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-white hover:bg-amber-50 text-slate-700 border border-slate-200 hover:border-amber-400 transition cursor-pointer"
-                    >
-                      + SOP Lapses & Drawer Reconciliation
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const coc = document.getElementById("nte-code-of-conduct");
-                        if (coc) {
-                          coc.value = `Employees Code of Conduct — Offenses Involving Insubordination & Unauthorized Financial Acts:\n"Willful refusal to comply with audit directives, releasing unauthorized advances or IOUs, or concealing transactional records."`;
-                        }
-                      }}
-                      className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-white hover:bg-amber-50 text-slate-700 border border-slate-200 hover:border-amber-400 transition cursor-pointer"
-                    >
-                      + Insubordination & Unauthorized IOUs
-                    </button>
-                  </div>
-                </div>
-
-                {/* Quick Insert Buttons for Labor Code */}
-                <div className="space-y-1.5 pt-2 border-t border-slate-200">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-600 block">
-                    Quick Reference: Insert Philippine Labor Code (PD 442 Art. 297) Grounds
-                  </span>
-                  <div className="flex flex-wrap gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const lc = document.getElementById("nte-labor-code");
-                        if (lc) {
-                          lc.value = `Philippine Labor Code (PD 442), Article 297(c) [Termination by Employer - Just Causes]:\n"Fraud or willful breach by the employee of the trust reposed in him by his employer or duly authorized representative."`;
-                        }
-                      }}
-                      className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-white hover:bg-amber-50 text-slate-700 border border-slate-200 hover:border-amber-400 transition cursor-pointer"
-                    >
-                      + Art. 297(c): Breach of Trust / Fraud
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const lc = document.getElementById("nte-labor-code");
-                        if (lc) {
-                          lc.value = `Philippine Labor Code (PD 442), Article 297(b) [Termination by Employer - Just Causes]:\n"Gross and habitual neglect by the employee of his duties."`;
-                        }
-                      }}
-                      className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-white hover:bg-amber-50 text-slate-700 border border-slate-200 hover:border-amber-400 transition cursor-pointer"
-                    >
-                      + Art. 297(b): Gross & Habitual Neglect
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const lc = document.getElementById("nte-labor-code");
-                        if (lc) {
-                          lc.value = `Philippine Labor Code (PD 442), Article 297(a) [Termination by Employer - Just Causes]:\n"Serious Misconduct or willful disobedience by the employee of the lawful orders of his employer or representative in connection with his work."`;
-                        }
-                      }}
-                      className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-white hover:bg-amber-50 text-slate-700 border border-slate-200 hover:border-amber-400 transition cursor-pointer"
-                    >
-                      + Art. 297(a): Serious Misconduct
-                    </button>
-                  </div>
                 </div>
               </div>
 
@@ -4105,15 +5537,67 @@ export default function IncidentReportPanel({
       {/* MODAL 4: AUTHENTIC NOTICE TO EXPLAIN (NTE) DOCUMENT VIEWER & PRINT         */}
       {/* ========================================================================= */}
       {isNteViewerOpen && selectedReport && (
-        <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 md:p-6 overflow-y-auto">
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-4xl w-full max-h-[96vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 z-50 bg-slate-900/75 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-6xl w-full max-h-[96vh] h-[96vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
             {/* Modal Controls Bar */}
-            <div className="px-5 py-3 border-b border-slate-200 bg-slate-100 flex items-center justify-between shrink-0 no-print">
-              <div className="flex items-center gap-2">
-                <span className="font-mono text-xs font-bold bg-white px-2 py-0.5 rounded border border-slate-300 text-slate-800">
+            <div className="px-5 py-2.5 border-b border-slate-200 bg-slate-50 flex flex-wrap items-center justify-between gap-3 shrink-0 no-print shadow-2xs">
+              <div className="flex flex-wrap items-center gap-2.5">
+                <span className="font-mono text-xs font-black bg-slate-900 text-white px-2.5 py-1 rounded-md shadow-2xs">
                   {selectedReport.caseNumber}
                 </span>
-                <span className="text-xs font-bold text-slate-700">Official Notice to Explain (Issued by Head Office SGC)</span>
+                <span className="text-xs font-black text-slate-800 tracking-tight hidden sm:inline">
+                  Official Notice to Explain (Issued by Head Office SGC)
+                </span>
+
+                {/* Bond Paper Format Selector (Short / Long / Standard A4 / Legal) */}
+                <div className="flex items-center bg-slate-200/90 p-0.5 rounded-lg text-xs font-semibold ml-1">
+                  <button
+                    type="button"
+                    onClick={() => setNtePaperFormat("SHORT")}
+                    className={`px-2.5 py-1 rounded-md transition cursor-pointer ${ntePaperFormat === "SHORT"
+                      ? "bg-white text-slate-900 shadow-xs font-bold"
+                      : "text-slate-600 hover:text-slate-900"
+                      }`}
+                  >
+                    Short (8.5×11)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setNtePaperFormat("LONG")}
+                    className={`px-2.5 py-1 rounded-md transition cursor-pointer ${ntePaperFormat === "LONG"
+                      ? "bg-white text-slate-900 shadow-xs font-bold"
+                      : "text-slate-600 hover:text-slate-900"
+                      }`}
+                  >
+                    Long (8.5×13)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setNtePaperFormat("A4")}
+                    className={`px-2.5 py-1 rounded-md transition cursor-pointer ${ntePaperFormat === "A4"
+                      ? "bg-white text-slate-900 shadow-xs font-bold"
+                      : "text-slate-600 hover:text-slate-900"
+                      }`}
+                  >
+                    Standard (A4)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setNtePaperFormat("LEGAL")}
+                    className={`px-2.5 py-1 rounded-md transition cursor-pointer ${ntePaperFormat === "LEGAL"
+                      ? "bg-white text-slate-900 shadow-xs font-bold"
+                      : "text-slate-600 hover:text-slate-900"
+                      }`}
+                  >
+                    Legal (8.5×14)
+                  </button>
+                </div>
+
+                {/* 1-Page Auto-Fit Active Indicator */}
+                <span className="hidden xl:inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                  Auto 1-Page Fit ({ntePaperFormat === "SHORT" ? "Short: 8.5×11in" : ntePaperFormat === "LONG" ? "Long: 8.5×13in" : ntePaperFormat === "A4" ? "A4: 210×297mm" : "Legal: 8.5×14in"})
+                </span>
               </div>
 
               <div className="flex items-center gap-2">
@@ -4125,170 +5609,207 @@ export default function IncidentReportPanel({
                     playAiVoiceAnnouncement(speech);
                   }}
                   title="Listen to official document reading"
-                  className="px-3 py-1.5 rounded-lg text-xs font-bold bg-white border border-slate-200 hover:bg-emerald-50 text-slate-700 hover:text-emerald-700 transition cursor-pointer inline-flex items-center gap-1.5"
+                  className="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-white border border-slate-200 hover:bg-emerald-50 text-slate-700 hover:text-emerald-700 transition cursor-pointer inline-flex items-center gap-1.5 shadow-2xs"
                 >
                   <Volume2 size={14} />
-                  <span>Listen (Voice)</span>
+                  <span>Listen</span>
+                </button>
+
+                {/* Direct Close & Archive Case button */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsNteViewerOpen(false);
+                    handleCloseCaseDirectly(selectedReport);
+                  }}
+                  className="px-3 py-1.5 rounded-lg text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs transition cursor-pointer inline-flex items-center gap-1.5 active:scale-95"
+                  title="Close and archive this case in HR 201 File"
+                >
+                  <CheckCheck size={14} />
+                  <span>Close Case</span>
                 </button>
 
                 {/* Print button */}
                 <button
                   type="button"
-                  onClick={handlePrintDocument}
-                  className="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-900 hover:bg-slate-800 text-white transition cursor-pointer inline-flex items-center gap-1.5 shadow-xs"
+                  onClick={() => handlePrintDocument("nte")}
+                  className="px-3.5 py-1.5 rounded-lg text-xs font-black bg-slate-900 hover:bg-slate-800 text-white transition cursor-pointer inline-flex items-center gap-1.5 shadow-sm active:scale-95 ring-1 ring-slate-950/20"
                 >
-                  <Printer size={14} />
+                  <Printer size={14} className="text-emerald-400" />
                   <span>Print Document</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={() => setIsNteViewerOpen(false)}
-                  className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200 transition cursor-pointer"
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200 transition cursor-pointer ml-1"
                 >
                   <X size={18} />
                 </button>
               </div>
             </div>
 
-            {/* Official Letterhead Printable Document Container */}
-            <div className="flex-1 overflow-y-auto p-4 sm:p-8 bg-slate-100/70 flex justify-center custom-scrollbar">
-              <div className="bg-white w-full max-w-[760px] p-8 sm:p-12 shadow-md border border-slate-200 rounded-sm print:p-0 print:border-none print:shadow-none text-slate-900 font-sans relative">
+            {/* Official Letterhead Printable Document Container - Desk Canvas */}
+            <div className="flex-1 min-h-0 overflow-auto p-4 sm:p-6 pb-12 bg-slate-200/80 flex justify-center items-start custom-scrollbar">
+              <div
+                id="printable-nte-document-sheet"
+                style={{
+                  width: ntePaperFormat === "A4" ? "210mm" : "8.5in",
+                  minWidth: ntePaperFormat === "A4" ? "210mm" : "8.5in",
+                  maxWidth: ntePaperFormat === "A4" ? "210mm" : "8.5in",
+                  minHeight: ntePaperFormat === "A4" ? "297mm" : ntePaperFormat === "SHORT" ? "11in" : ntePaperFormat === "LEGAL" ? "14in" : "13in",
+                  boxSizing: "border-box",
+                }}
+                className={`bg-white shadow-2xl ring-1 ring-slate-900/10 rounded-xs text-slate-900 font-sans relative shrink-0 flex flex-col justify-between transition-all duration-150 print:p-0 print:border-none print:shadow-none print:ring-0 ${ntePaperFormat === "SHORT"
+                  ? "p-4 sm:p-6 md:p-7"
+                  : ntePaperFormat === "A4"
+                    ? "p-6 sm:p-8 md:p-10"
+                    : ntePaperFormat === "LEGAL"
+                      ? "p-8 sm:p-11 md:p-13"
+                      : "p-7 sm:p-10 md:p-12"
+                  }`}
+              >
                 {/* Background Watermark */}
                 <div className="absolute inset-0 flex items-center justify-center opacity-[0.035] pointer-events-none select-none">
-                  <img src="/logos/5A.png" alt="watermark" className="w-96 h-auto" />
+                  <img src={getPaperLogo(selectedReport?.senderCompany || selectedReport?.company)} alt="watermark" className="w-[110mm] max-w-[420px] h-auto object-contain" />
                 </div>
 
-                {/* 1. Official Header */}
-                <div className="flex items-center justify-between pb-4 border-b-2 border-slate-900">
-                  {/* Left Logo */}
-                  <div className="flex items-center gap-2">
-                    <img src="/logos/5A.png" alt="Company Logo" className="h-16 w-auto object-contain" />
-                  </div>
+                <div className="relative z-10 flex flex-col flex-1 justify-between">
+                  <div>
+                    {/* 1. Official Header */}
+                    <div className="flex items-center justify-between pb-3 border-b-2 border-slate-900">
+                      {/* Left Logo */}
+                      <div className="flex items-center gap-2">
+                        <img src={getPaperLogo(selectedReport?.senderCompany || selectedReport?.company)} alt="Company Logo" className="h-16 w-auto object-contain" />
+                      </div>
 
-                  {/* Center Text */}
-                  <div className="text-center flex-1 px-4">
-                    <h2 className="text-base font-black tracking-wider uppercase text-slate-900">
-                      {selectedReport.senderCompany || selectedReport.company || "5A ROYAL GAMING OPC"}
-                    </h2>
-                    <p className="text-[11px] text-slate-700 mt-0.5">
-                      Purok Daisy, New Isabela, Tacurong City, Sultan Kudarat, Philippines
-                    </p>
-                    <p className="text-[11px] text-slate-700">
-                      Gmail: <span className="underline">imsoroglohr@gmail.com</span>
-                    </p>
-                  </div>
+                      {/* Center Text */}
+                      <div className="text-center flex-1 px-4">
+                        <h2 className="text-base sm:text-lg font-black tracking-wider uppercase text-slate-900 leading-tight">
+                          {getPaperCompanyName(selectedReport?.senderCompany || selectedReport?.company)}
+                        </h2>
+                        <p className="text-[11px] text-slate-700 mt-0.5">
+                          Purok Daisy, New Isabela, Tacurong City, Sultan Kudarat, Philippines
+                        </p>
+                        <p className="text-[11px] text-slate-700">
+                          Gmail: <span className="underline font-medium">imsoroglohr@gmail.com</span>
+                        </p>
+                      </div>
 
-                  {/* Right Emblem */}
-                  <div className="flex items-center gap-2">
-                    <img
-                      src="/logos/group_emblem.jpg"
-                      alt="Corporate Emblem"
-                      className="h-14 w-auto object-contain rounded"
-                      onError={(e) => {
-                        e.target.style.display = "none";
-                      }}
-                    />
-                  </div>
-                </div>
+                      {/* Right Emblem */}
+                      <div className="flex items-center gap-2">
+                        <img
+                          src="/logos/group_emblem.jpg"
+                          alt="Corporate Emblem"
+                          className="h-14 w-auto object-contain rounded"
+                          onError={(e) => {
+                            e.target.style.display = "none";
+                          }}
+                        />
+                      </div>
+                    </div>
 
-                {/* 2. Metadata: Date, To, Subject */}
-                <div className="mt-6 space-y-2 text-sm text-slate-900 font-sans">
-                  <div className="grid grid-cols-[80px_1fr] gap-2">
-                    <span className="font-bold">Date:</span>
-                    <span className="font-medium">{selectedReport.nteDate || "September 28, 2026"}</span>
-                  </div>
-                  <div className="grid grid-cols-[80px_1fr] gap-2">
-                    <span className="font-bold">To:</span>
-                    <span className="font-extrabold uppercase">{selectedReport.employeeName}</span>
-                  </div>
-                  <div className="grid grid-cols-[80px_1fr] gap-2">
-                    <span className="font-bold">Subject:</span>
-                    <span className="font-bold">Notice to Explain</span>
-                  </div>
-                </div>
+                    {/* 2. Metadata: Date, To, Subject */}
+                    <div className="mt-4 sm:mt-5 space-y-1 text-sm text-slate-900 font-sans">
+                      <div className="grid grid-cols-[80px_1fr] gap-2">
+                        <span className="font-bold">Date:</span>
+                        <span className="font-medium">{selectedReport.nteDate || "September 28, 2026"}</span>
+                      </div>
+                      <div className="grid grid-cols-[80px_1fr] gap-2">
+                        <span className="font-bold">To:</span>
+                        <span className="font-extrabold uppercase tracking-wide">{selectedReport.employeeName}</span>
+                      </div>
+                      <div className="grid grid-cols-[80px_1fr] gap-2">
+                        <span className="font-bold">Subject:</span>
+                        <span className="font-extrabold">Notice to Explain</span>
+                      </div>
+                    </div>
 
-                <div className="w-full h-[1.5px] bg-slate-900 my-4" />
+                    <div className="w-full h-[1.5px] bg-slate-900 my-2.5" />
 
-                {/* 3. Document Body Content (Exact structure from photo) */}
-                <div className="space-y-4 text-xs sm:text-[13px] leading-relaxed text-slate-800 text-justify">
-                  <p>
-                    {selectedReport.nteBodyParagraph1 ||
-                      `According to the incident report submitted by the HR Admin, Ms. Quennie R. Capuyan dated September 28, 2026, it was found that you have an outstanding cash shortage of PHP 12,102.00 during the audit conducted on September 24, 2026, by the CFO Admin Staff, Ms. Rollyn Beatrice Simpal and Ms. Hygiene Reusora.`}
-                  </p>
+                    {/* 3. Document Body Content (Exact structure from photo) */}
+                    <div className={`${ntePaperFormat === "SHORT" ? "space-y-2 text-[11.5px] leading-snug" : "space-y-3.5 text-xs sm:text-[13px] leading-relaxed"} text-slate-800 text-justify`}>
+                      <p>
+                        {selectedReport.nteBodyParagraph1 ||
+                          `According to the incident report submitted by the HR Admin, Ms. Quennie R. Capuyan dated September 28, 2026, it was found that you have an outstanding cash shortage of PHP 12,102.00 during the audit conducted on September 24, 2026, by the CFO Admin Staff, Ms. Rollyn Beatrice Simpal and Ms. Hygiene Reusora.`}
+                      </p>
 
-                  <p>
-                    {selectedReport.nteBodyParagraph2 ||
-                      `It was also noted that you allowed Mr. Mosher Bebot to borrow PHP 1,000.00 from the company cash and permitted advance fuel transactions for SPVR Joevert Sudsud (PHP 2,030.00) and Mr. Mosher Bebot (PHP 1,050.00) despite the scheduled release of fuel allowances. Furthermore, it was also found that there was a shortage under the name of SPVR Armando amounting to PHP 4,208.00 and other Sales Agents shortages totaling PHP 934.00 that remained uncleared and were not immediately addressed at the time of the audit.`}
-                  </p>
+                      <p>
+                        {selectedReport.nteBodyParagraph2 ||
+                          `It was also noted that you allowed Mr. Mosher Bebot to borrow PHP 1,000.00 from the company cash and permitted advance fuel transactions for SPVR Joevert Sudsud (PHP 2,030.00) and Mr. Mosher Bebot (PHP 1,050.00) despite the scheduled release of fuel allowances. Furthermore, it was also found that there was a shortage under the name of SPVR Armando amounting to PHP 4,208.00 and other Sales Agents shortages totaling PHP 934.00 that remained uncleared and were not immediately addressed at the time of the audit.`}
+                      </p>
 
-                  <p>
-                    {selectedReport.nteBodyParagraph3 ||
-                      `These circumstances raise serious concerns regarding your cash handling, accountability, and compliance with Company SOPs. As the assigned ${selectedReport.employeePosition || "Cashier"}, you are expected to strictly control company funds, follow established procedures, and promptly address shortages and irregular transactions. Failure to do so may compromise the Company's financial controls and accountability.`}
-                  </p>
+                      <p>
+                        {selectedReport.nteBodyParagraph3 ||
+                          `These circumstances raise serious concerns regarding your cash handling, accountability, and compliance with Company SOPs. As the assigned ${selectedReport.employeePosition || "Cashier"}, you are expected to strictly control company funds, follow established procedures, and promptly address shortages and irregular transactions. Failure to do so may compromise the Company's financial controls and accountability.`}
+                      </p>
 
-                  <p className="text-slate-800">
-                    {selectedReport.nteDueProcessClause ||
-                      "In line with due process (DOLE Department Order No. 147-15), you are hereby requested to submit your written explanation within five (5) calendar days upon receipt of this memo. Given the above allegations, explain why you should not be disciplined and found liable under the Employees Code of Conduct and the Labor Code."}
-                  </p>
+                      <p className="text-slate-800">
+                        {selectedReport.nteDueProcessClause ||
+                          "In line with due process (DOLE Department Order No. 147-15), you are hereby requested to submit your written explanation within five (5) calendar days upon receipt of this memo. Given the above allegations, explain why you should not be disciplined and found liable under the Employees Code of Conduct and the Labor Code."}
+                      </p>
 
-                  {/* Dynamic Code of Conduct Citation */}
-                  <div className="pl-4 border-l-4 border-amber-500 bg-amber-50/60 p-3.5 rounded-r-xl space-y-1.5 my-3">
-                    <p className="text-[11px] font-black uppercase tracking-wider text-amber-900">
-                      EMPLOYEES CODE OF CONDUCT VIOLATION CHARGE:
-                    </p>
-                    <div className="font-semibold text-slate-900 whitespace-pre-wrap text-xs sm:text-[13px] leading-relaxed">
-                      {selectedReport.codeOfConductSection ||
-                        "Section 14. Offenses Against Honesty, Financial Custodianship & Company Property."}
+                      {/* Dynamic Code of Conduct Citation */}
+                      <div className={`pl-4 border-l-4 border-amber-500 bg-amber-50/60 rounded-r-xl space-y-1 ${ntePaperFormat === "SHORT" ? "p-2.5 my-1.5" : "p-3.5 my-3"}`}>
+                        <p className="text-[11px] font-black uppercase tracking-wider text-amber-900">
+                          EMPLOYEES CODE OF CONDUCT VIOLATION CHARGE:
+                        </p>
+                        <div className="font-semibold text-slate-900 whitespace-pre-wrap text-xs sm:text-[13px] leading-relaxed">
+                          {selectedReport.codeOfConductSection ||
+                            "Section 14. Offenses Against Honesty, Financial Custodianship & Company Property."}
+                        </div>
+                      </div>
+
+                      {/* Dynamic Philippine Labor Code Grounds */}
+                      <div className={`pl-4 border-l-4 border-blue-600 bg-blue-50/60 rounded-r-xl space-y-1 ${ntePaperFormat === "SHORT" ? "p-2.5 my-1.5" : "p-3.5 my-3"}`}>
+                        <p className="text-[11px] font-black uppercase tracking-wider text-blue-900">
+                          PHILIPPINE LABOR CODE (PD 442 AS AMENDED) STATUTORY GROUNDS:
+                        </p>
+                        <div className="text-slate-900 whitespace-pre-wrap text-xs sm:text-[13px] leading-relaxed">
+                          {selectedReport.laborCodeViolation ||
+                            "Article 297 [formerly Art. 282] (Termination by Employer / Just Causes): Serious Misconduct, Gross Neglect of Duties, and Fraud / Loss of Confidence."}
+                        </div>
+                      </div>
+
+                      <p className="text-slate-800 whitespace-pre-wrap">
+                        {selectedReport.nteConclusion ||
+                          "Therefore, failure on your part to submit a written explanation within the mandatory period shall be considered an admission of the foregoing allegation.\n\nFor your strict Compliance."}
+                      </p>
                     </div>
                   </div>
 
-                  {/* Dynamic Philippine Labor Code Grounds */}
-                  <div className="pl-4 border-l-4 border-blue-600 bg-blue-50/60 p-3.5 rounded-r-xl space-y-1.5 my-3">
-                    <p className="text-[11px] font-black uppercase tracking-wider text-blue-900">
-                      PHILIPPINE LABOR CODE (PD 442 AS AMENDED) STATUTORY GROUNDS:
-                    </p>
-                    <div className="text-slate-900 whitespace-pre-wrap text-xs sm:text-[13px] leading-relaxed">
-                      {selectedReport.laborCodeViolation ||
-                        "Article 297 [formerly Art. 282] (Termination by Employer / Just Causes): Serious Misconduct, Gross Neglect of Duties, and Fraud / Loss of Confidence."}
+                  <div>
+                    {/* 4. Signatory Block (Issued by Simpal Group of Companies Head Office HRMD) */}
+                    <div className={`${ntePaperFormat === "SHORT" ? "mt-4 pt-2" : "mt-7 pt-3"}`}>
+                      <div className="space-y-0.5">
+                        <p className="font-black text-sm uppercase tracking-wide text-slate-900">
+                          {selectedReport.nteSignatoryName || "JEVINCE JAYE S. JUBAY, CHRP"}
+                        </p>
+                        <p className="text-xs text-slate-700 font-medium">
+                          {selectedReport.nteSignatoryTitle || "HRMD Manager"}
+                        </p>
+                        <p className="text-xs text-slate-700">
+                          Simpal Group of Companies (Head Office) / {selectedReport.senderCompany || selectedReport.company}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* 5. Received By Block */}
+                    <div className={`${ntePaperFormat === "SHORT" ? "mt-4 pt-1" : "mt-7 pt-2"}`}>
+                      <div className="space-y-1">
+                        <p className="text-xs text-slate-600">Received by:</p>
+                        <p className="font-black text-sm uppercase tracking-wide text-slate-900 mt-1 border-b border-slate-400 inline-block min-w-[240px] pb-1">
+                          {selectedReport.employeeName}
+                        </p>
+                        <p className="text-[11px] text-slate-500">Date & Signature</p>
+                      </div>
+                    </div>
+
+                    {/* 6. Document Footer */}
+                    <div className={`${ntePaperFormat === "SHORT" ? "mt-4 pt-2" : "mt-8 pt-3"} border-t border-slate-200 text-right text-[10px] text-slate-400`}>
+                      {selectedReport.nteFooterNote || "HR 201 File & Records 2026"}
                     </div>
                   </div>
-
-                  <p className="text-slate-800 whitespace-pre-wrap">
-                    {selectedReport.nteConclusion ||
-                      "Therefore, failure on your part to submit a written explanation within the mandatory period shall be considered an admission of the foregoing allegation.\n\nFor your strict Compliance."}
-                  </p>
-                </div>
-
-                {/* 4. Signatory Block (Issued by Simpal Group of Companies Head Office HRMD) */}
-                <div className="mt-10 pt-4">
-                  <div className="space-y-0.5">
-                    <p className="font-black text-sm uppercase tracking-wide text-slate-900">
-                      {selectedReport.nteSignatoryName || "JEVINCE JAYE S. JUBAY, CHRP"}
-                    </p>
-                    <p className="text-xs text-slate-700 font-medium">
-                      {selectedReport.nteSignatoryTitle || "HRMD Manager"}
-                    </p>
-                    <p className="text-xs text-slate-700">
-                      Simpal Group of Companies (Head Office) / {selectedReport.senderCompany || selectedReport.company}
-                    </p>
-                  </div>
-                </div>
-
-                {/* 5. Received By Block */}
-                <div className="mt-12 pt-4">
-                  <div className="space-y-1">
-                    <p className="text-xs text-slate-600">Received by:</p>
-                    <p className="font-black text-sm uppercase tracking-wide text-slate-900 mt-4 border-b border-slate-400 inline-block min-w-[240px] pb-1">
-                      {selectedReport.employeeName}
-                    </p>
-                    <p className="text-[11px] text-slate-500">Date & Signature</p>
-                  </div>
-                </div>
-
-                {/* 6. Document Footer */}
-                <div className="mt-14 pt-4 border-t border-slate-200 text-right text-[10px] text-slate-400">
-                  {selectedReport.nteFooterNote || "HR 201 File & Records 2026"}
                 </div>
               </div>
             </div>
@@ -4301,7 +5822,7 @@ export default function IncidentReportPanel({
       {/* ========================================================================= */}
       {isExplanationModalOpen && selectedReport && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-3 md:p-6 overflow-y-auto">
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-lg w-full overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-2xl w-full overflow-hidden animate-in fade-in zoom-in-95 duration-200">
             <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-purple-50/60">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-purple-600 text-white flex items-center justify-center font-bold">
@@ -4366,7 +5887,7 @@ export default function IncidentReportPanel({
       {/* ========================================================================= */}
       {isSignReceiptModalOpen && signReportTarget && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-3 md:p-6 overflow-y-auto">
-          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-xl w-full overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-3xl w-full overflow-hidden animate-in fade-in zoom-in-95 duration-200">
             <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-amber-500 to-orange-500 text-white">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-sm text-white flex items-center justify-center font-bold">
@@ -4419,22 +5940,20 @@ export default function IncidentReportPanel({
                     <button
                       type="button"
                       onClick={() => setSignMode("DRAW")}
-                      className={`px-2.5 py-1 rounded-md transition cursor-pointer ${
-                        signMode === "DRAW"
-                          ? "bg-white text-slate-900 shadow-xs font-bold"
-                          : "text-slate-500 hover:text-slate-800"
-                      }`}
+                      className={`px-2.5 py-1 rounded-md transition cursor-pointer ${signMode === "DRAW"
+                        ? "bg-white text-slate-900 shadow-xs font-bold"
+                        : "text-slate-500 hover:text-slate-800"
+                        }`}
                     >
                       Draw Signature
                     </button>
                     <button
                       type="button"
                       onClick={() => setSignMode("TYPE")}
-                      className={`px-2.5 py-1 rounded-md transition cursor-pointer ${
-                        signMode === "TYPE"
-                          ? "bg-white text-slate-900 shadow-xs font-bold"
-                          : "text-slate-500 hover:text-slate-800"
-                      }`}
+                      className={`px-2.5 py-1 rounded-md transition cursor-pointer ${signMode === "TYPE"
+                        ? "bg-white text-slate-900 shadow-xs font-bold"
+                        : "text-slate-500 hover:text-slate-800"
+                        }`}
                     >
                       Type Full Name
                     </button>
@@ -4534,7 +6053,7 @@ export default function IncidentReportPanel({
       {/* ========================================================================= */}
       {isAddToFilingsModalOpen && selectedReport && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-3 md:p-6 overflow-y-auto">
-          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-lg w-full overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-2xl w-full overflow-hidden animate-in fade-in zoom-in-95 duration-200">
             <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-900 text-white">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-slate-800 text-slate-200 flex items-center justify-center font-bold">
@@ -4615,107 +6134,307 @@ export default function IncidentReportPanel({
       )}
 
       {/* ========================================================================= */}
-      {/* LIFECYCLE MODAL 2: BRANCH HR — UPLOAD SIGNED NTE PROOF OF RECEIPT         */}
       {/* ========================================================================= */}
-      {isUploadNteProofModalOpen && selectedReport && (
+      {/* LIFECYCLE MODAL 2: BRANCH HR ONLY — UPLOAD SIGNED NTE PROOF OF RECEIPT    */}
+      {/* ========================================================================= */}
+      {/* ========================================================================= */}
+      {/* LIFECYCLE MODAL 2: BRANCH HR ONLY — UPLOAD SIGNED NTE & WRITTEN EXPLANATION */}
+      {/* ========================================================================= */}
+      {isUploadNteProofModalOpen && selectedReport && !effectiveRole.isHeadOffice && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-3 md:p-6 overflow-y-auto">
-          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-lg w-full overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-emerald-700 text-white">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-5xl w-full overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            {/* Header */}
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-emerald-800 via-teal-800 to-slate-900 text-white">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-white/20 text-white flex items-center justify-center font-bold">
-                  <FileSignature size={22} />
+                  <UploadCloud size={22} />
                 </div>
                 <div>
-                  <h2 className="text-base font-black text-white">
-                    Upload Employee-Signed NTE Proof
+                  <h2 className="text-base font-black text-white flex items-center gap-2">
+                    <span>Return Submissions: Signed NTE & Written Explanation</span>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/30 text-emerald-200 border border-emerald-400/30">
+                      2 Required Documents
+                    </span>
                   </h2>
-                  <p className="text-xs text-emerald-100">
-                    Serve NTE to employee on-site and attach signed acknowledgment receipt
+                  <p className="text-xs text-emerald-100/90">
+                    Branch HR Return to SGC Head Office • Case {selectedReport.caseNumber} ({selectedReport.employeeName})
                   </p>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => setIsUploadNteProofModalOpen(false)}
-                className="p-1.5 rounded-lg text-emerald-200 hover:text-white hover:bg-emerald-600 transition cursor-pointer"
+                className="p-1.5 rounded-lg text-emerald-200 hover:text-white hover:bg-white/10 transition cursor-pointer"
               >
                 <X size={18} />
               </button>
             </div>
 
-            <div className="p-6 space-y-4">
-              <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 text-xs space-y-1 text-emerald-950">
-                <div>
-                  <strong>Case:</strong> {selectedReport.caseNumber} • <strong>Employee:</strong> {selectedReport.employeeName}
-                </div>
-                <div>
-                  <strong>Serving HR:</strong> {effectiveRole.reportingName} ({selectedReport.company || selectedReport.senderCompany} HR)
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
-                  Date Served to Employee:
-                </label>
-                <input
-                  type="date"
-                  value={nteProofData.dateServed}
-                  onChange={(e) => setNteProofData({ ...nteProofData, dateServed: e.target.value })}
-                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-600"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
-                  Scanned Copy / Photo of Employee-Signed NTE:
-                </label>
-                {nteProofData.fileData ? (
-                  <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col items-center">
-                    <img
-                      src={nteProofData.fileData}
-                      alt="Signed NTE Proof"
-                      className="max-h-48 object-contain rounded-lg shadow-xs"
-                    />
-                    <div className="mt-2 text-xs text-slate-600 font-medium">{nteProofData.fileName || "signed_nte_proof.jpg"}</div>
-                    <button
-                      type="button"
-                      onClick={() => setNteProofData({ ...nteProofData, fileData: "", fileName: "" })}
-                      className="mt-1 text-[11px] text-rose-600 font-bold hover:underline cursor-pointer"
-                    >
-                      Remove / Upload Another File
-                    </button>
+            <div className="p-6 space-y-5 max-h-[80vh] overflow-y-auto custom-scrollbar">
+              {/* Due Process Guidance Notice */}
+              <div className="p-3.5 bg-gradient-to-r from-emerald-50 to-teal-50 rounded-2xl border border-emerald-200 text-xs text-emerald-950 flex items-start gap-3">
+                <ShieldCheck size={20} className="text-emerald-600 shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <div className="font-extrabold text-emerald-900">
+                    DOLE Due Process Compliance Protocol:
                   </div>
-                ) : (
-                  <label className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-emerald-300 hover:border-emerald-600 rounded-2xl bg-emerald-50/40 hover:bg-emerald-50 cursor-pointer transition">
-                    <FileSignature size={28} className="text-emerald-600 mb-2" />
-                    <span className="text-xs font-bold text-emerald-950">
-                      Upload Signed NTE Copy (Image / Photo)
-                    </span>
-                    <span className="text-[10px] text-emerald-700 mt-0.5">PNG, JPG, or WebP</span>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) {
-                          const reader = new FileReader();
-                          reader.onload = (evt) => {
-                            setNteProofData((prev) => ({
-                              ...prev,
-                              fileData: evt.target.result,
-                              fileName: file.name
-                            }));
-                          };
-                          reader.readAsDataURL(file);
-                        }
-                      }}
-                    />
-                  </label>
-                )}
+                  <div className="text-[11px] text-emerald-800 leading-relaxed">
+                    After the Head Office issues the Notice to Explain (NTE),the Branch HR must upload the following  <strong>two (2) documents</strong>:
+                    <ol className="list-decimal ml-4 mt-1 space-y-0.5">
+                      <li><strong>Received at Signed na NTE</strong> — Proof that the employee personally received and signed the NTE.</li>
+                      <li><strong>In-Written Explanation of Employee</strong> — The employee’s handwritten or signed written explanation in response to the NTE.</li>
+                    </ol>
+                  </div>
+                </div>
               </div>
 
-              <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2.5">
+              {/* Grid with 2 distinct document cards */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* ======================================================== */}
+                {/* DOCUMENT 1: RECEIVED & SIGNED NTE PROOF                  */}
+                {/* ======================================================== */}
+                <div className={`p-4 rounded-2xl border-2 transition flex flex-col justify-between ${nteProofData.fileData
+                  ? "bg-emerald-50/40 border-emerald-300"
+                  : "bg-slate-50 border-slate-200"
+                  }`}>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1.5 font-black text-xs text-slate-900">
+                        <span className="w-5 h-5 rounded-full bg-emerald-600 text-white flex items-center justify-center text-[10px]">
+                          1
+                        </span>
+                        <span>Received & Signed NTE</span>
+                      </div>
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${nteProofData.fileData
+                        ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
+                        : "bg-amber-100 text-amber-800 border border-amber-200"
+                        }`}>
+                        {nteProofData.fileData ? "✅ Attached" : "⚠️ Required"}
+                      </span>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">
+                        Date Served to Employee:
+                      </label>
+                      <input
+                        type="date"
+                        value={nteProofData.dateServed}
+                        onChange={(e) => setNteProofData({ ...nteProofData, dateServed: e.target.value })}
+                        className="w-full px-3 py-1.5 text-xs rounded-xl border border-slate-200 font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-600 bg-white"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">
+                        Signed NTE Copy (Scan / Photo / PDF):
+                      </label>
+                      {nteProofData.fileData ? (
+                        <div className="p-3 rounded-xl bg-white border border-emerald-200 flex flex-col items-center">
+                          {nteProofData.fileData.startsWith("data:application/pdf") ? (
+                            <div className="flex items-center gap-2 text-xs font-bold text-slate-700 py-3">
+                              <FileText size={24} className="text-emerald-600" />
+                              <span>{nteProofData.fileName || "signed_nte.pdf"}</span>
+                            </div>
+                          ) : (
+                            <img
+                              src={nteProofData.fileData}
+                              alt="Signed NTE Proof"
+                              className="max-h-36 object-contain rounded-lg shadow-2xs"
+                            />
+                          )}
+                          <div className="mt-2 text-[11px] text-slate-600 font-medium truncate max-w-full">
+                            {nteProofData.fileName || "signed_nte_proof.jpg"}
+                          </div>
+                          {selectedReport?.hasSignedNteProof ? (
+                            <div className="mt-1.5 px-2.5 py-1 rounded-lg text-[10.5px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 inline-flex items-center gap-1">
+                              <Lock size={12} className="text-emerald-700" />
+                              <span>Permanently Submitted & Locked</span>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setNteProofData({ ...nteProofData, fileData: "", fileName: "", fileSize: 0 })}
+                              className="mt-1 text-[11px] text-rose-600 font-bold hover:underline cursor-pointer"
+                            >
+                              Remove / Change File
+                            </button>
+                          )}
+                        </div>
+                      ) : (
+                        <label className="flex flex-col items-center justify-center p-5 border-2 border-dashed border-emerald-300 hover:border-emerald-600 rounded-xl bg-white hover:bg-emerald-50/50 cursor-pointer transition min-h-[140px]">
+                          <FileSignature size={26} className="text-emerald-600 mb-1.5" />
+                          <span className="text-xs font-bold text-slate-900 text-center">
+                            Upload Signed NTE Copy
+                          </span>
+                          <span className="text-[10px] text-slate-500 mt-0.5">Photo, Scanned Image, or PDF</span>
+                          <input
+                            type="file"
+                            accept="image/*,application/pdf"
+                            className="hidden"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) {
+                                const reader = new FileReader();
+                                reader.onload = (evt) => {
+                                  setNteProofData((prev) => ({
+                                    ...prev,
+                                    fileData: evt.target.result,
+                                    fileName: file.name,
+                                    fileSize: file.size
+                                  }));
+                                };
+                                reader.readAsDataURL(file);
+                              }
+                            }}
+                          />
+                        </label>
+                      )}
+                    </div>
+                  </div>
+
+                  <p className="text-[10px] text-slate-400 mt-2 italic">
+                    Must include employee's handwritten signature acknowledging receipt of the NTE.
+                  </p>
+                </div>
+
+                {/* ======================================================== */}
+                {/* DOCUMENT 2: EMPLOYEE IN-WRITTEN EXPLANATION              */}
+                {/* ======================================================== */}
+                <div className={`p-4 rounded-2xl border-2 transition flex flex-col justify-between ${explanationProofData.fileData || explanationProofData.explanationText
+                  ? "bg-purple-50/40 border-purple-300"
+                  : "bg-slate-50 border-slate-200"
+                  }`}>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1.5 font-black text-xs text-slate-900">
+                        <span className="w-5 h-5 rounded-full bg-purple-600 text-white flex items-center justify-center text-[10px]">
+                          2
+                        </span>
+                        <span>Employee Written Explanation</span>
+                      </div>
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${explanationProofData.fileData || explanationProofData.explanationText
+                        ? "bg-purple-100 text-purple-800 border border-purple-200"
+                        : "bg-amber-100 text-amber-800 border border-amber-200"
+                        }`}>
+                        {explanationProofData.fileData || explanationProofData.explanationText ? "✅ Attached" : "⚠️ Required"}
+                      </span>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">
+                        Date Explanation Submitted:
+                      </label>
+                      <input
+                        type="date"
+                        value={explanationProofData.dateSubmitted}
+                        onChange={(e) => setExplanationProofData({ ...explanationProofData, dateSubmitted: e.target.value })}
+                        className="w-full px-3 py-1.5 text-xs rounded-xl border border-slate-200 font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-600 bg-white"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">
+                        Explanation Letter (Scan / Photo / PDF):
+                      </label>
+                      {explanationProofData.fileData ? (
+                        <div className="p-3 rounded-xl bg-white border border-purple-200 flex flex-col items-center">
+                          {explanationProofData.fileData.startsWith("data:application/pdf") ? (
+                            <div className="flex items-center gap-2 text-xs font-bold text-slate-700 py-3">
+                              <FileText size={24} className="text-purple-600" />
+                              <span>{explanationProofData.fileName || "explanation_letter.pdf"}</span>
+                            </div>
+                          ) : (
+                            <img
+                              src={explanationProofData.fileData}
+                              alt="Explanation Proof"
+                              className="max-h-36 object-contain rounded-lg shadow-2xs"
+                            />
+                          )}
+                          <div className="mt-2 text-[11px] text-slate-600 font-medium truncate max-w-full">
+                            {explanationProofData.fileName || "employee_written_explanation.jpg"}
+                          </div>
+                          {selectedReport?.hasExplanationProof ? (
+                            <div className="mt-1.5 px-2.5 py-1 rounded-lg text-[10.5px] font-bold bg-purple-100 text-purple-800 border border-purple-300 inline-flex items-center gap-1">
+                              <Lock size={12} className="text-purple-700" />
+                              <span>Permanently Submitted & Locked</span>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setExplanationProofData({ ...explanationProofData, fileData: "", fileName: "", fileSize: 0 })}
+                              className="mt-1 text-[11px] text-rose-600 font-bold hover:underline cursor-pointer"
+                            >
+                              Remove / Change File
+                            </button>
+                          )}
+                        </div>
+                      ) : (
+                        <label className="flex flex-col items-center justify-center p-5 border-2 border-dashed border-purple-300 hover:border-purple-600 rounded-xl bg-white hover:bg-purple-50/50 cursor-pointer transition min-h-[140px]">
+                          <FileText size={26} className="text-purple-600 mb-1.5" />
+                          <span className="text-xs font-bold text-slate-900 text-center">
+                            Upload Employee Explanation Letter
+                          </span>
+                          <span className="text-[10px] text-slate-500 mt-0.5">Handwritten or typed signed letter</span>
+                          <input
+                            type="file"
+                            accept="image/*,application/pdf"
+                            className="hidden"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) {
+                                const reader = new FileReader();
+                                reader.onload = (evt) => {
+                                  setExplanationProofData((prev) => ({
+                                    ...prev,
+                                    fileData: evt.target.result,
+                                    fileName: file.name,
+                                    fileSize: file.size
+                                  }));
+                                };
+                                reader.readAsDataURL(file);
+                              }
+                            }}
+                          />
+                        </label>
+                      )}
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">
+                        Employee Explanation Notes / Summary:
+                      </label>
+                      <textarea
+                        rows={2}
+                        value={explanationProofData.explanationText}
+                        onChange={(e) => setExplanationProofData({ ...explanationProofData, explanationText: e.target.value })}
+                        placeholder="Transcribed statement, key explanation points, or employee admission/defense..."
+                        className="w-full p-2 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-purple-600 bg-white"
+                      />
+                    </div>
+                  </div>
+
+                  <p className="text-[10px] text-slate-400 mt-2 italic">
+                    The formal in-written response submitted by the employee to defend against allegations.
+                  </p>
+                </div>
+              </div>
+
+              {/* Submitting HR Identity Confirmation */}
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs flex flex-wrap items-center justify-between gap-2 text-slate-700">
+                <div className="flex items-center gap-2">
+                  <span className="font-bold text-slate-500 uppercase text-[10px]">Transmitting HR:</span>
+                  <span className="font-semibold text-slate-900">
+                    {effectiveRole.reportingName || effectiveRole.userName || currentUser?.name || "Branch HR"} ({selectedReport.company || selectedReport.senderCompany} HR)
+                  </span>
+                </div>
+                <div className="text-[11px] text-teal-700 font-mono">
+                  📁 High-Performance Multi-Bucket IndexedDB & Cloud Sync
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-3">
                 <button
                   type="button"
                   onClick={() => setIsUploadNteProofModalOpen(false)}
@@ -4726,10 +6445,14 @@ export default function IncidentReportPanel({
                 <button
                   type="button"
                   onClick={handleSaveNteProof}
-                  className="px-5 py-2.5 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-600/20 transition cursor-pointer inline-flex items-center gap-2 active:scale-98"
+                  className="px-6 py-2.5 rounded-xl text-xs font-black bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 text-white shadow-lg shadow-emerald-700/25 transition cursor-pointer inline-flex items-center gap-2 active:scale-98"
                 >
-                  <Check size={15} />
-                  <span>Confirm Signed NTE Upload</span>
+                  <Check size={16} />
+                  <span>
+                    {nteProofData.fileData && (explanationProofData.fileData || explanationProofData.explanationText)
+                      ? "Transmit Both Documents to Head Office ➔ SGC"
+                      : "Save & Transmit Submissions to Head Office SGC"}
+                  </span>
                 </button>
               </div>
             </div>
@@ -4738,11 +6461,347 @@ export default function IncidentReportPanel({
       )}
 
       {/* ========================================================================= */}
+      {/* DEDICATED DUE PROCESS SUBMISSIONS VIEWER (SIGNED NTE & WRITTEN EXPLANATION)*/}
+      {/* ========================================================================= */}
+      {isViewSignedNteProofModalOpen && selectedReport && (
+        <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 md:p-6 overflow-y-auto">
+          <div className="bg-slate-900 border border-slate-700/80 rounded-3xl shadow-2xl max-w-7xl w-full max-h-[97vh] h-[95vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200 text-white">
+            {/* Header with Dual Document Tab Switcher */}
+            <div className="px-6 py-3.5 border-b border-slate-800 bg-slate-900/95 flex flex-wrap items-center justify-between gap-3 shrink-0">
+              <div className="flex items-center gap-3">
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold ${activeProofViewerTab === "EXPLANATION_DOC"
+                  ? "bg-purple-500/20 text-purple-400 border border-purple-500/30"
+                  : "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
+                  }`}>
+                  {activeProofViewerTab === "EXPLANATION_DOC" ? <FileText size={22} /> : <FileCheck size={22} />}
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-base font-black text-white">
+                      {activeProofViewerTab === "EXPLANATION_DOC"
+                        ? "Employee In-Written Explanation"
+                        : "Received & Signed Notice to Explain"}
+                    </h2>
+                    {effectiveRole.isHeadOffice ? (
+                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                        👁️ SGC Head Office Audit
+                      </span>
+                    ) : (
+                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                        Branch HR Verified Submissions
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Case {selectedReport.caseNumber} • Respondent: {selectedReport.employeeName}
+                  </p>
+                </div>
+              </div>
+
+              {/* Document Tab Switcher */}
+              <div className="flex items-center gap-1.5 bg-slate-950/80 p-1 rounded-xl border border-slate-800 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setActiveProofViewerTab("SIGNED_NTE")}
+                  className={`px-3 py-1.5 rounded-lg font-bold transition flex items-center gap-1.5 cursor-pointer ${activeProofViewerTab === "SIGNED_NTE"
+                    ? "bg-emerald-600 text-white shadow-xs"
+                    : "text-slate-400 hover:text-white hover:bg-slate-800"
+                    }`}
+                >
+                  <FileSignature size={13} />
+                  <span>1. Signed NTE</span>
+                  {activeProofRecord?.fileData ? (
+                    <span className="w-2 h-2 rounded-full bg-emerald-300 ml-0.5" title="Document Attached" />
+                  ) : null}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveProofViewerTab("EXPLANATION_DOC")}
+                  className={`px-3 py-1.5 rounded-lg font-bold transition flex items-center gap-1.5 cursor-pointer ${activeProofViewerTab === "EXPLANATION_DOC"
+                    ? "bg-purple-600 text-white shadow-xs"
+                    : "text-slate-400 hover:text-white hover:bg-slate-800"
+                    }`}
+                >
+                  <FileText size={13} />
+                  <span>2. Written Explanation</span>
+                  {(activeExplanationRecord?.fileData || activeExplanationRecord?.explanationText) ? (
+                    <span className="w-2 h-2 rounded-full bg-purple-300 ml-0.5" title="Explanation Attached" />
+                  ) : null}
+                </button>
+              </div>
+
+              {/* Toolbar Controls */}
+              <div className="flex items-center gap-2">
+                {/* Zoom controls */}
+                <div className="flex items-center bg-slate-800 rounded-lg p-0.5 border border-slate-700 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setProofZoomLevel((prev) => Math.max(0.6, Number((prev - 0.15).toFixed(2))))}
+                    title="Zoom Out"
+                    className="p-1.5 hover:bg-slate-700 rounded text-slate-300 hover:text-white transition cursor-pointer"
+                  >
+                    <ZoomOut size={14} />
+                  </button>
+                  <span className="px-2 font-mono text-[11px] text-slate-300 min-w-[42px] text-center font-bold">
+                    {Math.round(proofZoomLevel * 100)}%
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setProofZoomLevel((prev) => Math.min(2.5, Number((prev + 0.15).toFixed(2))))}
+                    title="Zoom In"
+                    className="p-1.5 hover:bg-slate-700 rounded text-slate-300 hover:text-white transition cursor-pointer"
+                  >
+                    <ZoomIn size={14} />
+                  </button>
+                  {proofZoomLevel !== 1 && (
+                    <button
+                      type="button"
+                      onClick={() => setProofZoomLevel(1)}
+                      className="px-2 py-0.5 text-[10px] bg-slate-700 hover:bg-slate-600 rounded text-slate-200 font-bold transition ml-0.5 cursor-pointer"
+                    >
+                      Reset
+                    </button>
+                  )}
+                </div>
+
+                {/* Print button */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const activeFile = activeProofViewerTab === "EXPLANATION_DOC"
+                      ? (activeExplanationRecord?.fileData || "")
+                      : (activeProofRecord?.fileData || "");
+                    const titleStr = activeProofViewerTab === "EXPLANATION_DOC"
+                      ? `Employee Written Explanation - ${selectedReport.caseNumber}`
+                      : `Signed NTE Proof - ${selectedReport.caseNumber}`;
+                    const printWin = window.open("", "_blank");
+                    if (printWin && activeFile) {
+                      printWin.document.write(`
+                        <html>
+                          <head>
+                            <title>${titleStr}</title>
+                            <style>
+                              body { margin: 0; padding: 20px; display: flex; justify-content: center; align-items: center; background: #fff; }
+                              img { max-width: 100%; height: auto; }
+                            </style>
+                          </head>
+                          <body>
+                            <img src="${activeFile}" onload="window.print(); window.close();" />
+                          </body>
+                        </html>
+                      `);
+                      printWin.document.close();
+                    } else {
+                      window.print();
+                    }
+                  }}
+                  className="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 transition cursor-pointer inline-flex items-center gap-1.5"
+                  title="Print active document"
+                >
+                  <Printer size={14} />
+                  <span>Print</span>
+                </button>
+
+                {/* Download button */}
+                {((activeProofViewerTab === "EXPLANATION_DOC" ? activeExplanationRecord?.fileData : activeProofRecord?.fileData)) && (
+                  <a
+                    href={activeProofViewerTab === "EXPLANATION_DOC" ? activeExplanationRecord?.fileData : activeProofRecord?.fileData}
+                    download={
+                      activeProofViewerTab === "EXPLANATION_DOC"
+                        ? (activeExplanationRecord?.fileName || `Employee_Explanation_${selectedReport.caseNumber}.jpg`)
+                        : (activeProofRecord?.fileName || `Signed_NTE_${selectedReport.caseNumber}.jpg`)
+                    }
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold text-white transition cursor-pointer inline-flex items-center gap-1.5 shadow-xs ${activeProofViewerTab === "EXPLANATION_DOC" ? "bg-purple-600 hover:bg-purple-500" : "bg-emerald-600 hover:bg-emerald-500"
+                      }`}
+                    title="Download high-resolution file"
+                  >
+                    <Download size={14} />
+                    <span>Download</span>
+                  </a>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => setIsViewSignedNteProofModalOpen(false)}
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+            </div>
+
+            {/* Verification Metadata Strip */}
+            <div className="px-6 py-2.5 bg-slate-800/60 border-b border-slate-800 text-xs flex flex-wrap items-center justify-between gap-3 text-slate-300">
+              <div className="flex items-center gap-4 flex-wrap">
+                <div>
+                  <span className="text-slate-500 font-bold uppercase text-[10px] mr-1.5">
+                    {activeProofViewerTab === "EXPLANATION_DOC" ? "Date Submitted:" : "Date Served:"}
+                  </span>
+                  <span className={`font-semibold ${activeProofViewerTab === "EXPLANATION_DOC" ? "text-purple-400" : "text-emerald-400"}`}>
+                    {activeProofViewerTab === "EXPLANATION_DOC"
+                      ? (activeExplanationRecord?.dateSubmitted || selectedReport.explanationReceivedAt || "Recorded on-site")
+                      : (activeProofRecord?.dateServed || selectedReport.nteServedAt || "Recorded on-site")}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-slate-500 font-bold uppercase text-[10px] mr-1.5">
+                    {activeProofViewerTab === "EXPLANATION_DOC" ? "Transmitted By:" : "Served & Uploaded By:"}
+                  </span>
+                  <span className="font-semibold text-white">
+                    {activeProofViewerTab === "EXPLANATION_DOC"
+                      ? (activeExplanationRecord?.uploadedBy || activeProofRecord?.uploadedBy || selectedReport.senderHrName || "Branch HR")
+                      : (activeProofRecord?.uploadedBy || selectedReport.nteServedBy || selectedReport.senderHrName || "Branch HR")}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-slate-500 font-bold uppercase text-[10px] mr-1.5">Storage Location:</span>
+                  <span className="font-mono text-[11px] text-teal-400">
+                    IndexedDB Database Bucket & Cloud Sync
+                  </span>
+                </div>
+              </div>
+
+              <div className={`flex items-center gap-1.5 font-bold text-xs ${activeProofViewerTab === "EXPLANATION_DOC" ? "text-purple-400" : "text-emerald-400"
+                }`}>
+                <CheckCircle2 size={14} />
+                <span>
+                  {activeProofViewerTab === "EXPLANATION_DOC"
+                    ? "Employee Formal Written Response"
+                    : "Acknowledged & Signed by Employee"}
+                </span>
+              </div>
+            </div>
+
+            {/* Document Preview Canvas */}
+            <div className="flex-1 min-h-[580px] max-h-[82vh] overflow-auto p-6 bg-slate-950 flex flex-col items-center justify-start custom-scrollbar">
+              {/* If viewing explanation and there are explanation notes/text, show top quote banner */}
+              {activeProofViewerTab === "EXPLANATION_DOC" && (activeExplanationRecord?.explanationText || selectedReport.explanationText) && (
+                <div className="w-full max-w-4xl mb-5 p-4 rounded-2xl bg-purple-950/40 border border-purple-500/30 text-white shrink-0">
+                  <div className="flex items-center gap-2 font-bold text-xs text-purple-300 mb-1.5">
+                    <FileText size={15} />
+                    <span>Employee In-Written Explanation Statement & Summary:</span>
+                  </div>
+                  <p className="text-xs text-slate-200 leading-relaxed italic whitespace-pre-wrap pl-1 border-l-2 border-purple-500/50">
+                    "{activeExplanationRecord?.explanationText || selectedReport.explanationText}"
+                  </p>
+                </div>
+              )}
+
+              {isLoadingProof ? (
+                <div className="py-20 flex flex-col items-center justify-center text-slate-400 gap-3 my-auto">
+                  <RefreshCw size={28} className="animate-spin text-emerald-400" />
+                  <p className="text-xs font-semibold">Retrieving documents from database bucket...</p>
+                </div>
+              ) : activeProofViewerTab === "SIGNED_NTE" ? (
+                activeProofRecord?.fileData ? (
+                  <div
+                    className="transition-transform duration-150 ease-out flex justify-center my-auto"
+                    style={{ transform: `scale(${proofZoomLevel})`, transformOrigin: "center center" }}
+                  >
+                    {activeProofRecord.fileData.startsWith("data:application/pdf") ? (
+                      <iframe
+                        src={activeProofRecord.fileData}
+                        title="Signed NTE Document PDF"
+                        className="w-[850px] h-[1150px] rounded-lg shadow-2xl bg-white border border-slate-800"
+                      />
+                    ) : (
+                      <img
+                        src={activeProofRecord.fileData}
+                        alt={`Signed NTE Proof - ${selectedReport.caseNumber}`}
+                        className="max-w-full h-auto max-h-[78vh] rounded-lg shadow-2xl border border-slate-800 object-contain bg-white"
+                      />
+                    )}
+                  </div>
+                ) : (
+                  <div className="py-20 flex flex-col items-center justify-center text-slate-500 gap-3 my-auto">
+                    <FileSignature size={36} className="text-slate-600" />
+                    <p className="text-sm font-bold text-slate-300">Signed NTE Document Not Found in Bucket</p>
+                    <p className="text-xs text-slate-400 max-w-sm text-center">
+                      The signed NTE acknowledgment proof has not yet been attached. Branch HR can upload it using the button below.
+                    </p>
+                    {!effectiveRole.isHeadOffice && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsViewSignedNteProofModalOpen(false);
+                          handleOpenUploadNteProof(selectedReport, "ALL");
+                        }}
+                        className="px-4 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white transition cursor-pointer inline-flex items-center gap-1.5 shadow-md"
+                      >
+                        <UploadCloud size={14} />
+                        <span>Upload Signed NTE Now</span>
+                      </button>
+                    )}
+                  </div>
+                )
+              ) : (
+                /* Tab 2: Employee Written Explanation */
+                activeExplanationRecord?.fileData ? (
+                  <div
+                    className="transition-transform duration-150 ease-out flex justify-center my-auto"
+                    style={{ transform: `scale(${proofZoomLevel})`, transformOrigin: "center center" }}
+                  >
+                    {activeExplanationRecord.fileData.startsWith("data:application/pdf") ? (
+                      <iframe
+                        src={activeExplanationRecord.fileData}
+                        title="Employee Written Explanation PDF"
+                        className="w-[850px] h-[1150px] rounded-lg shadow-2xl bg-white border border-slate-800"
+                      />
+                    ) : (
+                      <img
+                        src={activeExplanationRecord.fileData}
+                        alt={`Employee Written Explanation - ${selectedReport.caseNumber}`}
+                        className="max-w-full h-auto max-h-[78vh] rounded-lg shadow-2xl border border-slate-800 object-contain bg-white"
+                      />
+                    )}
+                  </div>
+                ) : (
+                  <div className="py-16 flex flex-col items-center justify-center text-slate-500 gap-3 my-auto">
+                    <FileText size={36} className="text-slate-600" />
+                    <p className="text-sm font-bold text-slate-300">Written Explanation Letter Not Attached</p>
+                    <p className="text-xs text-slate-400 max-w-sm text-center">
+                      The formal letter or photo of the employee's written explanation has not yet been attached by Branch HR.
+                    </p>
+                    {!effectiveRole.isHeadOffice && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsViewSignedNteProofModalOpen(false);
+                          handleOpenUploadNteProof(selectedReport, "EXPLANATION");
+                        }}
+                        className="px-4 py-2 rounded-xl text-xs font-bold bg-purple-600 hover:bg-purple-500 text-white transition cursor-pointer inline-flex items-center gap-1.5 shadow-md"
+                      >
+                        <UploadCloud size={14} />
+                        <span>Upload Employee Explanation Letter</span>
+                      </button>
+                    )}
+                  </div>
+                )
+              )}
+            </div>
+
+            {/* Footer with Role Guidance */}
+            <div className="px-6 py-3 border-t border-slate-800 bg-slate-900/90 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-400">
+              <div className="flex items-center gap-2">
+                <ShieldCheck size={16} className="text-emerald-400 shrink-0" />
+                <span>
+                  {effectiveRole.isHeadOffice
+                    ? "Head Office Audit View: Both the received & signed NTE and employee in-written explanation are required for due process evaluation."
+                    : "Branch HR View: Submitting both documents ensures complete compliance with DOLE D.O. 147-15 due process standards. Submissions are permanently recorded and cannot be altered."}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* ========================================================================= */}
       {/* LIFECYCLE MODAL 3: SGC HEAD OFFICE — ISSUE NOTICE OF WARNING              */}
       {/* ========================================================================= */}
       {isWarningModalOpen && selectedReport && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-3 md:p-6 overflow-y-auto">
-          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-xl w-full overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-4xl w-full overflow-hidden animate-in fade-in zoom-in-95 duration-200 my-auto">
             <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-amber-500 text-slate-950">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-slate-950 text-amber-400 flex items-center justify-center font-bold">
@@ -4753,7 +6812,7 @@ export default function IncidentReportPanel({
                     SGC Discretion: Issue Notice of Warning
                   </h2>
                   <p className="text-xs text-slate-800">
-                    Conclude due process with an official Written Warning & Reprimand
+                    Official Disciplinary Warning Memo — 1:1 Matching Standard Format
                   </p>
                 </div>
               </div>
@@ -4766,58 +6825,248 @@ export default function IncidentReportPanel({
               </button>
             </div>
 
-            <div className="p-6 space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="p-6 space-y-4 max-h-[82vh] overflow-y-auto custom-scrollbar">
+              {/* Row 1: Header / Memo Settings */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
+                    Memo Date:
+                  </label>
+                  <input
+                    type="text"
+                    value={warningForm.date || ""}
+                    onChange={(e) => setWarningForm({ ...warningForm, date: e.target.value })}
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    placeholder="e.g. April 6, 2026"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
+                    To (Employee Name):
+                  </label>
+                  <input
+                    type="text"
+                    value={warningForm.toEmployee || ""}
+                    onChange={(e) => setWarningForm({ ...warningForm, toEmployee: e.target.value })}
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 font-bold uppercase text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  />
+                </div>
+
                 <div>
                   <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
                     Warning Sanction Level:
                   </label>
                   <select
-                    value={warningForm.penalty}
-                    onChange={(e) => setWarningForm({ ...warningForm, penalty: e.target.value })}
+                    value={warningForm.penalty || "Final Stern Warning"}
+                    onChange={(e) => {
+                      const newPenalty = e.target.value;
+                      const updatedP3 = `In view of this, please be informed that this shall serve as your “${newPenalty}”. Any further violations of company policies may result in the immediate termination of your employment.`;
+                      setWarningForm({ ...warningForm, penalty: newPenalty, paragraph3: updatedP3 });
+                    }}
                     className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
                   >
+                    <option value="Final Stern Warning">Final Stern Warning (Official Sample)</option>
                     <option value="1st Written Warning & Reprimand">1st Written Warning & Reprimand</option>
                     <option value="2nd Written Warning">2nd Written Warning</option>
-                    <option value="Final Written Warning">Final Written Warning</option>
+                    <option value="Written Warning">Written Warning</option>
                   </select>
                 </div>
+              </div>
 
+              {/* Row 2: Company Header Details */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3.5 bg-slate-50 rounded-2xl border border-slate-200">
                 <div>
-                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
-                    Signatory (Head Office):
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">
+                    Company Name:
                   </label>
                   <input
                     type="text"
-                    value={warningForm.signatoryName}
-                    onChange={(e) => setWarningForm({ ...warningForm, signatoryName: e.target.value })}
-                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 font-bold text-slate-900"
+                    value={warningForm.companyName || ""}
+                    onChange={(e) => setWarningForm({ ...warningForm, companyName: e.target.value, signatoryCompany: e.target.value })}
+                    className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 font-bold text-slate-900"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">
+                    Company Address:
+                  </label>
+                  <input
+                    type="text"
+                    value={warningForm.companyAddress || ""}
+                    onChange={(e) => setWarningForm({ ...warningForm, companyAddress: e.target.value })}
+                    className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 text-slate-800"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">
+                    Company Email:
+                  </label>
+                  <input
+                    type="text"
+                    value={warningForm.companyEmail || ""}
+                    onChange={(e) => setWarningForm({ ...warningForm, companyEmail: e.target.value })}
+                    className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 text-slate-800 font-mono"
                   />
                 </div>
               </div>
 
+              {/* Row 3: Quick Calculation Helpers for Paragraph 1 */}
+              <div className="p-3.5 bg-amber-50/70 rounded-2xl border border-amber-200/80 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-amber-950 flex items-center gap-1.5">
+                    <Sparkles size={14} className="text-amber-600" />
+                    Quick Incident Data Synchronization
+                  </span>
+                  <span className="text-[11px] text-amber-800 font-medium">
+                    Automatically converts number to formal English words
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-amber-900 mb-1">
+                      Written Explanation Date:
+                    </label>
+                    <input
+                      type="text"
+                      value={warningForm.explanationDate || ""}
+                      onChange={(e) => {
+                        const newExpDate = e.target.value;
+                        const words = formatPesosInWords(warningForm.shortageAmount || 1445);
+                        const newP1 = `This is to acknowledge receipt of your written explanation dated ${newExpDate}, with reference to the incident involving a cash shortage in the amount of ${words}.`;
+                        setWarningForm({ ...warningForm, explanationDate: newExpDate, paragraph1: newP1 });
+                      }}
+                      className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-amber-300 bg-white font-medium text-slate-900"
+                      placeholder="e.g. March 22, 2026"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-amber-900 mb-1">
+                      Cash Shortage Amount (PHP):
+                    </label>
+                    <input
+                      type="number"
+                      step="any"
+                      value={warningForm.shortageAmount || ""}
+                      onChange={(e) => {
+                        const amt = parseFloat(e.target.value) || 0;
+                        const words = formatPesosInWords(amt);
+                        const expDate = warningForm.explanationDate || "March 22, 2026";
+                        const newP1 = `This is to acknowledge receipt of your written explanation dated ${expDate}, with reference to the incident involving a cash shortage in the amount of ${words}.`;
+                        setWarningForm({ ...warningForm, shortageAmount: amt, paragraph1: newP1 });
+                      }}
+                      className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-amber-300 bg-white font-bold text-slate-900"
+                      placeholder="e.g. 1445"
+                    />
+                  </div>
+                </div>
+                <div className="text-[11px] text-amber-900 font-mono bg-white/80 p-2 rounded-lg border border-amber-200">
+                  <strong>Converted:</strong> {formatPesosInWords(warningForm.shortageAmount || 1445)}
+                </div>
+              </div>
+
+              {/* Paragraph 1 */}
               <div>
                 <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
-                  Subject Line:
+                  Paragraph 1 — Acknowledgment & Incident Details:
                 </label>
-                <input
-                  type="text"
-                  value={warningForm.subject}
-                  onChange={(e) => setWarningForm({ ...warningForm, subject: e.target.value })}
-                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 font-bold text-slate-900"
+                <textarea
+                  rows={2}
+                  value={warningForm.paragraph1 || ""}
+                  onChange={(e) => setWarningForm({ ...warningForm, paragraph1: e.target.value })}
+                  className="w-full p-2.5 text-xs rounded-xl border border-slate-200 leading-relaxed font-sans text-slate-800"
                 />
               </div>
 
+              {/* Paragraph 2 */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700">
+                    Paragraph 2 — Code of Conduct Violation:
+                  </label>
+                  <span className="text-[10px] text-slate-500 font-medium">Will be formatted in bold</span>
+                </div>
+                <input
+                  type="text"
+                  value={warningForm.violationClause || ""}
+                  onChange={(e) => {
+                    const clause = e.target.value;
+                    const newP2 = `After careful review, it has been determined that your actions constitute a violation of ${clause} as stated in the company’s Code of Conduct.`;
+                    setWarningForm({ ...warningForm, violationClause: clause, paragraph2: newP2 });
+                  }}
+                  className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-200 font-semibold text-slate-900"
+                  placeholder="e.g. Article IV – Section 18. Offenses Related to Job Performance and Productivity"
+                />
+                <textarea
+                  rows={2}
+                  value={warningForm.paragraph2 || ""}
+                  onChange={(e) => setWarningForm({ ...warningForm, paragraph2: e.target.value })}
+                  className="w-full p-2.5 text-xs rounded-xl border border-slate-200 leading-relaxed font-sans text-slate-800"
+                />
+              </div>
+
+              {/* Paragraph 3 */}
               <div>
                 <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
-                  Notice Content:
+                  Paragraph 3 — Sanction & Termination Warning:
                 </label>
                 <textarea
-                  rows={6}
-                  value={warningForm.body}
-                  onChange={(e) => setWarningForm({ ...warningForm, body: e.target.value })}
-                  className="w-full p-3 text-xs rounded-xl border border-slate-200 leading-relaxed font-sans"
+                  rows={2}
+                  value={warningForm.paragraph3 || ""}
+                  onChange={(e) => setWarningForm({ ...warningForm, paragraph3: e.target.value })}
+                  className="w-full p-2.5 text-xs rounded-xl border border-slate-200 leading-relaxed font-sans text-slate-800"
                 />
+              </div>
+
+              {/* Paragraph 4 */}
+              <div>
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
+                  Paragraph 4 — Directive:
+                </label>
+                <input
+                  type="text"
+                  value={warningForm.paragraph4 || ""}
+                  onChange={(e) => setWarningForm({ ...warningForm, paragraph4: e.target.value })}
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 font-medium text-slate-800"
+                  placeholder="Please be guided accordingly."
+                />
+              </div>
+
+              {/* Signatory & Footer */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
+                    Signatory Name:
+                  </label>
+                  <input
+                    type="text"
+                    value={warningForm.signatoryName || ""}
+                    onChange={(e) => setWarningForm({ ...warningForm, signatoryName: e.target.value })}
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 font-bold text-slate-900"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
+                    Signatory Title:
+                  </label>
+                  <input
+                    type="text"
+                    value={warningForm.signatoryTitle || ""}
+                    onChange={(e) => setWarningForm({ ...warningForm, signatoryTitle: e.target.value })}
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 text-slate-800"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
+                    Records Footer Note:
+                  </label>
+                  <input
+                    type="text"
+                    value={warningForm.footerText || ""}
+                    onChange={(e) => setWarningForm({ ...warningForm, footerText: e.target.value })}
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 text-slate-600 font-mono text-[11px]"
+                  />
+                </div>
               </div>
 
               <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2.5">
@@ -4834,7 +7083,7 @@ export default function IncidentReportPanel({
                   className="px-5 py-2.5 rounded-xl text-xs font-black bg-amber-500 hover:bg-amber-600 text-slate-950 shadow-md transition cursor-pointer inline-flex items-center gap-2 active:scale-98"
                 >
                   <AlertTriangle size={15} />
-                  <span>Promulgate Notice of Warning</span>
+                  <span>Save & Preview Notice of Warning</span>
                 </button>
               </div>
             </div>
@@ -4843,145 +7092,633 @@ export default function IncidentReportPanel({
       )}
 
       {/* ========================================================================= */}
+      {/* AUTHENTIC DOCUMENT VIEWER: NOTICE OF WARNING (1:1 SAMPLE FORMAT)          */}
+      {/* ========================================================================= */}
+      {isWarningViewerOpen && selectedReport && (
+        <div className="fixed inset-0 z-50 bg-slate-900/75 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-5xl w-full max-h-[96vh] h-[96vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            {/* Modal Controls Bar */}
+            <div className="px-5 py-2.5 border-b border-slate-200 bg-slate-50 flex flex-wrap items-center justify-between gap-3 shrink-0 no-print shadow-2xs">
+              <div className="flex flex-wrap items-center gap-2.5">
+                <span className="font-mono text-xs font-black bg-slate-900 text-white px-2.5 py-1 rounded-md shadow-2xs">
+                  {selectedReport.caseNumber}
+                </span>
+                <span className="text-xs font-black text-slate-800 tracking-tight hidden sm:inline">
+                  Notice of Warning Document
+                </span>
+
+                {/* Bond Paper Format Selector (Short / Long / Standard A4 / Legal) */}
+                <div className="flex items-center bg-slate-200/90 p-0.5 rounded-lg text-xs font-semibold ml-1">
+                  <button
+                    type="button"
+                    onClick={() => setWarningPaperFormat("SHORT")}
+                    className={`px-2.5 py-1 rounded-md transition cursor-pointer ${warningPaperFormat === "SHORT"
+                      ? "bg-white text-slate-900 shadow-xs font-bold"
+                      : "text-slate-600 hover:text-slate-900"
+                      }`}
+                  >
+                    Short (8.5×11)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setWarningPaperFormat("LONG")}
+                    className={`px-2.5 py-1 rounded-md transition cursor-pointer ${warningPaperFormat === "LONG"
+                      ? "bg-white text-slate-900 shadow-xs font-bold"
+                      : "text-slate-600 hover:text-slate-900"
+                      }`}
+                  >
+                    Long (8.5×13)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setWarningPaperFormat("A4")}
+                    className={`px-2.5 py-1 rounded-md transition cursor-pointer ${warningPaperFormat === "A4"
+                      ? "bg-white text-slate-900 shadow-xs font-bold"
+                      : "text-slate-600 hover:text-slate-900"
+                      }`}
+                  >
+                    Standard (A4)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setWarningPaperFormat("LEGAL")}
+                    className={`px-2.5 py-1 rounded-md transition cursor-pointer ${warningPaperFormat === "LEGAL"
+                      ? "bg-white text-slate-900 shadow-xs font-bold"
+                      : "text-slate-600 hover:text-slate-900"
+                      }`}
+                  >
+                    Legal (8.5×14)
+                  </button>
+                </div>
+
+                {/* Auto 1-Page Fit Indicator */}
+                <span className="hidden xl:inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+                  Auto 1-Page Fit ({warningPaperFormat === "SHORT" ? "Short: 8.5×11in" : warningPaperFormat === "LONG" ? "Long: 8.5×13in" : warningPaperFormat === "A4" ? "A4: 210×297mm" : "Legal: 8.5×14in"})
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {/* Voice speech */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const speech = `Official Notice of Warning issued by 5A Royal Gaming OPC for ${warningForm.toEmployee || selectedReport.employeeName}. Date: ${warningForm.date || "April 6, 2026"}. This shall serve as your Final Stern Warning.`;
+                    playAiVoiceAnnouncement(speech);
+                  }}
+                  title="Listen to official document reading"
+                  className="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-white border border-slate-200 hover:bg-amber-50 text-slate-700 hover:text-amber-800 transition cursor-pointer inline-flex items-center gap-1.5 shadow-2xs"
+                >
+                  <Volume2 size={14} />
+                  <span>Listen</span>
+                </button>
+
+                {/* Edit Memo button */}
+                {effectiveRole.isHeadOffice && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsWarningViewerOpen(false);
+                      setIsWarningModalOpen(true);
+                    }}
+                    className="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-white border border-slate-300 hover:bg-slate-50 text-slate-800 transition cursor-pointer inline-flex items-center gap-1.5 shadow-2xs"
+                  >
+                    <FileEdit size={14} />
+                    <span>Edit Memo</span>
+                  </button>
+                )}
+
+                {/* Direct Close & Archive Case button */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsWarningViewerOpen(false);
+                    handleCloseCaseDirectly(selectedReport);
+                  }}
+                  className="px-3 py-1.5 rounded-lg text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs transition cursor-pointer inline-flex items-center gap-1.5 active:scale-95"
+                  title="Close and archive this case in HR 201 File after Warning"
+                >
+                  <CheckCheck size={14} />
+                  <span>Close Case</span>
+                </button>
+
+                {/* Print button */}
+                <button
+                  type="button"
+                  onClick={() => handlePrintDocument("warning")}
+                  className="px-3.5 py-1.5 rounded-lg text-xs font-black bg-slate-900 hover:bg-slate-800 text-white transition cursor-pointer inline-flex items-center gap-1.5 shadow-sm active:scale-95 ring-1 ring-slate-950/20"
+                >
+                  <Printer size={14} className="text-emerald-400" />
+                  <span>Print Document</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setIsWarningViewerOpen(false)}
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200 transition cursor-pointer ml-1"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+            </div>
+
+            {/* Official Letterhead Printable Document Container - Desk Canvas */}
+            <div className="flex-1 min-h-0 overflow-auto p-4 sm:p-6 pb-12 bg-slate-200/80 flex justify-center items-start custom-scrollbar">
+              <div
+                id="printable-warning-document-sheet"
+                style={{
+                  width: warningPaperFormat === "A4" ? "210mm" : "8.5in",
+                  minWidth: warningPaperFormat === "A4" ? "210mm" : "8.5in",
+                  maxWidth: warningPaperFormat === "A4" ? "210mm" : "8.5in",
+                  minHeight: warningPaperFormat === "A4" ? "297mm" : warningPaperFormat === "SHORT" ? "11in" : warningPaperFormat === "LEGAL" ? "14in" : "13in",
+                  boxSizing: "border-box",
+                }}
+                className={`bg-white shadow-2xl ring-1 ring-slate-900/10 rounded-xs text-slate-900 font-sans relative shrink-0 flex flex-col justify-between transition-all duration-150 print:p-0 print:border-none print:shadow-none print:ring-0 ${warningPaperFormat === "SHORT"
+                  ? "p-5 sm:p-7 md:p-8"
+                  : warningPaperFormat === "A4"
+                    ? "p-7 sm:p-9 md:p-11"
+                    : warningPaperFormat === "LEGAL"
+                      ? "p-9 sm:p-11 md:p-13"
+                      : "p-8 sm:p-10 md:p-12"
+                  }`}
+              >
+                {/* Background Watermark */}
+                <div className="absolute inset-0 flex items-center justify-center opacity-[0.045] pointer-events-none select-none">
+                  <img src={getPaperLogo(warningForm.companyName || selectedReport?.company)} alt="watermark" className="w-[110mm] max-w-[440px] h-auto object-contain" />
+                </div>
+
+                <div className="relative z-10 flex flex-col flex-1 justify-between">
+                  <div>
+                    {/* 1. Official Header (Matching Photo 1:1) */}
+                    <div className="flex items-center justify-between pb-3">
+                      {/* Left Logo */}
+                      <div className="flex items-center gap-2">
+                        <img src={getPaperLogo(warningForm.companyName || selectedReport?.company)} alt="Company Logo" className="h-16 w-auto object-contain" />
+                      </div>
+
+                      {/* Center Text: Company, Address, Email */}
+                      <div className="text-center flex-1 px-4">
+                        <h2 className="text-sm sm:text-base font-black tracking-wide uppercase text-slate-900 leading-tight">
+                          {getPaperCompanyName(warningForm.companyName || selectedReport?.company)}
+                        </h2>
+                        <p className="text-[11px] text-slate-800 mt-0.5 leading-snug">
+                          {warningForm.companyAddress || "Purok Daisy, New Isabela, Tacurong City, Sultan Kudarat, Philippines"}
+                        </p>
+                        <p className="text-[11px] text-slate-800 leading-snug">
+                          Gmail: <span className="font-medium">{warningForm.companyEmail || "imsoroglohr@gmail.com"}</span>
+                        </p>
+                      </div>
+
+                      {/* Right Emblem: Corporate Emblem */}
+                      <div className="flex items-center gap-2">
+                        <img
+                          src="/logos/group_emblem.jpg"
+                          alt="Corporate Emblem"
+                          className="h-14 w-auto object-contain rounded"
+                          onError={(e) => {
+                            e.target.style.display = "none";
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* 2. Metadata: Date, To, Subject */}
+                    <div className="mt-4 sm:mt-5 space-y-1 text-sm font-sans text-slate-900">
+                      <div className="grid grid-cols-[90px_1fr] items-baseline">
+                        <span className="font-bold">Date:</span>
+                        <span className="font-medium">{warningForm.date || selectedReport.warningIssuedAt || "April 6, 2026"}</span>
+                      </div>
+                      <div className="grid grid-cols-[90px_1fr] items-baseline">
+                        <span className="font-bold">To:</span>
+                        <span className="font-black uppercase tracking-wide">
+                          {warningForm.toEmployee || (selectedReport.employeeName || "").toUpperCase()}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-[90px_1fr] items-baseline">
+                        <span className="font-bold">Subject:</span>
+                        <span className="font-black">{warningForm.subject || "Notice of Warning"}</span>
+                      </div>
+                    </div>
+
+                    {/* Black Dividing Line */}
+                    <div className="w-full h-[1.5px] bg-slate-900 mt-2 mb-3 sm:mb-4" />
+
+                    {/* 3. Document Body Content (Exact Structure & Typography from Sample Photo) */}
+                    <div className={`${warningPaperFormat === "SHORT" ? "space-y-3 text-xs leading-relaxed" : "space-y-4 text-xs sm:text-[13px] leading-relaxed"} text-slate-900 font-sans text-justify`}>
+                      {/* Paragraph 1 */}
+                      <p className="pl-6 sm:pl-8">
+                        {warningForm.paragraph1 ||
+                          `This is to acknowledge receipt of your written explanation dated March 22, 2026, with reference to the incident involving a cash shortage in the amount of One Thousand Four Hundred Forty-Five Pesos (PHP 1,445.00)`}
+                      </p>
+
+                      {/* Paragraph 2 with bold Code of Conduct violation */}
+                      <p className="pl-6 sm:pl-8">
+                        {warningForm.paragraph2 ? (
+                          warningForm.paragraph2
+                        ) : (
+                          <>
+                            After careful review, it has been determined that your actions constitute a violation of{" "}
+                            <strong>{warningForm.violationClause || "Article IV – Section 18. Offenses Related to Job Performance and Productivity"}</strong>{" "}
+                            as stated in the company’s Code of Conduct.
+                          </>
+                        )}
+                      </p>
+
+                      {/* Paragraph 3 with bold Final Stern Warning and immediate termination */}
+                      <p className="pl-6 sm:pl-8">
+                        {warningForm.paragraph3 ? (
+                          warningForm.paragraph3
+                        ) : (
+                          <>
+                            In view of this, please be informed that this shall serve as your{" "}
+                            <strong>“{warningForm.penalty || "Final Stern Warning"}”</strong>. Any further violations of company policies may result in the{" "}
+                            <strong>immediate termination of your employment</strong>.
+                          </>
+                        )}
+                      </p>
+
+                      {/* Paragraph 4 */}
+                      <p className="pl-6 sm:pl-8">
+                        {warningForm.paragraph4 || "Please be guided accordingly."}
+                      </p>
+                    </div>
+
+                    {/* 4. Signatures (Issued by & Received by) */}
+                    <div className={`${warningPaperFormat === "SHORT" ? "mt-5 space-y-4" : "mt-8 space-y-7"} text-sm font-sans text-slate-900`}>
+                      <div>
+                        <p className="mb-2 text-xs sm:text-sm">Sincerely,</p>
+                        <p className="font-black text-sm uppercase tracking-wide text-slate-900">
+                          {warningForm.signatoryName || "JEVINCE JAYE S. JUBAY, CHRP"}
+                        </p>
+                        <p className="text-xs text-slate-800">
+                          {warningForm.signatoryTitle || "HRMD Manager"}
+                        </p>
+                        <p className="text-xs text-slate-800">
+                          {warningForm.signatoryCompany || warningForm.companyName || "5A Royal Gaming OPC"}
+                        </p>
+                      </div>
+
+                      <div className="pt-1">
+                        <p className="text-xs text-slate-700 mb-2">Received by:</p>
+                        <p className="font-black text-sm uppercase tracking-wide text-slate-900">
+                          {warningForm.toEmployee || (selectedReport.employeeName || "").toUpperCase()}
+                        </p>
+                        <p className="text-xs text-slate-700">Date & Signature</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 5. Document Footer */}
+                  <div className={`${warningPaperFormat === "SHORT" ? "mt-5 pt-2" : "mt-8 pt-3"} text-left text-[11px] text-slate-500 font-sans`}>
+                    {warningForm.footerText || `HR 201 File & Records ${new Date().getFullYear()}`}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* ========================================================================= */}
       {/* LIFECYCLE MODAL 4: SGC HEAD OFFICE — NOTICE OF INVESTIGATION (NOI) ZOOM   */}
       {/* ========================================================================= */}
       {isNoiModalOpen && selectedReport && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-3 md:p-6 overflow-y-auto">
-          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-2xl w-full overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-indigo-700 text-white">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-4xl w-full overflow-hidden animate-in fade-in zoom-in-95 duration-200 my-auto">
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-blue-600 text-white">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-white/20 text-white flex items-center justify-center font-bold">
-                  <Video size={22} />
+                  <Scale size={22} />
                 </div>
                 <div>
                   <h2 className="text-base font-black text-white">
                     SGC Discretion: Notice of Investigation (NOI)
                   </h2>
-                  <p className="text-xs text-indigo-100">
-                    Mandatory Zoom Administrative Hearing Schedule (DOLE Department Order No. 147-15)
+                  <p className="text-xs text-blue-100">
+                    Official Notice of Investigation Memo — 1:1 Matching Standard Format
                   </p>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => setIsNoiModalOpen(false)}
-                className="p-1.5 rounded-lg text-indigo-200 hover:text-white hover:bg-indigo-600 transition cursor-pointer"
+                className="p-1.5 rounded-lg text-blue-200 hover:text-white hover:bg-blue-500 transition cursor-pointer"
               >
                 <X size={18} />
               </button>
             </div>
 
-            <div className="p-6 space-y-4">
-              <div className="p-3 bg-indigo-50 rounded-xl border border-indigo-200 text-xs text-indigo-950">
-                <strong>Mandatory Requirement:</strong> Head Office is required to prepare a complete Zoom Hearing Schedule with meeting details, committee, and counsel notice.
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
-                  Hearing Topic / Case Title: *
-                </label>
-                <input
-                  type="text"
-                  value={noiForm.zoomMeetingTopic}
-                  onChange={(e) => setNoiForm({ ...noiForm, zoomMeetingTopic: e.target.value })}
-                  placeholder="Administrative Investigation Hearing Topic"
-                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 font-bold text-slate-900 focus:ring-2 focus:ring-indigo-600"
-                />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="p-6 space-y-4 max-h-[82vh] overflow-y-auto custom-scrollbar">
+              {/* Row 1: Memo Header & Employee Details */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
-                    Hearing Date: *
-                  </label>
-                  <input
-                    type="date"
-                    value={noiForm.zoomMeetingDate}
-                    onChange={(e) => setNoiForm({ ...noiForm, zoomMeetingDate: e.target.value })}
-                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 font-bold text-slate-900"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
-                    Hearing Time: *
+                    Memo Date:
                   </label>
                   <input
                     type="text"
-                    value={noiForm.zoomMeetingTime}
-                    onChange={(e) => setNoiForm({ ...noiForm, zoomMeetingTime: e.target.value })}
-                    placeholder="e.g. 10:00 AM PST"
-                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 font-bold text-slate-900"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
-                  Zoom Meeting Link URL: *
-                </label>
-                <div className="relative">
-                  <Video size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-indigo-600" />
-                  <input
-                    type="url"
-                    value={noiForm.zoomMeetingLink}
-                    onChange={(e) => setNoiForm({ ...noiForm, zoomMeetingLink: e.target.value })}
-                    placeholder="https://zoom.us/j/..."
-                    className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-slate-200 font-mono text-indigo-900 focus:ring-2 focus:ring-indigo-600"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
-                    Zoom Meeting ID: *
-                  </label>
-                  <input
-                    type="text"
-                    value={noiForm.zoomMeetingId}
-                    onChange={(e) => setNoiForm({ ...noiForm, zoomMeetingId: e.target.value })}
-                    placeholder="812 4001 8920"
-                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 font-mono text-slate-900"
+                    value={noiForm.date || ""}
+                    onChange={(e) => setNoiForm({ ...noiForm, date: e.target.value })}
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 font-semibold uppercase text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="e.g. OCTOBER 12, 2026"
                   />
                 </div>
 
                 <div>
                   <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
-                    Zoom Passcode: *
+                    To (Employee Name):
                   </label>
                   <input
                     type="text"
-                    value={noiForm.zoomPasscode}
-                    onChange={(e) => setNoiForm({ ...noiForm, zoomPasscode: e.target.value })}
-                    placeholder="SGC2026"
-                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 font-mono text-slate-900"
+                    value={noiForm.toEmployee || ""}
+                    onChange={(e) => setNoiForm({ ...noiForm, toEmployee: e.target.value })}
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 font-bold uppercase text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
+                    Subject Line:
+                  </label>
+                  <input
+                    type="text"
+                    value={noiForm.subject || "Notice of Investigation"}
+                    onChange={(e) => setNoiForm({ ...noiForm, subject: e.target.value })}
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
               </div>
 
-              <div>
-                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
-                  Hearing Committee & Legal Panel:
-                </label>
-                <input
-                  type="text"
-                  value={noiForm.hearingCommittee}
-                  onChange={(e) => setNoiForm({ ...noiForm, hearingCommittee: e.target.value })}
-                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 text-slate-900"
-                />
+              {/* Row 2: Hearing Schedule (Date, Time, Mode) */}
+              <div className="p-4 bg-blue-50/70 rounded-2xl border border-blue-200/80 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-blue-950 flex items-center gap-1.5">
+                    <Video size={15} className="text-blue-600" />
+                    Investigation Hearing Schedule & Zoom Settings
+                  </span>
+                  <span className="text-[11px] text-blue-700 font-medium">
+                    DOLE Department Order No. 147-15 Compliant
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-blue-900 mb-1">
+                      Hearing Date: *
+                    </label>
+                    <input
+                      type="text"
+                      value={noiForm.hearingDate || ""}
+                      onChange={(e) => {
+                        const newDate = e.target.value;
+                        const newP1 = `A notice of investigation is one of the requisites by the law to hear and explain your side, you are hereby directed to attend, submit your supporting documents, and bring a counsel of your own choice on ${newDate}, ${noiForm.hearingTime || "2:30 PM"} ${noiForm.hearingMode || "via Zoom Meeting"}, for the acts allegedly committed in violation of:`;
+                        setNoiForm({ ...noiForm, hearingDate: newDate, paragraph1: newP1 });
+                      }}
+                      className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-blue-300 bg-white font-bold text-slate-900"
+                      placeholder="e.g. October 14, 2026"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-blue-900 mb-1">
+                      Hearing Time: *
+                    </label>
+                    <input
+                      type="text"
+                      value={noiForm.hearingTime || ""}
+                      onChange={(e) => {
+                        const newTime = e.target.value;
+                        const newP1 = `A notice of investigation is one of the requisites by the law to hear and explain your side, you are hereby directed to attend, submit your supporting documents, and bring a counsel of your own choice on ${noiForm.hearingDate || "October 14, 2026"}, ${newTime} ${noiForm.hearingMode || "via Zoom Meeting"}, for the acts allegedly committed in violation of:`;
+                        setNoiForm({ ...noiForm, hearingTime: newTime, paragraph1: newP1 });
+                      }}
+                      className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-blue-300 bg-white font-bold text-slate-900"
+                      placeholder="e.g. 2:30 PM"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-blue-900 mb-1">
+                      Hearing Mode: *
+                    </label>
+                    <input
+                      type="text"
+                      value={noiForm.hearingMode || "via Zoom Meeting"}
+                      onChange={(e) => {
+                        const newMode = e.target.value;
+                        const newP1 = `A notice of investigation is one of the requisites by the law to hear and explain your side, you are hereby directed to attend, submit your supporting documents, and bring a counsel of your own choice on ${noiForm.hearingDate || "October 14, 2026"}, ${noiForm.hearingTime || "2:30 PM"} ${newMode}, for the acts allegedly committed in violation of:`;
+                        setNoiForm({ ...noiForm, hearingMode: newMode, paragraph1: newP1 });
+                      }}
+                      className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-blue-300 bg-white font-semibold text-slate-900"
+                      placeholder="via Zoom Meeting"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-blue-900 mb-1">
+                      Zoom Meeting Link URL:
+                    </label>
+                    <input
+                      type="url"
+                      value={noiForm.zoomMeetingLink || ""}
+                      onChange={(e) => setNoiForm({ ...noiForm, zoomMeetingLink: e.target.value })}
+                      placeholder="https://zoom.us/j/..."
+                      className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-blue-200 bg-white font-mono text-blue-950"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-blue-900 mb-1">
+                      Meeting ID:
+                    </label>
+                    <input
+                      type="text"
+                      value={noiForm.zoomMeetingId || ""}
+                      onChange={(e) => setNoiForm({ ...noiForm, zoomMeetingId: e.target.value })}
+                      placeholder="812 4001 8920"
+                      className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-blue-200 bg-white font-mono text-blue-950"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-blue-900 mb-1">
+                      Passcode:
+                    </label>
+                    <input
+                      type="text"
+                      value={noiForm.zoomPasscode || ""}
+                      onChange={(e) => setNoiForm({ ...noiForm, zoomPasscode: e.target.value })}
+                      placeholder="SGC2026"
+                      className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-blue-200 bg-white font-mono text-blue-950"
+                    />
+                  </div>
+                </div>
               </div>
 
+              {/* Paragraph 1 */}
               <div>
                 <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
-                  Due Process Instructions & Legal Rights:
+                  Paragraph 1 — Legal Requisite & Directive:
                 </label>
                 <textarea
                   rows={3}
-                  value={noiForm.noiRemarks}
-                  onChange={(e) => setNoiForm({ ...noiForm, noiRemarks: e.target.value })}
-                  className="w-full p-3 text-xs rounded-xl border border-slate-200 leading-relaxed font-sans"
+                  value={noiForm.paragraph1 || ""}
+                  onChange={(e) => setNoiForm({ ...noiForm, paragraph1: e.target.value })}
+                  className="w-full p-2.5 text-xs rounded-xl border border-slate-200 leading-relaxed font-sans text-slate-800"
                 />
+              </div>
+
+              {/* Alleged Violations (2 Articles as in sample) */}
+              <div className="space-y-3 p-3.5 bg-slate-50 rounded-2xl border border-slate-200">
+                <span className="text-xs font-bold text-slate-900 block">
+                  Acts Allegedly Committed in Violation of Code of Conduct:
+                </span>
+
+                {/* Violation 1 */}
+                <div className="space-y-1.5 pl-3 border-l-2 border-blue-500">
+                  <input
+                    type="text"
+                    value={noiForm.violation1Article || ""}
+                    onChange={(e) => setNoiForm({ ...noiForm, violation1Article: e.target.value })}
+                    className="w-full px-2.5 py-1 text-xs rounded-lg border border-slate-200 font-bold text-slate-900"
+                    placeholder="Article IV – Section 18. Offenses Related to Job Performance and Productivity."
+                  />
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <input
+                      type="text"
+                      value={noiForm.violation1Clause || ""}
+                      onChange={(e) => setNoiForm({ ...noiForm, violation1Clause: e.target.value })}
+                      className="w-full px-2.5 py-1 text-xs rounded-lg border border-slate-200 font-bold text-slate-800"
+                      placeholder="(a) Non-observance of Standard Operating Procedures."
+                    />
+                    <input
+                      type="text"
+                      value={noiForm.violation1Desc || ""}
+                      onChange={(e) => setNoiForm({ ...noiForm, violation1Desc: e.target.value })}
+                      className="sm:col-span-2 w-full px-2.5 py-1 text-xs rounded-lg border border-slate-200 text-slate-700"
+                      placeholder="– willful or unintentional non-observance of standard operating procedures..."
+                    />
+                  </div>
+                </div>
+
+                {/* Violation 2 */}
+                <div className="space-y-1.5 pl-3 border-l-2 border-indigo-500">
+                  <input
+                    type="text"
+                    value={noiForm.violation2Article || ""}
+                    onChange={(e) => setNoiForm({ ...noiForm, violation2Article: e.target.value })}
+                    className="w-full px-2.5 py-1 text-xs rounded-lg border border-slate-200 font-bold text-slate-900"
+                    placeholder="Section 16. Offenses Against Good Personal Behavior and Conduct"
+                  />
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <input
+                      type="text"
+                      value={noiForm.violation2Clause || ""}
+                      onChange={(e) => setNoiForm({ ...noiForm, violation2Clause: e.target.value })}
+                      className="w-full px-2.5 py-1 text-xs rounded-lg border border-slate-200 font-bold text-slate-800"
+                      placeholder="(f) Drunkenness."
+                    />
+                    <input
+                      type="text"
+                      value={noiForm.violation2Desc || ""}
+                      onChange={(e) => setNoiForm({ ...noiForm, violation2Desc: e.target.value })}
+                      className="sm:col-span-2 w-full px-2.5 py-1 text-xs rounded-lg border border-slate-200 text-slate-700"
+                      placeholder="Reporting for work under the influence of liquor or drinking alcoholic beverages..."
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Paragraph 2 */}
+              <div>
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
+                  Paragraph 2 — Legal Representation & Evidence Submission:
+                </label>
+                <textarea
+                  rows={2}
+                  value={noiForm.paragraph2 || ""}
+                  onChange={(e) => setNoiForm({ ...noiForm, paragraph2: e.target.value })}
+                  className="w-full p-2.5 text-xs rounded-xl border border-slate-200 leading-relaxed font-sans text-slate-800"
+                />
+              </div>
+
+              {/* Witness Clause */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
+                    Witness Day:
+                  </label>
+                  <input
+                    type="text"
+                    value={noiForm.witnessDay || ""}
+                    onChange={(e) => setNoiForm({ ...noiForm, witnessDay: e.target.value })}
+                    className="w-full px-3 py-1.5 text-xs rounded-xl border border-slate-200 font-semibold text-slate-900"
+                    placeholder="12th"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
+                    Month & Year:
+                  </label>
+                  <input
+                    type="text"
+                    value={noiForm.witnessMonthYear || ""}
+                    onChange={(e) => setNoiForm({ ...noiForm, witnessMonthYear: e.target.value })}
+                    className="w-full px-3 py-1.5 text-xs rounded-xl border border-slate-200 font-semibold text-slate-900"
+                    placeholder="October 2026"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
+                    Venue / Place:
+                  </label>
+                  <input
+                    type="text"
+                    value={noiForm.witnessPlace || ""}
+                    onChange={(e) => setNoiForm({ ...noiForm, witnessPlace: e.target.value })}
+                    className="w-full px-3 py-1.5 text-xs rounded-xl border border-slate-200 text-slate-800"
+                    placeholder="Tacurong City, Sultan Kudarat, Philippines"
+                  />
+                </div>
+              </div>
+
+              {/* Signatory Details */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
+                    Signatory Name:
+                  </label>
+                  <input
+                    type="text"
+                    value={noiForm.signatoryName || ""}
+                    onChange={(e) => setNoiForm({ ...noiForm, signatoryName: e.target.value })}
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 font-bold text-slate-900"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
+                    Signatory Title:
+                  </label>
+                  <input
+                    type="text"
+                    value={noiForm.signatoryTitle || ""}
+                    onChange={(e) => setNoiForm({ ...noiForm, signatoryTitle: e.target.value })}
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 text-slate-800"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
+                    Company:
+                  </label>
+                  <input
+                    type="text"
+                    value={noiForm.signatoryCompany || ""}
+                    onChange={(e) => setNoiForm({ ...noiForm, signatoryCompany: e.target.value })}
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 text-slate-800"
+                  />
+                </div>
               </div>
 
               <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2.5">
@@ -4995,11 +7732,343 @@ export default function IncidentReportPanel({
                 <button
                   type="button"
                   onClick={handleIssueNoi}
-                  className="px-6 py-2.5 rounded-xl text-xs font-black bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-600/20 transition cursor-pointer inline-flex items-center gap-2 active:scale-98"
+                  className="px-6 py-2.5 rounded-xl text-xs font-black bg-blue-600 hover:bg-blue-700 text-white shadow-md transition cursor-pointer inline-flex items-center gap-2 active:scale-98"
                 >
-                  <Video size={15} />
-                  <span>Issue Formal NOI & Schedule Zoom Hearing</span>
+                  <Scale size={15} />
+                  <span>Save & Preview Notice of Investigation</span>
                 </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* AUTHENTIC DOCUMENT VIEWER: NOTICE OF INVESTIGATION (1:1 SAMPLE FORMAT)   */}
+      {/* ========================================================================= */}
+      {isNoiViewerOpen && selectedReport && (
+        <div className="fixed inset-0 z-50 bg-slate-900/75 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-5xl w-full max-h-[96vh] h-[96vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            {/* Modal Controls Bar */}
+            <div className="px-5 py-2.5 border-b border-slate-200 bg-slate-50 flex flex-wrap items-center justify-between gap-3 shrink-0 no-print shadow-2xs">
+              <div className="flex flex-wrap items-center gap-2.5">
+                <span className="font-mono text-xs font-black bg-slate-900 text-white px-2.5 py-1 rounded-md shadow-2xs">
+                  {selectedReport.caseNumber}
+                </span>
+                <span className="text-xs font-black text-slate-800 tracking-tight hidden sm:inline">
+                  Notice of Investigation Document
+                </span>
+
+                {/* Bond Paper Format Selector (Short / Long / Standard A4 / Legal) */}
+                <div className="flex items-center bg-slate-200/90 p-0.5 rounded-lg text-xs font-semibold ml-1">
+                  <button
+                    type="button"
+                    onClick={() => setNoiPaperFormat("SHORT")}
+                    className={`px-2.5 py-1 rounded-md transition cursor-pointer ${noiPaperFormat === "SHORT"
+                      ? "bg-white text-slate-900 shadow-xs font-bold"
+                      : "text-slate-600 hover:text-slate-900"
+                      }`}
+                  >
+                    Short (8.5×11)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setNoiPaperFormat("LONG")}
+                    className={`px-2.5 py-1 rounded-md transition cursor-pointer ${noiPaperFormat === "LONG"
+                      ? "bg-white text-slate-900 shadow-xs font-bold"
+                      : "text-slate-600 hover:text-slate-900"
+                      }`}
+                  >
+                    Long (8.5×13)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setNoiPaperFormat("A4")}
+                    className={`px-2.5 py-1 rounded-md transition cursor-pointer ${noiPaperFormat === "A4"
+                      ? "bg-white text-slate-900 shadow-xs font-bold"
+                      : "text-slate-600 hover:text-slate-900"
+                      }`}
+                  >
+                    Standard (A4)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setNoiPaperFormat("LEGAL")}
+                    className={`px-2.5 py-1 rounded-md transition cursor-pointer ${noiPaperFormat === "LEGAL"
+                      ? "bg-white text-slate-900 shadow-xs font-bold"
+                      : "text-slate-600 hover:text-slate-900"
+                      }`}
+                  >
+                    Legal (8.5×14)
+                  </button>
+                </div>
+
+                {/* Auto 1-Page Fit Indicator */}
+                <span className="hidden xl:inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-blue-50 text-blue-800 border border-blue-200">
+                  <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></span>
+                  Auto 1-Page Fit ({noiPaperFormat === "SHORT" ? "Short: 8.5×11in" : noiPaperFormat === "LONG" ? "Long: 8.5×13in" : noiPaperFormat === "A4" ? "A4: 210×297mm" : "Legal: 8.5×14in"})
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {/* Voice speech */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const speech = `Official Notice of Investigation issued by 5A Royal Gaming OPC for ${noiForm.toEmployee || selectedReport.employeeName}. You are directed to attend the hearing on ${noiForm.hearingDate} at ${noiForm.hearingTime} ${noiForm.hearingMode}.`;
+                    playAiVoiceAnnouncement(speech);
+                  }}
+                  title="Listen to official document reading"
+                  className="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-white border border-slate-200 hover:bg-blue-50 text-slate-700 hover:text-blue-800 transition cursor-pointer inline-flex items-center gap-1.5 shadow-2xs"
+                >
+                  <Volume2 size={14} />
+                  <span>Listen</span>
+                </button>
+
+                {/* Zoom Link Quick Button */}
+                <button
+                  type="button"
+                  onClick={() => setIsZoomViewerOpen(true)}
+                  className="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 text-indigo-900 transition cursor-pointer inline-flex items-center gap-1.5 shadow-2xs"
+                >
+                  <Video size={13} className="text-indigo-600" />
+                  <span>Zoom Link</span>
+                </button>
+
+                {/* Edit Memo button */}
+                {effectiveRole.isHeadOffice && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsNoiViewerOpen(false);
+                      setIsNoiModalOpen(true);
+                    }}
+                    className="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-white border border-slate-300 hover:bg-slate-50 text-slate-800 transition cursor-pointer inline-flex items-center gap-1.5 shadow-2xs"
+                  >
+                    <FileEdit size={14} />
+                    <span>Edit Memo</span>
+                  </button>
+                )}
+
+                {/* Direct Close & Archive Case button */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsNoiViewerOpen(false);
+                    handleCloseCaseDirectly(selectedReport);
+                  }}
+                  className="px-3 py-1.5 rounded-lg text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs transition cursor-pointer inline-flex items-center gap-1.5 active:scale-95"
+                  title="Close and archive this case in HR 201 File"
+                >
+                  <CheckCheck size={14} />
+                  <span>Close Case</span>
+                </button>
+
+                {/* Print button */}
+                <button
+                  type="button"
+                  onClick={() => handlePrintDocument("noi")}
+                  className="px-3.5 py-1.5 rounded-lg text-xs font-black bg-slate-900 hover:bg-slate-800 text-white transition cursor-pointer inline-flex items-center gap-1.5 shadow-sm active:scale-95 ring-1 ring-slate-950/20"
+                >
+                  <Printer size={14} className="text-emerald-400" />
+                  <span>Print Document</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setIsNoiViewerOpen(false)}
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200 transition cursor-pointer ml-1"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+            </div>
+
+            {/* Official Letterhead Printable Document Container - Desk Canvas */}
+            <div className="flex-1 min-h-0 overflow-auto p-4 sm:p-6 pb-12 bg-slate-200/80 flex justify-center items-start custom-scrollbar">
+              <div
+                id="printable-noi-document-sheet"
+                style={{
+                  width: noiPaperFormat === "A4" ? "210mm" : "8.5in",
+                  minWidth: noiPaperFormat === "A4" ? "210mm" : "8.5in",
+                  maxWidth: noiPaperFormat === "A4" ? "210mm" : "8.5in",
+                  minHeight: noiPaperFormat === "A4" ? "297mm" : noiPaperFormat === "SHORT" ? "11in" : noiPaperFormat === "LEGAL" ? "14in" : "13in",
+                  boxSizing: "border-box",
+                }}
+                className={`bg-white shadow-2xl ring-1 ring-slate-900/10 rounded-xs text-slate-900 font-sans relative shrink-0 flex flex-col justify-between transition-all duration-150 print:p-0 print:border-none print:shadow-none print:ring-0 ${noiPaperFormat === "SHORT"
+                  ? "p-5 sm:p-7 md:p-8"
+                  : noiPaperFormat === "A4"
+                    ? "p-7 sm:p-9 md:p-11"
+                    : noiPaperFormat === "LEGAL"
+                      ? "p-9 sm:p-11 md:p-13"
+                      : "p-8 sm:p-10 md:p-12"
+                  }`}
+              >
+                {/* Background Watermark */}
+                <div className="absolute inset-0 flex items-center justify-center opacity-[0.045] pointer-events-none select-none">
+                  <img src={getPaperLogo(noiForm.signatoryCompany || selectedReport?.company)} alt="watermark" className="w-[110mm] max-w-[440px] h-auto object-contain" />
+                </div>
+
+                <div className="relative z-10 flex flex-col flex-1 justify-between">
+                  <div>
+                    {/* 1. Official Header (Matching Photo 1:1) */}
+                    <div className="flex items-center justify-between pb-3">
+                      {/* Left Logo: PCSO Swirl Logo */}
+                      <div className="flex items-center gap-2">
+                        <img
+                          src="/id-assets/pcso_logo.svg"
+                          alt="PCSO Logo"
+                          className="h-16 w-auto object-contain"
+                          onError={(e) => {
+                            e.target.src = "/id-assets/pcso_logo.png";
+                          }}
+                        />
+                      </div>
+
+                      {/* Center Logo */}
+                      <div className="flex items-center justify-center flex-1 px-4">
+                        <img src={getPaperLogo(noiForm.signatoryCompany || selectedReport?.company)} alt="Company Logo" className="h-16 w-auto object-contain" />
+                      </div>
+
+                      {/* Right Logo: Corporate Emblem */}
+                      <div className="flex items-center gap-2">
+                        <img
+                          src="/logos/group_emblem.jpg"
+                          alt="Corporate Emblem"
+                          className="h-14 w-auto object-contain rounded"
+                          onError={(e) => {
+                            e.target.style.display = "none";
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* 2. Metadata: Date, To, Subject */}
+                    <div className="mt-6 space-y-1.5 text-sm font-sans text-slate-900">
+                      <div className="grid grid-cols-[90px_1fr] items-baseline">
+                        <span className="font-bold">Date:</span>
+                        <span className="font-bold uppercase tracking-wider">{noiForm.date || "OCTOBER 12, 2026"}</span>
+                      </div>
+                      <div className="grid grid-cols-[90px_1fr] items-baseline">
+                        <span className="font-bold">To:</span>
+                        <span className="font-black uppercase tracking-wide">
+                          {noiForm.toEmployee || (selectedReport.employeeName || "MICHAEL SIMPAL").toUpperCase()}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-[90px_1fr] items-baseline">
+                        <span className="font-bold">Subject:</span>
+                        <span className="font-black">{noiForm.subject || "Notice of Investigation"}</span>
+                      </div>
+                    </div>
+
+                    {/* Black Dividing Line */}
+                    <div className="w-full h-[2px] bg-slate-900 mt-2.5 mb-6" />
+
+                    {/* 3. Salutation & Document Body Content (Exact Structure & Typography from Sample Photo) */}
+                    <div className="space-y-4 text-xs sm:text-[13px] leading-relaxed text-slate-900 font-sans text-justify">
+                      <p className="pl-6 sm:pl-8 font-medium">
+                        Greetings:
+                      </p>
+
+                      {/* Paragraph 1 */}
+                      <p className="pl-6 sm:pl-8">
+                        A notice of investigation is one of the requisites by the law to hear and explain your side, you are hereby directed to attend, submit your supporting documents, and bring a counsel of your own choice on{" "}
+                        <strong>{noiForm.hearingDate || "October 14, 2026"}, {noiForm.hearingTime || "2:30 PM"} {noiForm.hearingMode || "via Zoom Meeting"}</strong>, for the acts allegedly committed in violation of:
+                      </p>
+
+                      {/* Indented Violation List */}
+                      <div className="pl-10 sm:pl-14 space-y-2 text-slate-900">
+                        {/* Violation 1 */}
+                        <div>
+                          <p className="font-black">
+                            {noiForm.violation1Article || "Article IV – Section 18. Offenses Related to Job Performance and Productivity."}
+                          </p>
+                          <p className="mt-0.5">
+                            <span className="font-black">{noiForm.violation1Clause || "(a) Non-observance of Standard Operating Procedures."}</span>{" "}
+                            <span>
+                              – willful or unintentional non-observance of standard operating procedures for direct or indirect personal gain is classified as{" "}
+                              <strong>serious offense and shall accordingly be meted penalties for serious offense.</strong>
+                            </span>
+                          </p>
+                        </div>
+
+                        {/* Violation 2 */}
+                        <div className="pt-1">
+                          <p className="font-black">
+                            {noiForm.violation2Article || "Section 16. Offenses Against Good Personal Behavior and Conduct"}
+                          </p>
+                          <p className="mt-0.5">
+                            <span className="font-black">{noiForm.violation2Clause || "(f) Drunkenness."}</span>{" "}
+                            <span>
+                              {noiForm.violation2Desc || "Reporting for work under the influence of liquor or drinking alcoholic beverages during work hours (except on official functions)."}
+                            </span>
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Paragraph 2 */}
+                      <p className="pl-6 sm:pl-8 pt-1">
+                        {noiForm.paragraph2 ||
+                          "You are entitled to counsel of your choice during this investigation. You may also bring your witness(es) if any. Please be guided that failure on your part to comply with this Notice of Investigation shall be considered submitted for a resolution based on the evidence on record."}
+                      </p>
+
+                      {/* Witness Clause */}
+                      <p className="pl-6 sm:pl-8 pt-2">
+                        WITNESS MY HAND this {noiForm.witnessDay || "12th"} day of {noiForm.witnessMonthYear || "October 2026"}, at {noiForm.witnessPlace || "Tacurong City, Sultan Kudarat, Philippines"}.
+                      </p>
+                    </div>
+
+                    {/* 4. Signatory Block */}
+                    <div className="mt-8 text-sm font-sans text-slate-900">
+                      {/* Stylized Digital Signature Graphic */}
+                      <div className="relative -mb-4 pl-2 h-14 w-44 pointer-events-none select-none">
+                        <img
+                          src="/id-assets/signature_charmie_transparent.png"
+                          alt="Signature"
+                          className="h-12 w-auto object-contain filter contrast-125 brightness-75"
+                          onError={(e) => {
+                            e.target.style.display = "none";
+                          }}
+                        />
+                      </div>
+                      <p className="font-black text-sm uppercase tracking-wide text-slate-900">
+                        {noiForm.signatoryName || "JEVINCE JAYE S. JUBAY, CHRP"}
+                      </p>
+                      <p className="text-xs text-slate-800 italic">
+                        {noiForm.signatoryTitle || "HRMD Manager"}
+                      </p>
+                      <p className="text-xs text-slate-800 italic">
+                        {noiForm.signatoryCompany || "5A Royal Gaming OPC"}
+                      </p>
+                    </div>
+
+                    {/* 5. Bottom Dual-Column Acknowledgment */}
+                    <div className="mt-10 grid grid-cols-2 gap-8 text-sm font-sans text-slate-900 pt-2">
+                      {/* Left Column: Received by */}
+                      <div>
+                        <p className="text-xs text-slate-700 mb-6">Received by:</p>
+                        <p className="font-black text-sm uppercase tracking-wide text-slate-900">
+                          {noiForm.toEmployee || (selectedReport.employeeName || "MICHAEL SIMPAL").toUpperCase()}
+                        </p>
+                        <p className="text-xs text-slate-700">Date & Signature</p>
+                      </div>
+
+                      {/* Right Column: Informed but refused received */}
+                      <div>
+                        <p className="text-xs text-slate-700 mb-6">Informed but refused received:</p>
+                        <div className="flex items-baseline gap-2">
+                          <span className="text-xs text-slate-900">Witnesses:</span>
+                          <span className="border-b border-slate-500 flex-1 min-w-[120px] inline-block"></span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 6. Document Footer */}
+                  <div className="mt-10 pt-3 text-left text-[11px] text-slate-500 font-sans">
+                    {noiForm.footerText || `HR 201 File & Records ${new Date().getFullYear()}`}
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -5011,7 +8080,7 @@ export default function IncidentReportPanel({
       {/* ========================================================================= */}
       {isZoomViewerOpen && selectedReport && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-3 md:p-6 overflow-y-auto">
-          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-lg w-full overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-2xl w-full overflow-hidden animate-in fade-in zoom-in-95 duration-200">
             <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-blue-600 text-white">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-white/20 text-white flex items-center justify-center font-bold">
@@ -5101,11 +8170,12 @@ export default function IncidentReportPanel({
       )}
 
       {/* ========================================================================= */}
+      {/* ========================================================================= */}
       {/* LIFECYCLE MODAL 6: SGC HEAD OFFICE — DECISION ON ADMINISTRATIVE CASE       */}
       {/* ========================================================================= */}
       {isAdminDecisionModalOpen && selectedReport && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-3 md:p-6 overflow-y-auto">
-          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-2xl w-full overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-4xl w-full overflow-hidden animate-in fade-in zoom-in-95 duration-200 my-auto">
             <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-rose-600 text-white">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-white/20 text-white flex items-center justify-center font-bold">
@@ -5116,7 +8186,7 @@ export default function IncidentReportPanel({
                     Decision on Administrative Case
                   </h2>
                   <p className="text-xs text-rose-100">
-                    Final Executive Ruling & Disciplinary Promulgation (Labor Code Art. 297)
+                    Official Ruling & Executive Disciplinary Promulgation — 1:1 Matching Standard Format
                   </p>
                 </div>
               </div>
@@ -5129,72 +8199,214 @@ export default function IncidentReportPanel({
               </button>
             </div>
 
-            <div className="p-6 space-y-4">
-              <div className="p-3 bg-rose-50 rounded-xl border border-rose-200 text-xs text-rose-950">
-                This Decision will be transmitted to the Branch HR of <strong>{selectedReport.company || selectedReport.senderCompany}</strong>, who must serve it in person to employee <strong>{selectedReport.employeeName}</strong> and upload their signed receipt to close the case.
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
-                  Decision Subject:
-                </label>
-                <input
-                  type="text"
-                  value={adminDecisionForm.subject}
-                  onChange={(e) => setAdminDecisionForm({ ...adminDecisionForm, subject: e.target.value })}
-                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 font-bold text-slate-900"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
-                  Investigation Findings & Administrative Liability:
-                </label>
-                <textarea
-                  rows={2}
-                  value={adminDecisionForm.findings}
-                  onChange={(e) => setAdminDecisionForm({ ...adminDecisionForm, findings: e.target.value })}
-                  className="w-full p-2.5 text-xs rounded-xl border border-slate-200 text-slate-900 font-medium"
-                />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="p-6 space-y-4 max-h-[82vh] overflow-y-auto custom-scrollbar">
+              {/* Row 1: Memo Header & Employee Details */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
-                    Sanction / Penalty / Restitution:
+                    Memo Date:
                   </label>
                   <input
                     type="text"
-                    value={adminDecisionForm.penalty}
-                    onChange={(e) => setAdminDecisionForm({ ...adminDecisionForm, penalty: e.target.value })}
-                    placeholder="e.g. 3-Day Suspension & Restitution"
-                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 font-bold text-rose-700"
+                    value={adminDecisionForm.date || ""}
+                    onChange={(e) => setAdminDecisionForm({ ...adminDecisionForm, date: e.target.value })}
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-rose-500"
+                    placeholder="e.g. October 21, 2026"
                   />
                 </div>
 
                 <div>
                   <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
-                    Signatory (Head Office HRMD):
+                    To (Employee Name):
                   </label>
                   <input
                     type="text"
-                    value={adminDecisionForm.signatoryName}
+                    value={adminDecisionForm.toEmployee || ""}
+                    onChange={(e) => setAdminDecisionForm({ ...adminDecisionForm, toEmployee: e.target.value })}
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 font-bold uppercase text-slate-900 focus:outline-none focus:ring-2 focus:ring-rose-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
+                    Subject Line:
+                  </label>
+                  <input
+                    type="text"
+                    value={adminDecisionForm.subject || "DECISION OF ADMINISTRATIVE CASE"}
+                    onChange={(e) => setAdminDecisionForm({ ...adminDecisionForm, subject: e.target.value })}
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-rose-500"
+                  />
+                </div>
+              </div>
+
+              {/* Sanction / Penalty Selection */}
+              <div className="p-4 bg-rose-50/70 rounded-2xl border border-rose-200/80 space-y-2">
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-rose-950">
+                  Decision Sanction / Penalty Level:
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <select
+                    value={adminDecisionForm.sanctionLevel || "Final Stern Warning"}
+                    onChange={(e) => {
+                      const newSanction = e.target.value;
+                      const newP2 = `In view thereof, please be informed that this shall serve as your “${newSanction}”. Any further violations of company policies may result in the immediate termination of your employment.`;
+                      setAdminDecisionForm({ ...adminDecisionForm, sanctionLevel: newSanction, paragraph2: newP2 });
+                    }}
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-rose-300 bg-white font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-rose-500"
+                  >
+                    <option value="Final Stern Warning">Final Stern Warning (Official Sample)</option>
+                    <option value="3-Day Suspension Without Pay">3-Day Suspension Without Pay</option>
+                    <option value="7-Day Suspension Without Pay">7-Day Suspension Without Pay</option>
+                    <option value="15-Day Suspension Without Pay">15-Day Suspension Without Pay</option>
+                    <option value="Termination of Employment">Termination of Employment (Immediate)</option>
+                    <option value="Written Warning & Reprimand">Written Warning & Reprimand</option>
+                  </select>
+                  <input
+                    type="text"
+                    value={adminDecisionForm.sanctionLevel || ""}
+                    onChange={(e) => {
+                      const newSanction = e.target.value;
+                      const newP2 = `In view thereof, please be informed that this shall serve as your “${newSanction}”. Any further violations of company policies may result in the immediate termination of your employment.`;
+                      setAdminDecisionForm({ ...adminDecisionForm, sanctionLevel: newSanction, paragraph2: newP2 });
+                    }}
+                    placeholder="Custom Sanction Level"
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-rose-300 bg-white font-bold text-rose-900"
+                  />
+                </div>
+              </div>
+
+              {/* Intro Line */}
+              <div>
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
+                  Introductory Statement:
+                </label>
+                <input
+                  type="text"
+                  value={adminDecisionForm.introLine || ""}
+                  onChange={(e) => setAdminDecisionForm({ ...adminDecisionForm, introLine: e.target.value })}
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 font-medium text-slate-800"
+                  placeholder="This is concerning your administrative case on;"
+                />
+              </div>
+
+              {/* Violations Bullet Points (Connected to notices & case) */}
+              <div className="space-y-3 p-3.5 bg-slate-50 rounded-2xl border border-slate-200">
+                <span className="text-xs font-bold text-slate-900 block">
+                  Violations Established & Decided:
+                </span>
+
+                {/* Bullet 1 */}
+                <div className="space-y-1.5 pl-3 border-l-2 border-rose-500">
+                  <input
+                    type="text"
+                    value={adminDecisionForm.bullet1Article || ""}
+                    onChange={(e) => setAdminDecisionForm({ ...adminDecisionForm, bullet1Article: e.target.value })}
+                    className="w-full px-2.5 py-1 text-xs rounded-lg border border-slate-200 font-bold text-slate-900"
+                    placeholder="Section 16. Offenses Against Good Personal Behavior and Conduct."
+                  />
+                  <textarea
+                    rows={2}
+                    value={adminDecisionForm.bullet1Desc || ""}
+                    onChange={(e) => setAdminDecisionForm({ ...adminDecisionForm, bullet1Desc: e.target.value })}
+                    className="w-full px-2.5 py-1 text-xs rounded-lg border border-slate-200 text-slate-700"
+                    placeholder="(f) Drunkenness. Reporting for work under the influence of liquor or drinking alcoholic beverages..."
+                  />
+                </div>
+
+                {/* Bullet 2 */}
+                <div className="space-y-1.5 pl-3 border-l-2 border-amber-500">
+                  <input
+                    type="text"
+                    value={adminDecisionForm.bullet2Article || ""}
+                    onChange={(e) => setAdminDecisionForm({ ...adminDecisionForm, bullet2Article: e.target.value })}
+                    className="w-full px-2.5 py-1 text-xs rounded-lg border border-slate-200 font-bold text-slate-900"
+                    placeholder="Section 18. Offenses Related to Job Performance and Productivity"
+                  />
+                  <textarea
+                    rows={2}
+                    value={adminDecisionForm.bullet2Desc || ""}
+                    onChange={(e) => setAdminDecisionForm({ ...adminDecisionForm, bullet2Desc: e.target.value })}
+                    className="w-full px-2.5 py-1 text-xs rounded-lg border border-slate-200 text-slate-700"
+                    placeholder="(a) Non-observance of Standard Operating Procedures..."
+                  />
+                </div>
+              </div>
+
+              {/* Paragraph 1: Management Review & Repeated Occurrence Findings */}
+              <div>
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
+                  Paragraph 1 — Management Review & Findings:
+                </label>
+                <textarea
+                  rows={3}
+                  value={adminDecisionForm.paragraph1 || ""}
+                  onChange={(e) => setAdminDecisionForm({ ...adminDecisionForm, paragraph1: e.target.value })}
+                  className="w-full p-2.5 text-xs rounded-xl border border-slate-200 leading-relaxed font-sans text-slate-800"
+                />
+              </div>
+
+              {/* Paragraph 2: Sanction & Termination Warning */}
+              <div>
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
+                  Paragraph 2 — Decision Sanction & Warning:
+                </label>
+                <textarea
+                  rows={2}
+                  value={adminDecisionForm.paragraph2 || ""}
+                  onChange={(e) => setAdminDecisionForm({ ...adminDecisionForm, paragraph2: e.target.value })}
+                  className="w-full p-2.5 text-xs rounded-xl border border-slate-200 leading-relaxed font-sans text-slate-800"
+                />
+              </div>
+
+              {/* Paragraph 3 */}
+              <div>
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
+                  Paragraph 3 — Closing Directive:
+                </label>
+                <input
+                  type="text"
+                  value={adminDecisionForm.paragraph3 || "Please be guided accordingly."}
+                  onChange={(e) => setAdminDecisionForm({ ...adminDecisionForm, paragraph3: e.target.value })}
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 font-medium text-slate-800"
+                />
+              </div>
+
+              {/* Signatory Details */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
+                    Signatory Name:
+                  </label>
+                  <input
+                    type="text"
+                    value={adminDecisionForm.signatoryName || ""}
                     onChange={(e) => setAdminDecisionForm({ ...adminDecisionForm, signatoryName: e.target.value })}
                     className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 font-bold text-slate-900"
                   />
                 </div>
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
-                  Full Deliberations & Decision Ruling:
-                </label>
-                <textarea
-                  rows={6}
-                  value={adminDecisionForm.body}
-                  onChange={(e) => setAdminDecisionForm({ ...adminDecisionForm, body: e.target.value })}
-                  className="w-full p-3 text-xs rounded-xl border border-slate-200 leading-relaxed font-sans"
-                />
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
+                    Signatory Title:
+                  </label>
+                  <input
+                    type="text"
+                    value={adminDecisionForm.signatoryTitle || ""}
+                    onChange={(e) => setAdminDecisionForm({ ...adminDecisionForm, signatoryTitle: e.target.value })}
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 text-slate-800"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
+                    Company:
+                  </label>
+                  <input
+                    type="text"
+                    value={adminDecisionForm.signatoryCompany || ""}
+                    onChange={(e) => setAdminDecisionForm({ ...adminDecisionForm, signatoryCompany: e.target.value })}
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 text-slate-800"
+                  />
+                </div>
               </div>
 
               <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2.5">
@@ -5208,10 +8420,10 @@ export default function IncidentReportPanel({
                 <button
                   type="button"
                   onClick={handleIssueAdminDecision}
-                  className="px-6 py-2.5 rounded-xl text-xs font-black bg-rose-600 hover:bg-rose-700 text-white shadow-md shadow-rose-600/20 transition cursor-pointer inline-flex items-center gap-2 active:scale-98"
+                  className="px-6 py-2.5 rounded-xl text-xs font-black bg-rose-600 hover:bg-rose-700 text-white shadow-md transition cursor-pointer inline-flex items-center gap-2 active:scale-98"
                 >
                   <Scale size={15} />
-                  <span>Promulgate Decision to Branch HR</span>
+                  <span>Save & Preview Decision Document</span>
                 </button>
               </div>
             </div>
@@ -5220,137 +8432,357 @@ export default function IncidentReportPanel({
       )}
 
       {/* ========================================================================= */}
-      {/* LIFECYCLE MODAL 7: BRANCH HR — UPLOAD SIGNED DECISION & CLOSE CASE         */}
+      {/* AUTHENTIC DOCUMENT VIEWER: DECISION OF ADMINISTRATIVE CASE (1:1 FORMAT)    */}
       {/* ========================================================================= */}
-      {isUploadDecisionProofModalOpen && selectedReport && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-3 md:p-6 overflow-y-auto">
-          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-lg w-full overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-emerald-800 text-white">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-white/20 text-white flex items-center justify-center font-bold">
-                  <CheckCheck size={22} />
-                </div>
-                <div>
-                  <h2 className="text-base font-black text-white">
-                    Upload Signed Decision & Close Case
-                  </h2>
-                  <p className="text-xs text-emerald-200">
-                    Serve Decision on Administrative Case, get employee signature, and close case
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsUploadDecisionProofModalOpen(false)}
-                className="p-1.5 rounded-lg text-emerald-300 hover:text-white hover:bg-emerald-700 transition cursor-pointer"
-              >
-                <X size={18} />
-              </button>
-            </div>
+      {isAdminDecisionViewerOpen && selectedReport && (
+        <div className="fixed inset-0 z-50 bg-slate-900/75 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-5xl w-full max-h-[96vh] h-[96vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            {/* Modal Controls Bar */}
+            <div className="px-5 py-2.5 border-b border-slate-200 bg-slate-50 flex flex-wrap items-center justify-between gap-3 shrink-0 no-print shadow-2xs">
+              <div className="flex flex-wrap items-center gap-2.5">
+                <span className="font-mono text-xs font-black bg-slate-900 text-white px-2.5 py-1 rounded-md shadow-2xs">
+                  {selectedReport.caseNumber}
+                </span>
+                <span className="text-xs font-black text-slate-800 tracking-tight hidden sm:inline">
+                  Decision of Administrative Case Document
+                </span>
 
-            <div className="p-6 space-y-4">
-              <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 text-xs space-y-1 text-emerald-950">
-                <div>
-                  <strong>Case:</strong> {selectedReport.caseNumber} • <strong>Employee:</strong> {selectedReport.employeeName}
+                {/* Bond Paper Format Selector (Short / Long / Standard A4 / Legal) */}
+                <div className="flex items-center bg-slate-200/90 p-0.5 rounded-lg text-xs font-semibold ml-1">
+                  <button
+                    type="button"
+                    onClick={() => setAdminDecisionPaperFormat("SHORT")}
+                    className={`px-2.5 py-1 rounded-md transition cursor-pointer ${adminDecisionPaperFormat === "SHORT"
+                      ? "bg-white text-slate-900 shadow-xs font-bold"
+                      : "text-slate-600 hover:text-slate-900"
+                      }`}
+                  >
+                    Short (8.5×11)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAdminDecisionPaperFormat("LONG")}
+                    className={`px-2.5 py-1 rounded-md transition cursor-pointer ${adminDecisionPaperFormat === "LONG"
+                      ? "bg-white text-slate-900 shadow-xs font-bold"
+                      : "text-slate-600 hover:text-slate-900"
+                      }`}
+                  >
+                    Long (8.5×13)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAdminDecisionPaperFormat("A4")}
+                    className={`px-2.5 py-1 rounded-md transition cursor-pointer ${adminDecisionPaperFormat === "A4"
+                      ? "bg-white text-slate-900 shadow-xs font-bold"
+                      : "text-slate-600 hover:text-slate-900"
+                      }`}
+                  >
+                    Standard (A4)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAdminDecisionPaperFormat("LEGAL")}
+                    className={`px-2.5 py-1 rounded-md transition cursor-pointer ${adminDecisionPaperFormat === "LEGAL"
+                      ? "bg-white text-slate-900 shadow-xs font-bold"
+                      : "text-slate-600 hover:text-slate-900"
+                      }`}
+                  >
+                    Legal (8.5×14)
+                  </button>
                 </div>
-                <div>
-                  <strong>Decision Penalty:</strong> {selectedReport.adminDecisionPenalty || "Disciplinary Action"}
-                </div>
+
+                {/* Auto 1-Page Fit Indicator */}
+                <span className="hidden xl:inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-50 text-rose-800 border border-rose-200">
+                  <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></span>
+                  Auto 1-Page Fit ({adminDecisionPaperFormat === "SHORT" ? "Short: 8.5×11in" : adminDecisionPaperFormat === "LONG" ? "Long: 8.5×13in" : adminDecisionPaperFormat === "A4" ? "A4: 210×297mm" : "Legal: 8.5×14in"})
+                </span>
               </div>
 
-              <div>
-                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
-                  Date Served to Employee:
-                </label>
-                <input
-                  type="date"
-                  value={decisionProofData.dateServed}
-                  onChange={(e) => setDecisionProofData({ ...decisionProofData, dateServed: e.target.value })}
-                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-700"
-                />
-              </div>
+              <div className="flex items-center gap-2">
+                {/* Voice speech */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const speech = `Official Decision of Administrative Case issued by ${getPaperCompanyName(adminDecisionForm.signatoryCompany || selectedReport?.company)} for ${adminDecisionForm.toEmployee || selectedReport?.employeeName}. Management has determined that there is substantial basis to establish your accountability. This shall serve as your ${adminDecisionForm.sanctionLevel || "Final Stern Warning"}.`;
+                    playAiVoiceAnnouncement(speech);
+                  }}
+                  title="Listen to official document reading"
+                  className="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-white border border-slate-200 hover:bg-rose-50 text-slate-700 hover:text-rose-800 transition cursor-pointer inline-flex items-center gap-1.5 shadow-2xs"
+                >
+                  <Volume2 size={14} />
+                  <span>Listen</span>
+                </button>
 
-              <div>
-                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
-                  Upload Scanned / Photo Copy of Employee-Signed Decision: *
-                </label>
-                {decisionProofData.fileData ? (
-                  <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col items-center">
-                    <img
-                      src={decisionProofData.fileData}
-                      alt="Signed Decision Proof"
-                      className="max-h-48 object-contain rounded-lg shadow-xs"
-                    />
-                    <div className="mt-2 text-xs text-slate-600 font-medium">{decisionProofData.fileName || "signed_decision.jpg"}</div>
-                    <button
-                      type="button"
-                      onClick={() => setDecisionProofData({ ...decisionProofData, fileData: "", fileName: "" })}
-                      className="mt-1 text-[11px] text-rose-600 font-bold hover:underline cursor-pointer"
-                    >
-                      Remove / Upload Another File
-                    </button>
-                  </div>
-                ) : (
-                  <label className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-emerald-300 hover:border-emerald-700 rounded-2xl bg-emerald-50/40 hover:bg-emerald-50 cursor-pointer transition">
-                    <FileSignature size={28} className="text-emerald-700 mb-2" />
-                    <span className="text-xs font-bold text-emerald-950">
-                      Upload Signed Decision Proof
-                    </span>
-                    <span className="text-[10px] text-emerald-700 mt-0.5">PNG, JPG, or WebP</span>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) {
-                          const reader = new FileReader();
-                          reader.onload = (evt) => {
-                            setDecisionProofData((prev) => ({
-                              ...prev,
-                              fileData: evt.target.result,
-                              fileName: file.name
-                            }));
-                          };
-                          reader.readAsDataURL(file);
-                        }
-                      }}
-                    />
-                  </label>
+                {/* Edit Memo button */}
+                {effectiveRole.isHeadOffice && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsAdminDecisionViewerOpen(false);
+                      setIsAdminDecisionModalOpen(true);
+                    }}
+                    className="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-white border border-slate-300 hover:bg-slate-50 text-slate-800 transition cursor-pointer inline-flex items-center gap-1.5 shadow-2xs"
+                  >
+                    <FileEdit size={14} />
+                    <span>Edit Memo</span>
+                  </button>
                 )}
-              </div>
 
-              <div>
-                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
-                  Branch Serving Remarks:
-                </label>
-                <textarea
-                  rows={2}
-                  value={decisionProofData.remarks}
-                  onChange={(e) => setDecisionProofData({ ...decisionProofData, remarks: e.target.value })}
-                  placeholder="Employee personally served copy of Administrative Case Decision, signed acknowledgment copy affixed."
-                  className="w-full p-2.5 text-xs rounded-xl border border-slate-200 font-medium text-slate-800"
-                />
-              </div>
-
-              <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2.5">
+                {/* Direct Close & Archive Case button */}
                 <button
                   type="button"
-                  onClick={() => setIsUploadDecisionProofModalOpen(false)}
-                  className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+                  onClick={() => {
+                    setIsAdminDecisionViewerOpen(false);
+                    handleCloseCaseDirectly(selectedReport);
+                  }}
+                  className="px-3 py-1.5 rounded-lg text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs transition cursor-pointer inline-flex items-center gap-1.5 active:scale-95"
+                  title="Close and archive this case in HR 201 File"
                 >
-                  Cancel
+                  <CheckCheck size={14} />
+                  <span>Close Case</span>
                 </button>
+
+                {/* Print button */}
                 <button
                   type="button"
-                  onClick={handleSaveDecisionProofAndCloseCase}
-                  className="px-6 py-2.5 rounded-xl text-xs font-black bg-emerald-700 hover:bg-emerald-800 text-white shadow-md shadow-emerald-700/20 transition cursor-pointer inline-flex items-center gap-2 active:scale-98"
+                  onClick={() => handlePrintDocument("adminDecision")}
+                  className="px-3.5 py-1.5 rounded-lg text-xs font-black bg-slate-900 hover:bg-slate-800 text-white transition cursor-pointer inline-flex items-center gap-1.5 shadow-sm active:scale-95 ring-1 ring-slate-950/20"
                 >
-                  <CheckCheck size={16} />
-                  <span>Upload Signed Proof & Close Case</span>
+                  <Printer size={14} className="text-emerald-400" />
+                  <span>Print Document</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setIsAdminDecisionViewerOpen(false)}
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200 transition cursor-pointer ml-1"
+                >
+                  <X size={18} />
                 </button>
               </div>
             </div>
+
+            {/* Official Letterhead Printable Document Container - Desk Canvas */}
+            <div className="flex-1 min-h-0 overflow-auto p-4 sm:p-6 pb-12 bg-slate-200/80 flex justify-center items-start custom-scrollbar">
+              <div
+                id="printable-admin-decision-document-sheet"
+                style={{
+                  width: adminDecisionPaperFormat === "A4" ? "210mm" : "8.5in",
+                  minWidth: adminDecisionPaperFormat === "A4" ? "210mm" : "8.5in",
+                  maxWidth: adminDecisionPaperFormat === "A4" ? "210mm" : "8.5in",
+                  minHeight: adminDecisionPaperFormat === "A4" ? "297mm" : adminDecisionPaperFormat === "SHORT" ? "11in" : adminDecisionPaperFormat === "LEGAL" ? "14in" : "13in",
+                  boxSizing: "border-box",
+                }}
+                className={`bg-white shadow-2xl ring-1 ring-slate-900/10 rounded-xs text-slate-900 font-sans relative shrink-0 flex flex-col justify-between transition-all duration-150 print:p-0 print:border-none print:shadow-none print:ring-0 ${adminDecisionPaperFormat === "SHORT"
+                  ? "p-5 sm:p-7 md:p-8"
+                  : adminDecisionPaperFormat === "A4"
+                    ? "p-7 sm:p-9 md:p-11"
+                    : adminDecisionPaperFormat === "LEGAL"
+                      ? "p-9 sm:p-11 md:p-13"
+                      : "p-8 sm:p-10 md:p-12"
+                  }`}
+              >
+                {/* Background Watermark: Dynamic Company Logo */}
+                <div className="absolute inset-0 flex items-center justify-center opacity-[0.045] pointer-events-none select-none">
+                  <img
+                    src={getPaperLogo(adminDecisionForm.signatoryCompany || selectedReport?.company)}
+                    alt="watermark"
+                    className="w-[110mm] max-w-[440px] h-auto object-contain"
+                  />
+                </div>
+
+                <div className="relative z-10 flex flex-col flex-1 justify-between">
+                  <div>
+                    {/* 1. Official Header (Matching Photo 1:1) */}
+                    <div className="flex items-center justify-between pb-3">
+                      {/* Left Logo: PCSO Swirl Logo */}
+                      <div className="flex items-center gap-2">
+                        <img
+                          src="/id-assets/pcso_logo.svg"
+                          alt="PCSO Logo"
+                          className="h-16 w-auto object-contain"
+                          onError={(e) => {
+                            e.target.src = "/id-assets/pcso_logo.png";
+                          }}
+                        />
+                      </div>
+
+                      {/* Center Logo: Dynamic Company Logo */}
+                      <div className="flex items-center justify-center flex-1 px-4">
+                        <img
+                          src={getPaperLogo(adminDecisionForm.signatoryCompany || selectedReport?.company)}
+                          alt={getPaperCompanyName(adminDecisionForm.signatoryCompany || selectedReport?.company)}
+                          className="h-16 w-auto object-contain"
+                        />
+                      </div>
+
+                      {/* Right Logo: Corporate Emblem */}
+                      <div className="flex items-center gap-2">
+                        <img
+                          src="/logos/group_emblem.jpg"
+                          alt="Corporate Emblem"
+                          className="h-14 w-auto object-contain rounded"
+                          onError={(e) => {
+                            e.target.style.display = "none";
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* 2. Metadata: Date, To, Subject */}
+                    <div className="mt-4 sm:mt-5 space-y-1 text-sm font-sans text-slate-900">
+                      <div className="grid grid-cols-[90px_1fr] items-baseline">
+                        <span className="font-bold">Date:</span>
+                        <span className="font-medium">{adminDecisionForm.date || "October 21, 2026"}</span>
+                      </div>
+                      <div className="grid grid-cols-[90px_1fr] items-baseline">
+                        <span className="font-bold">To:</span>
+                        <span className="font-black uppercase tracking-wide">
+                          {adminDecisionForm.toEmployee || (selectedReport.employeeName || "MICHAEL SIMPAL").toUpperCase()}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-[90px_1fr] items-baseline">
+                        <span className="font-bold">Subject:</span>
+                        <span className="font-black uppercase tracking-wide">{adminDecisionForm.subject || "DECISION OF ADMINISTRATIVE CASE"}</span>
+                      </div>
+                    </div>
+
+                    {/* Black Dividing Line */}
+                    <div className="w-full h-[1.5px] bg-slate-900 mt-2 mb-3 sm:mb-4" />
+
+                    {/* 3. Document Body Content (Exact Structure & Typography from Sample Photo) */}
+                    <div className={`${adminDecisionPaperFormat === "SHORT" ? "space-y-2.5 text-xs leading-relaxed" : "space-y-4 text-xs sm:text-[13px] leading-relaxed"} text-slate-900 font-sans text-justify`}>
+                      {/* Intro Line */}
+                      <p className="pl-6 sm:pl-8">
+                        {adminDecisionForm.introLine || "This is concerning your administrative case on;"}
+                      </p>
+
+                      {/* Bulleted Violation List */}
+                      <div className="pl-10 sm:pl-14 space-y-2 text-slate-900">
+                        {/* Bullet 1 */}
+                        <div>
+                          <p className="font-black flex items-start gap-2">
+                            <span>•</span>
+                            <span>{adminDecisionForm.bullet1Article || "Section 16. Offenses Against Good Personal Behavior and Conduct."}</span>
+                          </p>
+                          <p className="pl-4 mt-0.5">
+                            {adminDecisionForm.bullet1Desc ||
+                              "(f) Drunkenness. Reporting for work under the influence of liquor or drinking alcoholic beverages during work hours (except on official functions) is classified as serious offense."}
+                          </p>
+                        </div>
+
+                        {/* Bullet 2 */}
+                        <div className="pt-0.5">
+                          <p className="font-black flex items-start gap-2">
+                            <span>•</span>
+                            <span>{adminDecisionForm.bullet2Article || "Section 18. Offenses Related to Job Performance and Productivity"}</span>
+                          </p>
+                          <p className="pl-4 mt-0.5">
+                            {adminDecisionForm.bullet2Desc ||
+                              "(a) Non-observance of Standard Operating Procedures. Willful or unintentional non-observance of standard operating procedures for direct or indirect personal gain is classified as serious offense and shall accordingly be meted penalties for serious offense."}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Paragraph 1: Management Review & Repeated Occurrence */}
+                      <p className="pl-6 sm:pl-8 pt-0.5">
+                        {adminDecisionForm.paragraph1 ||
+                          "After reviewing the facts and circumstances surrounding the case, Management has determined that there is substantial basis to establish your accountability for the aforementioned violations. Management further notes that this is a repeated occurrence of the same or similar violation, notwithstanding prior reminders, and corrective measures previously undertaken."}
+                      </p>
+
+                      {/* Paragraph 2: Decision / Sanction Level & Termination Warning */}
+                      <p className="pl-6 sm:pl-8">
+                        {adminDecisionForm.paragraph2 ? (
+                          adminDecisionForm.paragraph2
+                        ) : (
+                          <>
+                            In view thereof, please be informed that this shall serve as your{" "}
+                            <strong>“{adminDecisionForm.sanctionLevel || "Final Stern Warning"}”</strong>. Any further violations of company policies may result in the{" "}
+                            <strong>immediate termination of your employment</strong>.
+                          </>
+                        )}
+                      </p>
+
+                      {/* Paragraph 3 */}
+                      <p className="pl-6 sm:pl-8">
+                        {adminDecisionForm.paragraph3 || "Please be guided accordingly."}
+                      </p>
+                    </div>
+
+                    {/* 4. Signatory Block */}
+                    <div className={`${adminDecisionPaperFormat === "SHORT" ? "mt-4 text-xs" : "mt-8 text-sm"} font-sans text-slate-900`}>
+                      <p className="mb-1 text-xs sm:text-sm">Sincerely,</p>
+                      {/* Stylized Digital Signature Graphic */}
+                      <div className="relative -mb-4 pl-2 h-14 w-44 pointer-events-none select-none">
+                        <img
+                          src="/id-assets/signature_charmie_transparent.png"
+                          alt="Signature"
+                          className="h-12 w-auto object-contain filter contrast-125 brightness-75"
+                          onError={(e) => {
+                            e.target.style.display = "none";
+                          }}
+                        />
+                      </div>
+                      <p className="font-black text-sm uppercase tracking-wide text-slate-900">
+                        {adminDecisionForm.signatoryName || "JEVINCE JAYE S. JUBAY, CHRP"}
+                      </p>
+                      <p className="text-xs text-slate-800">
+                        {adminDecisionForm.signatoryTitle || "HRMD Manager"}
+                      </p>
+                      <p className="text-xs text-slate-800">
+                        {adminDecisionForm.signatoryCompany || getPaperCompanyName(selectedReport?.company)}
+                      </p>
+                    </div>
+
+                    {/* 5. Received by Block */}
+                    <div className={`${adminDecisionPaperFormat === "SHORT" ? "mt-4 pt-1" : "mt-8 pt-2"} text-sm font-sans text-slate-900`}>
+                      <p className="text-xs text-slate-700 mb-2">Received by:</p>
+                      <p className="font-black text-sm uppercase tracking-wide text-slate-900">
+                        {adminDecisionForm.toEmployee || (selectedReport.employeeName || "MICHAEL SIMPAL").toUpperCase()}
+                      </p>
+                      <p className="text-xs text-slate-700">Date & Signature</p>
+                    </div>
+                  </div>
+
+                  {/* 6. Document Footer */}
+                  <div className={`${adminDecisionPaperFormat === "SHORT" ? "mt-5 pt-2" : "mt-10 pt-3"} text-left text-[11px] text-slate-500 font-sans`}>
+                    {adminDecisionForm.footerText || `HR 201 File & Records ${new Date().getFullYear()}`}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+
+
+      {/* ========================================================================= */}
+      {/* GLOBAL LOADING & TRANSMITTING ANIMATION OVERLAY                            */}
+      {/* ========================================================================= */}
+      {isTransmitting && (
+        <div className="fixed inset-0 z-[100] bg-slate-950/70 backdrop-blur-md flex flex-col items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl p-8 shadow-2xl border border-slate-200 flex flex-col items-center text-center max-w-sm w-full space-y-4">
+            <div className="relative">
+              <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-[#0f2b48] to-[#1e40af] flex items-center justify-center text-white shadow-xl shadow-blue-900/25">
+                <RefreshCw size={28} className="animate-spin text-emerald-400" />
+              </div>
+              <div className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-emerald-500 border-2 border-white flex items-center justify-center">
+                <span className="w-2 h-2 rounded-full bg-white animate-ping" />
+              </div>
+            </div>
+            <div>
+              <h3 className="text-base font-black text-slate-900">Transmitting & Saving</h3>
+              <p className="text-xs text-slate-600 mt-1 font-semibold leading-relaxed">
+                {transmittingMessage || "Synchronizing records to database bucket..."}
+              </p>
+            </div>
+            <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
+              <div className="bg-gradient-to-r from-emerald-500 via-blue-600 to-[#0f2b48] h-full w-2/3 animate-[pulse_1s_infinite] rounded-full" />
+            </div>
+            <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+              Please wait • Synchronizing changes
+            </span>
           </div>
         </div>
       )}

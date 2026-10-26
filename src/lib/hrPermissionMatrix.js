@@ -106,11 +106,14 @@ export function resolveUserHrRole(user, profiles = []) {
     ? HR_ENTITIES.HEAD_OFFICE
     : (registeredCompany || "5A Royal Gaming OPC");
 
+  const reportingName = registeredName || user?.name || "HR Officer";
+
   return {
     roleType,
     isHeadOffice,
     company: finalCompany,
-    userName: registeredName || user?.name || "HR Officer",
+    userName: reportingName,
+    reportingName,
     roleTitle: isHeadOffice
       ? "Head Office HRMD Central Authority"
       : `${finalCompany} HR Administrator`,

@@ -1,7 +1,6 @@
 import { supabase } from "./supabase";
 
 const LOCAL_STORAGE_KEY = "hrhub_incident_reports_v1";
-const CLOUD_BACKUP_KEY = "master_incident_reports_hub";
 
 // Broadcast channel for instantaneous cross-tab synchronization
 let liveBroadcastChannel = null;
@@ -70,6 +69,7 @@ export function normalizeIncidentReport(d) {
 
   const cashShortageAmount = d.cashShortageAmount || d.cash_shortage_amount || "";
   const incidentCategory = d.incidentCategory || d.incident_category || "Cash Shortage & Non-observance of SOPs";
+  const typeOfIncident = d.typeOfIncident || d.type_of_incident || incidentCategory;
   const incidentTime = d.incidentTime || d.incident_time || "16:30 PM";
   const policeNotified = d.policeNotified || d.police_notified || "NO";
   // Extract system metadata entry stored inside JSONB activity_log
@@ -230,6 +230,8 @@ export function normalizeIncidentReport(d) {
     additional_notes: additionalNotes,
     incidentCategory,
     incident_category: incidentCategory,
+    typeOfIncident,
+    type_of_incident: typeOfIncident,
     incidentTime,
     incident_time: incidentTime,
     policeNotified,
@@ -285,6 +287,18 @@ export function normalizeIncidentReport(d) {
     nteSignedProof: d.nteSignedProof || d.nte_signed_proof || metaFromLog.nteSignedProof || "",
     nteSignedProofName: d.nteSignedProofName || d.nte_signed_proof_name || metaFromLog.nteSignedProofName || "",
     nteServedAt: d.nteServedAt || d.nte_served_at || metaFromLog.nteServedAt || "",
+    nteServedBy: d.nteServedBy || d.nte_served_by || metaFromLog.nteServedBy || "",
+    nteSignedProofKey: d.nteSignedProofKey || d.nte_signed_proof_key || metaFromLog.nteSignedProofKey || "",
+    hasSignedNteProof: Boolean(d.hasSignedNteProof || metaFromLog.hasSignedNteProof || d.nteSignedProof || d.nte_signed_proof || d.nteSignedProofKey),
+
+    // 3B. Branch HR Upload Employee In-Written Explanation Proof & Statement
+    explanationProof: d.explanationProof || d.explanation_proof || metaFromLog.explanationProof || "",
+    explanationProofName: d.explanationProofName || d.explanation_proof_name || metaFromLog.explanationProofName || "",
+    explanationProofKey: d.explanationProofKey || d.explanation_proof_key || metaFromLog.explanationProofKey || "",
+    hasExplanationProof: Boolean(d.hasExplanationProof || metaFromLog.hasExplanationProof || d.explanationProof || d.explanation_proof || d.explanationProofKey),
+    explanationText: d.explanationText || d.explanation_text || metaFromLog.explanationText || "",
+    explanationReceivedAt: d.explanationReceivedAt || d.explanation_received_at || metaFromLog.explanationReceivedAt || "",
+    explanationSubmittedBy: d.explanationSubmittedBy || d.explanation_submitted_by || metaFromLog.explanationSubmittedBy || "",
 
     // 4. Head Office Discretion 2A: Warning Notice
     warningNoticeSubject: d.warningNoticeSubject || d.warning_notice_subject || metaFromLog.warningNoticeSubject || "",
@@ -466,73 +480,22 @@ function saveLocalReports(reports) {
 export async function fetchIncidentReports() {
   try {
     if (supabase) {
-      // 1. Check dedicated Supabase table 'incident_reports'
-      const { data: dedicatedData, error: dedicatedErr } = await supabase
+      // 1. Check dedicated Supabase table 'incident_reports' with a 4s timeout protection
+      const queryPromise = supabase
         .from("incident_reports")
         .select("*")
         .order("created_at", { ascending: false });
 
-      // If dedicated table query succeeded without error, it is our Single Source of Truth!
-      // If the user deleted all rows, dedicatedData is [] (length === 0), which we must strictly respect!
-      if (!dedicatedErr && Array.isArray(dedicatedData)) {
-        // Also load cloud user_settings backup to cross-merge fields
-        let cloudMap = {};
-        try {
-          const { data: cloudBackup } = await supabase
-            .from("user_settings")
-            .select("settings_json")
-            .eq("user_id", CLOUD_BACKUP_KEY)
-            .maybeSingle();
-          if (cloudBackup?.settings_json?.reports && Array.isArray(cloudBackup.settings_json.reports)) {
-            cloudBackup.settings_json.reports.forEach((item) => {
-              if (item && (item.id || item.caseNumber)) {
-                cloudMap[item.id || item.caseNumber] = item;
-              }
-            });
-          }
-        } catch {
-          // ignore
-        }
+      const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve({ timeout: true }), 4000));
+      const res = await Promise.race([queryPromise, timeoutPromise]);
 
-        const normalized = dedicatedData.map((row) => {
-          const cloudItem = cloudMap[row.id] || cloudMap[row.case_number] || {};
-          return normalizeIncidentReport({ ...cloudItem, ...row });
-        });
-        saveLocalReports(normalized);
-
-        // Also keep cloud backup in user_settings in sync
-        try {
-          await supabase.from("user_settings").upsert(
-            {
-              user_id: CLOUD_BACKUP_KEY,
-              settings_json: {
-                reports: normalized,
-                lastUpdated: new Date().toISOString()
-              },
-              updated_at: new Date().toISOString()
-            },
-            { onConflict: "user_id" }
-          );
-        } catch {
-          // Ignore
-        }
-
-        return normalized;
-      }
-
-      // 2. Only if the dedicated table had a query ERROR (e.g., table does not exist yet or schema mismatch),
-      // fallback to user_settings backup
-      const { data: cloudBackup, error: backupErr } = await supabase
-        .from("user_settings")
-        .select("settings_json")
-        .eq("user_id", CLOUD_BACKUP_KEY)
-        .maybeSingle();
-
-      if (!backupErr && cloudBackup?.settings_json?.reports && Array.isArray(cloudBackup.settings_json.reports)) {
-        const normalized = cloudBackup.settings_json.reports.map(normalizeIncidentReport);
+      if (res && !res.timeout && !res.error && Array.isArray(res.data)) {
+        const normalized = res.data.map((row) => normalizeIncidentReport(row));
         saveLocalReports(normalized);
         return normalized;
       }
+
+      // If dedicated query failed with error or timed out, gracefully fallback to local cache
     }
   } catch (err) {
     console.debug("[incidentReportStorage] Cloud query notice:", err?.message);
@@ -669,6 +632,16 @@ export async function saveIncidentReport(report) {
         nteSignedProof: updatedReport.nteSignedProof,
         nteSignedProofName: updatedReport.nteSignedProofName,
         nteServedAt: updatedReport.nteServedAt,
+        nteServedBy: updatedReport.nteServedBy,
+        nteSignedProofKey: updatedReport.nteSignedProofKey,
+        hasSignedNteProof: updatedReport.hasSignedNteProof,
+        explanationProof: updatedReport.explanationProof,
+        explanationProofName: updatedReport.explanationProofName,
+        explanationProofKey: updatedReport.explanationProofKey,
+        hasExplanationProof: updatedReport.hasExplanationProof,
+        explanationText: updatedReport.explanationText,
+        explanationReceivedAt: updatedReport.explanationReceivedAt,
+        explanationSubmittedBy: updatedReport.explanationSubmittedBy,
         warningNoticeSubject: updatedReport.warningNoticeSubject,
         warningNoticePenalty: updatedReport.warningNoticePenalty,
         warningNoticeBody: updatedReport.warningNoticeBody,
@@ -740,20 +713,6 @@ export async function saveIncidentReport(report) {
     } catch (errA) {
       console.debug("[incidentReportStorage] Supabase table upsert notice:", errA?.message);
     }
-
-    // Destination B: Guaranteed backup in 'user_settings'
-    try {
-      await supabase.from("user_settings").upsert({
-        user_id: CLOUD_BACKUP_KEY,
-        settings_json: {
-          reports: updatedList,
-          lastUpdated: nowIso
-        },
-        updated_at: nowIso
-      }, { onConflict: "user_id" });
-    } catch (errB) {
-      console.debug("[incidentReportStorage] Supabase backup upsert notice:", errB?.message);
-    }
   }
 
   return updatedReport;
@@ -777,18 +736,6 @@ export async function deleteIncidentReport(id) {
     } catch (err) {
       console.debug("[incidentReportStorage] Supabase delete warning:", err?.message);
     }
-    try {
-      await supabase.from("user_settings").upsert({
-        user_id: CLOUD_BACKUP_KEY,
-        settings_json: {
-          reports: filtered,
-          lastUpdated: new Date().toISOString()
-        },
-        updated_at: new Date().toISOString()
-      }, { onConflict: "user_id" });
-    } catch (err) {
-      // Ignore
-    }
   }
 
   return filtered;
@@ -809,18 +756,6 @@ export async function clearAllIncidentReports() {
       await supabase.from("incident_reports").delete().neq("id", "keep_schema_intact");
     } catch (err) {
       console.debug("[incidentReportStorage] Supabase clear warning:", err?.message);
-    }
-    try {
-      await supabase.from("user_settings").upsert({
-        user_id: CLOUD_BACKUP_KEY,
-        settings_json: {
-          reports: [],
-          lastUpdated: new Date().toISOString()
-        },
-        updated_at: new Date().toISOString()
-      }, { onConflict: "user_id" });
-    } catch (err) {
-      // Ignore
     }
   }
 

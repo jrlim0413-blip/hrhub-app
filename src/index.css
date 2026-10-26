@@ -19,6 +19,17 @@ body {
     -webkit-column-break-inside: avoid !important;
   }
 
+  /* Bond Paper Official Document Printing (Incident Report & Notice to Explain) */
+  body.printing-active-document html,
+  body.printing-active-document {
+    background: #ffffff !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
   /* Strict A4 Portrait Paper (Scoped to Agent ID Card printing) */
   body.printing-agent-id-card html,
   body.printing-agent-id-card {
