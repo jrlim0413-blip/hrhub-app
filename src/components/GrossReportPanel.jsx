@@ -77,6 +77,22 @@ const getDateColumns = (from, to) => {
   return dates;
 };
 
+const getDateChunks = (fromStr, toStr, maxDays = 14) => {
+  const chunks = [];
+  let cur = new Date(`${fromStr}T00:00:00`);
+  const end = new Date(`${toStr}T00:00:00`);
+  while (cur <= end) {
+    const chunkStart = formatDate(cur);
+    const nextCur = new Date(cur);
+    nextCur.setDate(nextCur.getDate() + (maxDays - 1));
+    const chunkEnd = nextCur < end ? formatDate(nextCur) : formatDate(end);
+    chunks.push({ from: chunkStart, to: chunkEnd });
+    cur = new Date(nextCur);
+    cur.setDate(cur.getDate() + 1);
+  }
+  return chunks;
+};
+
 const shiftDate = (dateString, days) => {
   const date = new Date(`${dateString}T00:00:00`);
   date.setDate(date.getDate() + days);
@@ -236,7 +252,22 @@ try {
   }
 
   const savedGross = sessionStorage.getItem("hrhub_gross_cache");
-  if (savedGross) CACHED_GROSS = JSON.parse(savedGross);
+  if (savedGross) {
+    try {
+      const parsed = JSON.parse(savedGross);
+      // Invalidate truncated cache that stopped at day 24 or has too few records
+      const day25Count = Array.isArray(parsed) ? parsed.filter((r) => Number(r.drawDay || r.day) === 25).length : 0;
+      const day26Count = Array.isArray(parsed) ? parsed.filter((r) => Number(r.drawDay || r.day) === 26).length : 0;
+      if (day25Count > 100 && day26Count > 100) {
+        CACHED_GROSS = parsed;
+      } else {
+        sessionStorage.removeItem("hrhub_gross_cache");
+        sessionStorage.removeItem("hrhub_records_cache");
+        CACHED_GROSS = null;
+        CACHED_RECORDS = [];
+      }
+    } catch {}
+  }
 } catch {}
 
 let RATE_LIMIT_REMAINING = 300;
@@ -392,7 +423,9 @@ function SupervisorPicker({ value, onChange, summaries, metrics, showFigures = t
 
 export default function GrossReportPanel() {
   const [range, setRange] = useState(getInitialRange);
-  const [records, setRecords] = useState(() => CACHED_RECORDS || []);
+  const [rawGrossList, setRawGrossList] = useState(() => CACHED_GROSS || []);
+  const [recordsState, setRecordsState] = useState(() => CACHED_RECORDS || []);
+  const setRecords = setRecordsState;
   const [loading, setLoading] = useState(false);
   const [loaded, setLoaded] = useState(() => Boolean(CACHED_TELLERS && CACHED_TELLERS.length > 0));
   const [error, setError] = useState("");
@@ -444,9 +477,19 @@ export default function GrossReportPanel() {
   };
 
   // Realtime agent entry states
-  const [rawGrossList, setRawGrossList] = useState(() => CACHED_GROSS || []);
   const [activeTellers, setActiveTellers] = useState(() => CACHED_TELLERS || []);
   const [supervisorsList, setSupervisorsList] = useState(() => CACHED_SUPERVISORS || []);
+
+  // Dynamically compute normalized records whenever rawGrossList, supervisorsList, or range changes
+  const records = useMemo(() => {
+    const list = rawGrossList.length > 0 ? rawGrossList : (CACHED_GROSS || []);
+    if (list.length === 0) return recordsState.length > 0 ? recordsState : (CACHED_RECORDS || []);
+    const spvrs = supervisorsList.length > 0 ? supervisorsList : (CACHED_SUPERVISORS || []);
+    const normalized = normalizeRecords(list, spvrs, range.from, range.to);
+    CACHED_RECORDS = normalized;
+    return normalized;
+  }, [rawGrossList, supervisorsList, range.from, range.to, recordsState]);
+
   const [lastRefreshed, setLastRefreshed] = useState(() => CACHED_LAST_SYNC || null);
   const [autoRefresh, setAutoRefresh] = useState(true); // ON by default!
   const [realtimeDate, setRealtimeDate] = useState(() => formatDate(new Date()));
@@ -830,45 +873,57 @@ export default function GrossReportPanel() {
         fetchLiveBets(priorityTellers, realtimeDate);
       }
 
-      // 2. CONCURRENT BACKGROUND LOAD: Fetch month-to-date gross plus the 7-day comparison lookback
+      // 2. CONCURRENT BACKGROUND LOAD: Fetch month-to-date gross with auto-chunking (max 14 days per chunk)
+      // to completely prevent upstream STL backend pagination/buffer limits (~8,000 records) from truncating dates past day 24.
       const configuredUrl = activeArea?.grossReportUrl || import.meta.env.VITE_GROSS_REPORT_API_URL;
       const endpoints = configuredUrl ? [configuredUrl] : [DEFAULT_GROSS_URL];
-      let response;
-      let lastStatus = "";
 
-      for (const endpoint of endpoints) {
-        if (!endpoint) continue;
-        const cleanEndpoint = String(endpoint).trim();
-        const url = new URL(cleanEndpoint);
-        const effectiveId = activeArea?.accountantId || url.searchParams.get("id") || import.meta.env.VITE_GROSS_ACCOUNTANT_ID || "2";
-        url.searchParams.set("id", effectiveId);
+      const todayStr = formatDate(new Date());
+      const validFrom = (range?.from && String(range.from).includes("-")) ? range.from : todayStr;
+      const validTo = (range?.to && String(range.to).includes("-")) ? range.to : todayStr;
 
-        const todayStr = formatDate(new Date());
-        const validFrom = (range?.from && String(range.from).includes("-")) ? range.from : todayStr;
-        const validTo = (range?.to && String(range.to).includes("-")) ? range.to : todayStr;
-        const fetchFrom = shiftDate(validFrom, -7);
-        const fetchTo = validTo < todayStr ? todayStr : validTo;
+      // Only add 7-day lookback if the comparison tab specifically requires it
+      const fetchFrom = (reportTab === "comparison") ? shiftDate(validFrom, -7) : validFrom;
+      const fetchTo = validTo;
 
-        url.searchParams.set("from", fetchFrom);
-        url.searchParams.set("to", fetchTo);
-        try {
-          response = await fetch(url.toString(), { headers: { Accept: "application/json", Authorization: `Bearer ${token}` } });
-          if (response.ok) break;
-          lastStatus = response.status;
-        } catch (err) {
-          lastStatus = err.message;
+      const chunks = getDateChunks(fetchFrom, fetchTo, 14);
+
+      const fetchGrossChunk = async (chunk) => {
+        for (const endpoint of endpoints) {
+          if (!endpoint) continue;
+          try {
+            const cleanEndpoint = String(endpoint).trim();
+            const url = new URL(cleanEndpoint);
+            const effectiveId = activeArea?.accountantId || url.searchParams.get("id") || import.meta.env.VITE_GROSS_ACCOUNTANT_ID || "2";
+            url.searchParams.set("id", effectiveId);
+            url.searchParams.set("from", chunk.from);
+            url.searchParams.set("to", chunk.to);
+
+            const res = await fetch(url.toString(), {
+              headers: { Accept: "application/json", Authorization: `Bearer ${token}` }
+            });
+            if (res.ok) {
+              const payload = await res.json();
+              return getRecords(payload);
+            }
+          } catch (err) {
+            console.warn(`Chunk ${chunk.from} to ${chunk.to} fetch error:`, err);
+          }
         }
-      }
+        return [];
+      };
 
-      if (response?.ok) {
-        const grossPayload = await response.json();
-        const rawRecords = getRecords(grossPayload);
+      const chunkResults = await Promise.all(chunks.map(fetchGrossChunk));
+      const rawRecords = chunkResults.flat();
+
+      if (rawRecords.length > 0) {
         setRawGrossList(rawRecords);
         CACHED_GROSS = rawRecords;
         try { sessionStorage.setItem("hrhub_gross_cache", JSON.stringify(rawRecords)); } catch {}
-        const normalized = normalizeRecords(grossPayload, supervisorsPayload || CACHED_SUPERVISORS, range.from, range.to);
+        const normalized = normalizeRecords(rawRecords, supervisorsPayload || CACHED_SUPERVISORS, range.from, range.to);
         setRecords(normalized);
         CACHED_RECORDS = normalized;
+        console.log(`[HrHub Gross Sync] ✅ Loaded ${rawRecords.length} records across ${chunks.length} chunks. Dates:`, Array.from(new Set(rawRecords.map((r) => r.drawDay))).sort((a, b) => a - b));
       }
     } catch (requestError) {
       console.error("Gross report load error:", requestError);
@@ -919,9 +974,10 @@ export default function GrossReportPanel() {
     return [];
   };
 
+  // Automatically fetch report when Area changes, Date Range changes, or Report Tab switches
   useEffect(() => {
     loadReport();
-  }, [selectedAreaId]);
+  }, [selectedAreaId, range.from, range.to, reportTab]);
 
   // Continuous Real-Time Auto-Stream with live second-by-second countdown
   // Only polls on the current day (todayStr) to completely protect server quota on historical dates
@@ -2898,14 +2954,20 @@ export default function GrossReportPanel() {
               id: "detail",
               label: "Supervisors",
               icon: SlidersHorizontal,
-              onClick: () => setReportTab("detail"),
+              onClick: () => {
+                setReportTab("detail");
+                loadReport();
+              },
               isActive: reportTab === "detail",
             },
             {
               id: "comparison",
               label: "Weekly Comparison",
               icon: TrendingUp,
-              onClick: () => setReportTab("comparison"),
+              onClick: () => {
+                setReportTab("comparison");
+                loadReport();
+              },
               isActive: reportTab === "comparison",
             },
           ].map((tab) => {
