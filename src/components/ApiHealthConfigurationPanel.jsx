@@ -274,7 +274,7 @@ export default function ApiHealthConfigurationPanel() {
       }),
       // 6. Current Area: Teller Bet API
       checkSingleEndpoint("bets_api", {
-        url: `${String(selectedArea.tellerBetUrl || "").trim()}?tellerId=1`,
+        url: String(selectedArea.tellerBetUrl || "").trim(),
         token: selectedArea.tellerBetToken || selectedArea.grossReportToken
       })
     ];
@@ -709,7 +709,7 @@ export default function ApiHealthConfigurationPanel() {
                   id: "bets_api",
                   label: `Live Teller Bets Stream (${getAreaConfigById(activeAreaId).areaName})`,
                   category: "Live Transactions",
-                  url: `${String(getAreaConfigById(activeAreaId).tellerBetUrl || "").trim()}?tellerId=1`,
+                  url: String(getAreaConfigById(activeAreaId).tellerBetUrl || "").trim(),
                   icon: Radio,
                   token: getAreaConfigById(activeAreaId).tellerBetToken || getAreaConfigById(activeAreaId).grossReportToken
                 }

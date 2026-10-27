@@ -296,9 +296,12 @@ export function prepareTestUrl(rawUrl, accountantId = null) {
       if (!u.searchParams.has("from")) u.searchParams.set("from", today);
       if (!u.searchParams.has("to")) u.searchParams.set("to", today);
     }
-    // /api/teller/bet requires tellerId
-    if (lowerPath.includes("/teller/bet") && !u.searchParams.has("tellerId")) {
-      u.searchParams.set("tellerId", "1");
+    // /api/teller/bet in Laravel backend expects from, to, and tellerId to prevent 500 errors during ping
+    if (lowerPath.includes("/teller/bet")) {
+      const today = new Date().toISOString().slice(0, 10);
+      if (!u.searchParams.has("from")) u.searchParams.set("from", today);
+      if (!u.searchParams.has("to")) u.searchParams.set("to", today);
+      if (!u.searchParams.has("tellerId")) u.searchParams.set("tellerId", "1");
     }
     return u.toString();
   } catch {
