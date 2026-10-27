@@ -337,9 +337,10 @@ export default function MondayStyleSidebar({
         },
         {
           id: "api_health",
-          label: "System Health & API Latency",
+          label: "System Health & API Configuration",
           icon: Wrench,
-          tag: "System"
+          tag: "System",
+          tabId: "api_health"
         }
       ]
     }

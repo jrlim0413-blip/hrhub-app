@@ -6,7 +6,7 @@ import {
   BriefcaseBusiness, FileText, Sparkles, BarChart3,
   Database, RefreshCw, CheckCircle2, AlertCircle, Clock,
   Bot, Layers, Home, X, CheckCheck, Menu, UserCheck, ShieldAlert,
-  Lock
+  Lock, Wrench
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import ProfileModal from "../components/ProfileModal";
@@ -21,6 +21,7 @@ import MemoGeneratorPanel from "../components/MemoGeneratorPanel";
 import IncidentReportPanel from "../components/IncidentReportPanel";
 import SupervisorsAttendancePanel from "../components/SupervisorsAttendancePanel";
 import RolePermissionMatrixPanel from "../components/RolePermissionMatrixPanel";
+import ApiHealthConfigurationPanel from "../components/ApiHealthConfigurationPanel";
 import AiAssistantDrawer from "../components/AiAssistantDrawer";
 import AiAgentAvatar from "../components/AiAgentAvatar";
 import AiAssistantGirlWidget from "../components/AiAssistantGirlWidget";
@@ -263,6 +264,14 @@ const WORKSPACE_TAB_DEFS = {
     activeClass: "bg-emerald-700 text-white ring-2 ring-emerald-300",
     activeIconClass: "text-white",
     inactiveIconClass: "text-emerald-600"
+  },
+  api_health: {
+    id: "api_health",
+    label: "API Configuration & Health",
+    icon: Wrench,
+    activeClass: "bg-slate-900 text-amber-400 ring-2 ring-amber-400",
+    activeIconClass: "text-amber-400",
+    inactiveIconClass: "text-amber-600"
   }
 };
 
@@ -2191,6 +2200,11 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
               currentUser={currentUser}
               onClose={() => handleCloseWorkspaceTab(null, "permission_matrix")}
             />
+          )}
+
+          {/* TAB 7: SYSTEM HEALTH & API CONFIGURATION */}
+          {workspaceTab === "api_health" && (
+            <ApiHealthConfigurationPanel />
           )}
         </div>
       </div>

@@ -4,9 +4,16 @@ import {
   Download, FileText, LoaderCircle, RefreshCw, TrendingUp, UsersRound, Printer, X,
   CheckCircle2, AlertTriangle, Clock, Search, Users, Zap, Check, ChevronDown, Ticket,
   Layers, ListFilter, Hash, ChevronLeft, ChevronRight, Eye, ArrowDownToLine,
-  Radio, RotateCw, Receipt, SlidersHorizontal, BadgeCheck, Clock3, Activity, Sparkles, Timer
+  Radio, RotateCw, Receipt, SlidersHorizontal, BadgeCheck, Clock3, Activity, Sparkles, Timer,
+  MapPin, Settings
 } from "lucide-react";
 import { API_CONFIG } from "../config/apiConfig";
+import {
+  getAreaConfigs,
+  getSelectedAreaId,
+  setSelectedAreaId,
+  getAreaConfigById
+} from "../lib/areaApiConfigStorage";
 
 const DEFAULT_GROSS_URL = API_CONFIG.GROSS_REPORT_URL;
 const DEFAULT_SUPERVISOR_URL = API_CONFIG.SUPERVISOR_URL;
@@ -392,6 +399,50 @@ export default function GrossReportPanel() {
   const [reportTab, setReportTab] = useState("realtime");
   const [previewOpen, setPreviewOpen] = useState(false);
 
+  // Multi-Area & Entity API Configuration Integration
+  const [areaConfigs, setAreaConfigs] = useState(() => getAreaConfigs());
+  const [selectedAreaId, setSelectedAreaIdState] = useState(() => getSelectedAreaId());
+  const currentArea = useMemo(() => getAreaConfigById(selectedAreaId), [selectedAreaId, areaConfigs]);
+  const currentAreaRef = useRef(currentArea);
+  currentAreaRef.current = currentArea;
+
+  useEffect(() => {
+    const handleAreaConfigsUpdated = (e) => {
+      if (e.detail && Array.isArray(e.detail)) {
+        setAreaConfigs(e.detail);
+      }
+    };
+    const handleSelectedAreaChanged = (e) => {
+      if (e.detail?.id && e.detail.id !== selectedAreaId) {
+        setSelectedAreaIdState(e.detail.id);
+      }
+    };
+    window.addEventListener("hrhub_area_configs_updated", handleAreaConfigsUpdated);
+    window.addEventListener("hrhub_selected_area_changed", handleSelectedAreaChanged);
+    return () => {
+      window.removeEventListener("hrhub_area_configs_updated", handleAreaConfigsUpdated);
+      window.removeEventListener("hrhub_selected_area_changed", handleSelectedAreaChanged);
+    };
+  }, [selectedAreaId]);
+
+  const handleAreaChange = (newAreaId) => {
+    setSelectedAreaIdState(newAreaId);
+    setSelectedAreaId(newAreaId);
+
+    // Reset caches for fresh fetch on the new area
+    CACHED_TELLERS = null;
+    CACHED_SUPERVISORS = null;
+    CACHED_GROSS = null;
+    CACHED_LIVE_BETS = {};
+    CACHED_RECORDS = [];
+    setLiveBetsMap({});
+    setActiveTellers([]);
+    setSupervisorsList([]);
+    setRawGrossList([]);
+    setRecords([]);
+    setLoaded(false);
+  };
+
   // Realtime agent entry states
   const [rawGrossList, setRawGrossList] = useState(() => CACHED_GROSS || []);
   const [activeTellers, setActiveTellers] = useState(() => CACHED_TELLERS || []);
@@ -488,11 +539,13 @@ export default function GrossReportPanel() {
     setSelectedTicketModal(entry);
     setTicketDetailsLoading(true);
     setTicketCombinations([]);
-    const token = import.meta.env.VITE_TELLER_BET_API_TOKEN || DEFAULT_BET_TOKEN;
+    const activeArea = currentAreaRef.current;
+    const token = activeArea?.tellerBetToken || import.meta.env.VITE_TELLER_BET_API_TOKEN || DEFAULT_BET_TOKEN;
+    const baseUrl = activeArea?.tellerBetUrl || "https://stl-mandaue-api.com/api/teller/bet";
     const headers = { Accept: "application/json", Authorization: `Bearer ${token}` };
 
     try {
-      const res = await fetch(`https://stl-mandaue-api.com/api/teller/bet/${entry.transactionId}`, { headers });
+      const res = await fetch(`${baseUrl}/${entry.transactionId}`, { headers });
       if (res.ok) {
         const payload = await res.json();
         const combis = Array.isArray(payload?.data) ? payload.data : [];
@@ -518,8 +571,9 @@ export default function GrossReportPanel() {
     }
     isFetchingLiveRef.current = true;
 
-    const token = import.meta.env.VITE_TELLER_BET_API_TOKEN || DEFAULT_BET_TOKEN;
-    const baseUrl = import.meta.env.VITE_TELLER_BET_API_URL || DEFAULT_BET_URL;
+    const activeArea = currentAreaRef.current;
+    const token = activeArea?.tellerBetToken || import.meta.env.VITE_TELLER_BET_API_TOKEN || DEFAULT_BET_TOKEN;
+    const baseUrl = activeArea?.tellerBetUrl || import.meta.env.VITE_TELLER_BET_API_URL || DEFAULT_BET_URL;
     const headers = { Accept: "application/json", Authorization: `Bearer ${token}` };
 
     const fromDate = targetDate;
@@ -717,9 +771,11 @@ export default function GrossReportPanel() {
     setError("");
 
     try {
-      const token = import.meta.env.VITE_GROSS_REPORT_API_TOKEN || import.meta.env.VITE_AGENTS_API_TOKEN || DEFAULT_TOKEN;
-      const supervisorUrl = import.meta.env.VITE_SUPERVISOR_API_URL || DEFAULT_SUPERVISOR_URL;
-      const activeTellersUrl = import.meta.env.VITE_ACTIVE_TELLERS_API_URL || DEFAULT_ACTIVE_TELLERS_URL;
+      const activeArea = currentAreaRef.current;
+      const token = String(activeArea?.grossReportToken || import.meta.env.VITE_GROSS_REPORT_API_TOKEN || import.meta.env.VITE_AGENTS_API_TOKEN || DEFAULT_TOKEN).trim();
+      const supervisorUrl = String(activeArea?.supervisorUrl || import.meta.env.VITE_SUPERVISOR_API_URL || DEFAULT_SUPERVISOR_URL).trim();
+      const activeTellersUrl = String(activeArea?.activeTellersUrl || import.meta.env.VITE_ACTIVE_TELLERS_API_URL || DEFAULT_ACTIVE_TELLERS_URL).trim();
+      const backupTellersUrl = String(activeArea?.backupTellersUrl || DEFAULT_BACKUP_TELLERS_URL).trim();
 
       // 1. FAST PARALLEL BOOT: Fetch active tellers and supervisors first (~200ms)
       const [spvrResult, tellersResult] = await Promise.allSettled([
@@ -732,7 +788,7 @@ export default function GrossReportPanel() {
 
       if (!tellersPayload && !CACHED_TELLERS) {
         try {
-          const backupRes = await fetch(DEFAULT_BACKUP_TELLERS_URL, { headers: { Accept: "application/json", Authorization: `Bearer ${token}` } });
+          const backupRes = await fetch(backupTellersUrl, { headers: { Accept: "application/json", Authorization: `Bearer ${token}` } });
           if (backupRes.ok) tellersPayload = await backupRes.json();
         } catch {}
       }
@@ -775,21 +831,28 @@ export default function GrossReportPanel() {
       }
 
       // 2. CONCURRENT BACKGROUND LOAD: Fetch month-to-date gross plus the 7-day comparison lookback
-      const configuredUrl = import.meta.env.VITE_GROSS_REPORT_API_URL;
+      const configuredUrl = activeArea?.grossReportUrl || import.meta.env.VITE_GROSS_REPORT_API_URL;
       const endpoints = configuredUrl ? [configuredUrl] : [DEFAULT_GROSS_URL];
       let response;
       let lastStatus = "";
 
       for (const endpoint of endpoints) {
-        const url = new URL(endpoint);
-        url.searchParams.set("id", import.meta.env.VITE_GROSS_ACCOUNTANT_ID || "2");
-        const fetchFrom = shiftDate(range.from, -7);
+        if (!endpoint) continue;
+        const cleanEndpoint = String(endpoint).trim();
+        const url = new URL(cleanEndpoint);
+        const effectiveId = activeArea?.accountantId || url.searchParams.get("id") || import.meta.env.VITE_GROSS_ACCOUNTANT_ID || "2";
+        url.searchParams.set("id", effectiveId);
+
         const todayStr = formatDate(new Date());
-        const fetchTo = range.to < todayStr ? todayStr : range.to;
+        const validFrom = (range?.from && String(range.from).includes("-")) ? range.from : todayStr;
+        const validTo = (range?.to && String(range.to).includes("-")) ? range.to : todayStr;
+        const fetchFrom = shiftDate(validFrom, -7);
+        const fetchTo = validTo < todayStr ? todayStr : validTo;
+
         url.searchParams.set("from", fetchFrom);
         url.searchParams.set("to", fetchTo);
         try {
-          response = await fetch(url, { headers: { Accept: "application/json", Authorization: `Bearer ${token}` } });
+          response = await fetch(url.toString(), { headers: { Accept: "application/json", Authorization: `Bearer ${token}` } });
           if (response.ok) break;
           lastStatus = response.status;
         } catch (err) {
@@ -818,13 +881,16 @@ export default function GrossReportPanel() {
   };
 
   const fetchHistoricalGrossForDate = async (targetDate) => {
+    if (!targetDate || typeof targetDate !== "string" || !targetDate.includes("-")) return;
     setHistoricalLoading(true);
     try {
-      const token = import.meta.env.VITE_GROSS_REPORT_API_TOKEN || import.meta.env.VITE_AGENTS_API_TOKEN || DEFAULT_TOKEN;
-      const configuredUrl = import.meta.env.VITE_GROSS_REPORT_API_URL;
-      const endpoint = configuredUrl || DEFAULT_GROSS_URL;
+      const activeArea = currentAreaRef.current;
+      const token = String(activeArea?.grossReportToken || import.meta.env.VITE_GROSS_REPORT_API_TOKEN || import.meta.env.VITE_AGENTS_API_TOKEN || DEFAULT_TOKEN).trim();
+      const configuredUrl = activeArea?.grossReportUrl || import.meta.env.VITE_GROSS_REPORT_API_URL;
+      const endpoint = String(configuredUrl || DEFAULT_GROSS_URL).trim();
       const url = new URL(endpoint);
-      url.searchParams.set("id", import.meta.env.VITE_GROSS_ACCOUNTANT_ID || "2");
+      const effectiveId = activeArea?.accountantId || url.searchParams.get("id") || import.meta.env.VITE_GROSS_ACCOUNTANT_ID || "2";
+      url.searchParams.set("id", effectiveId);
       url.searchParams.set("from", targetDate);
       url.searchParams.set("to", targetDate);
 
@@ -855,7 +921,7 @@ export default function GrossReportPanel() {
 
   useEffect(() => {
     loadReport();
-  }, []);
+  }, [selectedAreaId]);
 
   // Continuous Real-Time Auto-Stream with live second-by-second countdown
   // Only polls on the current day (todayStr) to completely protect server quota on historical dates
@@ -2623,8 +2689,8 @@ export default function GrossReportPanel() {
                 <span className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-emerald-400">
                   Operations & Audit
                 </span>
-                <span className="rounded-full bg-white/10 px-2 py-0.2 text-[8px] font-bold text-slate-300">
-                  Live Suite
+                <span className="rounded-full bg-emerald-500/20 border border-emerald-400/30 px-2 py-0.2 text-[9px] font-black text-emerald-300">
+                  {currentArea?.areaName || "Area"} • {currentArea?.companyName || "Entity"}
                 </span>
               </div>
               <h3 className="text-base font-black tracking-tight text-white sm:text-lg">
@@ -2635,6 +2701,26 @@ export default function GrossReportPanel() {
 
           {/* Compact Icon Controls */}
           <div className="flex flex-wrap items-center gap-2">
+            {/* Multi-Area / Entity Selector Dropdown */}
+            <div className="inline-flex items-center gap-1.5 rounded-lg border border-white/20 bg-white/10 px-2.5 py-1 text-xs backdrop-blur-xs">
+              <span className="text-[10px] font-black uppercase tracking-wider text-emerald-400 flex items-center gap-1 shrink-0">
+                <MapPin size={12} />
+                Area:
+              </span>
+              <select
+                value={selectedAreaId}
+                onChange={(e) => handleAreaChange(e.target.value)}
+                className="bg-slate-900/90 text-white font-bold rounded-md px-2 py-0.5 border border-white/15 outline-none focus:border-emerald-400 cursor-pointer text-xs max-w-48 truncate"
+                title="Select Area / Entity for Gross Report"
+              >
+                {areaConfigs.map((area) => (
+                  <option key={area.id} value={area.id} className="bg-slate-900 text-white">
+                    {area.areaName} ({area.companyName})
+                  </option>
+                ))}
+              </select>
+            </div>
+
             {/* Contextual Date Controls */}
             {reportTab === "realtime" ? (
               <div className="inline-flex items-center rounded-lg border border-white/15 bg-white/5 p-0.5 backdrop-blur-xs">
