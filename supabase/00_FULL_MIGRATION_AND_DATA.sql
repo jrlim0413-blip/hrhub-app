@@ -366,7 +366,8 @@ INSERT INTO storage.buckets (id, name, public)
 VALUES 
     ('requirements', 'requirements', true),
     ('nte-proofs', 'nte-proofs', true),
-    ('chat-attachments', 'chat-attachments', true)
+    ('chat-attachments', 'chat-attachments', true),
+    ('supervisor-attendance', 'supervisor-attendance', true)
 ON CONFLICT (id) DO UPDATE SET public = true;
 
 -- Storage Objects RLS Policies
@@ -378,16 +379,171 @@ BEGIN
     DROP POLICY IF EXISTS "Public Access - Delete" ON storage.objects;
 
     CREATE POLICY "Public Access - Read" ON storage.objects
-        FOR SELECT USING (bucket_id IN ('requirements', 'nte-proofs', 'chat-attachments'));
+        FOR SELECT TO public USING (bucket_id IN ('requirements', 'nte-proofs', 'chat-attachments', 'supervisor-attendance'));
 
     CREATE POLICY "Public Access - Insert" ON storage.objects
-        FOR INSERT WITH CHECK (bucket_id IN ('requirements', 'nte-proofs', 'chat-attachments'));
+        FOR INSERT TO public WITH CHECK (bucket_id IN ('requirements', 'nte-proofs', 'chat-attachments', 'supervisor-attendance'));
 
     CREATE POLICY "Public Access - Update" ON storage.objects
-        FOR UPDATE USING (bucket_id IN ('requirements', 'nte-proofs', 'chat-attachments'));
+        FOR UPDATE TO public USING (bucket_id IN ('requirements', 'nte-proofs', 'chat-attachments', 'supervisor-attendance'));
 
     CREATE POLICY "Public Access - Delete" ON storage.objects
-        FOR DELETE USING (bucket_id IN ('requirements', 'nte-proofs', 'chat-attachments'));
+        FOR DELETE TO public USING (bucket_id IN ('requirements', 'nte-proofs', 'chat-attachments', 'supervisor-attendance'));
+END $$;
+
+-- ------------------------------------------------------------------------------
+-- 10. TABLE: public.memo_acknowledgements (Employee Digital Acknowledgments & Signatures)
+-- ------------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.memo_acknowledgements (
+    id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    memo_id TEXT NOT NULL,
+    memo_ref_no TEXT,
+    memo_subject TEXT,
+    employee_id TEXT,
+    employee_name TEXT NOT NULL,
+    employee_email TEXT,
+    company TEXT DEFAULT 'Simpal Group of Companies',
+    status TEXT DEFAULT 'ACKNOWLEDGED',
+    signature_data TEXT,
+    remarks TEXT,
+    ip_address TEXT,
+    device_info TEXT,
+    metadata JSONB DEFAULT '{}'::jsonb,
+    acknowledged_at TIMESTAMPTZ DEFAULT TIMEZONE('Asia/Manila', NOW()),
+    created_at TIMESTAMPTZ DEFAULT TIMEZONE('Asia/Manila', NOW()),
+    updated_at TIMESTAMPTZ DEFAULT TIMEZONE('Asia/Manila', NOW()),
+    CONSTRAINT uq_memo_ack UNIQUE (memo_id, employee_email)
+);
+
+CREATE INDEX IF NOT EXISTS idx_memo_ack_memo_id ON public.memo_acknowledgements (memo_id);
+CREATE INDEX IF NOT EXISTS idx_memo_ack_employee ON public.memo_acknowledgements (employee_email);
+
+ALTER TABLE public.memo_acknowledgements ENABLE ROW LEVEL SECURITY;
+
+DO $$ BEGIN
+    DROP POLICY IF EXISTS "Allow all on memo_acknowledgements" ON public.memo_acknowledgements;
+    CREATE POLICY "Allow all on memo_acknowledgements" ON public.memo_acknowledgements FOR ALL USING (true) WITH CHECK (true);
+END $$;
+
+-- ------------------------------------------------------------------------------
+-- 11. SUPERVISOR ATTENDANCE & FIELD GEO-PROOF TABLE
+-- ------------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.supervisor_attendance (
+    id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    supervisor_id TEXT NOT NULL,
+    supervisor_name TEXT NOT NULL,
+    username TEXT,
+    attendance_date DATE NOT NULL DEFAULT CURRENT_DATE,
+    time_in TEXT,
+    time_out TEXT,
+    status TEXT NOT NULL DEFAULT 'Present',
+    area TEXT DEFAULT '5',
+    shift TEXT,
+    latitude NUMERIC(10, 7),
+    longitude NUMERIC(10, 7),
+    location_accuracy NUMERIC,
+    location_name TEXT,
+    photo_url TEXT,
+    photo_storage_path TEXT,
+    remarks TEXT,
+    device_info TEXT,
+    created_at TIMESTAMPTZ DEFAULT TIMEZONE('Asia/Manila', NOW()),
+    updated_at TIMESTAMPTZ DEFAULT TIMEZONE('Asia/Manila', NOW()),
+    CONSTRAINT uq_spvr_attendance_date UNIQUE (supervisor_id, attendance_date)
+);
+
+ALTER TABLE public.supervisor_attendance ADD COLUMN IF NOT EXISTS device_info TEXT;
+ALTER TABLE public.supervisor_attendance ADD COLUMN IF NOT EXISTS location_accuracy NUMERIC;
+ALTER TABLE public.supervisor_attendance ADD COLUMN IF NOT EXISTS location_name TEXT;
+ALTER TABLE public.supervisor_attendance ADD COLUMN IF NOT EXISTS photo_url TEXT;
+
+CREATE INDEX IF NOT EXISTS idx_spvr_att_date ON public.supervisor_attendance (attendance_date);
+CREATE INDEX IF NOT EXISTS idx_spvr_att_supervisor_id ON public.supervisor_attendance (supervisor_id);
+CREATE INDEX IF NOT EXISTS idx_spvr_att_area ON public.supervisor_attendance (area);
+
+CREATE OR REPLACE FUNCTION public.handle_spvr_attendance_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = TIMEZONE('Asia/Manila', NOW());
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_spvr_attendance_updated_at ON public.supervisor_attendance;
+CREATE TRIGGER trg_spvr_attendance_updated_at
+    BEFORE UPDATE ON public.supervisor_attendance
+    FOR EACH ROW EXECUTE FUNCTION public.handle_spvr_attendance_updated_at();
+
+ALTER TABLE public.supervisor_attendance ENABLE ROW LEVEL SECURITY;
+
+DO $$
+BEGIN
+    DROP POLICY IF EXISTS "Allow select on supervisor_attendance" ON public.supervisor_attendance;
+    DROP POLICY IF EXISTS "Allow insert on supervisor_attendance" ON public.supervisor_attendance;
+    DROP POLICY IF EXISTS "Allow update on supervisor_attendance" ON public.supervisor_attendance;
+    DROP POLICY IF EXISTS "Allow delete on supervisor_attendance" ON public.supervisor_attendance;
+
+    CREATE POLICY "Allow select on supervisor_attendance" 
+        ON public.supervisor_attendance FOR SELECT USING (true);
+
+    CREATE POLICY "Allow insert on supervisor_attendance" 
+        ON public.supervisor_attendance FOR INSERT WITH CHECK (true);
+
+    CREATE POLICY "Allow update on supervisor_attendance" 
+        ON public.supervisor_attendance FOR UPDATE USING (true) WITH CHECK (true);
+
+    CREATE POLICY "Allow delete on supervisor_attendance" 
+        ON public.supervisor_attendance FOR DELETE USING (true);
+END $$;
+
+-- Supervisor Attendance Storage Bucket & Policies
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('supervisor-attendance', 'supervisor-attendance', true)
+ON CONFLICT (id) DO UPDATE SET public = true;
+
+DO $$
+BEGIN
+    DROP POLICY IF EXISTS "Public Access - Read supervisor-attendance" ON storage.objects;
+    DROP POLICY IF EXISTS "Public Access - Insert supervisor-attendance" ON storage.objects;
+    DROP POLICY IF EXISTS "Public Access - Update supervisor-attendance" ON storage.objects;
+    DROP POLICY IF EXISTS "Public Access - Delete supervisor-attendance" ON storage.objects;
+
+    CREATE POLICY "Public Access - Read supervisor-attendance" 
+        ON storage.objects FOR SELECT 
+        TO public
+        USING (bucket_id = 'supervisor-attendance');
+
+    CREATE POLICY "Public Access - Insert supervisor-attendance" 
+        ON storage.objects FOR INSERT 
+        TO public
+        WITH CHECK (bucket_id = 'supervisor-attendance');
+
+    CREATE POLICY "Public Access - Update supervisor-attendance" 
+        ON storage.objects FOR UPDATE 
+        TO public
+        USING (bucket_id = 'supervisor-attendance');
+
+    CREATE POLICY "Public Access - Delete supervisor-attendance" 
+        ON storage.objects FOR DELETE 
+        TO public
+        USING (bucket_id = 'supervisor-attendance');
+END $$;
+
+-- Realtime Publication
+DO $$
+BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.supervisor_attendance;
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+    WHEN others THEN NULL;
+END $$;
+
+DO $$
+BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.memo_acknowledgements;
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+    WHEN others THEN NULL;
 END $$;
 
 

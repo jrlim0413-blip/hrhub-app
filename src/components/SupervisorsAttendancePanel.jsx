@@ -5,10 +5,17 @@ import {
   XCircle, Briefcase, Edit3, Save, X, Plus, MapPin,
   ChevronLeft, ChevronRight, ShieldCheck, TrendingUp,
   AlertCircle, Eye, Check, Camera, Smartphone,
-  ExternalLink, Navigation, LocateFixed, Upload,
-  Map, Layers, Shield
+  ExternalLink, Navigation, LocateFixed,
+  Map, Layers, Shield, Cloud, Loader2, Video, VideoOff, RotateCw
 } from "lucide-react";
 import { API_CONFIG } from "../config/apiConfig";
+import {
+  compressImage,
+  uploadAttendancePhoto,
+  fetchCloudAttendance,
+  upsertCloudAttendance,
+  subscribeToAttendanceRealtime
+} from "../lib/supervisorAttendanceStorage";
 
 // Fallback active supervisors (matching live STL Mandaue API IDs 21 to 32)
 const FALLBACK_SUPERVISORS = [
@@ -73,15 +80,28 @@ export default function SupervisorsAttendancePanel({ onClose }) {
   // Photo & Geo Verification Modal State
   const [viewingPhotoRecord, setViewingPhotoRecord] = useState(null);
 
-  // Mobile App Check-In Simulator Modal State
+  // Cloud Database Sync State ('synced' | 'syncing' | 'offline')
+  const [cloudSyncStatus, setCloudSyncStatus] = useState("syncing");
+
+  // Field Check-In Modal State
   const [isSimulatorOpen, setIsSimulatorOpen] = useState(false);
   const [simSupervisorId, setSimSupervisorId] = useState("");
   const [simLat, setSimLat] = useState("");
   const [simLng, setSimLng] = useState("");
+  const [simLocationAccuracy, setSimLocationAccuracy] = useState("");
   const [simLocationName, setSimLocationName] = useState("");
   const [simPhotoUrl, setSimPhotoUrl] = useState("");
+  const [simPhotoFile, setSimPhotoFile] = useState(null);
   const [isGettingGps, setIsGettingGps] = useState(false);
-  const fileInputRef = useRef(null);
+  const [isSubmittingCheckIn, setIsSubmittingCheckIn] = useState(false);
+
+  // Strict Live Camera State (Live Video Viewfinder - No File Uploads)
+  const [isCameraActive, setIsCameraActive] = useState(false);
+  const [cameraFacingMode, setCameraFacingMode] = useState("user"); // 'user' (selfie) | 'environment' (area)
+  const [cameraError, setCameraError] = useState("");
+  const videoRef = useRef(null);
+  const mediaStreamRef = useRef(null);
+  const mobileCameraInputRef = useRef(null);
 
   // Edit DTR Modal State
   const [editingRecord, setEditingRecord] = useState(null);
@@ -187,29 +207,13 @@ export default function SupervisorsAttendancePanel({ onClose }) {
     return map;
   }, [supervisorsList, agentsList]);
 
-  // 3. Load or Initialize Attendance Records for Selected Date
+  // 3. Load or Initialize Attendance Records for Selected Date & Sync with Supabase Cloud
   useEffect(() => {
     if (supervisorsList.length === 0) return;
 
+    let isMounted = true;
     const storageKey = `hrhub_spvr_attendance_v3_${selectedDate}`;
     const cached = localStorage.getItem(storageKey);
-
-    if (cached) {
-      try {
-        const parsed = JSON.parse(cached);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          // Filter out any obsolete records
-          const valid = parsed.filter((r) => {
-            const id = Number(r.supervisorId);
-            return !(id >= 13 && id <= 20) && !String(r.fullName).startsWith("SPVR ");
-          });
-          if (valid.length > 0) {
-            setAttendanceRecords(valid);
-            return;
-          }
-        }
-      } catch {}
-    }
 
     // Initialize clean attendance records from real API data
     const initialRecords = supervisorsList.map((spvr, index) => {
@@ -222,6 +226,7 @@ export default function SupervisorsAttendancePanel({ onClose }) {
         timeIn: "--",
         latitude: null,
         longitude: null,
+        locationAccuracy: null,
         locationName: "",
         photoProof: null,
         shift: SHIFTS[index % SHIFTS.length],
@@ -230,10 +235,119 @@ export default function SupervisorsAttendancePanel({ onClose }) {
       };
     });
 
-    setAttendanceRecords(initialRecords);
-    try {
-      localStorage.setItem(storageKey, JSON.stringify(initialRecords));
-    } catch {}
+    let currentWorkingRecords = initialRecords;
+
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const valid = parsed.filter((r) => {
+            const id = Number(r.supervisorId);
+            return !(id >= 13 && id <= 20) && !String(r.fullName).startsWith("SPVR ");
+          });
+          if (valid.length > 0) {
+            currentWorkingRecords = valid;
+          }
+        }
+      } catch {}
+    }
+
+    setAttendanceRecords(currentWorkingRecords);
+
+    // Asynchronously sync with Supabase Cloud Database
+    async function syncCloudData() {
+      setCloudSyncStatus("syncing");
+      const { data, error, isCloudAvailable } = await fetchCloudAttendance(selectedDate);
+      if (!isMounted) return;
+
+      if (isCloudAvailable && Array.isArray(data)) {
+        setCloudSyncStatus("synced");
+        if (data.length > 0) {
+          const cloudMap = new Map();
+          data.forEach((row) => {
+            cloudMap.set(String(row.supervisor_id), row);
+          });
+
+          setAttendanceRecords((prev) => {
+            const baseList = prev.length > 0 ? prev : initialRecords;
+            const merged = baseList.map((item) => {
+              const cloudRow = cloudMap.get(String(item.supervisorId));
+              if (cloudRow) {
+                return {
+                  ...item,
+                  fullName: cloudRow.supervisor_name || item.fullName,
+                  username: cloudRow.username || item.username,
+                  area: String(cloudRow.area || item.area || "5"),
+                  status: cloudRow.status || item.status,
+                  timeIn: cloudRow.time_in || item.timeIn,
+                  latitude: cloudRow.latitude !== null && cloudRow.latitude !== undefined ? Number(cloudRow.latitude) : item.latitude,
+                  longitude: cloudRow.longitude !== null && cloudRow.longitude !== undefined ? Number(cloudRow.longitude) : item.longitude,
+                  locationAccuracy: cloudRow.location_accuracy !== null && cloudRow.location_accuracy !== undefined ? Number(cloudRow.location_accuracy) : item.locationAccuracy,
+                  locationName: cloudRow.location_name || item.locationName,
+                  photoProof: cloudRow.photo_url || item.photoProof,
+                  shift: cloudRow.shift || item.shift,
+                  remarks: cloudRow.remarks || item.remarks,
+                  lastUpdated: cloudRow.updated_at ? new Date(cloudRow.updated_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : item.lastUpdated
+                };
+              }
+              return item;
+            });
+
+            try {
+              localStorage.setItem(storageKey, JSON.stringify(merged));
+            } catch {}
+            return merged;
+          });
+        }
+      } else {
+        // Table not ready or network offline, gracefully maintain local storage
+        setCloudSyncStatus("offline");
+      }
+    }
+
+    syncCloudData();
+
+    // Subscribe to Realtime Supabase notifications for immediate live updates
+    const unsubscribe = subscribeToAttendanceRealtime(selectedDate, (payload) => {
+      const row = payload?.new;
+      if (!row || !row.supervisor_id) return;
+
+      setAttendanceRecords((prev) => {
+        const updated = prev.map((item) => {
+          if (String(item.supervisorId) === String(row.supervisor_id)) {
+            return {
+              ...item,
+              fullName: row.supervisor_name || item.fullName,
+              username: row.username || item.username,
+              area: String(row.area || item.area || "5"),
+              status: row.status || item.status,
+              timeIn: row.time_in || item.timeIn,
+              latitude: row.latitude !== null && row.latitude !== undefined ? Number(row.latitude) : item.latitude,
+              longitude: row.longitude !== null && row.longitude !== undefined ? Number(row.longitude) : item.longitude,
+              locationAccuracy: row.location_accuracy !== null && row.location_accuracy !== undefined ? Number(row.location_accuracy) : item.locationAccuracy,
+              locationName: row.location_name || item.locationName,
+              photoProof: row.photo_url || item.photoProof,
+              shift: row.shift || item.shift,
+              remarks: row.remarks || item.remarks,
+              lastUpdated: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+            };
+          }
+          return item;
+        });
+
+        try {
+          localStorage.setItem(storageKey, JSON.stringify(updated));
+        } catch {}
+        return updated;
+      });
+
+      showToast(`🔔 Live attendance check-in synced for Supervisor #${row.supervisor_id}!`);
+    });
+
+    return () => {
+      isMounted = false;
+      if (typeof unsubscribe === "function") unsubscribe();
+    };
   }, [selectedDate, supervisorsList]);
 
   // Save current records to localStorage
@@ -267,6 +381,7 @@ export default function SupervisorsAttendancePanel({ onClose }) {
   // Quick Status Toggle for a Supervisor
   const handleQuickStatusChange = (supervisorId, newStatus) => {
     const nowTime = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    let changedRec = null;
     const updated = attendanceRecords.map((rec) => {
       if (rec.supervisorId === supervisorId) {
         let timeIn = rec.timeIn;
@@ -283,37 +398,46 @@ export default function SupervisorsAttendancePanel({ onClose }) {
           remarks = newStatus === "On Leave" ? "Filed leave of absence" : `${newStatus} status logged`;
         }
 
-        return {
+        changedRec = {
           ...rec,
           status: newStatus,
           timeIn,
           remarks,
           lastUpdated: nowTime
         };
+        return changedRec;
       }
       return rec;
     });
 
     saveRecordsToStorage(updated);
+    if (changedRec) {
+      upsertCloudAttendance(changedRec, selectedDate);
+    }
     showToast(`Updated attendance status to ${newStatus}`);
   };
 
   // Clock In Now Timestamp
   const handleClockInNow = (supervisorId) => {
     const nowTime = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    let changedRec = null;
     const updated = attendanceRecords.map((rec) => {
       if (rec.supervisorId === supervisorId) {
-        return {
+        changedRec = {
           ...rec,
           status: "Present",
           timeIn: nowTime,
           remarks: `Time In confirmed at ${nowTime}`,
           lastUpdated: nowTime
         };
+        return changedRec;
       }
       return rec;
     });
     saveRecordsToStorage(updated);
+    if (changedRec) {
+      upsertCloudAttendance(changedRec, selectedDate);
+    }
     showToast(`Time In recorded at ${nowTime}`);
   };
 
@@ -331,10 +455,11 @@ export default function SupervisorsAttendancePanel({ onClose }) {
     }));
 
     saveRecordsToStorage(updated);
-    showToast("All active supervisors marked as Present!");
+    updated.forEach((r) => upsertCloudAttendance(r, selectedDate));
+    showToast("All active supervisors marked as Present & synced!");
   };
 
-  // Grab Live GPS from Browser / Phone
+  // Grab Live GPS from Browser / Phone with High Accuracy
   const handleGetBrowserGps = () => {
     if (!navigator.geolocation) {
       alert("Geolocation is not supported by your browser/device.");
@@ -343,67 +468,239 @@ export default function SupervisorsAttendancePanel({ onClose }) {
     setIsGettingGps(true);
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        setSimLat(pos.coords.latitude.toFixed(6));
-        setSimLng(pos.coords.longitude.toFixed(6));
-        setSimLocationName(`Device GPS Location (±${Math.round(pos.coords.accuracy)}m)`);
+        const lat = pos.coords.latitude.toFixed(6);
+        const lng = pos.coords.longitude.toFixed(6);
+        const acc = Math.round(pos.coords.accuracy);
+        setSimLat(lat);
+        setSimLng(lng);
+        setSimLocationAccuracy(String(acc));
+        setSimLocationName(`Device GPS Location (±${acc}m)`);
         setIsGettingGps(false);
-        showToast("GPS Coordinates locked from device!");
+        showToast(`GPS locked: ±${acc}m accuracy!`);
       },
       (err) => {
-        alert("Failed to retrieve GPS location: " + err.message);
+        alert("Failed to retrieve GPS location: " + err.message + "\nPlease enable Location / GPS in your device settings.");
         setIsGettingGps(false);
       },
-      { enableHighAccuracy: true, timeout: 10000 }
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
     );
   };
 
-  // Handle Photo File Upload
-  const handlePhotoUpload = (e) => {
+  // Start In-App Live Camera Stream (Strict Live Capture)
+  const startLiveCamera = async (facing = cameraFacingMode) => {
+    setCameraError("");
+    try {
+      if (mediaStreamRef.current) {
+        mediaStreamRef.current.getTracks().forEach((t) => t.stop());
+        mediaStreamRef.current = null;
+      }
+
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error("Live video stream is not supported on this browser.");
+      }
+
+      const constraints = {
+        video: {
+          facingMode: { ideal: facing },
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        },
+        audio: false
+      };
+
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      mediaStreamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play().catch(() => {});
+      }
+      setIsCameraActive(true);
+      setSimPhotoUrl("");
+      setSimPhotoFile(null);
+    } catch (err) {
+      console.warn("Live camera access notice:", err);
+      setCameraError(err.message || "Live camera permission denied or unavailable.");
+      setIsCameraActive(false);
+    }
+  };
+
+  // Stop Live Camera Stream
+  const stopLiveCamera = () => {
+    if (mediaStreamRef.current) {
+      mediaStreamRef.current.getTracks().forEach((t) => t.stop());
+      mediaStreamRef.current = null;
+    }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+    setIsCameraActive(false);
+  };
+
+  // Capture Frame directly from Live Camera Viewfinder
+  const capturePhotoFromLiveCamera = () => {
+    if (!videoRef.current) return;
+    const video = videoRef.current;
+    const width = video.videoWidth || 640;
+    const height = video.videoHeight || 480;
+
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d");
+
+    // Mirror horizontal when using selfie camera
+    if (cameraFacingMode === "user") {
+      ctx.translate(width, 0);
+      ctx.scale(-1, 1);
+    }
+    ctx.drawImage(video, 0, 0, width, height);
+
+    const dataUrl = canvas.toDataURL("image/jpeg", 0.82);
+    canvas.toBlob(
+      (blob) => {
+        setSimPhotoFile(blob);
+        setSimPhotoUrl(dataUrl);
+        stopLiveCamera();
+        showToast("📸 Live photo captured from camera!");
+      },
+      "image/jpeg",
+      0.82
+    );
+  };
+
+  // Switch between Selfie (user) and Rear Area Camera (environment)
+  const switchCameraFacingMode = () => {
+    const nextMode = cameraFacingMode === "user" ? "environment" : "user";
+    setCameraFacingMode(nextMode);
+    if (isCameraActive) {
+      startLiveCamera(nextMode);
+    }
+  };
+
+  // Mobile Device Camera Fallback (Strict Camera Intent via capture="user")
+  const handleMobileCameraCapture = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      setSimPhotoUrl(event.target.result);
-      showToast("Real photo loaded from device!");
-    };
-    reader.readAsDataURL(file);
+    try {
+      showToast("Optimizing camera photo...");
+      const compressed = await compressImage(file, 1200, 1200, 0.82);
+      setSimPhotoFile(compressed.blob);
+      setSimPhotoUrl(compressed.dataUrl);
+      stopLiveCamera();
+      showToast("📸 Live photo captured from camera!");
+    } catch (err) {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        setSimPhotoUrl(event.target.result);
+        setSimPhotoFile(file);
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
-  // Submit Mobile Check-In
-  const handleSubmitMobileCheckin = (e) => {
+  // Watch modal open/close to auto-trigger camera & GPS
+  useEffect(() => {
+    if (isSimulatorOpen) {
+      startLiveCamera("user");
+      if (!simLat || !simLng) {
+        handleGetBrowserGps();
+      }
+    } else {
+      stopLiveCamera();
+    }
+    return () => {
+      stopLiveCamera();
+    };
+  }, [isSimulatorOpen]);
+
+  // Submit Mobile Check-In with Cloud Storage & Database Upsert
+  const handleSubmitMobileCheckin = async (e) => {
     e.preventDefault();
     if (!simSupervisorId) return;
+
+    if (!simPhotoUrl) {
+      alert("⚠️ Kinakailangan pong kumuha ng live photo gamit ang camera bago mag-check-in.");
+      return;
+    }
 
     const targetSpvr = supervisorsList.find((s) => String(s.id) === String(simSupervisorId));
     if (!targetSpvr) return;
 
+    setIsSubmittingCheckIn(true);
     const nowTime = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
-    const updated = attendanceRecords.map((rec) => {
-      if (String(rec.supervisorId) === String(simSupervisorId)) {
-        return {
-          ...rec,
-          status: "Present",
-          timeIn: nowTime,
-          latitude: simLat ? parseFloat(simLat) : null,
-          longitude: simLng ? parseFloat(simLng) : null,
-          locationName: simLocationName.trim() || (simLat ? "Mobile GPS Geo-tag" : ""),
-          photoProof: simPhotoUrl || null,
-          remarks: `Checked-in via Mobile Phone App at ${nowTime}`,
-          lastUpdated: nowTime
-        };
-      }
-      return rec;
-    });
+    let finalPhotoUrl = simPhotoUrl;
 
-    saveRecordsToStorage(updated);
+    // 1. Direct Upload to Supabase Storage Bucket 'supervisor-attendance'
+    if (simPhotoFile) {
+      try {
+        const uploadResult = await uploadAttendancePhoto(simPhotoFile, simSupervisorId, selectedDate);
+        if (uploadResult.url) {
+          finalPhotoUrl = uploadResult.url;
+        } else if (uploadResult.error) {
+          console.warn("Storage bucket upload notice (saving photo directly to database):", uploadResult.error);
+        }
+      } catch (err) {
+        console.warn("Photo upload exception:", err);
+      }
+    }
+
+    const updatedRec = {
+      supervisorId: targetSpvr.id,
+      fullName: targetSpvr.fullName || targetSpvr.username,
+      username: targetSpvr.username,
+      area: String(targetSpvr.area || "5"),
+      status: "Present",
+      timeIn: nowTime,
+      latitude: simLat ? parseFloat(simLat) : null,
+      longitude: simLng ? parseFloat(simLng) : null,
+      locationAccuracy: simLocationAccuracy ? parseFloat(simLocationAccuracy) : null,
+      locationName: simLocationName.trim() || (simLat ? `Field GPS Tag (±${simLocationAccuracy || "5"}m)` : ""),
+      photoProof: finalPhotoUrl || null,
+      shift: SHIFTS[0],
+      remarks: `Live Camera Check-in captured at ${nowTime}`,
+      lastUpdated: nowTime
+    };
+
+    // 2. Direct Await Upsert into Supabase Table 'supervisor_attendance'
+    const cloudRes = await upsertCloudAttendance(updatedRec, selectedDate);
+
+    if (cloudRes.success) {
+      setCloudSyncStatus("synced");
+      const updated = attendanceRecords.map((rec) => {
+        if (String(rec.supervisorId) === String(simSupervisorId)) {
+          return {
+            ...rec,
+            ...updatedRec
+          };
+        }
+        return rec;
+      });
+
+      saveRecordsToStorage(updated);
+      showToast(`☁️ Successfully saved to Supabase for ${targetSpvr.fullName}!`);
+    } else {
+      console.error("Supabase upsert failed:", cloudRes.error);
+      alert(`⚠️ Supabase Cloud Save Error:\n${cloudRes.error}\n\nPakisiguraduhin na na-run ang SQL script sa Supabase Dashboard.`);
+      const updated = attendanceRecords.map((rec) => {
+        if (String(rec.supervisorId) === String(simSupervisorId)) {
+          return { ...rec, ...updatedRec };
+        }
+        return rec;
+      });
+      saveRecordsToStorage(updated);
+    }
+
+    stopLiveCamera();
+    setIsSubmittingCheckIn(false);
     setIsSimulatorOpen(false);
     setSimPhotoUrl("");
+    setSimPhotoFile(null);
     setSimLat("");
     setSimLng("");
+    setSimLocationAccuracy("");
     setSimLocationName("");
-    showToast(`📱 Mobile Time In recorded for ${targetSpvr.fullName}!`);
   };
 
   // Open Edit DTR Modal
@@ -422,33 +719,39 @@ export default function SupervisorsAttendancePanel({ onClose }) {
     });
   };
 
-  // Save Edit DTR
-  const handleSaveEdit = (e) => {
+  // Save Edit DTR with Cloud Upsert
+  const handleSaveEdit = async (e) => {
     e.preventDefault();
     if (!editingRecord) return;
 
     const nowTime = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    const updatedRec = {
+      ...editingRecord,
+      status: editFormData.status,
+      timeIn: editFormData.timeIn.trim() || "--",
+      latitude: editFormData.latitude ? parseFloat(editFormData.latitude) : null,
+      longitude: editFormData.longitude ? parseFloat(editFormData.longitude) : null,
+      locationName: editFormData.locationName.trim(),
+      shift: editFormData.shift,
+      area: editFormData.area,
+      remarks: editFormData.remarks.trim() || "Log verified & updated by HR",
+      lastUpdated: nowTime
+    };
+
+    const cloudRes = await upsertCloudAttendance(updatedRec, selectedDate);
+    if (cloudRes.success) {
+      showToast(`☁️ DTR entry saved to Supabase for ${editingRecord.fullName}`);
+    }
+
     const updated = attendanceRecords.map((rec) => {
       if (rec.supervisorId === editingRecord.supervisorId) {
-        return {
-          ...rec,
-          status: editFormData.status,
-          timeIn: editFormData.timeIn.trim() || "--",
-          latitude: editFormData.latitude ? parseFloat(editFormData.latitude) : null,
-          longitude: editFormData.longitude ? parseFloat(editFormData.longitude) : null,
-          locationName: editFormData.locationName.trim(),
-          shift: editFormData.shift,
-          area: editFormData.area,
-          remarks: editFormData.remarks.trim() || "Log verified & updated by HR",
-          lastUpdated: nowTime
-        };
+        return updatedRec;
       }
       return rec;
     });
 
     saveRecordsToStorage(updated);
     setEditingRecord(null);
-    showToast(`DTR entry saved for ${editingRecord.fullName}`);
   };
 
   // Export CSV for Payroll
@@ -585,11 +888,28 @@ export default function SupervisorsAttendancePanel({ onClose }) {
       <div className="rounded-2xl border border-slate-200/90 bg-white p-5 md:p-6 shadow-sm">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div className="space-y-1">
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <span className="inline-flex items-center gap-1.5 rounded-md bg-emerald-50 px-2.5 py-0.5 text-[11px] font-bold text-[#008559] border border-emerald-200/60 uppercase tracking-wider">
                 <ShieldCheck size={12} />
                 Live Database • STL Mandaue API
               </span>
+              <span className="text-xs text-slate-400">•</span>
+              {cloudSyncStatus === "synced" ? (
+                <span className="inline-flex items-center gap-1.5 rounded-md bg-emerald-50 px-2.5 py-0.5 text-[11px] font-bold text-emerald-800 border border-emerald-200/80">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  Cloud Database Synced
+                </span>
+              ) : cloudSyncStatus === "syncing" ? (
+                <span className="inline-flex items-center gap-1.5 rounded-md bg-sky-50 px-2.5 py-0.5 text-[11px] font-bold text-sky-700 border border-sky-200/80">
+                  <RefreshCw size={10} className="animate-spin text-sky-600" />
+                  Connecting Cloud...
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 rounded-md bg-amber-50 px-2.5 py-0.5 text-[11px] font-bold text-amber-700 border border-amber-200/80" title="Local storage active. Run 03_supervisor_attendance_schema.sql in Supabase to enable cloud persistence.">
+                  <AlertTriangle size={11} className="text-amber-600" />
+                  Local Cache Mode
+                </span>
+              )}
               <span className="text-xs text-slate-400">•</span>
               <span className="text-xs font-semibold text-slate-600">
                 {stats.totalSupervisors} Active Supervisors • {stats.totalAgentsManaged} Total Agents Managed
@@ -673,14 +993,14 @@ export default function SupervisorsAttendancePanel({ onClose }) {
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Simulate Mobile Check-in Button */}
+            {/* Field Check-in & Photo Button */}
             <button
               type="button"
               onClick={() => setIsSimulatorOpen(true)}
               className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 text-white hover:from-emerald-700 hover:to-teal-700 text-xs font-bold transition shadow-xs cursor-pointer"
             >
-              <Smartphone size={13} />
-              <span>Simulate Mobile Check-in</span>
+              <Camera size={13} />
+              <span>Field Photo & GPS Check-In</span>
             </button>
 
             <button
@@ -896,9 +1216,7 @@ export default function SupervisorsAttendancePanel({ onClose }) {
                   <th className="py-3 px-3">Status</th>
                   <th className="py-3 px-3">Time In</th>
                   <th className="py-3 px-3">Field Photo</th>
-                  <th className="py-3 px-3">GPS Location</th>
-                  <th className="py-3 px-3">Area / Sector</th>
-                  <th className="py-3 px-4 text-right">Actions</th>
+                  <th className="py-3 px-4">GPS Location</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -1047,47 +1365,6 @@ export default function SupervisorsAttendancePanel({ onClose }) {
                           </span>
                         )}
                       </td>
-
-                      {/* Area */}
-                      <td className="py-3 px-3">
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-slate-100 text-slate-700 font-semibold text-[11px]">
-                          Area {record.area}
-                        </span>
-                      </td>
-
-                      {/* Actions */}
-                      <td className="py-3 px-4 text-right">
-                        <div className="inline-flex items-center gap-1">
-                          {record.status !== "Present" && (
-                            <button
-                              type="button"
-                              onClick={() => handleQuickStatusChange(record.supervisorId, "Present")}
-                              className="p-1.5 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition cursor-pointer"
-                              title="Mark Present"
-                            >
-                              <Check size={14} />
-                            </button>
-                          )}
-
-                          <button
-                            type="button"
-                            onClick={() => handleClockInNow(record.supervisorId)}
-                            className="p-1.5 rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 transition cursor-pointer"
-                            title="Stamp Time In Now"
-                          >
-                            <Clock size={14} />
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => openEditModal(record)}
-                            className="p-1.5 rounded-lg bg-slate-100 text-slate-700 hover:bg-[#008559] hover:text-white transition cursor-pointer"
-                            title="Edit Record"
-                          >
-                            <Edit3 size={14} />
-                          </button>
-                        </div>
-                      </td>
                     </tr>
                   );
                 })}
@@ -1190,6 +1467,33 @@ export default function SupervisorsAttendancePanel({ onClose }) {
                       </span>
                     </div>
                   </div>
+
+                  {/* Photo Proof Thumbnail on Card */}
+                  {record.photoProof && (
+                    <div className="mb-3 flex items-center justify-between gap-2.5 p-2 bg-emerald-50/60 border border-emerald-200/80 rounded-xl">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="w-11 h-11 rounded-lg overflow-hidden border border-emerald-400 shrink-0 shadow-2xs">
+                          <img src={record.photoProof} alt="Proof" className="w-full h-full object-cover" />
+                        </div>
+                        <div className="min-w-0">
+                          <span className="text-[11px] font-bold text-emerald-950 flex items-center gap-1">
+                            <CheckCircle2 size={12} className="text-emerald-600 shrink-0" />
+                            <span>Photo Verified</span>
+                          </span>
+                          <span className="text-[10px] text-emerald-700 block truncate">
+                            Logged via Camera
+                          </span>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setViewingPhotoRecord(record)}
+                        className="px-2 py-1 bg-white hover:bg-emerald-100 text-emerald-800 rounded-lg text-[10px] font-bold border border-emerald-300 transition cursor-pointer shrink-0"
+                      >
+                        View Photo
+                      </button>
+                    </div>
+                  )}
 
                   {/* GPS & Photo if available */}
                   {record.latitude && record.longitude ? (
@@ -1340,215 +1644,480 @@ export default function SupervisorsAttendancePanel({ onClose }) {
         </div>
       )}
 
-      {/* ================= 6. PHOTO & GPS VERIFICATION MODAL ================= */}
+      {/* ================= 6. PHOTO & GPS VERIFICATION MODAL (BOND PAPER PROPORTION) ================= */}
       {viewingPhotoRecord && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-xs animate-in fade-in duration-150">
-          <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
-            <div className="px-5 py-4 bg-slate-900 text-white flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Smartphone size={18} className="text-emerald-400" />
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 md:p-6 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="w-full max-w-5xl max-h-[92vh] bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col">
+            {/* Header */}
+            <div className="px-6 py-4 bg-slate-900 text-white flex items-center justify-between shrink-0 border-b border-slate-800">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-emerald-500/20 border border-emerald-400/40 flex items-center justify-center text-emerald-400 font-bold">
+                  <ShieldCheck size={20} />
+                </div>
                 <div>
-                  <h3 className="text-sm font-bold">Field Photo Proof</h3>
-                  <p className="text-[11px] text-slate-400">Supervisor #{viewingPhotoRecord.supervisorId} • {viewingPhotoRecord.fullName}</p>
+                  <h3 className="text-base font-extrabold tracking-tight">
+                    Official Field Attendance & Geotag Verification Sheet
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    Supervisor #{viewingPhotoRecord.supervisorId} • {viewingPhotoRecord.fullName} • Area {viewingPhotoRecord.area}
+                  </p>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => setViewingPhotoRecord(null)}
-                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer"
+                className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer"
               >
-                <X size={18} />
+                <X size={20} />
               </button>
             </div>
 
-            <div className="p-5 space-y-4">
-              <div className="relative rounded-2xl overflow-hidden border border-slate-200 bg-slate-950 shadow-inner flex items-center justify-center">
-                <img
-                  src={viewingPhotoRecord.photoProof}
-                  alt="Proof"
-                  className="w-full max-h-72 object-contain"
-                />
-              </div>
+            {/* Bond Paper 2-Column Body */}
+            <div className="overflow-y-auto p-6 md:p-8 grid grid-cols-1 lg:grid-cols-2 gap-6 bg-slate-50/50">
+              {/* Left Column: Visual Photo Proof */}
+              <div className="flex flex-col space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                    <Camera size={14} className="text-emerald-700" />
+                    <span>Visual Field Photo Proof</span>
+                  </label>
+                  <span className="text-[11px] font-bold text-emerald-800 bg-emerald-100/80 px-2 py-0.5 rounded-md">
+                    Verified Camera Capture
+                  </span>
+                </div>
 
-              <div className="space-y-2 text-xs">
-                <div className="flex items-center justify-between py-1.5 border-b border-slate-100">
-                  <span className="text-slate-500 font-medium">Supervisor:</span>
-                  <span className="font-bold text-slate-900">{viewingPhotoRecord.fullName}</span>
+                <div className="relative rounded-2xl overflow-hidden border-2 border-slate-200 bg-slate-950 shadow-md flex items-center justify-center aspect-4/3 max-h-[380px]">
+                  <img
+                    src={viewingPhotoRecord.photoProof}
+                    alt="Supervisor Proof"
+                    className="w-full h-full object-contain"
+                  />
+                  <div className="absolute bottom-3 left-3 bg-black/70 backdrop-blur-xs text-white text-[11px] px-3 py-1 rounded-lg border border-white/20">
+                    Time In: <strong className="font-mono text-emerald-300">{viewingPhotoRecord.timeIn}</strong>
+                  </div>
                 </div>
-                <div className="flex items-center justify-between py-1.5 border-b border-slate-100">
-                  <span className="text-slate-500 font-medium">Time In:</span>
-                  <span className="font-mono font-bold text-slate-900">{viewingPhotoRecord.timeIn}</span>
-                </div>
-                {viewingPhotoRecord.latitude && viewingPhotoRecord.longitude && (
-                  <div className="flex items-center justify-between py-1.5 border-b border-slate-100">
-                    <span className="text-slate-500 font-medium">GPS Coordinates:</span>
-                    <span className="font-mono font-semibold text-slate-800">
-                      {viewingPhotoRecord.latitude}, {viewingPhotoRecord.longitude}
+
+                {/* Supervisor details bar */}
+                <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs space-y-2 text-xs">
+                  <div className="flex items-center justify-between py-1 border-b border-slate-100">
+                    <span className="text-slate-500 font-medium">Supervisor:</span>
+                    <span className="font-bold text-slate-900">{viewingPhotoRecord.fullName} (#{viewingPhotoRecord.supervisorId})</span>
+                  </div>
+                  <div className="flex items-center justify-between py-1 border-b border-slate-100">
+                    <span className="text-slate-500 font-medium">Attendance Status:</span>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                      {viewingPhotoRecord.status}
                     </span>
                   </div>
-                )}
+                  <div className="flex items-center justify-between py-1 border-b border-slate-100">
+                    <span className="text-slate-500 font-medium">Assigned Sector:</span>
+                    <span className="font-bold text-slate-800">Area {viewingPhotoRecord.area}</span>
+                  </div>
+                  {viewingPhotoRecord.remarks && (
+                    <div className="pt-1 text-[11px] text-slate-600 italic">
+                      Remarks: "{viewingPhotoRecord.remarks}"
+                    </div>
+                  )}
+                </div>
               </div>
 
-              <div className="pt-2 flex items-center gap-2">
-                {viewingPhotoRecord.latitude && viewingPhotoRecord.longitude && (
-                  <a
-                    href={`https://www.google.com/maps/search/?api=1&query=${viewingPhotoRecord.latitude},${viewingPhotoRecord.longitude}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold text-center inline-flex items-center justify-center gap-1.5 transition shadow-xs"
-                  >
-                    <Map size={14} />
-                    <span>Open in Maps</span>
-                  </a>
+              {/* Right Column: Live Interactive Map Pin */}
+              <div className="flex flex-col space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                    <MapPin size={14} className="text-emerald-700" />
+                    <span>Real-Time Satellite & Street Map Pin</span>
+                  </label>
+                  {viewingPhotoRecord.latitude && viewingPhotoRecord.longitude && (
+                    <span className="text-[11px] font-mono font-bold text-emerald-800 bg-emerald-100/80 px-2 py-0.5 rounded-md">
+                      {Number(viewingPhotoRecord.latitude)?.toFixed(4)}, {Number(viewingPhotoRecord.longitude)?.toFixed(4)}
+                    </span>
+                  )}
+                </div>
+
+                {/* Map Embed or No GPS State */}
+                {viewingPhotoRecord.latitude && viewingPhotoRecord.longitude ? (
+                  <div className="relative rounded-2xl overflow-hidden border-2 border-slate-200 shadow-md aspect-4/3 max-h-[380px] bg-slate-100">
+                    <iframe
+                      title="Supervisor Geotag Map"
+                      src={`https://maps.google.com/maps?q=${viewingPhotoRecord.latitude},${viewingPhotoRecord.longitude}&hl=en&z=17&output=embed`}
+                      className="w-full h-full border-0"
+                      loading="lazy"
+                    />
+                  </div>
+                ) : (
+                  <div className="rounded-2xl border-2 border-dashed border-slate-300 bg-white aspect-4/3 max-h-[380px] flex flex-col items-center justify-center p-6 text-center text-slate-400">
+                    <MapPin size={36} className="text-slate-300 mb-2" />
+                    <p className="text-xs font-bold text-slate-600">No GPS coordinates recorded</p>
+                    <p className="text-[11px] text-slate-400 mt-1 max-w-xs">
+                      This check-in did not include satellite GPS coordinates.
+                    </p>
+                  </div>
                 )}
-                <button
-                  type="button"
-                  onClick={() => setViewingPhotoRecord(null)}
-                  className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition cursor-pointer"
-                >
-                  Close
-                </button>
+
+                {/* Geotag Details Box */}
+                <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs space-y-2 text-xs">
+                  {viewingPhotoRecord.latitude && viewingPhotoRecord.longitude ? (
+                    <>
+                      <div className="flex items-center justify-between py-1 border-b border-slate-100">
+                        <span className="text-slate-500 font-medium">Exact Coordinates:</span>
+                        <span className="font-mono font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">
+                          {Number(viewingPhotoRecord.latitude)?.toFixed(6)}, {Number(viewingPhotoRecord.longitude)?.toFixed(6)}
+                        </span>
+                      </div>
+                      {viewingPhotoRecord.locationAccuracy && (
+                        <div className="flex items-center justify-between py-1 border-b border-slate-100">
+                          <span className="text-slate-500 font-medium">Satellite Accuracy:</span>
+                          <span className="font-bold text-slate-800">±{viewingPhotoRecord.locationAccuracy}m radius (High Precision)</span>
+                        </div>
+                      )}
+                      {viewingPhotoRecord.locationName && (
+                        <div className="flex items-start justify-between py-1 border-b border-slate-100 gap-2">
+                          <span className="text-slate-500 font-medium shrink-0">Area Landmark / Note:</span>
+                          <span className="font-medium text-slate-800 text-right">{viewingPhotoRecord.locationName}</span>
+                        </div>
+                      )}
+                    </>
+                  ) : null}
+
+                  <div className="pt-2 flex items-center gap-2">
+                    {viewingPhotoRecord.latitude && viewingPhotoRecord.longitude && (
+                      <a
+                        href={`https://www.google.com/maps/search/?api=1&query=${viewingPhotoRecord.latitude},${viewingPhotoRecord.longitude}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold text-center inline-flex items-center justify-center gap-1.5 transition shadow-xs"
+                      >
+                        <Map size={14} />
+                        <span>Open Fullscreen in Google Maps</span>
+                      </a>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setViewingPhotoRecord(null)}
+                      className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition cursor-pointer"
+                    >
+                      Close Docket
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* ================= 7. SIMULATE MOBILE CHECK-IN MODAL ================= */}
+      {/* ================= 7. FIELD CHECK-IN MODAL (BOND PAPER PROPORTION & LIVE MAP) ================= */}
       {isSimulatorOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-xs animate-in fade-in duration-150">
-          <div className="w-full max-w-lg bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
-            <div className="px-6 py-4 bg-gradient-to-r from-emerald-700 to-teal-800 text-white flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="p-2 bg-white/10 rounded-xl">
-                  <Smartphone size={20} />
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 md:p-6 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="w-full max-w-5xl max-h-[92vh] bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col">
+            {/* Header */}
+            <div className="px-6 py-4 bg-gradient-to-r from-emerald-800 to-teal-900 text-white flex items-center justify-between shrink-0 border-b border-emerald-700/60">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-white/10 border border-white/20 flex items-center justify-center text-white">
+                  <Camera size={22} />
                 </div>
                 <div>
-                  <h3 className="text-base font-extrabold">Simulate Mobile Check-in App</h3>
-                  <p className="text-xs text-emerald-100">Test live photo capture, phone GPS & Time In submission</p>
+                  <h3 className="text-base md:text-lg font-extrabold tracking-tight">
+                    Field Attendance & Geotag Capture Sheet
+                  </h3>
+                  <p className="text-xs text-emerald-100">
+                    Live camera shutter & interactive satellite GPS mapping • Cloud Verified
+                  </p>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => setIsSimulatorOpen(false)}
-                className="p-1 rounded-lg text-emerald-200 hover:text-white hover:bg-white/10 transition cursor-pointer"
+                className="p-1.5 rounded-xl text-emerald-200 hover:text-white hover:bg-white/10 transition cursor-pointer"
               >
-                <X size={18} />
+                <X size={20} />
               </button>
             </div>
 
-            <form onSubmit={handleSubmitMobileCheckin} className="p-6 space-y-4">
-              {/* Select Supervisor */}
-              <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                  Select Supervisor
-                </label>
-                <select
-                  value={simSupervisorId}
-                  onChange={(e) => setSimSupervisorId(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:border-[#008559] transition cursor-pointer"
-                >
-                  {supervisorsList.map((s) => {
-                    const count = agentStatsBySupervisor[String(s.id)]?.total || 0;
-                    return (
-                      <option key={s.id} value={s.id}>
-                        #{s.id} - {s.fullName} ({count} Assigned Agents • Area {s.area})
-                      </option>
-                    );
-                  })}
-                </select>
+            {/* Bond Paper 2-Column Form Body */}
+            <form onSubmit={handleSubmitMobileCheckin} className="flex-1 overflow-y-auto p-6 md:p-8 grid grid-cols-1 lg:grid-cols-2 gap-6 bg-slate-50/50">
+              {/* Left Column: Live Camera Viewfinder & Snapshot Preview */}
+              <div className="flex flex-col space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                    <Camera size={14} className="text-emerald-700" />
+                    <span>1. Live Camera Proof (Snapshot Only)</span>
+                  </label>
+
+                  {isCameraActive && (
+                    <button
+                      type="button"
+                      onClick={switchCameraFacingMode}
+                      className="text-[11px] font-bold text-slate-700 hover:text-emerald-700 inline-flex items-center gap-1 cursor-pointer bg-white border border-slate-200 shadow-2xs hover:bg-slate-50 px-2.5 py-1 rounded-lg transition"
+                      title="Switch Camera"
+                    >
+                      <RotateCw size={12} />
+                      <span>{cameraFacingMode === "user" ? "Selfie Mode" : "Area Mode"}</span>
+                    </button>
+                  )}
+                </div>
+
+                {/* Hidden input strictly for direct mobile hardware camera intent */}
+                <input
+                  type="file"
+                  ref={mobileCameraInputRef}
+                  accept="image/*"
+                  capture={cameraFacingMode}
+                  onChange={handleMobileCameraCapture}
+                  className="hidden"
+                />
+
+                {/* Viewfinder Window */}
+                <div className="relative rounded-2xl overflow-hidden bg-slate-950 aspect-4/3 max-h-[360px] flex items-center justify-center border-2 border-slate-800 shadow-inner">
+                  {/* Live Video Feed */}
+                  <video
+                    ref={videoRef}
+                    playsInline
+                    autoPlay
+                    muted
+                    className={`w-full h-full object-cover ${
+                      cameraFacingMode === "user" ? "scale-x-[-1]" : ""
+                    } ${isCameraActive && !simPhotoUrl ? "block" : "hidden"}`}
+                  />
+
+                  {/* Captured Photo Preview */}
+                  {simPhotoUrl && !isCameraActive && (
+                    <div className="relative w-full h-full flex items-center justify-center bg-black">
+                      <img
+                        src={simPhotoUrl}
+                        alt="Captured Proof"
+                        className="w-full h-full object-contain"
+                      />
+                      <div className="absolute top-3 left-3 bg-emerald-600 text-white text-[11px] font-bold px-3 py-1 rounded-xl shadow-md flex items-center gap-1.5 border border-emerald-400">
+                        <CheckCircle2 size={13} />
+                        <span>Live Photo Captured</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Inactive State */}
+                  {!isCameraActive && !simPhotoUrl && (
+                    <div className="text-center p-6 text-slate-400 space-y-2">
+                      <VideoOff size={36} className="mx-auto text-slate-500" />
+                      <p className="text-xs font-bold text-slate-300">Live Camera is ready to start</p>
+                      {cameraError ? (
+                        <p className="text-[11px] text-amber-400 font-medium max-w-xs mx-auto">
+                          {cameraError}
+                        </p>
+                      ) : (
+                        <p className="text-[11px] text-slate-400">
+                          Click below to start the camera or trigger phone camera.
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Live Shutter Button on top of video */}
+                  {isCameraActive && (
+                    <div className="absolute bottom-4 inset-x-0 flex items-center justify-center">
+                      <button
+                        type="button"
+                        onClick={capturePhotoFromLiveCamera}
+                        className="px-6 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-full text-xs font-extrabold shadow-xl inline-flex items-center gap-2 transition hover:scale-105 active:scale-95 cursor-pointer border-2 border-white"
+                      >
+                        <Camera size={18} />
+                        <span>Take Snapshot Now</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Viewfinder Controls & Mobile Trigger */}
+                <div className="flex flex-wrap items-center justify-between gap-2 bg-white p-3 rounded-2xl border border-slate-200 shadow-2xs">
+                  {simPhotoUrl ? (
+                    <div className="flex items-center justify-between w-full">
+                      <span className="text-xs text-emerald-800 font-bold flex items-center gap-1.5">
+                        <CheckCircle2 size={14} className="text-emerald-600" />
+                        <span>Snapshot locked & ready for submission</span>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => startLiveCamera(cameraFacingMode)}
+                        className="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-bold inline-flex items-center gap-1.5 transition cursor-pointer"
+                      >
+                        <RotateCw size={13} />
+                        <span>Retake Photo</span>
+                      </button>
+                    </div>
+                  ) : !isCameraActive ? (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => startLiveCamera(cameraFacingMode)}
+                        className="px-4 py-2 bg-[#008559] hover:bg-emerald-700 text-white rounded-xl text-xs font-bold inline-flex items-center gap-1.5 transition cursor-pointer shadow-2xs"
+                      >
+                        <Video size={14} />
+                        <span>Open Live Viewfinder</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => mobileCameraInputRef.current?.click()}
+                        className="px-3.5 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-bold inline-flex items-center gap-1.5 transition cursor-pointer"
+                      >
+                        <Camera size={14} />
+                        <span>Device Camera App</span>
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between w-full">
+                      <span className="text-xs text-emerald-700 font-bold flex items-center gap-1.5">
+                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping" />
+                        Camera Viewfinder Running
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => mobileCameraInputRef.current?.click()}
+                        className="text-xs text-slate-500 hover:text-slate-800 font-semibold cursor-pointer underline"
+                      >
+                        Use Phone Camera App
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
 
-              {/* GPS Coordinates & Browser Grab */}
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                    GPS Coordinates (Device Location)
+              {/* Right Column: GPS Location & Live Interactive Map Pin */}
+              <div className="flex flex-col space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                    <MapPin size={14} className="text-emerald-700" />
+                    <span>2. Satellite GPS & Live Area Map</span>
                   </label>
+
                   <button
                     type="button"
                     onClick={handleGetBrowserGps}
                     disabled={isGettingGps}
-                    className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 hover:text-emerald-900 cursor-pointer"
+                    className="inline-flex items-center gap-1 text-xs font-bold text-emerald-700 hover:text-emerald-900 bg-white border border-slate-200 px-2.5 py-1 rounded-lg shadow-2xs transition cursor-pointer"
                   >
                     <LocateFixed size={12} className={isGettingGps ? "animate-spin text-emerald-600" : ""} />
-                    <span>{isGettingGps ? "Detecting GPS..." : "Detect Device GPS"}</span>
+                    <span>{isGettingGps ? "Acquiring GPS..." : "Re-detect GPS"}</span>
                   </button>
                 </div>
-                <div className="grid grid-cols-2 gap-2 mb-2">
-                  <input
-                    type="text"
-                    value={simLat}
-                    onChange={(e) => setSimLat(e.target.value)}
-                    placeholder="Latitude (e.g. 10.3341)"
-                    className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono text-slate-900 focus:outline-none focus:border-[#008559]"
-                  />
-                  <input
-                    type="text"
-                    value={simLng}
-                    onChange={(e) => setSimLng(e.target.value)}
-                    placeholder="Longitude (e.g. 123.9422)"
-                    className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono text-slate-900 focus:outline-none focus:border-[#008559]"
-                  />
-                </div>
-                <input
-                  type="text"
-                  value={simLocationName}
-                  onChange={(e) => setSimLocationName(e.target.value)}
-                  placeholder="Location landmark / Branch post"
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-[#008559]"
-                />
-              </div>
 
-              {/* Photo Upload / Proof */}
-              <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                  Photo / Selfie Capture (Live Device Camera)
-                </label>
-                <div className="flex items-center gap-3">
-                  <input
-                    type="file"
-                    ref={fileInputRef}
-                    accept="image/*"
-                    onChange={handlePhotoUpload}
-                    className="hidden"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold inline-flex items-center gap-1.5 transition cursor-pointer"
+                {/* Select Supervisor */}
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1">
+                    Supervisor Identity
+                  </label>
+                  <select
+                    value={simSupervisorId}
+                    onChange={(e) => setSimSupervisorId(e.target.value)}
+                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:border-[#008559] transition cursor-pointer shadow-2xs"
                   >
-                    <Camera size={14} />
-                    <span>{simPhotoUrl ? "Change Photo" : "Upload Picture"}</span>
-                  </button>
-                  <span className="text-[11px] text-slate-500">
-                    {simPhotoUrl ? "Photo attached ✅" : "Optional field camera photo"}
-                  </span>
+                    {supervisorsList.map((s) => {
+                      const count = agentStatsBySupervisor[String(s.id)]?.total || 0;
+                      return (
+                        <option key={s.id} value={s.id}>
+                          #{s.id} - {s.fullName} ({count} Assigned Agents • Area {s.area})
+                        </option>
+                      );
+                    })}
+                  </select>
                 </div>
 
-                {simPhotoUrl && (
-                  <div className="mt-2 w-24 h-24 rounded-xl overflow-hidden border border-emerald-400">
-                    <img src={simPhotoUrl} alt="Preview" className="w-full h-full object-cover" />
+                {/* LIVE INTERACTIVE MAP DISPLAY */}
+                <div className="relative rounded-2xl overflow-hidden border-2 border-slate-200 shadow-md aspect-4/3 max-h-[260px] bg-slate-100 flex items-center justify-center">
+                  {simLat && simLng ? (
+                    <iframe
+                      title="Field Location Live Map"
+                      src={`https://maps.google.com/maps?q=${simLat},${simLng}&hl=en&z=17&output=embed`}
+                      className="w-full h-full border-0"
+                      loading="lazy"
+                    />
+                  ) : (
+                    <div className="p-6 text-center space-y-2 text-slate-400">
+                      <LocateFixed size={32} className="mx-auto text-slate-400" />
+                      <p className="text-xs font-bold text-slate-600">Waiting for GPS Coordinates...</p>
+                      <button
+                        type="button"
+                        onClick={handleGetBrowserGps}
+                        className="px-3.5 py-1.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-xl text-xs font-bold transition border border-emerald-200"
+                      >
+                        Click to Lock Device GPS
+                      </button>
+                    </div>
+                  )}
+
+                  {simLat && simLng && (
+                    <div className="absolute top-2 right-2 bg-white/90 backdrop-blur-xs text-[10px] font-bold text-emerald-800 px-2 py-0.5 rounded-md border border-emerald-300 shadow-sm">
+                      📍 Live Pin Locked
+                    </div>
+                  )}
+                </div>
+
+                {/* GPS Coordinates pill */}
+                {simLat && simLng && (
+                  <div className="flex items-center justify-between text-xs bg-emerald-50/80 px-3 py-2 rounded-xl border border-emerald-200">
+                    <span className="font-mono text-emerald-950 font-bold">
+                      📍 {simLat}, {simLng} {simLocationAccuracy ? `(±${simLocationAccuracy}m accuracy)` : ""}
+                    </span>
+                    <a
+                      href={`https://www.google.com/maps/search/?api=1&query=${simLat},${simLng}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="font-bold underline text-emerald-700 hover:text-emerald-900 inline-flex items-center gap-1 text-[11px]"
+                    >
+                      <span>Google Maps</span>
+                      <ExternalLink size={10} />
+                    </a>
                   </div>
                 )}
-              </div>
 
-              {/* Buttons */}
-              <div className="pt-2 flex items-center justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setIsSimulatorOpen(false)}
-                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#008559] hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer"
-                >
-                  <CheckCircle2 size={14} />
-                  <span>Submit Time In</span>
-                </button>
+                {/* Landmark Input */}
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1">
+                    Location Landmark / Area Note
+                  </label>
+                  <input
+                    type="text"
+                    value={simLocationName}
+                    onChange={(e) => setSimLocationName(e.target.value)}
+                    placeholder="e.g. Mandaue Central Station / Area 5 Hub"
+                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-[#008559] transition shadow-2xs"
+                  />
+                </div>
+
+                {/* Action Buttons */}
+                <div className="pt-3 flex items-center justify-end gap-2 border-t border-slate-200/80">
+                  <button
+                    type="button"
+                    onClick={() => setIsSimulatorOpen(false)}
+                    disabled={isSubmittingCheckIn}
+                    className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+
+                  <button
+                    type="submit"
+                    disabled={isSubmittingCheckIn || !simPhotoUrl}
+                    className={`inline-flex items-center gap-2 px-6 py-2.5 rounded-xl text-xs font-bold text-white transition shadow-sm cursor-pointer ${
+                      !simPhotoUrl
+                        ? "bg-slate-400 cursor-not-allowed opacity-70"
+                        : "bg-[#008559] hover:bg-emerald-700 shadow-md"
+                    }`}
+                  >
+                    {isSubmittingCheckIn ? (
+                      <>
+                        <Loader2 size={15} className="animate-spin" />
+                        <span>Syncing to Supabase Cloud...</span>
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 size={15} />
+                        <span>{simPhotoUrl ? "Submit Field Attendance" : "Capture Photo First"}</span>
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
             </form>
           </div>

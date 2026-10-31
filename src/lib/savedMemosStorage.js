@@ -19,15 +19,31 @@ export async function getSavedMemosFromDb(currentUser = null) {
   const accountKey = getUserAccountKey(currentUser);
 
   try {
+        let targetRows = [];
     const { data, error } = await supabase
       .from(SAVED_MEMOS_TABLE)
       .select("*")
       .eq("user_id", accountKey)
       .order("created_at", { ascending: false });
 
-    if (!error && Array.isArray(data)) {
+    if (!error && Array.isArray(data) && data.length > 0) {
+      targetRows = data;
+    } else {
+      // Fallback: If no records match the logged-in email (e.g. data imported under admin@hrhub.com),
+      // fetch all official saved memorandums so the company archive is never empty.
+      const { data: allData, error: allErr } = await supabase
+        .from(SAVED_MEMOS_TABLE)
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (!allErr && Array.isArray(allData)) {
+        targetRows = allData;
+      }
+    }
+
+    if (Array.isArray(targetRows)) {
       // Map database row columns to Memo object format
-      const mapped = data.map((row) => ({
+      const mapped = targetRows.map((row) => ({
         id: row.id,
         ref: row.ref_no,
         date: row.date,

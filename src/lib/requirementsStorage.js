@@ -5,6 +5,7 @@
 import { jsPDF } from "jspdf";
 import JSZip from "jszip";
 import { supabase } from "./supabase";
+import { API_CONFIG } from "../config/apiConfig";
 import { sortRequirementsBySlotSequence, getItemSlotRank } from "../config/registrationRequirementsConfig";
 
 const DB_NAME = "hrhub_requirements_db";
@@ -510,7 +511,7 @@ export async function getRequirementsByProfile(profileKey) {
 
           // Ensure robust public dataUrl resolution
           const fallbackUrl = d.storage_path
-            ? `https://jiljeujvzlxptztmuaqy.supabase.co/storage/v1/object/public/requirements/${d.storage_path}`
+            ? `${API_CONFIG.SUPABASE_URL}/storage/v1/object/public/requirements/${d.storage_path}`
             : null;
           const resolvedDataUrl = d.data_url || d.file_url || fallbackUrl;
 

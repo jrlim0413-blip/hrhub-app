@@ -1,25 +1,32 @@
 -- ==============================================================================
--- HRHUB APP: MASTER DATABASE SCHEMA REPLICATION SCRIPT
+-- HRHUB APP: ALL-IN-ONE LIGHTWEIGHT DATABASE SCHEMA & POLICIES SETUP
 -- ==============================================================================
--- I-run ang buong script na ito sa:
--- Supabase Dashboard -> SQL Editor -> New Query -> Run
+-- I-paste ang BUONG script na ito sa inyong bagong Supabase project:
+-- Dashboard -> SQL Editor -> New Query -> Run
 --
--- Sakop ng script na ito ang:
+-- Sakop nito ang:
 -- 1. Extensions (pgcrypto, uuid-ossp)
--- 2. Tables:
---    - public.employees (Pre-registered staff directory)
---    - public.profiles (Auth & directory sync)
---    - public.user_settings (Memo generator settings & company configs)
---    - public.saved_memos (Official memorandums archive)
---    - public.incident_reports (HR Incident reports & NTE workflow)
---    - public.agent_requirements (Uploaded 201 file requirements & OCR metadata)
+-- 2. 11 Comprehensive Tables:
+--    - public.employees (Employee directory & role permissions)
+--    - public.profiles (Auth & system sync)
+--    - public.user_settings (HR settings, signatories, letterheads)
+--    - public.saved_memos (Official memorandums repository)
+--    - public.incident_reports (HR Incidents & NTE workflow)
+--    - public.agent_requirements (201 employee files & uploaded IDs)
+--    - public.agent_profiles (Agent profile custom details & booth overrides)
 --    - public.chat_messages (In-app real-time messaging)
 --    - public.memos (General noticeboard & announcements)
--- 3. Row Level Security (RLS) policies para sa bawat table
--- 4. Storage Buckets (requirements, nte-proofs, chat-attachments) at Storage RLS Policies
+--    - public.memo_acknowledgements (Employee digital acknowledgments & e-signatures)
+--    - public.supervisor_attendance (Live camera photo, coordinates & logs)
+-- 3. Row Level Security (RLS) Policies (Full read & write access for web & mobile app)
+-- 4. Storage Buckets & Policies (requirements, nte-proofs, chat-attachments, supervisor-attendance)
+-- 5. Realtime Sync Subscription (Auto-update sa screen ni HR)
+-- 6. Default Admin Account (Para instant login pagkatapos ma-run)
 -- ==============================================================================
 
--- Siguraduhing active ang required extensions
+-- ------------------------------------------------------------------------------
+-- EXTENSIONS
+-- ------------------------------------------------------------------------------
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
@@ -40,18 +47,9 @@ CREATE TABLE IF NOT EXISTS public.employees (
 
 ALTER TABLE public.employees ENABLE ROW LEVEL SECURITY;
 
-DO $$
-BEGIN
-    DROP POLICY IF EXISTS "Allow select on employees" ON public.employees;
+DO $$ BEGIN
     DROP POLICY IF EXISTS "Allow all on employees" ON public.employees;
-    DROP POLICY IF EXISTS "Allow insert on employees" ON public.employees;
-    DROP POLICY IF EXISTS "Allow update on employees" ON public.employees;
-    DROP POLICY IF EXISTS "Allow delete on employees" ON public.employees;
-
-    CREATE POLICY "Allow select on employees" ON public.employees FOR SELECT USING (true);
-    CREATE POLICY "Allow insert on employees" ON public.employees FOR INSERT WITH CHECK (true);
-    CREATE POLICY "Allow update on employees" ON public.employees FOR UPDATE USING (true) WITH CHECK (true);
-    CREATE POLICY "Allow delete on employees" ON public.employees FOR DELETE USING (true);
+    CREATE POLICY "Allow all on employees" ON public.employees FOR ALL USING (true) WITH CHECK (true);
 END $$;
 
 -- ------------------------------------------------------------------------------
@@ -68,42 +66,12 @@ CREATE TABLE IF NOT EXISTS public.profiles (
     updated_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW())
 );
 
-ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS name TEXT;
-ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS company TEXT DEFAULT 'Simpal Group of Companies';
-ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'Team Member';
-ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS is_approved BOOLEAN DEFAULT TRUE;
-ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW());
-ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW());
-
--- Crucial: Tanggalin ang foreign key constraint sa auth.users para hindi ma-block
--- ang activation kapag nag-i-insert o nag-u-update ng pre-registered personnel
 ALTER TABLE public.profiles DROP CONSTRAINT IF EXISTS profiles_id_fkey;
-
-DO $$
-BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'profiles_email_unique') THEN
-        BEGIN
-            ALTER TABLE public.profiles ADD CONSTRAINT profiles_email_unique UNIQUE (email);
-        EXCEPTION
-            WHEN duplicate_table THEN NULL;
-            WHEN others THEN NULL;
-        END;
-    END IF;
-END $$;
-
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 
-DO $$
-BEGIN
-    DROP POLICY IF EXISTS "Allow select on profiles" ON public.profiles;
-    DROP POLICY IF EXISTS "Allow insert on profiles" ON public.profiles;
-    DROP POLICY IF EXISTS "Allow update on profiles" ON public.profiles;
-    DROP POLICY IF EXISTS "Allow delete on profiles" ON public.profiles;
-
-    CREATE POLICY "Allow select on profiles" ON public.profiles FOR SELECT USING (true);
-    CREATE POLICY "Allow insert on profiles" ON public.profiles FOR INSERT WITH CHECK (true);
-    CREATE POLICY "Allow update on profiles" ON public.profiles FOR UPDATE USING (true) WITH CHECK (true);
-    CREATE POLICY "Allow delete on profiles" ON public.profiles FOR DELETE USING (true);
+DO $$ BEGIN
+    DROP POLICY IF EXISTS "Allow all on profiles" ON public.profiles;
+    CREATE POLICY "Allow all on profiles" ON public.profiles FOR ALL USING (true) WITH CHECK (true);
 END $$;
 
 -- ------------------------------------------------------------------------------
@@ -147,18 +115,9 @@ CREATE TABLE IF NOT EXISTS public.user_settings (
 
 ALTER TABLE public.user_settings ENABLE ROW LEVEL SECURITY;
 
-DO $$
-BEGIN
-    DROP POLICY IF EXISTS "Allow select on user_settings" ON public.user_settings;
+DO $$ BEGIN
     DROP POLICY IF EXISTS "Allow all on user_settings" ON public.user_settings;
-    DROP POLICY IF EXISTS "Allow insert on user_settings" ON public.user_settings;
-    DROP POLICY IF EXISTS "Allow update on user_settings" ON public.user_settings;
-    DROP POLICY IF EXISTS "Allow delete on user_settings" ON public.user_settings;
-
-    CREATE POLICY "Allow select on user_settings" ON public.user_settings FOR SELECT USING (true);
-    CREATE POLICY "Allow insert on user_settings" ON public.user_settings FOR INSERT WITH CHECK (true);
-    CREATE POLICY "Allow update on user_settings" ON public.user_settings FOR UPDATE USING (true) WITH CHECK (true);
-    CREATE POLICY "Allow delete on user_settings" ON public.user_settings FOR DELETE USING (true);
+    CREATE POLICY "Allow all on user_settings" ON public.user_settings FOR ALL USING (true) WITH CHECK (true);
 END $$;
 
 -- ------------------------------------------------------------------------------
@@ -189,18 +148,9 @@ CREATE TABLE IF NOT EXISTS public.saved_memos (
 
 ALTER TABLE public.saved_memos ENABLE ROW LEVEL SECURITY;
 
-DO $$
-BEGIN
-    DROP POLICY IF EXISTS "Allow select on saved_memos" ON public.saved_memos;
+DO $$ BEGIN
     DROP POLICY IF EXISTS "Allow all on saved_memos" ON public.saved_memos;
-    DROP POLICY IF EXISTS "Allow insert on saved_memos" ON public.saved_memos;
-    DROP POLICY IF EXISTS "Allow update on saved_memos" ON public.saved_memos;
-    DROP POLICY IF EXISTS "Allow delete on saved_memos" ON public.saved_memos;
-
-    CREATE POLICY "Allow select on saved_memos" ON public.saved_memos FOR SELECT USING (true);
-    CREATE POLICY "Allow insert on saved_memos" ON public.saved_memos FOR INSERT WITH CHECK (true);
-    CREATE POLICY "Allow update on saved_memos" ON public.saved_memos FOR UPDATE USING (true) WITH CHECK (true);
-    CREATE POLICY "Allow delete on saved_memos" ON public.saved_memos FOR DELETE USING (true);
+    CREATE POLICY "Allow all on saved_memos" ON public.saved_memos FOR ALL USING (true) WITH CHECK (true);
 END $$;
 
 -- ------------------------------------------------------------------------------
@@ -237,21 +187,13 @@ CREATE TABLE IF NOT EXISTS public.incident_reports (
 
 ALTER TABLE public.incident_reports ENABLE ROW LEVEL SECURITY;
 
-DO $$
-BEGIN
-    DROP POLICY IF EXISTS "Allow authenticated read incident_reports" ON public.incident_reports;
-    DROP POLICY IF EXISTS "Allow authenticated insert incident_reports" ON public.incident_reports;
-    DROP POLICY IF EXISTS "Allow authenticated update incident_reports" ON public.incident_reports;
-    DROP POLICY IF EXISTS "Allow authenticated delete incident_reports" ON public.incident_reports;
-
-    CREATE POLICY "Allow authenticated read incident_reports" ON public.incident_reports FOR SELECT USING (true);
-    CREATE POLICY "Allow authenticated insert incident_reports" ON public.incident_reports FOR INSERT WITH CHECK (true);
-    CREATE POLICY "Allow authenticated update incident_reports" ON public.incident_reports FOR UPDATE USING (true) WITH CHECK (true);
-    CREATE POLICY "Allow authenticated delete incident_reports" ON public.incident_reports FOR DELETE USING (true);
+DO $$ BEGIN
+    DROP POLICY IF EXISTS "Allow all on incident_reports" ON public.incident_reports;
+    CREATE POLICY "Allow all on incident_reports" ON public.incident_reports FOR ALL USING (true) WITH CHECK (true);
 END $$;
 
 -- ------------------------------------------------------------------------------
--- 6. TABLE: public.agent_requirements (201 Files & Requirement Attachments)
+-- 6. TABLE: public.agent_requirements (201 Files, IDs, Uploaded Proofs)
 -- ------------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.agent_requirements (
     id TEXT PRIMARY KEY,
@@ -271,24 +213,41 @@ CREATE TABLE IF NOT EXISTS public.agent_requirements (
 );
 
 CREATE INDEX IF NOT EXISTS idx_agent_req_agent_key ON public.agent_requirements (agent_key);
-
 ALTER TABLE public.agent_requirements ENABLE ROW LEVEL SECURITY;
 
-DO $$
-BEGIN
-    DROP POLICY IF EXISTS "Allow select on agent_requirements" ON public.agent_requirements;
-    DROP POLICY IF EXISTS "Allow insert on agent_requirements" ON public.agent_requirements;
-    DROP POLICY IF EXISTS "Allow update on agent_requirements" ON public.agent_requirements;
-    DROP POLICY IF EXISTS "Allow delete on agent_requirements" ON public.agent_requirements;
-
-    CREATE POLICY "Allow select on agent_requirements" ON public.agent_requirements FOR SELECT USING (true);
-    CREATE POLICY "Allow insert on agent_requirements" ON public.agent_requirements FOR INSERT WITH CHECK (true);
-    CREATE POLICY "Allow update on agent_requirements" ON public.agent_requirements FOR UPDATE USING (true) WITH CHECK (true);
-    CREATE POLICY "Allow delete on agent_requirements" ON public.agent_requirements FOR DELETE USING (true);
+DO $$ BEGIN
+    DROP POLICY IF EXISTS "Allow all on agent_requirements" ON public.agent_requirements;
+    CREATE POLICY "Allow all on agent_requirements" ON public.agent_requirements FOR ALL USING (true) WITH CHECK (true);
 END $$;
 
 -- ------------------------------------------------------------------------------
--- 7. TABLE: public.chat_messages (In-App Messaging & Notifications)
+-- 7. TABLE: public.agent_profiles (Agent Overrides & Extended Details)
+-- ------------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.agent_profiles (
+    agent_key TEXT PRIMARY KEY,
+    full_name TEXT,
+    birthday TEXT,
+    home_address TEXT,
+    contact_number TEXT,
+    emergency_name TEXT,
+    emergency_contact_number TEXT,
+    booth_number TEXT,
+    booth_location TEXT,
+    id_number TEXT,
+    notes TEXT,
+    created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()),
+    updated_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW())
+);
+
+ALTER TABLE public.agent_profiles ENABLE ROW LEVEL SECURITY;
+
+DO $$ BEGIN
+    DROP POLICY IF EXISTS "Allow all on agent_profiles" ON public.agent_profiles;
+    CREATE POLICY "Allow all on agent_profiles" ON public.agent_profiles FOR ALL USING (true) WITH CHECK (true);
+END $$;
+
+-- ------------------------------------------------------------------------------
+-- 8. TABLE: public.chat_messages (In-App Team Messaging)
 -- ------------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.chat_messages (
     id TEXT PRIMARY KEY,
@@ -304,24 +263,15 @@ CREATE TABLE IF NOT EXISTS public.chat_messages (
 
 CREATE INDEX IF NOT EXISTS idx_chat_sender ON public.chat_messages (sender_email);
 CREATE INDEX IF NOT EXISTS idx_chat_receiver ON public.chat_messages (receiver_email);
-
 ALTER TABLE public.chat_messages ENABLE ROW LEVEL SECURITY;
 
-DO $$
-BEGIN
-    DROP POLICY IF EXISTS "Allow select on chat_messages" ON public.chat_messages;
-    DROP POLICY IF EXISTS "Allow insert on chat_messages" ON public.chat_messages;
-    DROP POLICY IF EXISTS "Allow update on chat_messages" ON public.chat_messages;
-    DROP POLICY IF EXISTS "Allow delete on chat_messages" ON public.chat_messages;
-
-    CREATE POLICY "Allow select on chat_messages" ON public.chat_messages FOR SELECT USING (true);
-    CREATE POLICY "Allow insert on chat_messages" ON public.chat_messages FOR INSERT WITH CHECK (true);
-    CREATE POLICY "Allow update on chat_messages" ON public.chat_messages FOR UPDATE USING (true) WITH CHECK (true);
-    CREATE POLICY "Allow delete on chat_messages" ON public.chat_messages FOR DELETE USING (true);
+DO $$ BEGIN
+    DROP POLICY IF EXISTS "Allow all on chat_messages" ON public.chat_messages;
+    CREATE POLICY "Allow all on chat_messages" ON public.chat_messages FOR ALL USING (true) WITH CHECK (true);
 END $$;
 
 -- ------------------------------------------------------------------------------
--- 8. TABLE: public.memos (Noticeboard Feed)
+-- 9. TABLE: public.memos (Noticeboard Feed)
 -- ------------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.memos (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -335,51 +285,162 @@ CREATE TABLE IF NOT EXISTS public.memos (
 
 ALTER TABLE public.memos ENABLE ROW LEVEL SECURITY;
 
-DO $$
-BEGIN
-    DROP POLICY IF EXISTS "Allow select on memos" ON public.memos;
-    DROP POLICY IF EXISTS "Allow insert on memos" ON public.memos;
-    DROP POLICY IF EXISTS "Allow update on memos" ON public.memos;
-    DROP POLICY IF EXISTS "Allow delete on memos" ON public.memos;
-
-    CREATE POLICY "Allow select on memos" ON public.memos FOR SELECT USING (true);
-    CREATE POLICY "Allow insert on memos" ON public.memos FOR INSERT WITH CHECK (true);
-    CREATE POLICY "Allow update on memos" ON public.memos FOR UPDATE USING (true) WITH CHECK (true);
-    CREATE POLICY "Allow delete on memos" ON public.memos FOR DELETE USING (true);
+DO $$ BEGIN
+    DROP POLICY IF EXISTS "Allow all on memos" ON public.memos;
+    CREATE POLICY "Allow all on memos" ON public.memos FOR ALL USING (true) WITH CHECK (true);
 END $$;
 
 -- ------------------------------------------------------------------------------
--- 9. STORAGE BUCKETS SETUP & STORAGE RLS POLICIES
+-- 10. TABLE: public.memo_acknowledgements (Employee Digital Acknowledgments & Signatures)
 -- ------------------------------------------------------------------------------
--- Siguraduhin na exist ang storage buckets:
--- 1. requirements (para sa 201 files at IDs)
--- 2. nte-proofs (para sa NTE incident report proofs)
--- 3. chat-attachments (para sa mga larawan o dokumento sa chat)
+CREATE TABLE IF NOT EXISTS public.memo_acknowledgements (
+    id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    memo_id TEXT NOT NULL,
+    memo_ref_no TEXT,
+    memo_subject TEXT,
+    employee_id TEXT,
+    employee_name TEXT NOT NULL,
+    employee_email TEXT,
+    company TEXT DEFAULT 'Simpal Group of Companies',
+    status TEXT DEFAULT 'ACKNOWLEDGED',
+    signature_data TEXT,
+    remarks TEXT,
+    ip_address TEXT,
+    device_info TEXT,
+    metadata JSONB DEFAULT '{}'::jsonb,
+    acknowledged_at TIMESTAMPTZ DEFAULT TIMEZONE('Asia/Manila', NOW()),
+    created_at TIMESTAMPTZ DEFAULT TIMEZONE('Asia/Manila', NOW()),
+    updated_at TIMESTAMPTZ DEFAULT TIMEZONE('Asia/Manila', NOW()),
+    CONSTRAINT uq_memo_ack UNIQUE (memo_id, employee_email)
+);
 
+CREATE INDEX IF NOT EXISTS idx_memo_ack_memo_id ON public.memo_acknowledgements (memo_id);
+CREATE INDEX IF NOT EXISTS idx_memo_ack_employee ON public.memo_acknowledgements (employee_email);
+
+ALTER TABLE public.memo_acknowledgements ENABLE ROW LEVEL SECURITY;
+
+DO $$ BEGIN
+    DROP POLICY IF EXISTS "Allow all on memo_acknowledgements" ON public.memo_acknowledgements;
+    CREATE POLICY "Allow all on memo_acknowledgements" ON public.memo_acknowledgements FOR ALL USING (true) WITH CHECK (true);
+END $$;
+
+-- ------------------------------------------------------------------------------
+-- 11. TABLE: public.supervisor_attendance (Live Camera & GPS Coordinates)
+-- ------------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.supervisor_attendance (
+    id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    supervisor_id TEXT NOT NULL,
+    supervisor_name TEXT NOT NULL,
+    username TEXT,
+    attendance_date DATE NOT NULL DEFAULT CURRENT_DATE,
+    time_in TEXT,
+    time_out TEXT,
+    status TEXT NOT NULL DEFAULT 'Present',
+    area TEXT DEFAULT '5',
+    shift TEXT,
+    latitude NUMERIC(10, 7),
+    longitude NUMERIC(10, 7),
+    location_accuracy NUMERIC,
+    location_name TEXT,
+    photo_url TEXT,
+    photo_storage_path TEXT,
+    remarks TEXT,
+    device_info TEXT,
+    created_at TIMESTAMPTZ DEFAULT TIMEZONE('Asia/Manila', NOW()),
+    updated_at TIMESTAMPTZ DEFAULT TIMEZONE('Asia/Manila', NOW()),
+    CONSTRAINT uq_spvr_attendance_date UNIQUE (supervisor_id, attendance_date)
+);
+
+CREATE INDEX IF NOT EXISTS idx_spvr_att_date ON public.supervisor_attendance (attendance_date);
+CREATE INDEX IF NOT EXISTS idx_spvr_att_supervisor_id ON public.supervisor_attendance (supervisor_id);
+
+CREATE OR REPLACE FUNCTION public.handle_spvr_attendance_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = TIMEZONE('Asia/Manila', NOW());
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_spvr_attendance_updated_at ON public.supervisor_attendance;
+CREATE TRIGGER trg_spvr_attendance_updated_at
+    BEFORE UPDATE ON public.supervisor_attendance
+    FOR EACH ROW EXECUTE FUNCTION public.handle_spvr_attendance_updated_at();
+
+ALTER TABLE public.supervisor_attendance ENABLE ROW LEVEL SECURITY;
+
+DO $$ BEGIN
+    DROP POLICY IF EXISTS "Allow all on supervisor_attendance" ON public.supervisor_attendance;
+    CREATE POLICY "Allow all on supervisor_attendance" ON public.supervisor_attendance FOR ALL USING (true) WITH CHECK (true);
+END $$;
+
+-- ------------------------------------------------------------------------------
+-- 12. STORAGE BUCKETS SETUP & STORAGE RLS POLICIES
+-- ------------------------------------------------------------------------------
+-- Pag-create ng 4 public buckets: requirements, nte-proofs, chat-attachments, supervisor-attendance
 INSERT INTO storage.buckets (id, name, public)
 VALUES 
     ('requirements', 'requirements', true),
     ('nte-proofs', 'nte-proofs', true),
-    ('chat-attachments', 'chat-attachments', true)
+    ('chat-attachments', 'chat-attachments', true),
+    ('supervisor-attendance', 'supervisor-attendance', true)
 ON CONFLICT (id) DO UPDATE SET public = true;
 
--- Storage Objects RLS Policies
-DO $$
-BEGIN
+-- Storage Objects Policies (Allow select, insert, update, delete for public)
+DO $$ BEGIN
     DROP POLICY IF EXISTS "Public Access - Read" ON storage.objects;
     DROP POLICY IF EXISTS "Public Access - Insert" ON storage.objects;
     DROP POLICY IF EXISTS "Public Access - Update" ON storage.objects;
     DROP POLICY IF EXISTS "Public Access - Delete" ON storage.objects;
 
     CREATE POLICY "Public Access - Read" ON storage.objects
-        FOR SELECT USING (bucket_id IN ('requirements', 'nte-proofs', 'chat-attachments'));
+        FOR SELECT TO public USING (bucket_id IN ('requirements', 'nte-proofs', 'chat-attachments', 'supervisor-attendance'));
 
     CREATE POLICY "Public Access - Insert" ON storage.objects
-        FOR INSERT WITH CHECK (bucket_id IN ('requirements', 'nte-proofs', 'chat-attachments'));
+        FOR INSERT TO public WITH CHECK (bucket_id IN ('requirements', 'nte-proofs', 'chat-attachments', 'supervisor-attendance'));
 
     CREATE POLICY "Public Access - Update" ON storage.objects
-        FOR UPDATE USING (bucket_id IN ('requirements', 'nte-proofs', 'chat-attachments'));
+        FOR UPDATE TO public USING (bucket_id IN ('requirements', 'nte-proofs', 'chat-attachments', 'supervisor-attendance'));
 
     CREATE POLICY "Public Access - Delete" ON storage.objects
-        FOR DELETE USING (bucket_id IN ('requirements', 'nte-proofs', 'chat-attachments'));
+        FOR DELETE TO public USING (bucket_id IN ('requirements', 'nte-proofs', 'chat-attachments', 'supervisor-attendance'));
 END $$;
+
+-- ------------------------------------------------------------------------------
+-- 13. REALTIME PUBLICATION SETUP
+-- ------------------------------------------------------------------------------
+DO $$ BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.supervisor_attendance;
+EXCEPTION WHEN others THEN NULL; END $$;
+
+DO $$ BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.chat_messages;
+EXCEPTION WHEN others THEN NULL; END $$;
+
+DO $$ BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.incident_reports;
+EXCEPTION WHEN others THEN NULL; END $$;
+
+DO $$ BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.memo_acknowledgements;
+EXCEPTION WHEN others THEN NULL; END $$;
+
+-- ------------------------------------------------------------------------------
+-- 14. SEED DEFAULT ADMIN ACCOUNTS & SETTINGS (Para makapasok agad)
+-- ------------------------------------------------------------------------------
+INSERT INTO public.profiles (email, name, company, role, is_approved)
+VALUES 
+    ('admin@hrhub.com', 'H R M D', 'Simpal Group of Companies', 'Admin', true),
+    ('hr@5aroyal.com', 'Central HR', '5A Royal Gaming OPC', 'Admin', true)
+ON CONFLICT (email) DO NOTHING;
+
+INSERT INTO public.employees (id, email, name, company, role, is_approved)
+VALUES 
+    ('emp-admin', 'admin@hrhub.com', 'H R M D', 'Simpal Group of Companies', 'Admin', true),
+    ('emp-central-hr', 'hr@5aroyal.com', 'Central HR', '5A Royal Gaming OPC', 'Admin', true)
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO public.user_settings (user_id, signatory_name, signatory_title, approver_name, approver_title)
+VALUES 
+    ('default_admin', 'JEVINCE JAYE S. JUBAY, CHRP', 'HRMD Manager', 'CHARMIE JEAN M. SIMPAL', 'President & CEO')
+ON CONFLICT (user_id) DO NOTHING;

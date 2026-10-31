@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { API_CONFIG } from "../config/apiConfig";
 import {
   Activity, Archive, Award, CalendarDays, Check, CheckCircle2, CreditCard, Database, Download, Eye, FileDown, FileText,
   Fingerprint, Home, KeyRound, Loader2, Lock, Pencil, Phone, ShieldCheck, Sparkles, Trash2, Upload, UserRound, X,
@@ -1453,7 +1454,7 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
                                             className="h-full w-full object-contain p-1.5 group-hover:scale-[1.03] transition duration-300"
                                             onError={(e) => {
                                               if (currentCover.storagePath) {
-                                                e.target.src = `https://jiljeujvzlxptztmuaqy.supabase.co/storage/v1/object/public/requirements/${currentCover.storagePath}`;
+                                                e.target.src = `${API_CONFIG.SUPABASE_URL}/storage/v1/object/public/requirements/${currentCover.storagePath}`;
                                               }
                                             }}
                                           />
@@ -1564,7 +1565,7 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
                                                     className="h-full w-full object-cover group-hover:scale-110 transition duration-300"
                                                     onError={(e) => {
                                                       if (photo.storagePath) {
-                                                        e.target.src = `https://jiljeujvzlxptztmuaqy.supabase.co/storage/v1/object/public/requirements/${photo.storagePath}`;
+                                                        e.target.src = `${API_CONFIG.SUPABASE_URL}/storage/v1/object/public/requirements/${photo.storagePath}`;
                                                       }
                                                     }}
                                                   />
@@ -1887,7 +1888,7 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
                 className="max-h-[80vh] w-auto object-contain rounded-lg shadow-lg"
                 onError={(e) => {
                   if (previewModalImage.storagePath) {
-                    e.target.src = `https://jiljeujvzlxptztmuaqy.supabase.co/storage/v1/object/public/requirements/${previewModalImage.storagePath}`;
+                    e.target.src = `${API_CONFIG.SUPABASE_URL}/storage/v1/object/public/requirements/${previewModalImage.storagePath}`;
                   }
                 }}
               />
