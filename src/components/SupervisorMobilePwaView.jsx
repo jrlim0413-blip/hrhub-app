@@ -3,7 +3,7 @@ import {
   Camera, MapPin, CheckCircle2, AlertCircle, RefreshCw, Smartphone,
   RotateCw, Video, VideoOff, Download, ChevronRight, ShieldCheck,
   Clock, Calendar, User, ExternalLink, ArrowRight, LogOut, Check,
-  Sparkles, Layers, Map
+  Sparkles, Layers, Map, Lock, Key, Eye, EyeOff, LogIn
 } from "lucide-react";
 import {
   compressImage,
@@ -12,20 +12,20 @@ import {
   upsertCloudAttendance
 } from "../lib/supervisorAttendanceStorage";
 
-// Active Mandaue Supervisors for fallback selection
+// Active Mandaue Supervisors (matching official live STL Mandaue Source API IDs & Usernames)
 const SUPERVISORS = [
-  { id: 21, fullName: "ARLFRED SABERON", area: "5", username: "asaberon" },
-  { id: 22, fullName: "RAFFY BAGUIO", area: "5", username: "rbaguio" },
-  { id: 23, fullName: "ROEL CATALAN", area: "5", username: "rcatalan" },
-  { id: 24, fullName: "MICHAEL DE GUZMAN", area: "5", username: "mdeguzman" },
-  { id: 25, fullName: "JOEL ESTORCO", area: "5", username: "jestorco" },
-  { id: 26, fullName: "HARRY EYA", area: "5", username: "heya" },
-  { id: 27, fullName: "CARL MANGRUBAN", area: "5", username: "cmangruban" },
-  { id: 28, fullName: "JED MELENDREZ", area: "5", username: "jmelendrez" },
-  { id: 29, fullName: "NYOR SESALDO", area: "5", username: "nsesaldo" },
-  { id: 30, fullName: "NARCISO TAGUD JR.", area: "5", username: "ntagud" },
-  { id: 31, fullName: "MOLLY BATUBALANOS", area: "5", username: "mbatubalanos" },
-  { id: 32, fullName: "COORDINATOR - APPLEGROUP", area: "5", username: "applegroup" }
+  { id: 21, fullName: "ARLFRED SABERON", area: "5", username: "spvr-arlfred" },
+  { id: 22, fullName: "RAFFY BAGUIO", area: "5", username: "spvr-raffy" },
+  { id: 23, fullName: "ROEL CATALAN", area: "5", username: "spvr-roel" },
+  { id: 24, fullName: "MICHAEL DE GUZMAN", area: "5", username: "spvr-michael" },
+  { id: 25, fullName: "JOEL ESTORCO", area: "5", username: "spvr-joel" },
+  { id: 26, fullName: "HARRY EYA", area: "5", username: "spvr-eya" },
+  { id: 27, fullName: "CARL MANGRUBAN", area: "5", username: "spvr-carl" },
+  { id: 28, fullName: "JED MELENDREZ", area: "5", username: "spvr-jed" },
+  { id: 29, fullName: "NYOR SESALDO", area: "5", username: "spvr-nyor" },
+  { id: 30, fullName: "NARCISO TAGUD JR.", area: "5", username: "spvr-jason" },
+  { id: 31, fullName: "MOLLY BATUBALANOS", area: "5", username: "spvr-molly" },
+  { id: 32, fullName: "COORDINATOR - APPLEGROUP", area: "5", username: "spvr-apple" }
 ];
 
 function getTodayString() {
@@ -36,7 +36,65 @@ function getTodayString() {
   return `${year}-${month}-${day}`;
 }
 
-export default function SupervisorMobilePwaView({ onExitToAdmin }) {
+/**
+ * Authenticates a supervisor against the official Source API endpoints.
+ * Checks coordinator, teller, cashier, and accountant roles.
+ */
+async function verifySourceApiCredentials(username, password) {
+  const cleanUsername = String(username || "").trim();
+  const cleanPassword = String(password || "").trim();
+
+  if (!cleanUsername || !cleanPassword) {
+    return { success: false, error: "Please enter both username and password." };
+  }
+
+  const endpoints = [
+    "https://stl-mandaue-api.com/api/coordinator/login",
+    "https://stl-mandaue-api.com/api/teller/login",
+    "https://stl-mandaue-api.com/api/cashier/login",
+    "https://stl-mandaue-api.com/api/accountant/login",
+    "https://stl-mandaue-api.com/api/admin/login"
+  ];
+
+  let lastErrorMessage = "Invalid username or password. Please check your Source API credentials.";
+
+  for (const url of endpoints) {
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Accept": "application/json",
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          username: cleanUsername,
+          email: cleanUsername,
+          password: cleanPassword
+        })
+      });
+
+      const data = await res.json().catch(() => null);
+
+      if (res.ok && data && (data.success === true || data.token || data.access_token || data.data?.token)) {
+        return {
+          success: true,
+          token: data.token || data.access_token || data.data?.token || "session-verified",
+          data: data.data || data
+        };
+      }
+
+      if (data && data.message && data.message !== "Unauthorised.") {
+        lastErrorMessage = data.message;
+      }
+    } catch (err) {
+      console.warn(`Source API auth error on ${url}:`, err);
+    }
+  }
+
+  return { success: false, error: lastErrorMessage };
+}
+
+export default function SupervisorMobilePwaView() {
   // PWA Install Prompt State
   const [deferredPrompt, setDeferredPrompt] = useState(null);
   const [isInstallable, setIsInstallable] = useState(false);
@@ -44,22 +102,35 @@ export default function SupervisorMobilePwaView({ onExitToAdmin }) {
   const [isIos, setIsIos] = useState(false);
   const [showIosTip, setShowIosTip] = useState(false);
 
-  // Supervisor Identity
-  const [currentSupervisor, setCurrentSupervisor] = useState(() => {
+  // Supervisor Identity (derived strictly from magic link or storage)
+  const [currentSupervisor] = useState(() => {
     if (typeof window === "undefined") return SUPERVISORS[0];
     const params = new URLSearchParams(window.location.search);
     const idParam = params.get("id") || params.get("spvr") || params.get("supervisorId");
     const nameParam = params.get("name") || params.get("fullName");
+    const usernameParam = params.get("username");
+    const areaParam = params.get("area");
 
     if (idParam) {
       const match = SUPERVISORS.find((s) => String(s.id) === String(idParam));
       if (match) {
-        localStorage.setItem("hrhub_pwa_supervisor", JSON.stringify(match));
-        return match;
+        const merged = {
+          ...match,
+          fullName: nameParam ? decodeURIComponent(nameParam) : match.fullName,
+          username: usernameParam ? decodeURIComponent(usernameParam) : match.username,
+          area: areaParam || match.area || "5"
+        };
+        try { localStorage.setItem("hrhub_pwa_supervisor", JSON.stringify(merged)); } catch {}
+        return merged;
       }
       if (nameParam) {
-        const custom = { id: idParam, fullName: decodeURIComponent(nameParam), area: params.get("area") || "5" };
-        localStorage.setItem("hrhub_pwa_supervisor", JSON.stringify(custom));
+        const custom = {
+          id: idParam,
+          fullName: decodeURIComponent(nameParam),
+          username: usernameParam ? decodeURIComponent(usernameParam) : `spvr-${idParam}`,
+          area: areaParam || "5"
+        };
+        try { localStorage.setItem("hrhub_pwa_supervisor", JSON.stringify(custom)); } catch {}
         return custom;
       }
     }
@@ -74,15 +145,105 @@ export default function SupervisorMobilePwaView({ onExitToAdmin }) {
 
   // Today's Date & Clock
   const todayStr = getTodayString();
-  const [currentTime, setCurrentTime] = useState(() => new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: true }));
+  const [currentTime, setCurrentTime] = useState(() =>
+    new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: true })
+  );
 
   // Live Philippine Clock
   useEffect(() => {
     const timer = setInterval(() => {
-      setCurrentTime(new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: true }));
+      setCurrentTime(
+        new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: true })
+      );
     }, 1000);
     return () => clearInterval(timer);
   }, []);
+
+  // Authentication State
+  const [isAuthenticated, setIsAuthenticated] = useState(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      const authKey = `hrhub_spvr_auth_${currentSupervisor?.id}_${todayStr}`;
+      const saved = localStorage.getItem(authKey) || sessionStorage.getItem(authKey);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && parsed.authenticated) return true;
+      }
+    } catch {}
+    return false;
+  });
+
+  const [inputUsername, setInputUsername] = useState(currentSupervisor.username || "");
+  const [inputPassword, setInputPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [isAuthenticating, setIsAuthenticating] = useState(false);
+  const [loginError, setLoginError] = useState("");
+
+  // Keep input username synced with current supervisor
+  useEffect(() => {
+    if (currentSupervisor?.username) {
+      setInputUsername(currentSupervisor.username);
+    }
+  }, [currentSupervisor?.username]);
+
+  // Handle Supervisor Login Submission
+  const handleSupervisorLogin = async (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    setLoginError("");
+
+    if (!inputPassword.trim()) {
+      setLoginError("Please enter your password.");
+      return;
+    }
+
+    setIsAuthenticating(true);
+    try {
+      const targetUser = inputUsername.trim() || currentSupervisor.username;
+      const authRes = await verifySourceApiCredentials(targetUser, inputPassword);
+
+      if (authRes.success) {
+        const authKey = `hrhub_spvr_auth_${currentSupervisor.id}_${todayStr}`;
+        const sessionData = {
+          authenticated: true,
+          supervisorId: currentSupervisor.id,
+          username: targetUser,
+          loginTime: new Date().toISOString()
+        };
+
+        try {
+          localStorage.setItem(authKey, JSON.stringify(sessionData));
+          sessionStorage.setItem(authKey, JSON.stringify(sessionData));
+        } catch {}
+
+        setIsAuthenticated(true);
+        setInputPassword("");
+        setLoginError("");
+
+        // Auto-request GPS and Camera upon login
+        requestGpsLocation();
+        startCamera(cameraFacingMode);
+      } else {
+        setLoginError(authRes.error || "Invalid password for this supervisor username.");
+      }
+    } catch (err) {
+      setLoginError("Connection error while connecting to Source API. Please check your internet connection.");
+    } finally {
+      setIsAuthenticating(false);
+    }
+  };
+
+  // Handle Supervisor Logout
+  const handleSupervisorLogout = () => {
+    try {
+      const authKey = `hrhub_spvr_auth_${currentSupervisor.id}_${todayStr}`;
+      localStorage.removeItem(authKey);
+      sessionStorage.removeItem(authKey);
+    } catch {}
+    setIsAuthenticated(false);
+    setInputPassword("");
+    setLoginError("");
+    stopCamera();
+  };
 
   // Today's Existing Attendance from Supabase Cloud
   const [todayRecord, setTodayRecord] = useState(null);
@@ -112,7 +273,9 @@ export default function SupervisorMobilePwaView({ onExitToAdmin }) {
 
   // PWA Install Prompt Listener
   useEffect(() => {
-    const isStandalone = window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
+    const isStandalone =
+      (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) ||
+      window.navigator.standalone === true;
     if (isStandalone) {
       setIsInstalled(true);
     }
@@ -171,14 +334,12 @@ export default function SupervisorMobilePwaView({ onExitToAdmin }) {
   };
 
   useEffect(() => {
-    checkTodayAttendance();
-  }, [currentSupervisor?.id, todayStr]);
+    if (isAuthenticated) {
+      checkTodayAttendance();
+    }
+  }, [isAuthenticated, currentSupervisor?.id, todayStr]);
 
-  // Auto-request GPS on Mount
-  useEffect(() => {
-    requestGpsLocation();
-  }, []);
-
+  // Request GPS Location
   const requestGpsLocation = () => {
     if (!navigator.geolocation) {
       alert("Geolocation is not supported by your device browser.");
@@ -293,7 +454,7 @@ export default function SupervisorMobilePwaView({ onExitToAdmin }) {
     );
   };
 
-  // Fallback Camera File Input
+  // Fallback Native Camera File Input
   const handleNativeCameraFallback = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -318,13 +479,14 @@ export default function SupervisorMobilePwaView({ onExitToAdmin }) {
     startCamera(cameraFacingMode);
   };
 
-  // Auto-start camera when mounting if not yet checked in
+  // Auto-start camera once authenticated and not checked in
   useEffect(() => {
-    if (!todayRecord && !capturedPhotoUrl) {
+    if (isAuthenticated && !todayRecord && !capturedPhotoUrl) {
+      requestGpsLocation();
       startCamera(cameraFacingMode);
     }
     return () => stopCamera();
-  }, [cameraFacingMode, todayRecord]);
+  }, [isAuthenticated, cameraFacingMode, todayRecord]);
 
   // Submit Attendance to Supabase Cloud
   const handleSubmitAttendance = async () => {
@@ -404,7 +566,7 @@ export default function SupervisorMobilePwaView({ onExitToAdmin }) {
             <h1 className="text-xs font-black tracking-tight text-white flex items-center gap-1.5">
               HRHub <span className="text-emerald-400">FIELD PWA</span>
             </h1>
-            <p className="text-[10px] text-slate-400 font-medium">Supervisor Attendance & Geotag</p>
+            <p className="text-[10px] text-slate-400 font-medium">Supervisor Attendance &amp; Geotag</p>
           </div>
         </div>
 
@@ -465,305 +627,417 @@ export default function SupervisorMobilePwaView({ onExitToAdmin }) {
 
       {/* ================= MAIN CONTENT AREA ================= */}
       <main className="flex-1 max-w-lg w-full mx-auto p-4 space-y-4">
-        {/* Supervisor Identity Card */}
-        <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 shadow-sm flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center font-black text-base shrink-0">
-              {currentSupervisor.fullName?.charAt(0) || "S"}
-            </div>
-            <div>
-              <div className="flex items-center gap-1.5">
-                <span className="text-[10px] font-mono font-bold text-emerald-400 bg-emerald-950/80 px-1.5 py-0.5 rounded border border-emerald-800/60">
-                  ID #{currentSupervisor.id}
-                </span>
-                <span className="text-[10px] font-semibold text-slate-400">Area {currentSupervisor.area || "5"}</span>
+        {!isAuthenticated ? (
+          /* ================= LOGIN FORM (BEFORE ATTENDANCE) ================= */
+          <div className="rounded-3xl border border-slate-800 bg-slate-950/80 p-5 shadow-2xl space-y-5 animate-in fade-in duration-300">
+            {/* Header Lock Icon */}
+            <div className="text-center space-y-2 pt-2">
+              <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-emerald-500/20 to-teal-500/20 border border-emerald-500/40 text-emerald-400 flex items-center justify-center mx-auto shadow-lg shadow-emerald-950/50">
+                <Lock size={26} />
               </div>
-              <h2 className="text-sm font-black text-white tracking-tight mt-0.5">{currentSupervisor.fullName}</h2>
-            </div>
-          </div>
-
-          {/* Quick Supervisor Switcher Dropdown */}
-          <select
-            value={currentSupervisor.id}
-            onChange={(e) => {
-              const match = SUPERVISORS.find((s) => String(s.id) === e.target.value);
-              if (match) {
-                setCurrentSupervisor(match);
-                localStorage.setItem("hrhub_pwa_supervisor", JSON.stringify(match));
-                setCapturedPhotoUrl("");
-                setCapturedFile(null);
-                setSubmitSuccess(false);
-              }
-            }}
-            className="text-[10px] bg-slate-900 border border-slate-700 text-slate-300 rounded-lg px-2 py-1 focus:ring-1 focus:ring-emerald-500 outline-none cursor-pointer"
-          >
-            {SUPERVISORS.map((s) => (
-              <option key={s.id} value={s.id}>
-                #{s.id} {s.fullName.split(" ")[0]}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* ================= TODAY'S STATUS CARD ================= */}
-        {todayRecord && !submitSuccess && (
-          <div className="rounded-2xl border border-emerald-500/40 bg-emerald-950/30 p-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <CheckCircle2 size={18} className="text-emerald-400" />
-                <span className="text-xs font-black text-emerald-300">Checked In Today</span>
-              </div>
-              <span className="text-[10px] font-mono text-emerald-400 bg-emerald-950 px-2 py-0.5 rounded border border-emerald-800">
-                {todayRecord.time_in || todayRecord.timeIn || "VERIFIED"}
-              </span>
-            </div>
-
-            <div className="flex items-center gap-3">
-              {(todayRecord.photo_url || todayRecord.photoUrl) && (
-                <img
-                  src={todayRecord.photo_url || todayRecord.photoUrl}
-                  alt="Proof"
-                  className="w-16 h-16 rounded-xl object-cover border border-emerald-500/40 shrink-0"
-                />
-              )}
-              <div className="text-[11px] text-slate-300 space-y-1">
-                <p className="font-semibold text-white">Proof: Cloud Geo-Verified</p>
-                <p className="text-[10px] text-slate-400 font-mono">
-                  GPS: {todayRecord.latitude?.toFixed(5) || todayRecord.lat}, {todayRecord.longitude?.toFixed(5) || todayRecord.lng}
-                </p>
-                <p className="text-[10px] text-emerald-400">Status: {todayRecord.status || "Present"}</p>
-              </div>
-            </div>
-
-            <button
-              onClick={() => {
-                setTodayRecord(null);
-                startCamera(cameraFacingMode);
-              }}
-              className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5"
-            >
-              <RotateCw size={13} />
-              Record a new attendance snapshot
-            </button>
-          </div>
-        )}
-
-        {/* ================= SUCCESS BANNER ================= */}
-        {submitSuccess && (
-          <div className="rounded-2xl border border-emerald-500 bg-emerald-950/50 p-5 text-center space-y-3 animate-in fade-in zoom-in-95 duration-200">
-            <div className="w-12 h-12 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center mx-auto">
-              <CheckCircle2 size={28} />
-            </div>
-            <div>
-              <h3 className="text-sm font-black text-white">Attendance Confirmed &amp; Synced!</h3>
-              <p className="text-xs text-emerald-300 mt-0.5">
-                Your field check-in was successfully recorded in HR Cloud at {currentTime}.
+              <h2 className="text-base font-black text-white tracking-tight">Supervisor Portal Login</h2>
+              <p className="text-xs text-slate-400 max-w-xs mx-auto leading-relaxed">
+                Please enter your registered <strong>Source API password</strong> to verify your identity before recording attendance.
               </p>
             </div>
-            <button
-              onClick={() => setSubmitSuccess(false)}
-              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl transition cursor-pointer"
-            >
-              Done
-            </button>
-          </div>
-        )}
 
-        {/* ================= STEP 1: CAMERA PROOF ================= */}
-        {(!todayRecord || submitSuccess === false) && (
-          <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-black text-white flex items-center gap-1.5">
-                <Camera size={14} className="text-emerald-400" />
-                1. Live Camera Geotag Capture
-              </span>
+            {/* Target Supervisor Profile Banner */}
+            <div className="p-3.5 rounded-2xl bg-slate-900 border border-slate-800 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-500 text-white font-extrabold flex items-center justify-center text-sm shadow-xs shrink-0">
+                {currentSupervisor.fullName?.charAt(0) || "S"}
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] font-mono font-bold text-emerald-400 bg-emerald-950 px-1.5 py-0.5 rounded border border-emerald-800/60">
+                    ID #{currentSupervisor.id}
+                  </span>
+                  <span className="text-[10px] font-semibold text-slate-400">Area {currentSupervisor.area || "5"}</span>
+                </div>
+                <h3 className="text-xs font-black text-white truncate mt-0.5">{currentSupervisor.fullName}</h3>
+              </div>
+            </div>
+
+            {/* Error Message Notice */}
+            {loginError && (
+              <div className="p-3 rounded-xl bg-rose-950/50 border border-rose-500/60 text-rose-300 text-xs flex items-center gap-2 animate-in fade-in duration-200">
+                <AlertCircle size={16} className="shrink-0 text-rose-400" />
+                <span className="leading-snug">{loginError}</span>
+              </div>
+            )}
+
+            {/* Credentials Input Form */}
+            <form onSubmit={handleSupervisorLogin} className="space-y-4">
+              {/* Username Field */}
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-bold text-slate-300 uppercase tracking-wider block">
+                  Source API Username
+                </label>
+                <div className="relative flex items-center">
+                  <div className="absolute left-3.5 text-slate-500 pointer-events-none">
+                    <User size={15} />
+                  </div>
+                  <input
+                    type="text"
+                    required
+                    value={inputUsername}
+                    onChange={(e) => setInputUsername(e.target.value)}
+                    placeholder="e.g. spvr-arlfred"
+                    className="w-full text-xs font-mono bg-slate-900 border border-slate-700 focus:border-emerald-500 rounded-xl pl-9 pr-3 py-2.5 text-white placeholder-slate-600 outline-none transition"
+                  />
+                </div>
+              </div>
+
+              {/* Password Field */}
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-bold text-slate-300 uppercase tracking-wider block">
+                  Source API Password
+                </label>
+                <div className="relative flex items-center">
+                  <div className="absolute left-3.5 text-slate-500 pointer-events-none">
+                    <Key size={15} />
+                  </div>
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    required
+                    value={inputPassword}
+                    onChange={(e) => setInputPassword(e.target.value)}
+                    placeholder="Enter registered password"
+                    className="w-full text-xs font-mono bg-slate-900 border border-slate-700 focus:border-emerald-500 rounded-xl pl-9 pr-10 py-2.5 text-white placeholder-slate-600 outline-none transition"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 text-slate-500 hover:text-slate-300 transition cursor-pointer"
+                  >
+                    {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Sign In Button */}
+              <button
+                type="submit"
+                disabled={isAuthenticating}
+                className={`w-full py-3 rounded-xl font-bold text-xs flex items-center justify-center gap-2 shadow-lg transition cursor-pointer ${
+                  isAuthenticating
+                    ? "bg-slate-800 text-slate-400 cursor-not-allowed"
+                    : "bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black shadow-emerald-950/60 active:scale-[0.98]"
+                }`}
+              >
+                {isAuthenticating ? (
+                  <>
+                    <RefreshCw size={14} className="animate-spin text-slate-400" />
+                    <span>Verifying with Source API...</span>
+                  </>
+                ) : (
+                  <>
+                    <LogIn size={14} />
+                    <span>Sign In &amp; Open Attendance Portal</span>
+                  </>
+                )}
+              </button>
+            </form>
+
+            <div className="pt-2 text-center">
+              <p className="text-[10px] text-slate-500">
+                🔒 Security Note: Credentials are authenticated directly via official Source API endpoints.
+              </p>
+            </div>
+          </div>
+        ) : (
+          /* ================= AUTHENTICATED ATTENDANCE VIEW ================= */
+          <>
+            {/* Supervisor Identity Card (NO DROPDOWN - Strictly locked to row link) */}
+            <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 shadow-sm flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center font-black text-base shrink-0">
+                  {currentSupervisor.fullName?.charAt(0) || "S"}
+                </div>
+                <div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] font-mono font-bold text-emerald-400 bg-emerald-950/80 px-1.5 py-0.5 rounded border border-emerald-800/60">
+                      ID #{currentSupervisor.id}
+                    </span>
+                    <span className="text-[10px] font-semibold text-slate-400">Area {currentSupervisor.area || "5"}</span>
+                  </div>
+                  <h2 className="text-sm font-black text-white tracking-tight mt-0.5">{currentSupervisor.fullName}</h2>
+                  <p className="text-[10px] text-slate-400 font-mono">@{currentSupervisor.username}</p>
+                </div>
+              </div>
+
+              {/* Sign Out Button (Replaces dropdown) */}
               <button
                 type="button"
-                onClick={toggleCameraFacing}
-                className="text-[10px] text-slate-300 bg-slate-900 border border-slate-700 px-2 py-1 rounded-lg flex items-center gap-1 hover:text-white cursor-pointer"
+                onClick={handleSupervisorLogout}
+                className="px-2.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700/80 text-slate-400 hover:text-white text-[11px] font-bold flex items-center gap-1.5 transition cursor-pointer"
+                title="Log out of supervisor portal"
               >
-                <RotateCw size={11} />
-                {cameraFacingMode === "user" ? "Selfie" : "Area"}
+                <LogOut size={13} className="text-rose-400" />
+                <span>Sign Out</span>
               </button>
             </div>
 
-            {/* Viewfinder Window */}
-            <div className="relative aspect-4/3 w-full rounded-2xl overflow-hidden bg-slate-900 border border-slate-800 flex items-center justify-center">
-              {capturedPhotoUrl ? (
-                // Captured Photo Preview
-                <img src={capturedPhotoUrl} alt="Captured Proof" className="w-full h-full object-cover" />
-              ) : isCameraActive ? (
-                // Live Viewfinder
-                <video
-                  ref={videoRef}
-                  playsInline
-                  autoPlay
-                  muted
-                  className={`w-full h-full object-cover ${cameraFacingMode === "user" ? "scale-x-[-1]" : ""}`}
-                />
-              ) : (
-                // Inactive placeholder
-                <div className="text-center p-4 space-y-2">
-                  <VideoOff size={32} className="mx-auto text-slate-600" />
-                  <p className="text-xs text-slate-400">Camera viewfinder is inactive</p>
-                  <button
-                    type="button"
-                    onClick={() => startCamera(cameraFacingMode)}
-                    className="px-3 py-1.5 bg-emerald-600 text-white font-bold text-xs rounded-lg cursor-pointer"
-                  >
-                    Open Camera
-                  </button>
+            {/* ================= TODAY'S STATUS CARD ================= */}
+            {todayRecord && !submitSuccess && (
+              <div className="rounded-2xl border border-emerald-500/40 bg-emerald-950/30 p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 size={18} className="text-emerald-400" />
+                    <span className="text-xs font-black text-emerald-300">Checked In Today</span>
+                  </div>
+                  <span className="text-[10px] font-mono text-emerald-400 bg-emerald-950 px-2 py-0.5 rounded border border-emerald-800">
+                    {todayRecord.time_in || todayRecord.timeIn || "VERIFIED"}
+                  </span>
                 </div>
-              )}
 
-              {/* Shutter Overlay Button when Camera Active */}
-              {isCameraActive && !capturedPhotoUrl && (
-                <div className="absolute bottom-3 inset-x-0 flex justify-center">
-                  <button
-                    type="button"
-                    onClick={takeSnapshot}
-                    className="px-5 py-2.5 rounded-full bg-emerald-500 hover:bg-emerald-400 active:scale-95 text-slate-950 font-black text-xs shadow-xl shadow-emerald-950/60 flex items-center gap-2 cursor-pointer transition"
-                  >
-                    <Camera size={16} />
-                    Take Photo Snapshot
-                  </button>
+                <div className="flex items-center gap-3">
+                  {(todayRecord.photo_url || todayRecord.photoUrl) && (
+                    <img
+                      src={todayRecord.photo_url || todayRecord.photoUrl}
+                      alt="Proof"
+                      className="w-16 h-16 rounded-xl object-cover border border-emerald-500/40 shrink-0"
+                    />
+                  )}
+                  <div className="text-[11px] text-slate-300 space-y-1">
+                    <p className="font-semibold text-white">Proof: Cloud Geo-Verified</p>
+                    <p className="text-[10px] text-slate-400 font-mono">
+                      GPS: {todayRecord.latitude?.toFixed(5) || todayRecord.lat}, {todayRecord.longitude?.toFixed(5) || todayRecord.lng}
+                    </p>
+                    <p className="text-[10px] text-emerald-400">Status: {todayRecord.status || "Present"}</p>
+                  </div>
                 </div>
-              )}
-            </div>
 
-            {/* Retake Control */}
-            {capturedPhotoUrl && (
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-emerald-400 text-[11px] font-semibold flex items-center gap-1">
-                  <Check size={13} /> Photo snapshot captured
-                </span>
                 <button
-                  type="button"
-                  onClick={handleRetake}
-                  className="px-2.5 py-1 text-slate-300 hover:text-white bg-slate-800 rounded-lg text-[10px] font-bold cursor-pointer"
+                  onClick={() => {
+                    setTodayRecord(null);
+                    startCamera(cameraFacingMode);
+                  }}
+                  className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5"
                 >
-                  Retake Photo
+                  <RotateCw size={13} />
+                  Record a new attendance snapshot
                 </button>
               </div>
             )}
 
-            {/* Fallback Native Camera Trigger */}
-            <input
-              type="file"
-              ref={fileInputRef}
-              accept="image/*"
-              capture={cameraFacingMode === "user" ? "user" : "environment"}
-              onChange={handleNativeCameraFallback}
-              className="hidden"
-            />
-            <div className="text-center">
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="text-[10px] text-slate-500 hover:text-slate-300 underline cursor-pointer"
-              >
-                Video issues? Tap here to use native Camera App
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* ================= STEP 2: SATELLITE GPS & LIVE MAP ================= */}
-        {(!todayRecord || submitSuccess === false) && (
-          <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-black text-white flex items-center gap-1.5">
-                <MapPin size={14} className="text-emerald-400" />
-                2. Satellite GPS &amp; Area Map Lock
-              </span>
-              <button
-                type="button"
-                onClick={requestGpsLocation}
-                disabled={isGettingGps}
-                className="text-[10px] text-slate-300 bg-slate-900 border border-slate-700 px-2 py-1 rounded-lg flex items-center gap-1 hover:text-white cursor-pointer disabled:opacity-50"
-              >
-                <RefreshCw size={11} className={isGettingGps ? "animate-spin text-emerald-400" : ""} />
-                {isGettingGps ? "Acquiring GPS..." : "Re-detect GPS"}
-              </button>
-            </div>
-
-            {/* Embedded Interactive Map */}
-            <div className="w-full h-44 rounded-xl overflow-hidden border border-slate-800 bg-slate-900 relative">
-              {lat && lng ? (
-                <iframe
-                  title="Supervisor Field Location Map"
-                  src={`https://maps.google.com/maps?q=${lat},${lng}&hl=en&z=17&output=embed`}
-                  className="w-full h-full border-0"
-                  loading="lazy"
-                />
-              ) : (
-                <div className="w-full h-full flex flex-col items-center justify-center p-4 text-center text-slate-500 space-y-1">
-                  <MapPin size={24} className="animate-bounce text-slate-600" />
-                  <p className="text-xs">Acquiring precise GPS coordinates...</p>
+            {/* ================= SUCCESS BANNER ================= */}
+            {submitSuccess && (
+              <div className="rounded-2xl border border-emerald-500 bg-emerald-950/50 p-5 text-center space-y-3 animate-in fade-in zoom-in-95 duration-200">
+                <div className="w-12 h-12 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center mx-auto">
+                  <CheckCircle2 size={28} />
                 </div>
-              )}
-            </div>
-
-            {/* GPS Metadata readout */}
-            <div className="flex items-center justify-between text-[11px] font-mono text-slate-400 bg-slate-900/90 p-2.5 rounded-xl border border-slate-800">
-              <div className="flex items-center gap-1.5 text-emerald-400">
-                <MapPin size={13} />
-                <span>{lat || "Detecting..."}, {lng || "Detecting..."}</span>
+                <div>
+                  <h3 className="text-sm font-black text-white">Attendance Confirmed &amp; Synced!</h3>
+                  <p className="text-xs text-emerald-300 mt-0.5">
+                    Your field check-in was successfully recorded in HR Cloud at {currentTime}.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setSubmitSuccess(false)}
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl transition cursor-pointer"
+                >
+                  Done
+                </button>
               </div>
-              <span className="text-[10px] text-slate-500">
-                {accuracy ? `(±${accuracy}m accuracy)` : ""}
-              </span>
-            </div>
+            )}
 
-            {/* Optional Area/Landmark note */}
-            <div>
-              <input
-                type="text"
-                placeholder="Area Landmark / Assigned Booth Note (Optional)"
-                value={locationLandmark}
-                onChange={(e) => setLocationLandmark(e.target.value)}
-                className="w-full text-xs bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-white placeholder-slate-500 focus:ring-1 focus:ring-emerald-500 outline-none"
-              />
-            </div>
-          </div>
-        )}
+            {/* ================= STEP 1: CAMERA PROOF ================= */}
+            {(!todayRecord || submitSuccess === false) && (
+              <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-black text-white flex items-center gap-1.5">
+                    <Camera size={14} className="text-emerald-400" />
+                    1. Live Camera Geotag Capture
+                  </span>
+                  <button
+                    type="button"
+                    onClick={toggleCameraFacing}
+                    className="text-[10px] text-slate-300 bg-slate-900 border border-slate-700 px-2 py-1 rounded-lg flex items-center gap-1 hover:text-white cursor-pointer"
+                  >
+                    <RotateCw size={11} />
+                    {cameraFacingMode === "user" ? "Selfie" : "Area"}
+                  </button>
+                </div>
 
-        {/* ================= SUBMIT BUTTON ================= */}
-        {(!todayRecord || submitSuccess === false) && (
-          <div className="pt-2">
-            <button
-              type="button"
-              onClick={handleSubmitAttendance}
-              disabled={isSubmitting || !capturedPhotoUrl || !lat}
-              className={`w-full py-3.5 rounded-2xl font-black text-sm flex items-center justify-center gap-2 shadow-xl transition cursor-pointer ${
-                capturedPhotoUrl && lat && !isSubmitting
-                  ? "bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 shadow-emerald-950/70 active:scale-[0.98]"
-                  : "bg-slate-800 text-slate-500 cursor-not-allowed shadow-none"
-              }`}
-            >
-              {isSubmitting ? (
-                <>
-                  <RefreshCw size={16} className="animate-spin text-slate-950" />
-                  Syncing to HR Cloud...
-                </>
-              ) : !capturedPhotoUrl ? (
-                <>
-                  <Camera size={16} />
-                  Capture Live Photo Proof First
-                </>
-              ) : !lat ? (
-                <>
-                  <MapPin size={16} />
-                  Awaiting GPS Location Lock...
-                </>
-              ) : (
-                <>
-                  <CheckCircle2 size={18} />
-                  Confirm &amp; Sync Proof to HR Cloud
-                </>
-              )}
-            </button>
-          </div>
+                {/* Viewfinder Window */}
+                <div className="relative aspect-4/3 w-full rounded-2xl overflow-hidden bg-slate-900 border border-slate-800 flex items-center justify-center">
+                  {capturedPhotoUrl ? (
+                    // Captured Photo Preview
+                    <img src={capturedPhotoUrl} alt="Captured Proof" className="w-full h-full object-cover" />
+                  ) : isCameraActive ? (
+                    // Live Viewfinder
+                    <video
+                      ref={videoRef}
+                      playsInline
+                      autoPlay
+                      muted
+                      className={`w-full h-full object-cover ${cameraFacingMode === "user" ? "scale-x-[-1]" : ""}`}
+                    />
+                  ) : (
+                    // Inactive placeholder
+                    <div className="text-center p-4 space-y-2">
+                      <VideoOff size={32} className="mx-auto text-slate-600" />
+                      <p className="text-xs text-slate-400">Camera viewfinder is inactive</p>
+                      <button
+                        type="button"
+                        onClick={() => startCamera(cameraFacingMode)}
+                        className="px-3 py-1.5 bg-emerald-600 text-white font-bold text-xs rounded-lg cursor-pointer"
+                      >
+                        Open Camera
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Shutter Overlay Button when Camera Active */}
+                  {isCameraActive && !capturedPhotoUrl && (
+                    <div className="absolute bottom-3 inset-x-0 flex justify-center">
+                      <button
+                        type="button"
+                        onClick={takeSnapshot}
+                        className="px-5 py-2.5 rounded-full bg-emerald-500 hover:bg-emerald-400 active:scale-95 text-slate-950 font-black text-xs shadow-xl shadow-emerald-950/60 flex items-center gap-2 cursor-pointer transition"
+                      >
+                        <Camera size={16} />
+                        Take Photo Snapshot
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Retake Control */}
+                {capturedPhotoUrl && (
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-emerald-400 text-[11px] font-semibold flex items-center gap-1">
+                      <Check size={13} /> Photo snapshot captured
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleRetake}
+                      className="px-2.5 py-1 text-slate-300 hover:text-white bg-slate-800 rounded-lg text-[10px] font-bold cursor-pointer"
+                    >
+                      Retake Photo
+                    </button>
+                  </div>
+                )}
+
+                {/* Fallback Native Camera Trigger */}
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  accept="image/*"
+                  capture={cameraFacingMode === "user" ? "user" : "environment"}
+                  onChange={handleNativeCameraFallback}
+                  className="hidden"
+                />
+                <div className="text-center">
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="text-[10px] text-slate-500 hover:text-slate-300 underline cursor-pointer"
+                  >
+                    Video issues? Tap here to use native Camera App
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* ================= STEP 2: SATELLITE GPS & LIVE MAP ================= */}
+            {(!todayRecord || submitSuccess === false) && (
+              <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-black text-white flex items-center gap-1.5">
+                    <MapPin size={14} className="text-emerald-400" />
+                    2. Satellite GPS &amp; Area Map Lock
+                  </span>
+                  <button
+                    type="button"
+                    onClick={requestGpsLocation}
+                    disabled={isGettingGps}
+                    className="text-[10px] text-slate-300 bg-slate-900 border border-slate-700 px-2 py-1 rounded-lg flex items-center gap-1 hover:text-white cursor-pointer disabled:opacity-50"
+                  >
+                    <RefreshCw size={11} className={isGettingGps ? "animate-spin text-emerald-400" : ""} />
+                    {isGettingGps ? "Acquiring GPS..." : "Re-detect GPS"}
+                  </button>
+                </div>
+
+                {/* Embedded Interactive Map */}
+                <div className="w-full h-44 rounded-xl overflow-hidden border border-slate-800 bg-slate-900 relative">
+                  {lat && lng ? (
+                    <iframe
+                      title="Supervisor Field Location Map"
+                      src={`https://maps.google.com/maps?q=${lat},${lng}&hl=en&z=17&output=embed`}
+                      className="w-full h-full border-0"
+                      loading="lazy"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex flex-col items-center justify-center p-4 text-center text-slate-500 space-y-1">
+                      <MapPin size={24} className="animate-bounce text-slate-600" />
+                      <p className="text-xs">Acquiring precise GPS coordinates...</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* GPS Metadata readout */}
+                <div className="flex items-center justify-between text-[11px] font-mono text-slate-400 bg-slate-900/90 p-2.5 rounded-xl border border-slate-800">
+                  <div className="flex items-center gap-1.5 text-emerald-400">
+                    <MapPin size={13} />
+                    <span>{lat || "Detecting..."}, {lng || "Detecting..."}</span>
+                  </div>
+                  <span className="text-[10px] text-slate-500">
+                    {accuracy ? `(±${accuracy}m accuracy)` : ""}
+                  </span>
+                </div>
+
+                {/* Optional Area/Landmark note */}
+                <div>
+                  <input
+                    type="text"
+                    placeholder="Area Landmark / Assigned Booth Note (Optional)"
+                    value={locationLandmark}
+                    onChange={(e) => setLocationLandmark(e.target.value)}
+                    className="w-full text-xs bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-white placeholder-slate-500 focus:ring-1 focus:ring-emerald-500 outline-none"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* ================= SUBMIT BUTTON ================= */}
+            {(!todayRecord || submitSuccess === false) && (
+              <div className="pt-2">
+                <button
+                  type="button"
+                  onClick={handleSubmitAttendance}
+                  disabled={isSubmitting || !capturedPhotoUrl || !lat}
+                  className={`w-full py-3.5 rounded-2xl font-black text-sm flex items-center justify-center gap-2 shadow-xl transition cursor-pointer ${
+                    capturedPhotoUrl && lat && !isSubmitting
+                      ? "bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 shadow-emerald-950/70 active:scale-[0.98]"
+                      : "bg-slate-800 text-slate-500 cursor-not-allowed shadow-none"
+                  }`}
+                >
+                  {isSubmitting ? (
+                    <>
+                      <RefreshCw size={16} className="animate-spin text-slate-950" />
+                      Syncing to HR Cloud...
+                    </>
+                  ) : !capturedPhotoUrl ? (
+                    <>
+                      <Camera size={16} />
+                      Capture Live Photo Proof First
+                    </>
+                  ) : !lat ? (
+                    <>
+                      <MapPin size={16} />
+                      Awaiting GPS Location Lock...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 size={18} />
+                      Confirm &amp; Sync Proof to HR Cloud
+                    </>
+                  )}
+                </button>
+              </div>
+            )}
+          </>
         )}
 
         {/* Footer */}
@@ -775,4 +1049,3 @@ export default function SupervisorMobilePwaView({ onExitToAdmin }) {
     </div>
   );
 }
-

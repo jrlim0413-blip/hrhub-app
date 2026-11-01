@@ -19,18 +19,18 @@ import {
 
 // Fallback active supervisors (matching live STL Mandaue API IDs 21 to 32)
 const FALLBACK_SUPERVISORS = [
-  { id: 21, fullName: "ARLFRED SABERON", area: "5", username: "asaberon", isActive: 1 },
-  { id: 22, fullName: "RAFFY BAGUIO", area: "5", username: "rbaguio", isActive: 1 },
-  { id: 23, fullName: "ROEL CATALAN", area: "5", username: "rcatalan", isActive: 1 },
-  { id: 24, fullName: "MICHAEL DE GUZMAN", area: "5", username: "mdeguzman", isActive: 1 },
-  { id: 25, fullName: "JOEL ESTORCO", area: "5", username: "jestorco", isActive: 1 },
-  { id: 26, fullName: "HARRY EYA", area: "5", username: "heya", isActive: 1 },
-  { id: 27, fullName: "CARL MANGRUBAN", area: "5", username: "cmangruban", isActive: 1 },
-  { id: 28, fullName: "JED MELENDREZ", area: "5", username: "jmelendrez", isActive: 1 },
-  { id: 29, fullName: "NYOR SESALDO", area: "5", username: "nsesaldo", isActive: 1 },
-  { id: 30, fullName: "NARCISO TAGUD JR.", area: "5", username: "ntagud", isActive: 1 },
-  { id: 31, fullName: "MOLLY BATUBALANOS", area: "5", username: "mbatubalanos", isActive: 1 },
-  { id: 32, fullName: "COORDINATOR - APPLEGROUP", area: "5", username: "applegroup", isActive: 1 }
+  { id: 21, fullName: "ARLFRED SABERON", area: "5", username: "spvr-arlfred", isActive: 1 },
+  { id: 22, fullName: "RAFFY BAGUIO", area: "5", username: "spvr-raffy", isActive: 1 },
+  { id: 23, fullName: "ROEL CATALAN", area: "5", username: "spvr-roel", isActive: 1 },
+  { id: 24, fullName: "MICHAEL DE GUZMAN", area: "5", username: "spvr-michael", isActive: 1 },
+  { id: 25, fullName: "JOEL ESTORCO", area: "5", username: "spvr-joel", isActive: 1 },
+  { id: 26, fullName: "HARRY EYA", area: "5", username: "spvr-eya", isActive: 1 },
+  { id: 27, fullName: "CARL MANGRUBAN", area: "5", username: "spvr-carl", isActive: 1 },
+  { id: 28, fullName: "JED MELENDREZ", area: "5", username: "spvr-jed", isActive: 1 },
+  { id: 29, fullName: "NYOR SESALDO", area: "5", username: "spvr-nyor", isActive: 1 },
+  { id: 30, fullName: "NARCISO TAGUD JR.", area: "5", username: "spvr-jason", isActive: 1 },
+  { id: 31, fullName: "MOLLY BATUBALANOS", area: "5", username: "spvr-molly", isActive: 1 },
+  { id: 32, fullName: "COORDINATOR - APPLEGROUP", area: "5", username: "spvr-apple", isActive: 1 }
 ];
 
 // Areas filter reference
@@ -103,8 +103,9 @@ export default function SupervisorsAttendancePanel({ onClose }) {
     const origin = typeof window !== "undefined" ? window.location.origin : "https://hrhub-app.vercel.app";
     const spvrId = supervisor.supervisorId || supervisor.id;
     const spvrName = supervisor.fullName || supervisor.supervisor_name || "Supervisor";
+    const spvrUsername = supervisor.username || "";
     const spvrArea = supervisor.area || "5";
-    const pwaUrl = `${origin}/?pwa=supervisor&id=${spvrId}&name=${encodeURIComponent(spvrName)}&area=${spvrArea}`;
+    const pwaUrl = `${origin}/?pwa=supervisor&id=${spvrId}&username=${encodeURIComponent(spvrUsername)}&name=${encodeURIComponent(spvrName)}&area=${spvrArea}`;
 
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(pwaUrl);
@@ -1405,7 +1406,7 @@ export default function SupervisorsAttendancePanel({ onClose }) {
                             )}
                           </button>
                           <a
-                            href={`/?pwa=supervisor&id=${record.supervisorId}&name=${encodeURIComponent(record.fullName)}&area=${record.area || "5"}`}
+                            href={`/?pwa=supervisor&id=${record.supervisorId}&username=${encodeURIComponent(record.username || "")}&name=${encodeURIComponent(record.fullName)}&area=${record.area || "5"}`}
                             target="_blank"
                             rel="noreferrer"
                             className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-700 hover:bg-slate-100 border border-transparent hover:border-slate-200 transition"
