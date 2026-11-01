@@ -566,7 +566,7 @@ export default function SupervisorMobilePwaView() {
             <h1 className="text-xs font-black tracking-tight text-white flex items-center gap-1.5">
               HRHub <span className="text-emerald-400">FIELD PWA</span>
             </h1>
-            <p className="text-[10px] text-slate-400 font-medium">Daily Attendance &amp; Geotag</p>
+            <p className="text-[10px] text-slate-400 font-medium">Supervisor Field Portal</p>
           </div>
         </div>
 
@@ -795,15 +795,11 @@ export default function SupervisorMobilePwaView() {
                 </div>
 
                 <div className="flex items-center gap-3">
-                  {(todayRecord.photo_url || todayRecord.photoUrl) && (
-                    <img
-                      src={todayRecord.photo_url || todayRecord.photoUrl}
-                      alt="Proof"
-                      className="w-16 h-16 rounded-xl object-cover border border-emerald-500/40 shrink-0"
-                    />
-                  )}
+                  <div className="w-12 h-12 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 flex items-center justify-center shrink-0 shadow-xs">
+                    <ShieldCheck size={24} />
+                  </div>
                   <div className="text-[11px] text-slate-300 space-y-1">
-                    <p className="font-semibold text-white">Proof: Cloud Geo-Verified</p>
+                    <p className="font-semibold text-white">Proof: Verified in Cloud Database</p>
                     <p className="text-[10px] text-slate-400 font-mono">
                       GPS: {todayRecord.latitude?.toFixed(5) || todayRecord.lat}, {todayRecord.longitude?.toFixed(5) || todayRecord.lng}
                     </p>
@@ -851,7 +847,7 @@ export default function SupervisorMobilePwaView() {
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-black text-white flex items-center gap-1.5">
                     <Camera size={14} className="text-emerald-400" />
-                    1. Live Camera Geotag Capture
+                    1. Live Photo Verification
                   </span>
                   <button
                     type="button"
@@ -863,20 +859,76 @@ export default function SupervisorMobilePwaView() {
                   </button>
                 </div>
 
-                {/* Viewfinder Window */}
-                <div className="relative aspect-4/3 w-full rounded-2xl overflow-hidden bg-slate-900 border border-slate-800 flex items-center justify-center">
+                {/* Modern Redesigned Camera Viewfinder (Preview removed - database record only) */}
+                <div className="relative aspect-4/3 w-full rounded-3xl overflow-hidden bg-slate-950 border-2 border-slate-800/90 shadow-2xl flex items-center justify-center">
                   {capturedPhotoUrl ? (
-                    // Captured Photo Preview
-                    <img src={capturedPhotoUrl} alt="Captured Proof" className="w-full h-full object-cover" />
+                    // After capture: Confirmation state ONLY (No image preview displayed to user)
+                    <div className="w-full h-full flex flex-col items-center justify-center p-6 text-center space-y-3.5 bg-gradient-to-b from-slate-900 via-slate-950 to-slate-900 animate-in fade-in zoom-in-95 duration-200">
+                      <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-emerald-500/20 to-teal-500/20 border border-emerald-500/50 text-emerald-400 flex items-center justify-center shadow-xl shadow-emerald-950/70">
+                        <CheckCircle2 size={36} />
+                      </div>
+                      <div className="space-y-1">
+                        <h4 className="text-sm font-black text-white tracking-tight">Photo Captured &amp; Verified</h4>
+                        <p className="text-xs text-emerald-400 font-medium">
+                          Securely locked for database record
+                        </p>
+                        <p className="text-[10px] text-slate-400 font-mono">
+                          Timestamp: {currentTime}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleRetake}
+                        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-slate-200 hover:text-white text-xs font-bold border border-slate-700 transition cursor-pointer active:scale-95 shadow-sm"
+                      >
+                        <RotateCw size={13} />
+                        <span>Retake Photo</span>
+                      </button>
+                    </div>
                   ) : isCameraActive ? (
-                    // Live Viewfinder
-                    <video
-                      ref={videoRef}
-                      playsInline
-                      autoPlay
-                      muted
-                      className={`w-full h-full object-cover ${cameraFacingMode === "user" ? "scale-x-[-1]" : ""}`}
-                    />
+                    // Live Viewfinder with professional camera styling
+                    <>
+                      <video
+                        ref={videoRef}
+                        playsInline
+                        autoPlay
+                        muted
+                        className={`w-full h-full object-cover ${cameraFacingMode === "user" ? "scale-x-[-1]" : ""}`}
+                      />
+
+                      {/* Viewfinder Target Guidelines */}
+                      <div className="absolute inset-6 pointer-events-none border border-white/20 rounded-2xl flex items-center justify-center">
+                        {/* Corner Accents */}
+                        <div className="absolute top-0 left-0 w-4 h-4 border-t-2 border-l-2 border-emerald-400" />
+                        <div className="absolute top-0 right-0 w-4 h-4 border-t-2 border-r-2 border-emerald-400" />
+                        <div className="absolute bottom-0 left-0 w-4 h-4 border-b-2 border-l-2 border-emerald-400" />
+                        <div className="absolute bottom-0 right-0 w-4 h-4 border-b-2 border-r-2 border-emerald-400" />
+                        <div className="w-8 h-8 rounded-full border border-dashed border-white/30" />
+                      </div>
+
+                      {/* Viewfinder Top Status Pill */}
+                      <div className="absolute top-3 left-3 bg-slate-950/75 backdrop-blur-md px-2.5 py-1 rounded-full border border-slate-800 flex items-center gap-1.5 text-[10px] font-mono text-emerald-400 font-bold">
+                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                        <span>LIVE CAMERA</span>
+                      </div>
+
+                      {/* Redesigned Circular Shutter Button */}
+                      <div className="absolute bottom-4 inset-x-0 flex flex-col items-center justify-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={takeSnapshot}
+                          className="w-16 h-16 rounded-full border-4 border-white/90 bg-emerald-500 hover:bg-emerald-400 active:scale-90 flex items-center justify-center shadow-2xl shadow-black/90 transition cursor-pointer group"
+                          title="Capture Photo"
+                        >
+                          <div className="w-11 h-11 rounded-full bg-white flex items-center justify-center shadow-inner group-hover:bg-emerald-100 transition">
+                            <Camera size={20} className="text-emerald-700" />
+                          </div>
+                        </button>
+                        <span className="text-[10px] text-white/90 font-bold bg-slate-950/70 px-2.5 py-0.5 rounded-full backdrop-blur-xs shadow-xs">
+                          Tap to Capture
+                        </span>
+                      </div>
+                    </>
                   ) : (
                     // Inactive placeholder
                     <div className="text-center p-4 space-y-2">
@@ -885,43 +937,13 @@ export default function SupervisorMobilePwaView() {
                       <button
                         type="button"
                         onClick={() => startCamera(cameraFacingMode)}
-                        className="px-3 py-1.5 bg-emerald-600 text-white font-bold text-xs rounded-lg cursor-pointer"
+                        className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl cursor-pointer transition shadow-sm"
                       >
                         Open Camera
                       </button>
                     </div>
                   )}
-
-                  {/* Shutter Overlay Button when Camera Active */}
-                  {isCameraActive && !capturedPhotoUrl && (
-                    <div className="absolute bottom-3 inset-x-0 flex justify-center">
-                      <button
-                        type="button"
-                        onClick={takeSnapshot}
-                        className="px-5 py-2.5 rounded-full bg-emerald-500 hover:bg-emerald-400 active:scale-95 text-slate-950 font-black text-xs shadow-xl shadow-emerald-950/60 flex items-center gap-2 cursor-pointer transition"
-                      >
-                        <Camera size={16} />
-                        Take Photo Snapshot
-                      </button>
-                    </div>
-                  )}
                 </div>
-
-                {/* Retake Control */}
-                {capturedPhotoUrl && (
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-emerald-400 text-[11px] font-semibold flex items-center gap-1">
-                      <Check size={13} /> Photo snapshot captured
-                    </span>
-                    <button
-                      type="button"
-                      onClick={handleRetake}
-                      className="px-2.5 py-1 text-slate-300 hover:text-white bg-slate-800 rounded-lg text-[10px] font-bold cursor-pointer"
-                    >
-                      Retake Photo
-                    </button>
-                  </div>
-                )}
 
                 {/* Fallback Native Camera Trigger */}
                 <input
@@ -1047,7 +1069,7 @@ export default function SupervisorMobilePwaView() {
         {/* Footer */}
         <div className="pt-4 pb-8 text-center text-xs text-slate-500 space-y-1">
           <p>Official Simpal Group of Companies HR Technology</p>
-          <p className="text-[10px] text-slate-600 font-medium">Supervisor Field Attendance &amp; Geotag Verification Portal</p>
+          <p className="text-[10px] text-slate-600 font-medium">Supervisor Field Verification Portal</p>
         </div>
       </main>
     </div>
