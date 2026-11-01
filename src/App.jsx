@@ -653,15 +653,7 @@ const App = () => {
   };
 
     if (isSupervisorPwaMode) {
-    return (
-      <SupervisorMobilePwaView
-        onExitToAdmin={() => {
-          try { localStorage.removeItem("hrhub_pwa_supervisor_active"); } catch {}
-          setIsSupervisorPwaMode(false);
-          window.location.href = window.location.origin;
-        }}
-      />
-    );
+    return <SupervisorMobilePwaView />;
   }
 
   if (isLoggedIn) {

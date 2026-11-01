@@ -408,27 +408,12 @@ export default function SupervisorMobilePwaView({ onExitToAdmin }) {
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          {/* Live Clock Badge */}
-          <div className="text-right">
-            <span className="font-mono text-xs font-bold text-emerald-400 bg-slate-900 px-2 py-0.5 rounded border border-slate-800">
-              {currentTime}
-            </span>
-            <p className="text-[9px] text-slate-400 mt-0.5 font-medium">{todayStr}</p>
-          </div>
-
-          {/* Quick Return to HR Portal */}
-          {onExitToAdmin && (
-            <button
-              type="button"
-              onClick={onExitToAdmin}
-              className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-[11px] font-bold border border-slate-700 transition cursor-pointer flex items-center gap-1 shrink-0 ml-1"
-              title="Return to HR Hub Portal"
-            >
-              <LogOut size={13} className="text-emerald-400" />
-              <span className="hidden sm:inline">HR Portal</span>
-            </button>
-          )}
+        {/* Live Clock Badge */}
+        <div className="text-right">
+          <span className="font-mono text-xs font-bold text-emerald-400 bg-slate-900 px-2 py-0.5 rounded border border-slate-800">
+            {currentTime}
+          </span>
+          <p className="text-[9px] text-slate-400 mt-0.5 font-medium">{todayStr}</p>
         </div>
       </header>
 
@@ -781,16 +766,10 @@ export default function SupervisorMobilePwaView({ onExitToAdmin }) {
           </div>
         )}
 
-        {/* Footer Admin Switcher */}
+        {/* Footer */}
         <div className="pt-4 pb-8 text-center text-xs text-slate-500 space-y-1">
           <p>Official Simpal Group of Companies HR Technology</p>
-          <button
-            type="button"
-            onClick={onExitToAdmin}
-            className="text-[11px] text-emerald-400 hover:underline cursor-pointer inline-flex items-center gap-1 font-semibold"
-          >
-            Go to HR Administrator Dashboard <ArrowRight size={11} />
-          </button>
+          <p className="text-[10px] text-slate-600 font-medium">Supervisor Field Attendance &amp; Geotag Verification Portal</p>
         </div>
       </main>
     </div>

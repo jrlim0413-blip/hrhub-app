@@ -1025,25 +1025,6 @@ export default function SupervisorsAttendancePanel({ onClose }) {
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Field Check-in & Photo Button */}
-            <button
-              type="button"
-              onClick={() => setIsSimulatorOpen(true)}
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 text-white hover:from-emerald-700 hover:to-teal-700 text-xs font-bold transition shadow-xs cursor-pointer"
-            >
-              <Camera size={13} />
-              <span>Field Photo & GPS Check-In</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={handleMarkAllPresent}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 text-[#008559] hover:bg-emerald-100/80 border border-emerald-200/80 text-xs font-bold transition cursor-pointer"
-            >
-              <CheckCircle2 size={13} />
-              <span>Mark All Present</span>
-            </button>
-
             <button
               type="button"
               onClick={handleExportCSV}
