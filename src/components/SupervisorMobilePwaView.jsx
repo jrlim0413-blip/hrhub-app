@@ -138,7 +138,7 @@ export default function SupervisorMobilePwaView({ onExitToAdmin }) {
       return;
     }
     if (!deferredPrompt) {
-      alert("Para i-download sa phone: I-click ang tatlong tuldok (⋮) sa browser at pindutin ang 'Install app' o 'Add to Home screen'.");
+      alert("To install on your mobile device: Open your browser menu (⋮ or Share) and select 'Install app' or 'Add to Home screen'.");
       return;
     }
     deferredPrompt.prompt();
@@ -155,7 +155,8 @@ export default function SupervisorMobilePwaView({ onExitToAdmin }) {
     if (!currentSupervisor?.id) return;
     try {
       setIsCheckingTodayRecord(true);
-      const records = await fetchCloudAttendance(todayStr);
+      const res = await fetchCloudAttendance(todayStr);
+      const records = res?.data || (Array.isArray(res) ? res : []);
       const match = records.find((r) => String(r.supervisor_id || r.supervisorId) === String(currentSupervisor.id));
       if (match) {
         setTodayRecord(match);
@@ -328,11 +329,11 @@ export default function SupervisorMobilePwaView({ onExitToAdmin }) {
   // Submit Attendance to Supabase Cloud
   const handleSubmitAttendance = async () => {
     if (!capturedPhotoUrl) {
-      alert("Kailangan kumuha ng litrato gamit ang camera para sa attendance proof.");
+      alert("Please capture a live photo using the camera before submitting attendance.");
       return;
     }
     if (!lat || !lng) {
-      alert("Kailangan muna makuha ang GPS coordinates. Pindutin ang 'Re-detect GPS'.");
+      alert("GPS coordinates are required. Please tap 'Re-detect GPS' to lock your position.");
       return;
     }
 
@@ -346,35 +347,33 @@ export default function SupervisorMobilePwaView({ onExitToAdmin }) {
 
       if (capturedFile) {
         const uploadRes = await uploadAttendancePhoto(capturedFile, currentSupervisor.id, todayStr);
-        if (uploadRes && uploadRes.publicUrl) {
-          cloudPhotoUrl = uploadRes.publicUrl;
+        if (uploadRes && (uploadRes.url || uploadRes.publicUrl)) {
+          cloudPhotoUrl = uploadRes.url || uploadRes.publicUrl;
           cloudStoragePath = uploadRes.path;
         }
       }
 
       // 2. Prepare Attendance Record
       const recordPayload = {
-        supervisor_id: String(currentSupervisor.id),
-        supervisor_name: currentSupervisor.fullName,
+        supervisorId: String(currentSupervisor.id),
+        fullName: currentSupervisor.fullName,
         username: currentSupervisor.username || "",
-        attendance_date: todayStr,
-        time_in: currentTime,
+        timeIn: currentTime,
         status: "Present",
         area: currentSupervisor.area || "5",
         shift: "Morning Draw (06:00 AM - 02:30 PM)",
         latitude: parseFloat(lat),
         longitude: parseFloat(lng),
-        location_accuracy: accuracy ? parseFloat(accuracy) : null,
-        location_name: locationLandmark || `Field Check-In GPS (±${accuracy || 0}m)`,
-        photo_url: cloudPhotoUrl || capturedPhotoUrl,
-        photo_storage_path: cloudStoragePath || null,
+        locationAccuracy: accuracy ? parseFloat(accuracy) : null,
+        locationName: locationLandmark || `Field Check-In GPS (±${accuracy || 0}m)`,
+        photoProof: cloudPhotoUrl || capturedPhotoUrl,
         remarks: "Logged via Official Supervisor Mobile PWA"
       };
 
       // 3. Upsert to Supabase
-      const saved = await upsertCloudAttendance(recordPayload);
-      if (!saved) {
-        throw new Error("Hindi na-save ang attendance sa cloud. Pakisubukang muli.");
+      const savedRes = await upsertCloudAttendance(recordPayload, todayStr);
+      if (!savedRes.success) {
+        throw new Error(savedRes.error || "Failed to sync attendance to HR Cloud. Please try again.");
       }
 
       // Vibration confirmation
@@ -387,7 +386,7 @@ export default function SupervisorMobilePwaView({ onExitToAdmin }) {
     } catch (err) {
       console.error("Attendance submission error:", err);
       setSubmitError(err.message || "Failed to record attendance.");
-      alert(`⚠️ Error sa pag-save: ${err.message}`);
+      alert(`⚠️ Cloud Save Error: ${err.message}`);
     } finally {
       setIsSubmitting(false);
     }
@@ -426,8 +425,8 @@ export default function SupervisorMobilePwaView({ onExitToAdmin }) {
               <Smartphone size={16} />
             </div>
             <div>
-              <p className="font-bold text-white text-[11px] leading-tight">I-download bilang App sa Cellphone</p>
-              <p className="text-[10px] text-slate-300">1-click access sa home screen nang hindi na naglo-login</p>
+              <p className="font-bold text-white text-[11px] leading-tight">Install Mobile App on Phone</p>
+              <p className="text-[10px] text-slate-300">1-tap home screen access with instant auto-login</p>
             </div>
           </div>
           <button
@@ -447,18 +446,18 @@ export default function SupervisorMobilePwaView({ onExitToAdmin }) {
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 max-w-sm w-full space-y-3">
             <h3 className="text-sm font-black text-white flex items-center gap-2">
               <Smartphone size={18} className="text-emerald-400" />
-              Paano i-install sa iPhone / Safari:
+              How to install on iPhone / Safari:
             </h3>
             <ol className="text-xs text-slate-300 space-y-2 list-decimal list-inside">
-              <li>Pindutin ang <strong>Share button</strong> (<span className="text-emerald-400 font-bold">⎋</span>) sa ibaba ng Safari.</li>
-              <li>I-scroll pababa at pindutin ang <strong>"Add to Home Screen"</strong> (<span className="text-emerald-400 font-bold">+</span>).</li>
-              <li>Pindutin ang <strong>"Add"</strong> sa kanang itaas. Magkakaroon na ito ng app icon sa iyong cellphone!</li>
+              <li>Tap the <strong>Share button</strong> (<span className="text-emerald-400 font-bold">⎋</span>) at the bottom of Safari.</li>
+              <li>Scroll down and tap <strong>"Add to Home Screen"</strong> (<span className="text-emerald-400 font-bold">+</span>).</li>
+              <li>Tap <strong>"Add"</strong> in the top-right corner. The app icon will appear on your phone!</li>
             </ol>
             <button
               onClick={() => setShowIosTip(false)}
-              className="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xs"
+              className="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xs cursor-pointer"
             >
-              Naiintindihan ko
+              Got it
             </button>
           </div>
         </div>
@@ -496,7 +495,7 @@ export default function SupervisorMobilePwaView({ onExitToAdmin }) {
                 setSubmitSuccess(false);
               }
             }}
-            className="text-[10px] bg-slate-900 border border-slate-700 text-slate-300 rounded-lg px-2 py-1 focus:ring-1 focus:ring-emerald-500 outline-none"
+            className="text-[10px] bg-slate-900 border border-slate-700 text-slate-300 rounded-lg px-2 py-1 focus:ring-1 focus:ring-emerald-500 outline-none cursor-pointer"
           >
             {SUPERVISORS.map((s) => (
               <option key={s.id} value={s.id}>
@@ -512,7 +511,7 @@ export default function SupervisorMobilePwaView({ onExitToAdmin }) {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <CheckCircle2 size={18} className="text-emerald-400" />
-                <span className="text-xs font-black text-emerald-300">Naka-Check In Ka Na Ngayong Araw!</span>
+                <span className="text-xs font-black text-emerald-300">Checked In Today</span>
               </div>
               <span className="text-[10px] font-mono text-emerald-400 bg-emerald-950 px-2 py-0.5 rounded border border-emerald-800">
                 {todayRecord.time_in || todayRecord.timeIn || "VERIFIED"}
@@ -528,7 +527,7 @@ export default function SupervisorMobilePwaView({ onExitToAdmin }) {
                 />
               )}
               <div className="text-[11px] text-slate-300 space-y-1">
-                <p className="font-semibold text-white">Katibayan: Cloud Geo-Verified</p>
+                <p className="font-semibold text-white">Proof: Cloud Geo-Verified</p>
                 <p className="text-[10px] text-slate-400 font-mono">
                   GPS: {todayRecord.latitude?.toFixed(5) || todayRecord.lat}, {todayRecord.longitude?.toFixed(5) || todayRecord.lng}
                 </p>
@@ -544,7 +543,7 @@ export default function SupervisorMobilePwaView({ onExitToAdmin }) {
               className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5"
             >
               <RotateCw size={13} />
-              Mag-record ng panibagong time snapshot
+              Record a new attendance snapshot
             </button>
           </div>
         )}
@@ -558,14 +557,14 @@ export default function SupervisorMobilePwaView({ onExitToAdmin }) {
             <div>
               <h3 className="text-sm font-black text-white">Attendance Confirmed &amp; Synced!</h3>
               <p className="text-xs text-emerald-300 mt-0.5">
-                Opisyal nang naitala ang iyong field check-in sa HR Cloud ngayong {currentTime}.
+                Your field check-in was successfully recorded in HR Cloud at {currentTime}.
               </p>
             </div>
             <button
               onClick={() => setSubmitSuccess(false)}
               className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl transition cursor-pointer"
             >
-              Ok, Tapos na
+              Done
             </button>
           </div>
         )}
@@ -610,9 +609,9 @@ export default function SupervisorMobilePwaView({ onExitToAdmin }) {
                   <button
                     type="button"
                     onClick={() => startCamera(cameraFacingMode)}
-                    className="px-3 py-1.5 bg-emerald-600 text-white font-bold text-xs rounded-lg"
+                    className="px-3 py-1.5 bg-emerald-600 text-white font-bold text-xs rounded-lg cursor-pointer"
                   >
-                    Buksan ang Camera
+                    Open Camera
                   </button>
                 </div>
               )}
@@ -626,7 +625,7 @@ export default function SupervisorMobilePwaView({ onExitToAdmin }) {
                     className="px-5 py-2.5 rounded-full bg-emerald-500 hover:bg-emerald-400 active:scale-95 text-slate-950 font-black text-xs shadow-xl shadow-emerald-950/60 flex items-center gap-2 cursor-pointer transition"
                   >
                     <Camera size={16} />
-                    Kunan ng Litrato
+                    Take Photo Snapshot
                   </button>
                 </div>
               )}
@@ -636,14 +635,14 @@ export default function SupervisorMobilePwaView({ onExitToAdmin }) {
             {capturedPhotoUrl && (
               <div className="flex items-center justify-between text-xs">
                 <span className="text-emerald-400 text-[11px] font-semibold flex items-center gap-1">
-                  <Check size={13} /> Litrato ay handa na
+                  <Check size={13} /> Photo snapshot captured
                 </span>
                 <button
                   type="button"
                   onClick={handleRetake}
                   className="px-2.5 py-1 text-slate-300 hover:text-white bg-slate-800 rounded-lg text-[10px] font-bold cursor-pointer"
                 >
-                  Ulitin ang Litrato
+                  Retake Photo
                 </button>
               </div>
             )}
@@ -663,7 +662,7 @@ export default function SupervisorMobilePwaView({ onExitToAdmin }) {
                 onClick={() => fileInputRef.current?.click()}
                 className="text-[10px] text-slate-500 hover:text-slate-300 underline cursor-pointer"
               >
-                Problema sa video? Pindutin ito para sa Phone Camera App
+                Video issues? Tap here to use native Camera App
               </button>
             </div>
           </div>
@@ -684,7 +683,7 @@ export default function SupervisorMobilePwaView({ onExitToAdmin }) {
                 className="text-[10px] text-slate-300 bg-slate-900 border border-slate-700 px-2 py-1 rounded-lg flex items-center gap-1 hover:text-white cursor-pointer disabled:opacity-50"
               >
                 <RefreshCw size={11} className={isGettingGps ? "animate-spin text-emerald-400" : ""} />
-                {isGettingGps ? "Nagde-detect..." : "Re-detect GPS"}
+                {isGettingGps ? "Acquiring GPS..." : "Re-detect GPS"}
               </button>
             </div>
 
@@ -700,7 +699,7 @@ export default function SupervisorMobilePwaView({ onExitToAdmin }) {
               ) : (
                 <div className="w-full h-full flex flex-col items-center justify-center p-4 text-center text-slate-500 space-y-1">
                   <MapPin size={24} className="animate-bounce text-slate-600" />
-                  <p className="text-xs">Kinukuha ang iyong eksaktong GPS coordinates...</p>
+                  <p className="text-xs">Acquiring precise GPS coordinates...</p>
                 </div>
               )}
             </div>
@@ -720,7 +719,7 @@ export default function SupervisorMobilePwaView({ onExitToAdmin }) {
             <div>
               <input
                 type="text"
-                placeholder="Pangalan ng area / Landmark (Opsyonal)"
+                placeholder="Area Landmark / Assigned Booth Note (Optional)"
                 value={locationLandmark}
                 onChange={(e) => setLocationLandmark(e.target.value)}
                 className="w-full text-xs bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-white placeholder-slate-500 focus:ring-1 focus:ring-emerald-500 outline-none"
@@ -745,17 +744,17 @@ export default function SupervisorMobilePwaView({ onExitToAdmin }) {
               {isSubmitting ? (
                 <>
                   <RefreshCw size={16} className="animate-spin text-slate-950" />
-                  Nagse-save sa HR Cloud...
+                  Syncing to HR Cloud...
                 </>
               ) : !capturedPhotoUrl ? (
                 <>
                   <Camera size={16} />
-                  Kunan Muna ng Litrato ang Mukha
+                  Capture Live Photo Proof First
                 </>
               ) : !lat ? (
                 <>
                   <MapPin size={16} />
-                  Hinihintay ang GPS Lock...
+                  Awaiting GPS Location Lock...
                 </>
               ) : (
                 <>
@@ -775,10 +774,11 @@ export default function SupervisorMobilePwaView({ onExitToAdmin }) {
             onClick={onExitToAdmin}
             className="text-[11px] text-emerald-400 hover:underline cursor-pointer inline-flex items-center gap-1 font-semibold"
           >
-            Pumunta sa HR Administrator Dashboard <ArrowRight size={11} />
+            Go to HR Administrator Dashboard <ArrowRight size={11} />
           </button>
         </div>
       </main>
     </div>
   );
 }
+
