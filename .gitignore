@@ -26,3 +26,6 @@ dist-ssr
 .env.api
 .env.local
 .env.api.local
+
+# Supabase SQL schema & backup files
+supabase/
