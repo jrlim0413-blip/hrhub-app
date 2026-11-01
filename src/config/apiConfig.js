@@ -3,8 +3,8 @@
 
 export const API_CONFIG = {
   // Supabase Configuration
-  SUPABASE_URL: (typeof import.meta !== "undefined" && import.meta.env?.VITE_API_URL) || "https://jiljeujvzlxptztmuaqy.supabase.co",
-  SUPABASE_ANON: (typeof import.meta !== "undefined" && import.meta.env?.VITE_API_ANON) || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImppbGpldWp2emx4cHR6dG11YXF5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY0Mzk4ODgsImV4cCI6MjEwMjAxNTg4OH0.s8c9A_2d3VB_bwR0zwo9kdl3phPdt2I6cd9Ofcq6MSY",
+  SUPABASE_URL: (typeof import.meta !== "undefined" && import.meta.env?.VITE_API_URL) || "https://ojjsejqsaflajpqwbmcr.supabase.co",
+  SUPABASE_ANON: (typeof import.meta !== "undefined" && import.meta.env?.VITE_API_ANON) || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9qanNlanFzYWZsYWpwcXdibWNyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMwNDM0ODAsImV4cCI6MjEwODYxOTQ4MH0.A5W507SDHt8pKpg50-gRRhA8aVyJF_D1K9ucLrQYOHs",
 
   // Agents & Supervisors API
   AGENTS_URL: (typeof import.meta !== "undefined" && import.meta.env?.VITE_AGENTS_API_URL) || "https://stl-mandaue-api.com/api/accountant/teller?id=2",
