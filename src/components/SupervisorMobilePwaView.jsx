@@ -12,7 +12,7 @@ import {
   upsertCloudAttendance
 } from "../lib/supervisorAttendanceStorage";
 
-// Active Mandaue Supervisors (matching official live STL Mandaue Source API IDs & Usernames)
+// Active Mandaue Supervisors
 const SUPERVISORS = [
   { id: 21, fullName: "ARLFRED SABERON", area: "5", username: "spvr-arlfred" },
   { id: 22, fullName: "RAFFY BAGUIO", area: "5", username: "spvr-raffy" },
@@ -37,7 +37,7 @@ function getTodayString() {
 }
 
 /**
- * Authenticates a supervisor against the official Source API endpoints.
+ * Authenticates supervisor credentials.
  * Checks coordinator, teller, cashier, and accountant roles.
  */
 async function verifySourceApiCredentials(username, password) {
@@ -56,7 +56,7 @@ async function verifySourceApiCredentials(username, password) {
     "https://stl-mandaue-api.com/api/admin/login"
   ];
 
-  let lastErrorMessage = "Invalid username or password. Please check your Source API credentials.";
+  let lastErrorMessage = "Invalid username or password. Please check your login credentials.";
 
   for (const url of endpoints) {
     try {
@@ -87,7 +87,7 @@ async function verifySourceApiCredentials(username, password) {
         lastErrorMessage = data.message;
       }
     } catch (err) {
-      console.warn(`Source API auth error on ${url}:`, err);
+      console.warn(`Auth attempt notice on ${url}:`, err);
     }
   }
 
@@ -226,7 +226,7 @@ export default function SupervisorMobilePwaView() {
         setLoginError(authRes.error || "Invalid password for this supervisor username.");
       }
     } catch (err) {
-      setLoginError("Connection error while connecting to Source API. Please check your internet connection.");
+      setLoginError("Connection error. Please check your internet connection and try again.");
     } finally {
       setIsAuthenticating(false);
     }
@@ -566,7 +566,7 @@ export default function SupervisorMobilePwaView() {
             <h1 className="text-xs font-black tracking-tight text-white flex items-center gap-1.5">
               HRHub <span className="text-emerald-400">FIELD PWA</span>
             </h1>
-            <p className="text-[10px] text-slate-400 font-medium">Supervisor Attendance &amp; Geotag</p>
+            <p className="text-[10px] text-slate-400 font-medium">Daily Attendance &amp; Geotag</p>
           </div>
         </div>
 
@@ -635,9 +635,9 @@ export default function SupervisorMobilePwaView() {
               <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-emerald-500/20 to-teal-500/20 border border-emerald-500/40 text-emerald-400 flex items-center justify-center mx-auto shadow-lg shadow-emerald-950/50">
                 <Lock size={26} />
               </div>
-              <h2 className="text-base font-black text-white tracking-tight">Supervisor Portal Login</h2>
+              <h2 className="text-base font-black text-white tracking-tight">Daily Login</h2>
               <p className="text-xs text-slate-400 max-w-xs mx-auto leading-relaxed">
-                Please enter your registered <strong>Source API password</strong> to verify your identity before recording attendance.
+                Please enter your password to sign in for today's attendance.
               </p>
             </div>
 
@@ -647,11 +647,13 @@ export default function SupervisorMobilePwaView() {
                 {currentSupervisor.fullName?.charAt(0) || "S"}
               </div>
               <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-[10px] font-mono font-bold text-emerald-400 bg-emerald-950 px-1.5 py-0.5 rounded border border-emerald-800/60">
-                    ID #{currentSupervisor.id}
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-[10px] font-mono font-bold text-emerald-400 bg-emerald-950 px-2 py-0.5 rounded border border-emerald-800/60">
+                    ID Number: {currentSupervisor.id}
                   </span>
-                  <span className="text-[10px] font-semibold text-slate-400">Area {currentSupervisor.area || "5"}</span>
+                  <span className="text-[10px] font-bold text-slate-300 bg-slate-800 px-2 py-0.5 rounded border border-slate-700">
+                    Area: Area {currentSupervisor.area || "5"}
+                  </span>
                 </div>
                 <h3 className="text-xs font-black text-white truncate mt-0.5">{currentSupervisor.fullName}</h3>
               </div>
@@ -670,7 +672,7 @@ export default function SupervisorMobilePwaView() {
               {/* Username Field */}
               <div className="space-y-1.5">
                 <label className="text-[11px] font-bold text-slate-300 uppercase tracking-wider block">
-                  Source API Username
+                  Username
                 </label>
                 <div className="relative flex items-center">
                   <div className="absolute left-3.5 text-slate-500 pointer-events-none">
@@ -681,7 +683,7 @@ export default function SupervisorMobilePwaView() {
                     required
                     value={inputUsername}
                     onChange={(e) => setInputUsername(e.target.value)}
-                    placeholder="e.g. spvr-arlfred"
+                    placeholder="Enter username"
                     className="w-full text-xs font-mono bg-slate-900 border border-slate-700 focus:border-emerald-500 rounded-xl pl-9 pr-3 py-2.5 text-white placeholder-slate-600 outline-none transition"
                   />
                 </div>
@@ -690,7 +692,7 @@ export default function SupervisorMobilePwaView() {
               {/* Password Field */}
               <div className="space-y-1.5">
                 <label className="text-[11px] font-bold text-slate-300 uppercase tracking-wider block">
-                  Source API Password
+                  Password
                 </label>
                 <div className="relative flex items-center">
                   <div className="absolute left-3.5 text-slate-500 pointer-events-none">
@@ -701,7 +703,7 @@ export default function SupervisorMobilePwaView() {
                     required
                     value={inputPassword}
                     onChange={(e) => setInputPassword(e.target.value)}
-                    placeholder="Enter registered password"
+                    placeholder="Enter your password"
                     className="w-full text-xs font-mono bg-slate-900 border border-slate-700 focus:border-emerald-500 rounded-xl pl-9 pr-10 py-2.5 text-white placeholder-slate-600 outline-none transition"
                   />
                   <button
@@ -727,12 +729,12 @@ export default function SupervisorMobilePwaView() {
                 {isAuthenticating ? (
                   <>
                     <RefreshCw size={14} className="animate-spin text-slate-400" />
-                    <span>Verifying with Source API...</span>
+                    <span>Verifying credentials...</span>
                   </>
                 ) : (
                   <>
                     <LogIn size={14} />
-                    <span>Sign In &amp; Open Attendance Portal</span>
+                    <span>Daily Login</span>
                   </>
                 )}
               </button>
@@ -740,7 +742,7 @@ export default function SupervisorMobilePwaView() {
 
             <div className="pt-2 text-center">
               <p className="text-[10px] text-slate-500">
-                🔒 Security Note: Credentials are authenticated directly via official Source API endpoints.
+                🔒 Security Notice: Your daily login, photo proof, and GPS location are securely recorded.
               </p>
             </div>
           </div>
@@ -754,13 +756,15 @@ export default function SupervisorMobilePwaView() {
                   {currentSupervisor.fullName?.charAt(0) || "S"}
                 </div>
                 <div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[10px] font-mono font-bold text-emerald-400 bg-emerald-950/80 px-1.5 py-0.5 rounded border border-emerald-800/60">
-                      ID #{currentSupervisor.id}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-[10px] font-mono font-bold text-emerald-400 bg-emerald-950/80 px-2 py-0.5 rounded border border-emerald-800/60">
+                      ID Number: {currentSupervisor.id}
                     </span>
-                    <span className="text-[10px] font-semibold text-slate-400">Area {currentSupervisor.area || "5"}</span>
+                    <span className="text-[10px] font-bold text-slate-300 bg-slate-800 px-2 py-0.5 rounded border border-slate-700">
+                      Area: Area {currentSupervisor.area || "5"}
+                    </span>
                   </div>
-                  <h2 className="text-sm font-black text-white tracking-tight mt-0.5">{currentSupervisor.fullName}</h2>
+                  <h2 className="text-sm font-black text-white tracking-tight mt-1">{currentSupervisor.fullName}</h2>
                   <p className="text-[10px] text-slate-400 font-mono">@{currentSupervisor.username}</p>
                 </div>
               </div>
@@ -783,7 +787,7 @@ export default function SupervisorMobilePwaView() {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <CheckCircle2 size={18} className="text-emerald-400" />
-                    <span className="text-xs font-black text-emerald-300">Checked In Today</span>
+                    <span className="text-xs font-black text-emerald-300">Daily Attendance Logged</span>
                   </div>
                   <span className="text-[10px] font-mono text-emerald-400 bg-emerald-950 px-2 py-0.5 rounded border border-emerald-800">
                     {todayRecord.time_in || todayRecord.timeIn || "VERIFIED"}
@@ -1031,7 +1035,7 @@ export default function SupervisorMobilePwaView() {
                   ) : (
                     <>
                       <CheckCircle2 size={18} />
-                      Confirm &amp; Sync Proof to HR Cloud
+                      Confirm &amp; Sync Daily Attendance
                     </>
                   )}
                 </button>
