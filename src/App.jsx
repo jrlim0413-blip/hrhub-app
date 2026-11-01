@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "./lib/supabase";
 import Dashboard from "./page/Dashboard";
+import SupervisorMobilePwaView from "./components/SupervisorMobilePwaView";
 import {
   getStoredEmployees,
   saveActivatedPassword,
@@ -55,6 +56,20 @@ const Logo = ({ src, alt, fallback = "LOGO", parent = false }) => (
 );
 
 const App = () => {
+  const [isSupervisorPwaMode, setIsSupervisorPwaMode] = useState(() => {
+    if (typeof window === "undefined") return false;
+    const params = new URLSearchParams(window.location.search);
+    const hasPwaParam = params.get("pwa") === "supervisor" || params.get("view") === "supervisor_pwa" || params.get("mode") === "supervisor" || params.has("spvr") || params.has("supervisorId");
+    if (hasPwaParam) {
+      try { localStorage.setItem("hrhub_pwa_supervisor_active", "true"); } catch {}
+      return true;
+    }
+    try {
+      return Boolean(localStorage.getItem("hrhub_pwa_supervisor_active"));
+    } catch {
+      return false;
+    }
+  });
   const [displayedText, setDisplayedText] = useState("");
   const [isDeleting, setIsDeleting] = useState(false);
   const [currentPhraseIndex, setCurrentPhraseIndex] = useState(0);
@@ -621,6 +636,18 @@ const App = () => {
     setCurrentPage("dashboard");
     setLoginOpen(false);
   };
+
+    if (isSupervisorPwaMode) {
+    return (
+      <SupervisorMobilePwaView
+        onExitToAdmin={() => {
+          try { localStorage.removeItem("hrhub_pwa_supervisor_active"); } catch {}
+          setIsSupervisorPwaMode(false);
+          window.location.href = window.location.origin;
+        }}
+      />
+    );
+  }
 
   if (isLoggedIn) {
     return <Dashboard onLogout={handleLogout} currentUser={currentUser} />;

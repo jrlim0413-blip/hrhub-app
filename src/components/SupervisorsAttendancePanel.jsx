@@ -95,6 +95,39 @@ export default function SupervisorsAttendancePanel({ onClose }) {
   const [isGettingGps, setIsGettingGps] = useState(false);
   const [isSubmittingCheckIn, setIsSubmittingCheckIn] = useState(false);
 
+  // Mobile PWA Link State
+  const [copiedSupervisorId, setCopiedSupervisorId] = useState(null);
+  const [copiedPwaNotice, setCopiedPwaNotice] = useState("");
+  const [isPwaShareModalOpen, setIsPwaShareModalOpen] = useState(false);
+
+  const handleCopyPwaLink = (supervisor) => {
+    const origin = typeof window !== "undefined" ? window.location.origin : "https://hrhub-app.vercel.app";
+    const spvrId = supervisor.supervisorId || supervisor.id;
+    const spvrName = supervisor.fullName || supervisor.supervisor_name || "Supervisor";
+    const spvrArea = supervisor.area || "5";
+    const pwaUrl = `${origin}/?pwa=supervisor&id=${spvrId}&name=${encodeURIComponent(spvrName)}&area=${spvrArea}`;
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(pwaUrl);
+    } else {
+      const el = document.createElement("textarea");
+      el.value = pwaUrl;
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand("copy");
+      document.body.removeChild(el);
+    }
+
+    setCopiedSupervisorId(String(spvrId));
+    setCopiedPwaNotice(`Na-kopyang PWA Mobile Link para kay ${spvrName}! I-send ito sa kanyang Messenger o SMS para ma-download at awtomatikong mag-login sa kanyang cellphone.`);
+    setTimeout(() => {
+      setCopiedSupervisorId(null);
+    }, 3000);
+    setTimeout(() => {
+      setCopiedPwaNotice("");
+    }, 6000);
+  };
+
   // Strict Live Camera State (Live Video Viewfinder - No File Uploads)
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [cameraFacingMode, setCameraFacingMode] = useState("user"); // 'user' (selfie) | 'environment' (area)
@@ -993,6 +1026,17 @@ export default function SupervisorsAttendancePanel({ onClose }) {
           </div>
 
           <div className="flex items-center gap-2">
+            {/* Mobile PWA Links Quick Access Button */}
+            <button
+              type="button"
+              onClick={() => setIsPwaShareModalOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-slate-900 text-white hover:bg-slate-800 text-xs font-bold transition shadow-xs cursor-pointer"
+              title="Ibahagi ang PWA mobile download links sa mga supervisor"
+            >
+              <Smartphone size={13} className="text-emerald-400" />
+              <span>📱 Supervisor PWA Mobile Links</span>
+            </button>
+
             {/* Field Check-in & Photo Button */}
             <button
               type="button"
@@ -1217,6 +1261,7 @@ export default function SupervisorsAttendancePanel({ onClose }) {
                   <th className="py-3 px-3">Time In</th>
                   <th className="py-3 px-3">Field Photo</th>
                   <th className="py-3 px-4">GPS Location</th>
+                  <th className="py-3 px-4 text-center">📱 Mobile PWA Link</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -1364,6 +1409,42 @@ export default function SupervisorsAttendancePanel({ onClose }) {
                             Not geo-tagged
                           </span>
                         )}
+                      </td>
+                      {/* Mobile PWA Link with Auto-Login */}
+                      <td className="py-3 px-4 text-center">
+                        <div className="flex items-center justify-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => handleCopyPwaLink(record)}
+                            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-bold text-xs shadow-2xs transition active:scale-95 cursor-pointer ${
+                              copiedSupervisorId === String(record.supervisorId)
+                                ? "bg-emerald-600 text-white shadow-emerald-900/20"
+                                : "bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-200/80"
+                            }`}
+                            title="Kopyahin ang personalized PWA auto-login link para ipadala sa supervisor"
+                          >
+                            {copiedSupervisorId === String(record.supervisorId) ? (
+                              <>
+                                <Check size={13} className="text-white" />
+                                <span>Copied!</span>
+                              </>
+                            ) : (
+                              <>
+                                <Smartphone size={13} className="text-emerald-600" />
+                                <span>Copy PWA Link</span>
+                              </>
+                            )}
+                          </button>
+                          <a
+                            href={`/?pwa=supervisor&id=${record.supervisorId}&name=${encodeURIComponent(record.fullName)}&area=${record.area || "5"}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-700 hover:bg-slate-100 border border-transparent hover:border-slate-200 transition"
+                            title="I-test/Buksan ang Mobile PWA view sa bagong tab"
+                          >
+                            <ExternalLink size={13} />
+                          </a>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -2281,6 +2362,122 @@ export default function SupervisorsAttendancePanel({ onClose }) {
           </div>
         </div>
       )}
+      {/* ================= FLOATING TOAST: COPIED PWA NOTICE ================= */}
+      {copiedPwaNotice && (
+        <div className="fixed bottom-6 right-6 z-50 max-w-md bg-slate-900 text-white px-4 py-3 rounded-2xl shadow-2xl border border-emerald-500/50 flex items-center gap-3 animate-in fade-in slide-in-from-bottom-4 duration-200">
+          <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
+            <CheckCircle2 size={18} />
+          </div>
+          <div className="flex-1 text-xs">
+            <p className="font-bold text-emerald-400">PWA Mobile Link Copied!</p>
+            <p className="text-slate-300 text-[11px] mt-0.5 leading-snug">{copiedPwaNotice}</p>
+          </div>
+          <button
+            onClick={() => setCopiedPwaNotice("")}
+            className="text-slate-400 hover:text-white p-1"
+          >
+            <X size={15} />
+          </button>
+        </div>
+      )}
+
+      {/* ================= MODAL: SHARE ALL PWA MOBILE LINKS ================= */}
+      {isPwaShareModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-2xl w-full p-6 space-y-4 max-h-[88vh] flex flex-col">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold">
+                  <Smartphone size={20} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-slate-900">Supervisor Mobile PWA Links</h3>
+                  <p className="text-[11px] text-slate-500">I-copy ang direct link at i-send sa bawat Supervisor para sa automatic mobile login &amp; installation</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsPwaShareModalOpen(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
+              {supervisorsList.map((spvr) => {
+                const spvrId = spvr.supervisorId || spvr.id;
+                const spvrName = spvr.fullName || spvr.supervisor_name;
+                const isCopied = copiedSupervisorId === String(spvrId);
+                const pwaUrl = `${typeof window !== "undefined" ? window.location.origin : "https://hrhub-app.vercel.app"}/?pwa=supervisor&id=${spvrId}&name=${encodeURIComponent(spvrName)}&area=${spvr.area || "5"}`;
+
+                return (
+                  <div
+                    key={spvrId}
+                    className="p-3 rounded-2xl border border-slate-200 bg-slate-50 hover:bg-white hover:border-emerald-300 transition flex items-center justify-between gap-3"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-[10px] font-bold text-emerald-800 bg-emerald-100 px-1.5 py-0.5 rounded border border-emerald-200">
+                          #{spvrId}
+                        </span>
+                        <h4 className="text-xs font-black text-slate-900 truncate">{spvrName}</h4>
+                      </div>
+                      <p className="text-[10px] text-slate-400 font-mono truncate mt-0.5 select-all">
+                        {pwaUrl}
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => handleCopyPwaLink(spvr)}
+                        className={`px-3 py-1.5 rounded-xl font-bold text-xs shadow-2xs transition active:scale-95 cursor-pointer flex items-center gap-1 ${
+                          isCopied
+                            ? "bg-emerald-600 text-white"
+                            : "bg-white hover:bg-emerald-50 text-emerald-800 border border-emerald-200"
+                        }`}
+                      >
+                        {isCopied ? (
+                          <>
+                            <Check size={13} />
+                            <span>Copied!</span>
+                          </>
+                        ) : (
+                          <>
+                            <Smartphone size={13} className="text-emerald-600" />
+                            <span>Copy Link</span>
+                          </>
+                        )}
+                      </button>
+
+                      <a
+                        href={pwaUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-700 hover:bg-slate-100 border border-transparent hover:border-slate-200 transition"
+                        title="Open view"
+                      >
+                        <ExternalLink size={13} />
+                      </a>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="border-t border-slate-100 pt-3 text-[11px] text-slate-500 flex items-center justify-between">
+              <span>💡 Pwede itong i-paste sa Messenger o SMS para mabuksan agad sa Chrome/Safari.</span>
+              <button
+                onClick={() => setIsPwaShareModalOpen(false)}
+                className="px-4 py-1.5 bg-slate-900 text-white font-bold rounded-xl text-xs"
+              >
+                Sara
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

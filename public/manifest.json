@@ -1,0 +1,48 @@
+{
+  "name": "HRHub - Supervisor Field Attendance",
+  "short_name": "HRHub Field",
+  "description": "HRHub Operations, Supervisor Field Geotag & Attendance Portal",
+  "id": "hrhub-supervisor-pwa",
+  "start_url": "/?pwa=supervisor",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#059669",
+  "orientation": "portrait-primary",
+  "categories": ["business", "productivity"],
+  "icons": [
+    {
+      "src": "/pwa-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-maskable-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/pwa-maskable-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Supervisor Field Check-in",
+      "short_name": "Attendance",
+      "description": "Log Field Geo-Proof Attendance",
+      "url": "/?pwa=supervisor",
+      "icons": [{ "src": "/pwa-192x192.png", "sizes": "192x192" }]
+    }
+  ]
+}
