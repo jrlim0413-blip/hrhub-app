@@ -59,16 +59,31 @@ const App = () => {
   const [isSupervisorPwaMode, setIsSupervisorPwaMode] = useState(() => {
     if (typeof window === "undefined") return false;
     const params = new URLSearchParams(window.location.search);
-    const hasPwaParam = params.get("pwa") === "supervisor" || params.get("view") === "supervisor_pwa" || params.get("mode") === "supervisor" || params.has("spvr") || params.has("supervisorId");
+    const hasPwaParam =
+      params.get("pwa") === "supervisor" ||
+      params.get("view") === "supervisor_pwa" ||
+      params.get("mode") === "supervisor" ||
+      params.has("spvr");
+
     if (hasPwaParam) {
-      try { localStorage.setItem("hrhub_pwa_supervisor_active", "true"); } catch {}
       return true;
     }
-    try {
-      return Boolean(localStorage.getItem("hrhub_pwa_supervisor_active"));
-    } catch {
-      return false;
+
+    // Only stay in PWA mode if launched as an installed PWA on mobile (standalone mode)
+    const isStandalone =
+      (typeof window.matchMedia === "function" && window.matchMedia("(display-mode: standalone)").matches) ||
+      window.navigator?.standalone === true;
+
+    if (isStandalone) {
+      return true;
     }
+
+    // Regular browser visits to https://hrhub-app.vercel.app/ will always open the main HR Hub portal
+    try {
+      localStorage.removeItem("hrhub_pwa_supervisor_active");
+    } catch {}
+
+    return false;
   });
   const [displayedText, setDisplayedText] = useState("");
   const [isDeleting, setIsDeleting] = useState(false);
