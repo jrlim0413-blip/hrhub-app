@@ -179,23 +179,21 @@ export default function SupervisorMobilePwaView() {
     return false;
   });
 
-  const [inputUsername, setInputUsername] = useState(currentSupervisor.username || "");
+  const [inputUsername, setInputUsername] = useState("");
   const [inputPassword, setInputPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [loginError, setLoginError] = useState("");
 
-  // Keep input username strictly synchronized to assigned supervisor
-  useEffect(() => {
-    if (currentSupervisor?.username) {
-      setInputUsername(currentSupervisor.username);
-    }
-  }, [currentSupervisor?.username]);
-
   // Handle Supervisor Login Submission with strict account link isolation
   const handleSupervisorLogin = async (e) => {
     if (e && e.preventDefault) e.preventDefault();
     setLoginError("");
+
+    if (!inputUsername.trim()) {
+      setLoginError("Please enter your username.");
+      return;
+    }
 
     if (!inputPassword.trim()) {
       setLoginError("Please enter your password.");
@@ -205,18 +203,16 @@ export default function SupervisorMobilePwaView() {
     // Strict Link-to-Account Enforcement:
     // Only the supervisor account assigned to this URL link may log in
     const assignedUser = (currentSupervisor.username || "").trim().toLowerCase();
-    const enteredUser = (inputUsername || "").trim().toLowerCase();
+    const enteredUser = inputUsername.trim().toLowerCase();
 
     if (assignedUser && enteredUser !== assignedUser) {
-      setLoginError(
-        `Access Denied: This link is assigned specifically to ${currentSupervisor.fullName} (@${currentSupervisor.username}). Please open your personal assigned link to log in.`
-      );
+      setLoginError("Invalid credentials for this terminal link. Please verify your username and password.");
       return;
     }
 
     setIsAuthenticating(true);
     try {
-      const targetUser = currentSupervisor.username || enteredUser;
+      const targetUser = enteredUser;
       const authRes = await verifySourceApiCredentials(targetUser, inputPassword);
 
       if (authRes.success) {
@@ -660,27 +656,6 @@ export default function SupervisorMobilePwaView() {
               </p>
             </div>
 
-            {/* Assigned Supervisor Lock Banner */}
-            <div className="p-3.5 rounded-2xl bg-slate-900/90 border border-slate-800/90 flex items-center gap-3.5 shadow-inner">
-              <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-emerald-600/20 to-teal-400/20 border border-emerald-500/30 text-emerald-400 flex items-center justify-center font-black text-base shrink-0 shadow-sm">
-                {currentSupervisor.fullName?.charAt(0) || "S"}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-1.5 text-[10px] font-bold text-emerald-400 uppercase tracking-wider mb-0.5">
-                  <Lock size={10} />
-                  <span>Assigned Portal Link</span>
-                </div>
-                <p className="text-xs font-black text-white truncate tracking-tight uppercase">
-                  {currentSupervisor.fullName}
-                </p>
-                <div className="flex items-center gap-2 mt-0.5 text-[10px] text-slate-400 font-mono">
-                  <span>ID #{currentSupervisor.id}</span>
-                  <span>•</span>
-                  <span className="text-teal-400 font-semibold">📍 Mandaue City</span>
-                </div>
-              </div>
-            </div>
-
             {/* Error Message Notice */}
             {loginError && (
               <div className="p-3 rounded-xl bg-rose-950/60 border border-rose-500/60 text-rose-300 text-xs flex items-center gap-2 animate-in fade-in duration-200">
@@ -691,30 +666,23 @@ export default function SupervisorMobilePwaView() {
 
             {/* Credentials Input Form */}
             <form onSubmit={handleSupervisorLogin} className="space-y-4">
-              {/* Username Field (Strictly Locked / Read-Only to Assigned Account) */}
+              {/* Username Field */}
               <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <label className="text-[11px] font-bold text-slate-300 uppercase tracking-wider block">
-                    Username
-                  </label>
-                  <span className="text-[10px] font-semibold text-emerald-400 flex items-center gap-1">
-                    <Lock size={10} /> Locked to Link
-                  </span>
-                </div>
+                <label className="text-[11px] font-bold text-slate-300 uppercase tracking-wider block">
+                  Username
+                </label>
                 <div className="relative flex items-center">
                   <div className="absolute left-3.5 text-slate-500 pointer-events-none">
                     <User size={15} />
                   </div>
                   <input
                     type="text"
-                    readOnly
-                    value={currentSupervisor.username || inputUsername}
-                    placeholder="Supervisor Username"
-                    className="w-full text-xs font-mono bg-slate-900/80 border border-slate-700/80 rounded-xl pl-9 pr-9 py-2.5 text-emerald-300 outline-none cursor-not-allowed shadow-inner"
+                    required
+                    value={inputUsername}
+                    onChange={(e) => setInputUsername(e.target.value)}
+                    placeholder="Enter your username"
+                    className="w-full text-xs font-mono bg-slate-900 border border-slate-700 focus:border-emerald-500 rounded-xl pl-9 pr-3 py-2.5 text-white placeholder-slate-600 outline-none transition"
                   />
-                  <div className="absolute right-3 text-slate-500 pointer-events-none" title="Strictly locked to this assigned supervisor link">
-                    <Lock size={13} />
-                  </div>
                 </div>
               </div>
 
@@ -771,7 +739,7 @@ export default function SupervisorMobilePwaView() {
 
             <div className="pt-2 text-center">
               <p className="text-[10px] text-slate-500 leading-relaxed">
-                🔒 Security Note: This terminal link is strictly locked to ID #{currentSupervisor.id}. Your daily login, photo proof, and GPS location are securely recorded.
+                🔒 Security Note: Your daily login, photo proof, and GPS location are securely recorded.
               </p>
             </div>
           </div>
