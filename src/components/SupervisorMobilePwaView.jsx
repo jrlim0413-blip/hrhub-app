@@ -3,7 +3,8 @@ import {
   Camera, MapPin, CheckCircle2, AlertCircle, RefreshCw, Smartphone,
   RotateCw, Video, VideoOff, Download, ChevronRight, ShieldCheck,
   Clock, Calendar, User, ExternalLink, ArrowRight, LogOut, Check,
-  Sparkles, Layers, Map, Lock, Key, Eye, EyeOff, LogIn
+  Sparkles, Layers, Map, Lock, Key, Eye, EyeOff, LogIn, Shield,
+  Crosshair, Radio, CheckCircle, Hash
 } from "lucide-react";
 import {
   compressImage,
@@ -12,20 +13,20 @@ import {
   upsertCloudAttendance
 } from "../lib/supervisorAttendanceStorage";
 
-// Active Mandaue Supervisors
+// Active Mandaue Supervisors (Strictly Mandaue City)
 const SUPERVISORS = [
-  { id: 21, fullName: "ARLFRED SABERON", area: "5", username: "spvr-arlfred" },
-  { id: 22, fullName: "RAFFY BAGUIO", area: "5", username: "spvr-raffy" },
-  { id: 23, fullName: "ROEL CATALAN", area: "5", username: "spvr-roel" },
-  { id: 24, fullName: "MICHAEL DE GUZMAN", area: "5", username: "spvr-michael" },
-  { id: 25, fullName: "JOEL ESTORCO", area: "5", username: "spvr-joel" },
-  { id: 26, fullName: "HARRY EYA", area: "5", username: "spvr-eya" },
-  { id: 27, fullName: "CARL MANGRUBAN", area: "5", username: "spvr-carl" },
-  { id: 28, fullName: "JED MELENDREZ", area: "5", username: "spvr-jed" },
-  { id: 29, fullName: "NYOR SESALDO", area: "5", username: "spvr-nyor" },
-  { id: 30, fullName: "NARCISO TAGUD JR.", area: "5", username: "spvr-jason" },
-  { id: 31, fullName: "MOLLY BATUBALANOS", area: "5", username: "spvr-molly" },
-  { id: 32, fullName: "COORDINATOR - APPLEGROUP", area: "5", username: "spvr-apple" }
+  { id: 21, fullName: "ARLFRED SABERON", area: "Mandaue City", username: "spvr-arlfred" },
+  { id: 22, fullName: "RAFFY BAGUIO", area: "Mandaue City", username: "spvr-raffy" },
+  { id: 23, fullName: "ROEL CATALAN", area: "Mandaue City", username: "spvr-roel" },
+  { id: 24, fullName: "MICHAEL DE GUZMAN", area: "Mandaue City", username: "spvr-michael" },
+  { id: 25, fullName: "JOEL ESTORCO", area: "Mandaue City", username: "spvr-joel" },
+  { id: 26, fullName: "HARRY EYA", area: "Mandaue City", username: "spvr-eya" },
+  { id: 27, fullName: "CARL MANGRUBAN", area: "Mandaue City", username: "spvr-carl" },
+  { id: 28, fullName: "JED MELENDREZ", area: "Mandaue City", username: "spvr-jed" },
+  { id: 29, fullName: "NYOR SESALDO", area: "Mandaue City", username: "spvr-nyor" },
+  { id: 30, fullName: "NARCISO TAGUD JR.", area: "Mandaue City", username: "spvr-jason" },
+  { id: 31, fullName: "MOLLY BATUBALANOS", area: "Mandaue City", username: "spvr-molly" },
+  { id: 32, fullName: "COORDINATOR - APPLEGROUP", area: "Mandaue City", username: "spvr-apple" }
 ];
 
 function getTodayString() {
@@ -37,8 +38,7 @@ function getTodayString() {
 }
 
 /**
- * Authenticates supervisor credentials.
- * Checks coordinator, teller, cashier, and accountant roles.
+ * Authenticates supervisor credentials against secure STL endpoints.
  */
 async function verifySourceApiCredentials(username, password) {
   const cleanUsername = String(username || "").trim();
@@ -56,7 +56,7 @@ async function verifySourceApiCredentials(username, password) {
     "https://stl-mandaue-api.com/api/admin/login"
   ];
 
-  let lastErrorMessage = "Invalid username or password. Please check your login credentials.";
+  let lastErrorMessage = "Invalid username or password. Please verify your credentials.";
 
   for (const url of endpoints) {
     try {
@@ -111,6 +111,8 @@ export default function SupervisorMobilePwaView() {
     const usernameParam = params.get("username");
     const areaParam = params.get("area");
 
+    const resolvedArea = (areaParam && areaParam !== "5") ? decodeURIComponent(areaParam) : "Mandaue City";
+
     if (idParam) {
       const match = SUPERVISORS.find((s) => String(s.id) === String(idParam));
       if (match) {
@@ -118,7 +120,7 @@ export default function SupervisorMobilePwaView() {
           ...match,
           fullName: nameParam ? decodeURIComponent(nameParam) : match.fullName,
           username: usernameParam ? decodeURIComponent(usernameParam) : match.username,
-          area: areaParam || match.area || "5"
+          area: resolvedArea
         };
         try { localStorage.setItem("hrhub_pwa_supervisor", JSON.stringify(merged)); } catch {}
         return merged;
@@ -128,7 +130,7 @@ export default function SupervisorMobilePwaView() {
           id: idParam,
           fullName: decodeURIComponent(nameParam),
           username: usernameParam ? decodeURIComponent(usernameParam) : `spvr-${idParam}`,
-          area: areaParam || "5"
+          area: resolvedArea
         };
         try { localStorage.setItem("hrhub_pwa_supervisor", JSON.stringify(custom)); } catch {}
         return custom;
@@ -137,7 +139,11 @@ export default function SupervisorMobilePwaView() {
 
     try {
       const saved = localStorage.getItem("hrhub_pwa_supervisor");
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (!parsed.area || parsed.area === "5") parsed.area = "Mandaue City";
+        return parsed;
+      }
     } catch {}
 
     return SUPERVISORS[0];
@@ -149,7 +155,7 @@ export default function SupervisorMobilePwaView() {
     new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: true })
   );
 
-  // Live Philippine Clock
+  // Live Clock
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTime(
@@ -179,14 +185,14 @@ export default function SupervisorMobilePwaView() {
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [loginError, setLoginError] = useState("");
 
-  // Keep input username synced with current supervisor
+  // Keep input username strictly synchronized to assigned supervisor
   useEffect(() => {
     if (currentSupervisor?.username) {
       setInputUsername(currentSupervisor.username);
     }
   }, [currentSupervisor?.username]);
 
-  // Handle Supervisor Login Submission
+  // Handle Supervisor Login Submission with strict account link isolation
   const handleSupervisorLogin = async (e) => {
     if (e && e.preventDefault) e.preventDefault();
     setLoginError("");
@@ -196,9 +202,21 @@ export default function SupervisorMobilePwaView() {
       return;
     }
 
+    // Strict Link-to-Account Enforcement:
+    // Only the supervisor account assigned to this URL link may log in
+    const assignedUser = (currentSupervisor.username || "").trim().toLowerCase();
+    const enteredUser = (inputUsername || "").trim().toLowerCase();
+
+    if (assignedUser && enteredUser !== assignedUser) {
+      setLoginError(
+        `Access Denied: This link is assigned specifically to ${currentSupervisor.fullName} (@${currentSupervisor.username}). Please open your personal assigned link to log in.`
+      );
+      return;
+    }
+
     setIsAuthenticating(true);
     try {
-      const targetUser = inputUsername.trim() || currentSupervisor.username;
+      const targetUser = currentSupervisor.username || enteredUser;
       const authRes = await verifySourceApiCredentials(targetUser, inputPassword);
 
       if (authRes.success) {
@@ -223,7 +241,7 @@ export default function SupervisorMobilePwaView() {
         requestGpsLocation();
         startCamera(cameraFacingMode);
       } else {
-        setLoginError(authRes.error || "Invalid password for this supervisor username.");
+        setLoginError(authRes.error || `Invalid password for supervisor @${targetUser}.`);
       }
     } catch (err) {
       setLoginError("Connection error. Please check your internet connection and try again.");
@@ -434,7 +452,7 @@ export default function SupervisorMobilePwaView() {
 
     ctx.fillStyle = "#10b981";
     ctx.font = "bold 13px monospace";
-    ctx.fillText(`HRHUB VERIFIED • ${currentSupervisor.fullName} (#${currentSupervisor.id})`, 20, canvas.height - 34);
+    ctx.fillText(`HRHUB VERIFIED • ${currentSupervisor.fullName} (#${currentSupervisor.id}) • MANDAUE CITY`, 20, canvas.height - 34);
 
     ctx.fillStyle = "#ffffff";
     ctx.font = "11px sans-serif";
@@ -491,11 +509,11 @@ export default function SupervisorMobilePwaView() {
   // Submit Attendance to Supabase Cloud
   const handleSubmitAttendance = async () => {
     if (!capturedPhotoUrl) {
-      alert("Please capture a live photo using the camera before submitting Daily Login.");
+      alert("Please capture your live photo proof before submitting Daily Login.");
       return;
     }
     if (!lat || !lng) {
-      alert("GPS coordinates are required. Please tap 'Re-detect GPS' to lock your position.");
+      alert("GPS coordinates are required. Please tap 'Re-detect GPS' to lock your position in Mandaue City.");
       return;
     }
 
@@ -515,21 +533,21 @@ export default function SupervisorMobilePwaView() {
         }
       }
 
-      // 2. Prepare Attendance Record
+      // 2. Prepare Attendance Record strictly in Mandaue City
       const recordPayload = {
         supervisorId: String(currentSupervisor.id),
         fullName: currentSupervisor.fullName,
         username: currentSupervisor.username || "",
         timeIn: currentTime,
         status: "Present",
-        area: currentSupervisor.area || "5",
+        area: "Mandaue City",
         shift: "Morning Draw (06:00 AM - 02:30 PM)",
         latitude: parseFloat(lat),
         longitude: parseFloat(lng),
         locationAccuracy: accuracy ? parseFloat(accuracy) : null,
-        locationName: locationLandmark || `Field Check-In GPS (±${accuracy || 0}m)`,
+        locationName: locationLandmark || `Mandaue City Station (±${accuracy || 0}m)`,
         photoProof: cloudPhotoUrl || capturedPhotoUrl,
-        remarks: "Logged via Official Supervisor Mobile PWA"
+        remarks: "Logged via Official Supervisor Mobile PWA • Mandaue City Operations"
       };
 
       // 3. Upsert to Supabase
@@ -555,33 +573,34 @@ export default function SupervisorMobilePwaView() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-900 text-slate-100 flex flex-col font-sans select-none antialiased">
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans select-none antialiased">
       {/* ================= TOP NAVIGATION BAR ================= */}
-      <header className="sticky top-0 z-40 bg-slate-950/90 backdrop-blur-md border-b border-slate-800/80 px-4 py-3 flex items-center justify-between shadow-lg">
+      <header className="sticky top-0 z-40 bg-slate-950/95 backdrop-blur-md border-b border-slate-800/80 px-4 py-3 flex items-center justify-between shadow-xl">
         <div className="flex items-center gap-2.5">
           <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-400 flex items-center justify-center font-black text-white text-base shadow-md shadow-emerald-950/50">
             H
           </div>
           <div>
-            <h1 className="text-xs font-black tracking-tight text-white flex items-center gap-1.5">
-              HRHub <span className="text-emerald-400">FIELD PWA</span>
+            <h1 className="text-xs font-black tracking-tight text-white flex items-center gap-1.5 uppercase">
+              HRHub <span className="text-emerald-400 font-extrabold">Executive</span>
             </h1>
-            <p className="text-[10px] text-slate-400 font-medium">Supervisor Field Portal</p>
+            <p className="text-[10px] text-slate-400 font-medium">Mandaue Operations Portal</p>
           </div>
         </div>
 
         {/* Live Clock Badge */}
         <div className="text-right">
-          <span className="font-mono text-xs font-bold text-emerald-400 bg-slate-900 px-2 py-0.5 rounded border border-slate-800">
-            {currentTime}
-          </span>
+          <div className="inline-flex items-center gap-1.5 font-mono text-xs font-bold text-emerald-400 bg-slate-900 px-2.5 py-1 rounded-lg border border-slate-800 shadow-inner">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            <span>{currentTime}</span>
+          </div>
           <p className="text-[9px] text-slate-400 mt-0.5 font-medium">{todayStr}</p>
         </div>
       </header>
 
-      {/* ================= PWA INSTALLATION PROMPT BANNER ================= */}
+      {/* ================= PWA INSTALLATION BANNER ================= */}
       {!isInstalled && (
-        <div className="bg-gradient-to-r from-emerald-900/90 via-teal-900/90 to-slate-900 border-b border-emerald-600/30 px-4 py-2.5 flex items-center justify-between gap-3 shadow-inner">
+        <div className="bg-gradient-to-r from-emerald-950/90 via-slate-900 to-slate-950 border-b border-emerald-600/30 px-4 py-2.5 flex items-center justify-between gap-3 shadow-inner">
           <div className="flex items-center gap-2 text-xs">
             <div className="w-7 h-7 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
               <Smartphone size={16} />
@@ -605,7 +624,7 @@ export default function SupervisorMobilePwaView() {
       {/* iOS Safari Installation Guide Modal */}
       {showIosTip && (
         <div className="fixed inset-0 z-50 bg-black/80 flex items-end sm:items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 max-w-sm w-full space-y-3">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 max-w-sm w-full space-y-3 shadow-2xl">
             <h3 className="text-sm font-black text-white flex items-center gap-2">
               <Smartphone size={18} className="text-emerald-400" />
               How to install on iPhone / Safari:
@@ -617,7 +636,7 @@ export default function SupervisorMobilePwaView() {
             </ol>
             <button
               onClick={() => setShowIosTip(false)}
-              className="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xs cursor-pointer"
+              className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xs cursor-pointer"
             >
               Got it
             </button>
@@ -626,24 +645,45 @@ export default function SupervisorMobilePwaView() {
       )}
 
       {/* ================= MAIN CONTENT AREA ================= */}
-      <main className="flex-1 max-w-lg w-full mx-auto p-4 space-y-4">
+      <main className="flex-1 max-w-md w-full mx-auto p-4 space-y-4">
         {!isAuthenticated ? (
-          /* ================= DAILY LOGIN FORM ================= */
-          <div className="rounded-3xl border border-slate-800 bg-slate-950/80 p-5 shadow-2xl space-y-5 animate-in fade-in duration-300">
+          /* ================= DAILY LOGIN FORM (STRICT ACCOUNT LOCK) ================= */
+          <div className="rounded-3xl border border-slate-800/90 bg-gradient-to-b from-slate-900/90 via-slate-950 to-slate-950 p-6 shadow-2xl space-y-5 animate-in fade-in duration-300">
             {/* Header Lock Icon */}
             <div className="text-center space-y-2 pt-2">
               <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-emerald-500/20 to-teal-500/20 border border-emerald-500/40 text-emerald-400 flex items-center justify-center mx-auto shadow-lg shadow-emerald-950/50">
                 <Lock size={26} />
               </div>
-              <h2 className="text-base font-black text-white tracking-tight">Daily Login</h2>
+              <h2 className="text-lg font-black text-white tracking-tight">Daily Login</h2>
               <p className="text-xs text-slate-400 max-w-xs mx-auto leading-relaxed">
-                Please enter your password to complete your Daily Login.
+                Sign in with your registered supervisor password to complete today's Daily Login.
               </p>
+            </div>
+
+            {/* Assigned Supervisor Lock Banner */}
+            <div className="p-3.5 rounded-2xl bg-slate-900/90 border border-slate-800/90 flex items-center gap-3.5 shadow-inner">
+              <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-emerald-600/20 to-teal-400/20 border border-emerald-500/30 text-emerald-400 flex items-center justify-center font-black text-base shrink-0 shadow-sm">
+                {currentSupervisor.fullName?.charAt(0) || "S"}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5 text-[10px] font-bold text-emerald-400 uppercase tracking-wider mb-0.5">
+                  <Lock size={10} />
+                  <span>Assigned Portal Link</span>
+                </div>
+                <p className="text-xs font-black text-white truncate tracking-tight uppercase">
+                  {currentSupervisor.fullName}
+                </p>
+                <div className="flex items-center gap-2 mt-0.5 text-[10px] text-slate-400 font-mono">
+                  <span>ID #{currentSupervisor.id}</span>
+                  <span>•</span>
+                  <span className="text-teal-400 font-semibold">📍 Mandaue City</span>
+                </div>
+              </div>
             </div>
 
             {/* Error Message Notice */}
             {loginError && (
-              <div className="p-3 rounded-xl bg-rose-950/50 border border-rose-500/60 text-rose-300 text-xs flex items-center gap-2 animate-in fade-in duration-200">
+              <div className="p-3 rounded-xl bg-rose-950/60 border border-rose-500/60 text-rose-300 text-xs flex items-center gap-2 animate-in fade-in duration-200">
                 <AlertCircle size={16} className="shrink-0 text-rose-400" />
                 <span className="leading-snug">{loginError}</span>
               </div>
@@ -651,23 +691,30 @@ export default function SupervisorMobilePwaView() {
 
             {/* Credentials Input Form */}
             <form onSubmit={handleSupervisorLogin} className="space-y-4">
-              {/* Username Field */}
+              {/* Username Field (Strictly Locked / Read-Only to Assigned Account) */}
               <div className="space-y-1.5">
-                <label className="text-[11px] font-bold text-slate-300 uppercase tracking-wider block">
-                  Username
-                </label>
+                <div className="flex items-center justify-between">
+                  <label className="text-[11px] font-bold text-slate-300 uppercase tracking-wider block">
+                    Username
+                  </label>
+                  <span className="text-[10px] font-semibold text-emerald-400 flex items-center gap-1">
+                    <Lock size={10} /> Locked to Link
+                  </span>
+                </div>
                 <div className="relative flex items-center">
                   <div className="absolute left-3.5 text-slate-500 pointer-events-none">
                     <User size={15} />
                   </div>
                   <input
                     type="text"
-                    required
-                    value={inputUsername}
-                    onChange={(e) => setInputUsername(e.target.value)}
-                    placeholder="Enter username"
-                    className="w-full text-xs font-mono bg-slate-900 border border-slate-700 focus:border-emerald-500 rounded-xl pl-9 pr-3 py-2.5 text-white placeholder-slate-600 outline-none transition"
+                    readOnly
+                    value={currentSupervisor.username || inputUsername}
+                    placeholder="Supervisor Username"
+                    className="w-full text-xs font-mono bg-slate-900/80 border border-slate-700/80 rounded-xl pl-9 pr-9 py-2.5 text-emerald-300 outline-none cursor-not-allowed shadow-inner"
                   />
+                  <div className="absolute right-3 text-slate-500 pointer-events-none" title="Strictly locked to this assigned supervisor link">
+                    <Lock size={13} />
+                  </div>
                 </div>
               </div>
 
@@ -698,24 +745,24 @@ export default function SupervisorMobilePwaView() {
                 </div>
               </div>
 
-              {/* Sign In Button */}
+              {/* Daily Login Button */}
               <button
                 type="submit"
                 disabled={isAuthenticating}
-                className={`w-full py-3 rounded-xl font-bold text-xs flex items-center justify-center gap-2 shadow-lg transition cursor-pointer ${
+                className={`w-full py-3.5 rounded-2xl font-black text-xs flex items-center justify-center gap-2 shadow-xl transition cursor-pointer ${
                   isAuthenticating
                     ? "bg-slate-800 text-slate-400 cursor-not-allowed"
-                    : "bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black shadow-emerald-950/60 active:scale-[0.98]"
+                    : "bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 shadow-emerald-950/60 active:scale-[0.98]"
                 }`}
               >
                 {isAuthenticating ? (
                   <>
-                    <RefreshCw size={14} className="animate-spin text-slate-400" />
+                    <RefreshCw size={14} className="animate-spin text-slate-950" />
                     <span>Verifying credentials...</span>
                   </>
                 ) : (
                   <>
-                    <LogIn size={14} />
+                    <LogIn size={15} />
                     <span>Daily Login</span>
                   </>
                 )}
@@ -723,126 +770,164 @@ export default function SupervisorMobilePwaView() {
             </form>
 
             <div className="pt-2 text-center">
-              <p className="text-[10px] text-slate-500">
-                🔒 Security Notice: Your daily login, photo proof, and GPS location are securely recorded.
+              <p className="text-[10px] text-slate-500 leading-relaxed">
+                🔒 Security Note: This terminal link is strictly locked to ID #{currentSupervisor.id}. Your daily login, photo proof, and GPS location are securely recorded.
               </p>
             </div>
           </div>
         ) : (
-          /* ================= AUTHENTICATED FIELD VIEW ================= */
+          /* ================= AUTHENTICATED FIELD VIEW (HIGH-END EXECUTIVE REDESIGN) ================= */
           <>
-            {/* Supervisor Identity Card (NO DROPDOWN - Strictly locked to row link) */}
-            <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 shadow-sm flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-11 h-11 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center font-black text-base shrink-0">
-                  {currentSupervisor.fullName?.charAt(0) || "S"}
-                </div>
-                <div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-[10px] font-mono font-bold text-emerald-400 bg-emerald-950/80 px-2 py-0.5 rounded border border-emerald-800/60">
-                      ID Number: {currentSupervisor.id}
-                    </span>
-                    <span className="text-[10px] font-bold text-slate-300 bg-slate-800 px-2 py-0.5 rounded border border-slate-700">
-                      Area: Area {currentSupervisor.area || "5"}
-                    </span>
+            {/* 1. EXECUTIVE IDENTITY CONSOLE */}
+            <div className="relative rounded-3xl border border-slate-800/90 bg-gradient-to-b from-slate-900/90 via-slate-950 to-slate-950 p-5 shadow-2xl overflow-hidden backdrop-blur-xl">
+              {/* Subtle Ambient Glow */}
+              <div className="absolute -top-12 -right-12 w-44 h-44 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
+
+              <div className="relative flex items-start justify-between gap-3">
+                <div className="flex items-center gap-3.5 min-w-0">
+                  {/* Avatar with live session ring */}
+                  <div className="relative shrink-0">
+                    <div className="w-13 h-13 rounded-2xl bg-gradient-to-tr from-emerald-600/30 to-teal-400/20 border-2 border-emerald-500/40 text-emerald-400 flex items-center justify-center font-black text-lg shadow-lg shadow-emerald-950/60">
+                      {currentSupervisor.fullName?.charAt(0) || "S"}
+                    </div>
+                    <span className="absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full bg-emerald-500 border-2 border-slate-950 shadow-xs" title="Verified Session" />
                   </div>
-                  <h2 className="text-sm font-black text-white tracking-tight mt-1">{currentSupervisor.fullName}</h2>
-                  <p className="text-[10px] text-slate-400 font-mono">@{currentSupervisor.username}</p>
+
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-1.5 mb-1">
+                      <span className="text-[10px] font-mono font-bold text-emerald-400 bg-emerald-950/90 px-2 py-0.5 rounded-md border border-emerald-800/70">
+                        ID #{currentSupervisor.id}
+                      </span>
+                      <span className="text-[10px] font-bold text-teal-300 bg-teal-950/70 px-2 py-0.5 rounded-md border border-teal-800/60 flex items-center gap-1">
+                        <MapPin size={10} />
+                        Mandaue City
+                      </span>
+                    </div>
+                    <h2 className="text-sm font-black text-white tracking-tight uppercase truncate">
+                      {currentSupervisor.fullName}
+                    </h2>
+                    <p className="text-[11px] text-slate-400 font-mono">@{currentSupervisor.username}</p>
+                  </div>
                 </div>
+
+                {/* Sign Out Button */}
+                <button
+                  type="button"
+                  onClick={handleSupervisorLogout}
+                  className="shrink-0 px-3 py-1.5 rounded-xl bg-slate-900/90 hover:bg-slate-800/90 border border-slate-700/80 text-slate-400 hover:text-white text-xs font-bold flex items-center gap-1.5 transition cursor-pointer active:scale-95 shadow-sm"
+                  title="Sign out of supervisor session"
+                >
+                  <LogOut size={13} className="text-rose-400" />
+                  <span>Sign Out</span>
+                </button>
               </div>
 
-              {/* Sign Out Button (Replaces dropdown) */}
-              <button
-                type="button"
-                onClick={handleSupervisorLogout}
-                className="px-2.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700/80 text-slate-400 hover:text-white text-[11px] font-bold flex items-center gap-1.5 transition cursor-pointer"
-                title="Log out of supervisor portal"
-              >
-                <LogOut size={13} className="text-rose-400" />
-                <span>Sign Out</span>
-              </button>
+              {/* Operational Shift & Sector Ribbon */}
+              <div className="mt-4 pt-3.5 border-t border-slate-800/80 grid grid-cols-2 gap-2 text-left">
+                <div className="bg-slate-900/70 border border-slate-800/70 rounded-xl p-2.5">
+                  <span className="text-[9px] font-bold uppercase tracking-wider text-slate-500 block mb-0.5">Shift Window</span>
+                  <span className="text-[11px] font-bold text-slate-200">Morning Draw (06:00 AM - 02:30 PM)</span>
+                </div>
+                <div className="bg-slate-900/70 border border-slate-800/70 rounded-xl p-2.5">
+                  <span className="text-[9px] font-bold uppercase tracking-wider text-slate-500 block mb-0.5">Assigned Sector</span>
+                  <span className="text-[11px] font-bold text-emerald-400">📍 Mandaue City</span>
+                </div>
+              </div>
             </div>
 
-            {/* ================= TODAY'S STATUS CARD ================= */}
+            {/* 2. TODAY'S RECORDED STATUS CARD */}
             {todayRecord && !submitSuccess && (
-              <div className="rounded-2xl border border-emerald-500/40 bg-emerald-950/30 p-4 space-y-3">
+              <div className="rounded-3xl border border-emerald-500/50 bg-gradient-to-b from-emerald-950/40 via-slate-950 to-slate-950 p-5 shadow-2xl space-y-4 animate-in fade-in duration-200">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <CheckCircle2 size={18} className="text-emerald-400" />
-                    <span className="text-xs font-black text-emerald-300">Daily Login Recorded</span>
+                    <div className="w-7 h-7 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
+                      <CheckCircle2 size={16} />
+                    </div>
+                    <div>
+                      <span className="text-xs font-black text-white uppercase tracking-wider">Daily Login Verified</span>
+                      <p className="text-[10px] text-emerald-400">Recorded in HR Cloud Database</p>
+                    </div>
                   </div>
-                  <span className="text-[10px] font-mono text-emerald-400 bg-emerald-950 px-2 py-0.5 rounded border border-emerald-800">
+                  <span className="font-mono text-xs font-bold text-emerald-400 bg-emerald-950 px-2.5 py-1 rounded-lg border border-emerald-800">
                     {todayRecord.time_in || todayRecord.timeIn || "VERIFIED"}
                   </span>
                 </div>
 
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 flex items-center justify-center shrink-0 shadow-xs">
-                    <ShieldCheck size={24} />
+                <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 flex items-center gap-3.5">
+                  <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 flex items-center justify-center shrink-0">
+                    <ShieldCheck size={26} />
                   </div>
-                  <div className="text-[11px] text-slate-300 space-y-1">
-                    <p className="font-semibold text-white">Proof: Verified in Cloud Database</p>
-                    <p className="text-[10px] text-slate-400 font-mono">
+                  <div className="text-xs text-slate-300 space-y-1">
+                    <p className="font-bold text-white">Official Cloud Attendance Confirmed</p>
+                    <p className="text-[10px] font-mono text-slate-400">
                       GPS: {todayRecord.latitude?.toFixed(5) || todayRecord.lat}, {todayRecord.longitude?.toFixed(5) || todayRecord.lng}
                     </p>
-                    <p className="text-[10px] text-emerald-400">Status: {todayRecord.status || "Present"}</p>
+                    <p className="text-[10px] text-teal-400">📍 Mandaue City Sector • Status: {todayRecord.status || "Present"}</p>
                   </div>
                 </div>
 
                 <button
+                  type="button"
                   onClick={() => {
                     setTodayRecord(null);
                     startCamera(cameraFacingMode);
                   }}
-                  className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5"
+                  className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white text-xs font-bold rounded-xl border border-slate-700/80 transition cursor-pointer flex items-center justify-center gap-2 active:scale-95"
                 >
                   <RotateCw size={13} />
-                  Record a new Daily Login snapshot
+                  <span>Record a new Daily Login snapshot</span>
                 </button>
               </div>
             )}
 
-            {/* ================= SUCCESS BANNER ================= */}
+            {/* 3. SUCCESS BANNER */}
             {submitSuccess && (
-              <div className="rounded-2xl border border-emerald-500 bg-emerald-950/50 p-5 text-center space-y-3 animate-in fade-in zoom-in-95 duration-200">
-                <div className="w-12 h-12 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center mx-auto">
-                  <CheckCircle2 size={28} />
+              <div className="rounded-3xl border border-emerald-500 bg-emerald-950/50 p-6 text-center space-y-3.5 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+                <div className="w-14 h-14 rounded-2xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center mx-auto shadow-inner">
+                  <CheckCircle2 size={32} />
                 </div>
                 <div>
-                  <h3 className="text-sm font-black text-white">Daily Login Confirmed &amp; Synced!</h3>
-                  <p className="text-xs text-emerald-300 mt-0.5">
-                    Your field check-in was successfully recorded in HR Cloud at {currentTime}.
+                  <h3 className="text-sm font-black text-white uppercase tracking-wider">Daily Login Confirmed &amp; Synced!</h3>
+                  <p className="text-xs text-emerald-300 mt-1">
+                    Your field check-in for <strong>Mandaue City</strong> was successfully recorded in HR Cloud at {currentTime}.
                   </p>
                 </div>
                 <button
+                  type="button"
                   onClick={() => setSubmitSuccess(false)}
-                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl transition cursor-pointer"
+                  className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl transition cursor-pointer shadow-md"
                 >
                   Done
                 </button>
               </div>
             )}
 
-            {/* ================= STEP 1: CAMERA PROOF ================= */}
+            {/* 4. STEP 1: LIVE PHOTO VERIFICATION */}
             {(!todayRecord || submitSuccess === false) && (
-              <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 space-y-3">
+              <div className="rounded-3xl border border-slate-800/90 bg-slate-950/80 p-5 shadow-2xl space-y-3.5">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-black text-white flex items-center gap-1.5">
-                    <Camera size={14} className="text-emerald-400" />
-                    1. Live Photo Verification
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-400 font-bold text-[11px] flex items-center justify-center border border-emerald-500/40">
+                      01
+                    </span>
+                    <span className="text-xs font-black text-white uppercase tracking-wider flex items-center gap-1.5">
+                      <Camera size={14} className="text-emerald-400" />
+                      Live Photo Verification
+                    </span>
+                  </div>
+
                   <button
                     type="button"
                     onClick={toggleCameraFacing}
-                    className="text-[10px] text-slate-300 bg-slate-900 border border-slate-700 px-2 py-1 rounded-lg flex items-center gap-1 hover:text-white cursor-pointer"
+                    className="text-[10px] font-bold text-slate-300 bg-slate-900 border border-slate-700/80 px-2.5 py-1 rounded-xl flex items-center gap-1.5 hover:text-white cursor-pointer active:scale-95 transition"
                   >
-                    <RotateCw size={11} />
-                    {cameraFacingMode === "user" ? "Selfie" : "Area"}
+                    <RotateCw size={11} className="text-emerald-400" />
+                    <span>{cameraFacingMode === "user" ? "Selfie Mode" : "Area Mode"}</span>
                   </button>
                 </div>
 
-                {/* Modern Redesigned Camera Viewfinder (Preview removed - database record only) */}
-                <div className="relative aspect-4/3 w-full rounded-3xl overflow-hidden bg-slate-950 border-2 border-slate-800/90 shadow-2xl flex items-center justify-center">
+                {/* Viewfinder Window (Preview removed after capture: database record only) */}
+                <div className="relative aspect-4/3 w-full rounded-2xl overflow-hidden bg-slate-950 border-2 border-slate-800/90 shadow-2xl flex items-center justify-center">
                   {capturedPhotoUrl ? (
                     // After capture: Confirmation state ONLY (No image preview displayed to user)
                     <div className="w-full h-full flex flex-col items-center justify-center p-6 text-center space-y-3.5 bg-gradient-to-b from-slate-900 via-slate-950 to-slate-900 animate-in fade-in zoom-in-95 duration-200">
@@ -850,12 +935,12 @@ export default function SupervisorMobilePwaView() {
                         <CheckCircle2 size={36} />
                       </div>
                       <div className="space-y-1">
-                        <h4 className="text-sm font-black text-white tracking-tight">Photo Captured &amp; Verified</h4>
+                        <h4 className="text-sm font-black text-white tracking-tight uppercase">Photo Proof Secured &amp; Locked</h4>
                         <p className="text-xs text-emerald-400 font-medium">
-                          Securely locked for database record
+                          Watermarked and encrypted for cloud database record
                         </p>
                         <p className="text-[10px] text-slate-400 font-mono">
-                          Timestamp: {currentTime}
+                          Timestamp: {currentTime} • 📍 Mandaue City
                         </p>
                       </div>
                       <button
@@ -878,32 +963,31 @@ export default function SupervisorMobilePwaView() {
                         className={`w-full h-full object-cover ${cameraFacingMode === "user" ? "scale-x-[-1]" : ""}`}
                       />
 
-                      {/* Viewfinder Target Guidelines */}
-                      <div className="absolute inset-6 pointer-events-none border border-white/20 rounded-2xl flex items-center justify-center">
-                        {/* Corner Accents */}
+                      {/* Viewfinder Reticle & Corner Brackets */}
+                      <div className="absolute inset-5 pointer-events-none border border-white/15 rounded-2xl flex items-center justify-center">
                         <div className="absolute top-0 left-0 w-4 h-4 border-t-2 border-l-2 border-emerald-400" />
                         <div className="absolute top-0 right-0 w-4 h-4 border-t-2 border-r-2 border-emerald-400" />
                         <div className="absolute bottom-0 left-0 w-4 h-4 border-b-2 border-l-2 border-emerald-400" />
                         <div className="absolute bottom-0 right-0 w-4 h-4 border-b-2 border-r-2 border-emerald-400" />
-                        <div className="w-8 h-8 rounded-full border border-dashed border-white/30" />
+                        <div className="w-9 h-9 rounded-full border border-dashed border-white/30" />
                       </div>
 
-                      {/* Viewfinder Top Status Pill */}
-                      <div className="absolute top-3 left-3 bg-slate-950/75 backdrop-blur-md px-2.5 py-1 rounded-full border border-slate-800 flex items-center gap-1.5 text-[10px] font-mono text-emerald-400 font-bold">
+                      {/* Viewfinder Top Live Badge */}
+                      <div className="absolute top-3 left-3 bg-slate-950/80 backdrop-blur-md px-2.5 py-1 rounded-full border border-slate-800 flex items-center gap-1.5 text-[10px] font-mono text-emerald-400 font-bold shadow-md">
                         <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
                         <span>LIVE CAMERA</span>
                       </div>
 
-                      {/* Redesigned Circular Shutter Button */}
-                      <div className="absolute bottom-4 inset-x-0 flex flex-col items-center justify-center gap-1.5">
+                      {/* Circular Shutter Trigger */}
+                      <div className="absolute bottom-3 inset-x-0 flex flex-col items-center justify-center gap-1">
                         <button
                           type="button"
                           onClick={takeSnapshot}
-                          className="w-16 h-16 rounded-full border-4 border-white/90 bg-emerald-500 hover:bg-emerald-400 active:scale-90 flex items-center justify-center shadow-2xl shadow-black/90 transition cursor-pointer group"
+                          className="w-15 h-15 rounded-full border-4 border-white/90 bg-emerald-500 hover:bg-emerald-400 active:scale-90 flex items-center justify-center shadow-2xl shadow-black/90 transition cursor-pointer group"
                           title="Capture Photo"
                         >
-                          <div className="w-11 h-11 rounded-full bg-white flex items-center justify-center shadow-inner group-hover:bg-emerald-100 transition">
-                            <Camera size={20} className="text-emerald-700" />
+                          <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center shadow-inner group-hover:bg-emerald-100 transition">
+                            <Camera size={19} className="text-emerald-700" />
                           </div>
                         </button>
                         <span className="text-[10px] text-white/90 font-bold bg-slate-950/70 px-2.5 py-0.5 rounded-full backdrop-blur-xs shadow-xs">
@@ -942,33 +1026,39 @@ export default function SupervisorMobilePwaView() {
                     onClick={() => fileInputRef.current?.click()}
                     className="text-[10px] text-slate-500 hover:text-slate-300 underline cursor-pointer"
                   >
-                    Video issues? Tap here to use native Camera App
+                    Camera issues? Tap here to use native Camera App
                   </button>
                 </div>
               </div>
             )}
 
-            {/* ================= STEP 2: SATELLITE GPS & LIVE MAP ================= */}
+            {/* 5. STEP 2: SATELLITE GPS & MANDAUE STATION LOCK */}
             {(!todayRecord || submitSuccess === false) && (
-              <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 space-y-3">
+              <div className="rounded-3xl border border-slate-800/90 bg-slate-950/80 p-5 shadow-2xl space-y-3.5">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-black text-white flex items-center gap-1.5">
-                    <MapPin size={14} className="text-emerald-400" />
-                    2. Satellite GPS &amp; Area Map Lock
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-400 font-bold text-[11px] flex items-center justify-center border border-emerald-500/40">
+                      02
+                    </span>
+                    <span className="text-xs font-black text-white uppercase tracking-wider flex items-center gap-1.5">
+                      <MapPin size={14} className="text-emerald-400" />
+                      Satellite GPS &amp; Station Lock
+                    </span>
+                  </div>
+
                   <button
                     type="button"
                     onClick={requestGpsLocation}
                     disabled={isGettingGps}
-                    className="text-[10px] text-slate-300 bg-slate-900 border border-slate-700 px-2 py-1 rounded-lg flex items-center gap-1 hover:text-white cursor-pointer disabled:opacity-50"
+                    className="text-[10px] font-bold text-slate-300 bg-slate-900 border border-slate-700/80 px-2.5 py-1 rounded-xl flex items-center gap-1.5 hover:text-white cursor-pointer disabled:opacity-50 transition active:scale-95"
                   >
-                    <RefreshCw size={11} className={isGettingGps ? "animate-spin text-emerald-400" : ""} />
-                    {isGettingGps ? "Acquiring GPS..." : "Re-detect GPS"}
+                    <RefreshCw size={11} className={isGettingGps ? "animate-spin text-emerald-400" : "text-emerald-400"} />
+                    <span>{isGettingGps ? "Acquiring..." : "Re-detect GPS"}</span>
                   </button>
                 </div>
 
                 {/* Embedded Interactive Map */}
-                <div className="w-full h-44 rounded-xl overflow-hidden border border-slate-800 bg-slate-900 relative">
+                <div className="w-full h-44 rounded-2xl overflow-hidden border border-slate-800 bg-slate-900 relative shadow-inner">
                   {lat && lng ? (
                     <iframe
                       title="Supervisor Field Location Map"
@@ -978,68 +1068,68 @@ export default function SupervisorMobilePwaView() {
                     />
                   ) : (
                     <div className="w-full h-full flex flex-col items-center justify-center p-4 text-center text-slate-500 space-y-1">
-                      <MapPin size={24} className="animate-bounce text-slate-600" />
-                      <p className="text-xs">Acquiring precise GPS coordinates...</p>
+                      <MapPin size={24} className="animate-bounce text-emerald-500" />
+                      <p className="text-xs font-semibold text-slate-400">Locking Mandaue City GPS position...</p>
                     </div>
                   )}
                 </div>
 
-                {/* GPS Metadata readout */}
+                {/* GPS Coordinates Strip */}
                 <div className="flex items-center justify-between text-[11px] font-mono text-slate-400 bg-slate-900/90 p-2.5 rounded-xl border border-slate-800">
-                  <div className="flex items-center gap-1.5 text-emerald-400">
+                  <div className="flex items-center gap-1.5 text-emerald-400 font-bold">
                     <MapPin size={13} />
                     <span>{lat || "Detecting..."}, {lng || "Detecting..."}</span>
                   </div>
-                  <span className="text-[10px] text-slate-500">
-                    {accuracy ? `(±${accuracy}m accuracy)` : ""}
+                  <span className="text-[10px] text-teal-400 font-sans font-semibold">
+                    {accuracy ? `±${accuracy}m High Precision` : "📍 Mandaue City"}
                   </span>
                 </div>
 
-                {/* Optional Area/Landmark note */}
+                {/* Optional Mandaue Station/Landmark Note */}
                 <div>
                   <input
                     type="text"
-                    placeholder="Area Landmark / Assigned Booth Note (Optional)"
+                    placeholder="Mandaue City Station / Landmark Note (Optional)"
                     value={locationLandmark}
                     onChange={(e) => setLocationLandmark(e.target.value)}
-                    className="w-full text-xs bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-white placeholder-slate-500 focus:ring-1 focus:ring-emerald-500 outline-none"
+                    className="w-full text-xs bg-slate-900 border border-slate-800 rounded-xl px-3 py-2.5 text-white placeholder-slate-500 focus:ring-1 focus:ring-emerald-500 outline-none shadow-inner"
                   />
                 </div>
               </div>
             )}
 
-            {/* ================= SUBMIT BUTTON ================= */}
+            {/* 6. SUBMIT BUTTON DOCK */}
             {(!todayRecord || submitSuccess === false) && (
-              <div className="pt-2">
+              <div className="pt-1">
                 <button
                   type="button"
                   onClick={handleSubmitAttendance}
                   disabled={isSubmitting || !capturedPhotoUrl || !lat}
-                  className={`w-full py-3.5 rounded-2xl font-black text-sm flex items-center justify-center gap-2 shadow-xl transition cursor-pointer ${
+                  className={`w-full py-4 rounded-2xl font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-2xl transition cursor-pointer ${
                     capturedPhotoUrl && lat && !isSubmitting
-                      ? "bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 shadow-emerald-950/70 active:scale-[0.98]"
-                      : "bg-slate-800 text-slate-500 cursor-not-allowed shadow-none"
+                      ? "bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 shadow-emerald-950/70 active:scale-[0.98]"
+                      : "bg-slate-900 text-slate-500 border border-slate-800 cursor-not-allowed shadow-none"
                   }`}
                 >
                   {isSubmitting ? (
                     <>
                       <RefreshCw size={16} className="animate-spin text-slate-950" />
-                      Syncing to HR Cloud...
+                      <span>Syncing to HR Cloud Storage &amp; Database...</span>
                     </>
                   ) : !capturedPhotoUrl ? (
                     <>
                       <Camera size={16} />
-                      Capture Live Photo Proof First
+                      <span>Capture Live Photo Proof First</span>
                     </>
                   ) : !lat ? (
                     <>
                       <MapPin size={16} />
-                      Awaiting GPS Location Lock...
+                      <span>Awaiting GPS Location Lock...</span>
                     </>
                   ) : (
                     <>
                       <CheckCircle2 size={18} />
-                      Confirm &amp; Sync Daily Login
+                      <span>Confirm &amp; Submit Daily Login</span>
                     </>
                   )}
                 </button>
@@ -1048,10 +1138,10 @@ export default function SupervisorMobilePwaView() {
           </>
         )}
 
-        {/* Footer */}
+        {/* Executive Footer */}
         <div className="pt-4 pb-8 text-center text-xs text-slate-500 space-y-1">
-          <p>Official Simpal Group of Companies HR Technology</p>
-          <p className="text-[10px] text-slate-600 font-medium">Supervisor Field Verification Portal</p>
+          <p className="font-semibold text-slate-400">Simpal Group of Companies • HR Technology Systems</p>
+          <p className="text-[10px] text-slate-600 font-medium">Mandaue City Field Verification Portal • SSL Encrypted</p>
         </div>
       </main>
     </div>

@@ -19,28 +19,28 @@ import {
 
 // Fallback active supervisors (matching live STL Mandaue API IDs 21 to 32)
 const FALLBACK_SUPERVISORS = [
-  { id: 21, fullName: "ARLFRED SABERON", area: "5", username: "spvr-arlfred", isActive: 1 },
-  { id: 22, fullName: "RAFFY BAGUIO", area: "5", username: "spvr-raffy", isActive: 1 },
-  { id: 23, fullName: "ROEL CATALAN", area: "5", username: "spvr-roel", isActive: 1 },
-  { id: 24, fullName: "MICHAEL DE GUZMAN", area: "5", username: "spvr-michael", isActive: 1 },
-  { id: 25, fullName: "JOEL ESTORCO", area: "5", username: "spvr-joel", isActive: 1 },
-  { id: 26, fullName: "HARRY EYA", area: "5", username: "spvr-eya", isActive: 1 },
-  { id: 27, fullName: "CARL MANGRUBAN", area: "5", username: "spvr-carl", isActive: 1 },
-  { id: 28, fullName: "JED MELENDREZ", area: "5", username: "spvr-jed", isActive: 1 },
-  { id: 29, fullName: "NYOR SESALDO", area: "5", username: "spvr-nyor", isActive: 1 },
-  { id: 30, fullName: "NARCISO TAGUD JR.", area: "5", username: "spvr-jason", isActive: 1 },
-  { id: 31, fullName: "MOLLY BATUBALANOS", area: "5", username: "spvr-molly", isActive: 1 },
-  { id: 32, fullName: "COORDINATOR - APPLEGROUP", area: "5", username: "spvr-apple", isActive: 1 }
+  { id: 21, fullName: "ARLFRED SABERON", area: "Mandaue City", username: "spvr-arlfred", isActive: 1 },
+  { id: 22, fullName: "RAFFY BAGUIO", area: "Mandaue City", username: "spvr-raffy", isActive: 1 },
+  { id: 23, fullName: "ROEL CATALAN", area: "Mandaue City", username: "spvr-roel", isActive: 1 },
+  { id: 24, fullName: "MICHAEL DE GUZMAN", area: "Mandaue City", username: "spvr-michael", isActive: 1 },
+  { id: 25, fullName: "JOEL ESTORCO", area: "Mandaue City", username: "spvr-joel", isActive: 1 },
+  { id: 26, fullName: "HARRY EYA", area: "Mandaue City", username: "spvr-eya", isActive: 1 },
+  { id: 27, fullName: "CARL MANGRUBAN", area: "Mandaue City", username: "spvr-carl", isActive: 1 },
+  { id: 28, fullName: "JED MELENDREZ", area: "Mandaue City", username: "spvr-jed", isActive: 1 },
+  { id: 29, fullName: "NYOR SESALDO", area: "Mandaue City", username: "spvr-nyor", isActive: 1 },
+  { id: 30, fullName: "NARCISO TAGUD JR.", area: "Mandaue City", username: "spvr-jason", isActive: 1 },
+  { id: 31, fullName: "MOLLY BATUBALANOS", area: "Mandaue City", username: "spvr-molly", isActive: 1 },
+  { id: 32, fullName: "COORDINATOR - APPLEGROUP", area: "Mandaue City", username: "spvr-apple", isActive: 1 }
 ];
 
 // Areas filter reference
 const AREAS = [
   { id: "all", label: "All Sectors" },
+  { id: "Mandaue City", label: "Mandaue City" },
   { id: "1", label: "Area 1 - Subangdaku / SIMCON" },
   { id: "2", label: "Area 2 - Centro & Cabancalan" },
   { id: "3", label: "Area 3 - Basak & Canduman" },
-  { id: "4", label: "Area 4 - Tipolo & Guiso" },
-  { id: "5", label: "Area 5 - Mandaue Central" }
+  { id: "4", label: "Area 4 - Tipolo & Guiso" }
 ];
 
 // Shift slots for STL operations
@@ -104,8 +104,8 @@ export default function SupervisorsAttendancePanel({ onClose }) {
     const spvrId = supervisor.supervisorId || supervisor.id;
     const spvrName = supervisor.fullName || supervisor.supervisor_name || "Supervisor";
     const spvrUsername = supervisor.username || "";
-    const spvrArea = supervisor.area || "5";
-    const pwaUrl = `${origin}/?pwa=supervisor&id=${spvrId}&username=${encodeURIComponent(spvrUsername)}&name=${encodeURIComponent(spvrName)}&area=${spvrArea}`;
+    const spvrArea = supervisor.area && supervisor.area !== "5" ? supervisor.area : "Mandaue City";
+    const pwaUrl = `${origin}/?pwa=supervisor&id=${spvrId}&username=${encodeURIComponent(spvrUsername)}&name=${encodeURIComponent(spvrName)}&area=${encodeURIComponent(spvrArea)}`;
 
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(pwaUrl);
@@ -254,7 +254,7 @@ export default function SupervisorsAttendancePanel({ onClose }) {
         supervisorId: spvr.id,
         fullName: spvr.fullName || spvr.username || `Supervisor ${spvr.id}`,
         username: spvr.username || `spvr_${spvr.id}`,
-        area: String(spvr.area || "5"),
+        area: String(spvr.area && spvr.area !== "5" ? spvr.area : "Mandaue City"),
         status: "Awaiting Check-in",
         timeIn: "--",
         latitude: null,
@@ -310,7 +310,7 @@ export default function SupervisorsAttendancePanel({ onClose }) {
                   ...item,
                   fullName: cloudRow.supervisor_name || item.fullName,
                   username: cloudRow.username || item.username,
-                  area: String(cloudRow.area || item.area || "5"),
+                  area: String(cloudRow.area && cloudRow.area !== "5" ? cloudRow.area : (item.area && item.area !== "5" ? item.area : "Mandaue City")),
                   status: cloudRow.status || item.status,
                   timeIn: cloudRow.time_in || item.timeIn,
                   latitude: cloudRow.latitude !== null && cloudRow.latitude !== undefined ? Number(cloudRow.latitude) : item.latitude,
@@ -352,7 +352,7 @@ export default function SupervisorsAttendancePanel({ onClose }) {
               ...item,
               fullName: row.supervisor_name || item.fullName,
               username: row.username || item.username,
-              area: String(row.area || item.area || "5"),
+              area: String(row.area && row.area !== "5" ? row.area : (item.area && item.area !== "5" ? item.area : "Mandaue City")),
               status: row.status || item.status,
               timeIn: row.time_in || item.timeIn,
               latitude: row.latitude !== null && row.latitude !== undefined ? Number(row.latitude) : item.latitude,
@@ -683,7 +683,7 @@ export default function SupervisorsAttendancePanel({ onClose }) {
       supervisorId: targetSpvr.id,
       fullName: targetSpvr.fullName || targetSpvr.username,
       username: targetSpvr.username,
-      area: String(targetSpvr.area || "5"),
+      area: String(targetSpvr.area && targetSpvr.area !== "5" ? targetSpvr.area : "Mandaue City"),
       status: "Present",
       timeIn: nowTime,
       latitude: simLat ? parseFloat(simLat) : null,
@@ -747,7 +747,7 @@ export default function SupervisorsAttendancePanel({ onClose }) {
       locationName: record.locationName || "",
       photoProof: record.photoProof || "",
       shift: record.shift || SHIFTS[0],
-      area: record.area || "5",
+      area: record.area && record.area !== "5" ? record.area : "Mandaue City",
       remarks: record.remarks || ""
     });
   };
@@ -1406,7 +1406,7 @@ export default function SupervisorsAttendancePanel({ onClose }) {
                             )}
                           </button>
                           <a
-                            href={`/?pwa=supervisor&id=${record.supervisorId}&username=${encodeURIComponent(record.username || "")}&name=${encodeURIComponent(record.fullName)}&area=${record.area || "5"}`}
+                            href={`/?pwa=supervisor&id=${record.supervisorId}&username=${encodeURIComponent(record.username || "")}&name=${encodeURIComponent(record.fullName)}&area=${encodeURIComponent(record.area && record.area !== "5" ? record.area : "Mandaue City")}`}
                             target="_blank"
                             rel="noreferrer"
                             className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-700 hover:bg-slate-100 border border-transparent hover:border-slate-200 transition"
@@ -1514,7 +1514,7 @@ export default function SupervisorsAttendancePanel({ onClose }) {
                         Sector
                       </span>
                       <span className="text-xs font-bold text-slate-800">
-                        Area {record.area}
+                        {record.area === "Mandaue City" || record.area === "5" || !record.area ? "Mandaue City" : `Area ${record.area}`}
                       </span>
                     </div>
                   </div>
@@ -1710,7 +1710,7 @@ export default function SupervisorsAttendancePanel({ onClose }) {
                     Official Field Attendance & Geotag Verification Sheet
                   </h3>
                   <p className="text-xs text-slate-400">
-                    Supervisor #{viewingPhotoRecord.supervisorId} • {viewingPhotoRecord.fullName} • Area {viewingPhotoRecord.area}
+                    Supervisor #{viewingPhotoRecord.supervisorId} • {viewingPhotoRecord.fullName} • {viewingPhotoRecord.area === "Mandaue City" || viewingPhotoRecord.area === "5" || !viewingPhotoRecord.area ? "Mandaue City" : `Area ${viewingPhotoRecord.area}`}
                   </p>
                 </div>
               </div>
@@ -1762,7 +1762,7 @@ export default function SupervisorsAttendancePanel({ onClose }) {
                   </div>
                   <div className="flex items-center justify-between py-1 border-b border-slate-100">
                     <span className="text-slate-500 font-medium">Assigned Sector:</span>
-                    <span className="font-bold text-slate-800">Area {viewingPhotoRecord.area}</span>
+                    <span className="font-bold text-slate-800">{viewingPhotoRecord.area === "Mandaue City" || viewingPhotoRecord.area === "5" || !viewingPhotoRecord.area ? "Mandaue City" : `Area ${viewingPhotoRecord.area}`}</span>
                   </div>
                   {viewingPhotoRecord.remarks && (
                     <div className="pt-1 text-[11px] text-slate-600 italic">
@@ -2067,7 +2067,7 @@ export default function SupervisorsAttendancePanel({ onClose }) {
                       const count = agentStatsBySupervisor[String(s.id)]?.total || 0;
                       return (
                         <option key={s.id} value={s.id}>
-                          #{s.id} - {s.fullName} ({count} Assigned Agents • Area {s.area})
+                          #{s.id} - {s.fullName} ({count} Assigned Agents • {s.area === "Mandaue City" || s.area === "5" || !s.area ? "Mandaue City" : `Area ${s.area}`})
                         </option>
                       );
                     })}
@@ -2131,7 +2131,7 @@ export default function SupervisorsAttendancePanel({ onClose }) {
                     type="text"
                     value={simLocationName}
                     onChange={(e) => setSimLocationName(e.target.value)}
-                    placeholder="e.g. Mandaue Central Station / Area 5 Hub"
+                    placeholder="e.g. Mandaue Central Station / Subangdaku"
                     className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-[#008559] transition shadow-2xs"
                   />
                 </div>
@@ -2288,11 +2288,11 @@ export default function SupervisorsAttendancePanel({ onClose }) {
                     onChange={(e) => setEditFormData({ ...editFormData, area: e.target.value })}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:border-[#008559] focus:bg-white transition cursor-pointer"
                   >
+                    <option value="Mandaue City">Mandaue City</option>
                     <option value="1">Area 1 - Subangdaku</option>
                     <option value="2">Area 2 - Centro</option>
                     <option value="3">Area 3 - Basak</option>
                     <option value="4">Area 4 - Tipolo</option>
-                    <option value="5">Area 5 - Mandaue Central</option>
                   </select>
                 </div>
               </div>
