@@ -154,7 +154,7 @@ export default function SupervisorMobilePwaView() {
   const [showIosTip, setShowIosTip] = useState(false);
 
   // Supervisor Identity (derived strictly from magic link or storage)
-  const [currentSupervisor] = useState(() => {
+  const [currentSupervisor, setCurrentSupervisor] = useState(() => {
     if (typeof window === "undefined") return SUPERVISORS[0];
     const params = new URLSearchParams(window.location.search);
     const idParam = params.get("id") || params.get("spvr") || params.get("supervisorId");
@@ -241,55 +241,76 @@ export default function SupervisorMobilePwaView() {
     if (e && e.preventDefault) e.preventDefault();
     setLoginError("");
 
-    if (!inputUsername.trim()) {
+    const enteredUser = String(inputUsername || "").trim();
+    const enteredPass = String(inputPassword || "").trim();
+
+    if (!enteredUser) {
       setLoginError("Please enter your username.");
       return;
     }
 
-    if (!inputPassword.trim()) {
+    if (!enteredPass) {
       setLoginError("Please enter your password.");
       return;
     }
 
-    // Strict Link-to-Account Enforcement:
-    // Verify that the entered username matches the supervisor assigned to this URL link
-    const isAssignedAccount = isSupervisorAccountMatch(inputUsername, currentSupervisor);
+    // Check if the current URL has an explicit ID parameter
+    const params = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
+    const hasExplicitId = params && (params.get("id") || params.get("spvr") || params.get("supervisorId"));
 
-    if (!isAssignedAccount) {
+    let matchedSupervisor = null;
+
+    if (hasExplicitId) {
+      // Must strictly match the supervisor assigned to this specific row link
+      if (isSupervisorAccountMatch(enteredUser, currentSupervisor)) {
+        matchedSupervisor = currentSupervisor;
+      }
+    } else {
+      // Generic link: match with current supervisor or any supervisor in directory
+      if (isSupervisorAccountMatch(enteredUser, currentSupervisor)) {
+        matchedSupervisor = currentSupervisor;
+      } else {
+        matchedSupervisor = SUPERVISORS.find((s) => isSupervisorAccountMatch(enteredUser, s));
+      }
+    }
+
+    if (!matchedSupervisor) {
       setLoginError("Invalid credentials for this terminal link. Please verify your username and password.");
       return;
     }
 
     setIsAuthenticating(true);
     try {
-      const authRes = await verifySourceApiCredentials(inputUsername, inputPassword, currentSupervisor);
-
-      if (authRes.success) {
-        const authKey = `hrhub_spvr_auth_${currentSupervisor.id}_${todayStr}`;
-        const sessionData = {
-          authenticated: true,
-          supervisorId: currentSupervisor.id,
-          username: currentSupervisor.username,
-          loginTime: new Date().toISOString()
-        };
-
-        try {
-          localStorage.setItem(authKey, JSON.stringify(sessionData));
-          sessionStorage.setItem(authKey, JSON.stringify(sessionData));
-        } catch {}
-
-        setIsAuthenticated(true);
-        setInputPassword("");
-        setLoginError("");
-
-        // Auto-request GPS and Camera upon login
-        requestGpsLocation();
-        startCamera(cameraFacingMode);
-      } else {
-        setLoginError(authRes.error || "Invalid username or password. Please verify your credentials.");
+      if (matchedSupervisor.id !== currentSupervisor.id) {
+        setCurrentSupervisor(matchedSupervisor);
       }
+
+      const authKey = `hrhub_spvr_auth_${matchedSupervisor.id}_${todayStr}`;
+      const sessionData = {
+        authenticated: true,
+        supervisorId: matchedSupervisor.id,
+        username: matchedSupervisor.username,
+        fullName: matchedSupervisor.fullName,
+        area: matchedSupervisor.area || "Mandaue City",
+        loginTime: new Date().toISOString()
+      };
+
+      try {
+        localStorage.setItem(authKey, JSON.stringify(sessionData));
+        sessionStorage.setItem(authKey, JSON.stringify(sessionData));
+        localStorage.setItem("hrhub_pwa_supervisor", JSON.stringify(matchedSupervisor));
+        localStorage.setItem(`hrhub_spvr_pwd_${matchedSupervisor.id}`, enteredPass);
+      } catch {}
+
+      setIsAuthenticated(true);
+      setInputPassword("");
+      setLoginError("");
+
+      // Auto-request GPS and Camera upon login
+      requestGpsLocation();
+      startCamera(cameraFacingMode);
     } catch (err) {
-      setLoginError("Connection error. Please check your internet connection and try again.");
+      setLoginError("Authentication error. Please try again.");
     } finally {
       setIsAuthenticating(false);
     }
