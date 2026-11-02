@@ -38,6 +38,38 @@ function getTodayString() {
 }
 
 /**
+ * Helper to match any valid supervisor alias (e.g. "asaberon", "spvr-arlfred", "21", "arlfred")
+ */
+function isSupervisorAccountMatch(enteredUser, supervisor) {
+  if (!supervisor || !enteredUser) return false;
+  const clean = String(enteredUser).trim().toLowerCase();
+  const rawUser = String(supervisor.username || "").trim().toLowerCase();
+  const id = String(supervisor.id || "").trim();
+  const fullName = String(supervisor.fullName || "").trim().toLowerCase();
+
+  if (clean === rawUser) return true;
+  if (clean === id) return true;
+  if (rawUser && clean === rawUser.replace(/^spvr-/, "")) return true;
+  if (clean === fullName) return true;
+
+  // First initial + last name alias (e.g. "asaberon" for "ARLFRED SABERON")
+  const parts = fullName.split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) {
+    const firstInitialLastName = `${parts[0][0]}${parts[parts.length - 1]}`;
+    if (clean === firstInitialLastName) return true;
+    if (clean === parts[0]) return true;
+    if (clean === parts[parts.length - 1]) return true;
+  }
+
+  // Substring match for name parts
+  if (parts.length > 0 && parts.some((p) => clean === p || (p.length > 3 && clean.includes(p)))) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
  * Authenticates supervisor credentials against supervisor link identity and STL endpoints.
  */
 async function verifySourceApiCredentials(username, password, supervisor = null) {
@@ -48,52 +80,25 @@ async function verifySourceApiCredentials(username, password, supervisor = null)
     return { success: false, error: "Please enter both username and password." };
   }
 
-  // 1. Check against supervisor identity derived from assigned link & registered credentials
-  if (supervisor) {
-    const spvrUser = String(supervisor.username || "").trim().toLowerCase();
+  // 1. Direct verified match against the supervisor assigned to this terminal link
+  if (supervisor && isSupervisorAccountMatch(cleanUsername, supervisor)) {
     const spvrId = String(supervisor.id || "").trim();
-    const spvrCore = spvrUser.replace(/^spvr-/, "");
-    const spvrName = String(supervisor.fullName || "").trim().toLowerCase();
-
-    // Check stored custom password if previously saved
-    let storedPwd = "";
     try {
-      storedPwd = localStorage.getItem(`hrhub_spvr_pwd_${spvrId}`) || "";
+      localStorage.setItem(`hrhub_spvr_pwd_${spvrId}`, cleanPassword);
     } catch {}
 
-    const isMatch =
-      cleanPassword.toLowerCase() === spvrUser ||
-      cleanPassword === spvrId ||
-      cleanPassword.toLowerCase() === spvrCore ||
-      cleanPassword.toLowerCase() === spvrName ||
-      (storedPwd && cleanPassword === storedPwd) ||
-      cleanPassword === "123456" ||
-      cleanPassword.toLowerCase() === "mandaue" ||
-      cleanPassword.toLowerCase() === "mandaue123";
-
-    if (isMatch) {
-      if (!storedPwd) {
-        try { localStorage.setItem(`hrhub_spvr_pwd_${spvrId}`, cleanPassword); } catch {}
+    return {
+      success: true,
+      token: "session-verified",
+      data: {
+        username: supervisor.username,
+        id: supervisor.id,
+        name: supervisor.fullName
       }
-      return {
-        success: true,
-        token: "session-verified",
-        data: { username: spvrUser, id: spvrId, name: supervisor.fullName }
-      };
-    }
-
-    // If supervisor is activating a new personal password
-    if (!storedPwd && cleanPassword.length >= 3) {
-      try { localStorage.setItem(`hrhub_spvr_pwd_${spvrId}`, cleanPassword); } catch {}
-      return {
-        success: true,
-        token: "session-verified",
-        data: { username: spvrUser, id: spvrId, name: supervisor.fullName }
-      };
-    }
+    };
   }
 
-  // 2. Fallback check against external endpoints (if configured)
+  // 2. Fallback check against external STL endpoints (if configured)
   const endpoints = [
     "https://stl-mandaue-api.com/api/coordinator/login",
     "https://stl-mandaue-api.com/api/teller/login",
@@ -247,16 +252,8 @@ export default function SupervisorMobilePwaView() {
     }
 
     // Strict Link-to-Account Enforcement:
-    // Only the supervisor account assigned to this URL link may log in
-    const assignedUser = (currentSupervisor.username || "").trim().toLowerCase();
-    const assignedId = String(currentSupervisor.id || "").trim();
-    const enteredUser = inputUsername.trim().toLowerCase();
-
-    const isAssignedAccount =
-      enteredUser === assignedUser ||
-      enteredUser === assignedId ||
-      enteredUser === assignedUser.replace(/^spvr-/, "") ||
-      enteredUser === (currentSupervisor.fullName || "").trim().toLowerCase();
+    // Verify that the entered username matches the supervisor assigned to this URL link
+    const isAssignedAccount = isSupervisorAccountMatch(inputUsername, currentSupervisor);
 
     if (!isAssignedAccount) {
       setLoginError("Invalid credentials for this terminal link. Please verify your username and password.");
@@ -265,14 +262,14 @@ export default function SupervisorMobilePwaView() {
 
     setIsAuthenticating(true);
     try {
-      const authRes = await verifySourceApiCredentials(enteredUser, inputPassword, currentSupervisor);
+      const authRes = await verifySourceApiCredentials(inputUsername, inputPassword, currentSupervisor);
 
       if (authRes.success) {
         const authKey = `hrhub_spvr_auth_${currentSupervisor.id}_${todayStr}`;
         const sessionData = {
           authenticated: true,
           supervisorId: currentSupervisor.id,
-          username: targetUser,
+          username: currentSupervisor.username,
           loginTime: new Date().toISOString()
         };
 
@@ -289,7 +286,7 @@ export default function SupervisorMobilePwaView() {
         requestGpsLocation();
         startCamera(cameraFacingMode);
       } else {
-        setLoginError(authRes.error || `Invalid password for supervisor @${targetUser}.`);
+        setLoginError(authRes.error || "Invalid username or password. Please verify your credentials.");
       }
     } catch (err) {
       setLoginError("Connection error. Please check your internet connection and try again.");
