@@ -82,35 +82,27 @@ function isSupervisorAccountMatch(enteredUser, supervisor) {
 }
 
 /**
- * Authenticates supervisor credentials against supervisor link identity and STL endpoints.
+ * Strictly authenticates supervisor credentials against official Source API endpoints
+ * and verified credentials store. Checks that the password is valid.
  */
 async function verifySourceApiCredentials(username, password, supervisor = null) {
-  const cleanUsername = String(username || "").trim().toLowerCase();
+  const cleanUsername = String(username || "").trim();
   const cleanPassword = String(password || "").trim();
 
   if (!cleanUsername || !cleanPassword) {
     return { success: false, error: "Please enter both username and password." };
   }
 
-  // 1. Direct verified match against the supervisor assigned to this terminal link
-  if (supervisor && isSupervisorAccountMatch(cleanUsername, supervisor)) {
-    const spvrId = String(supervisor.id || "").trim();
-    try {
-      localStorage.setItem(`hrhub_spvr_pwd_${spvrId}`, cleanPassword);
-    } catch { }
-
-    return {
-      success: true,
-      token: "session-verified",
-      data: {
-        username: supervisor.username,
-        id: supervisor.id,
-        name: supervisor.fullName
-      }
-    };
+  // 1. Candidate usernames to check against Source API
+  const candidateUsernames = new Set();
+  if (supervisor?.username) {
+    candidateUsernames.add(supervisor.username.trim().toLowerCase());
+    candidateUsernames.add(supervisor.username.replace(/^spvr-/, "").trim().toLowerCase());
+  }
+  if (cleanUsername) {
+    candidateUsernames.add(cleanUsername.toLowerCase());
   }
 
-  // 2. Fallback check against external STL endpoints (if configured)
   const endpoints = [
     "https://stl-mandaue-api.com/api/coordinator/login",
     "https://stl-mandaue-api.com/api/teller/login",
@@ -119,42 +111,86 @@ async function verifySourceApiCredentials(username, password, supervisor = null)
     "https://stl-mandaue-api.com/api/admin/login"
   ];
 
-  let lastErrorMessage = "Invalid username or password. Please verify your credentials.";
+  let isVerifiedByApi = false;
+  let apiResponseData = null;
 
   for (const url of endpoints) {
-    try {
-      const res = await fetch(url, {
-        method: "POST",
-        headers: {
-          "Accept": "application/json",
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          username: cleanUsername,
-          email: cleanUsername,
-          password: cleanPassword
-        })
-      });
+    for (const u of candidateUsernames) {
+      if (!u) continue;
+      try {
+        const res = await fetch(url, {
+          method: "POST",
+          headers: {
+            "Accept": "application/json",
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            username: u,
+            email: u,
+            password: cleanPassword
+          })
+        });
 
-      const data = await res.json().catch(() => null);
+        const data = await res.json().catch(() => null);
 
-      if (res.ok && data && (data.success === true || data.token || data.access_token || data.data?.token)) {
-        return {
-          success: true,
-          token: data.token || data.access_token || data.data?.token || "session-verified",
-          data: data.data || data
-        };
+        if (res.ok && data && (data.success === true || data.token || data.access_token || data.data?.token)) {
+          isVerifiedByApi = true;
+          apiResponseData = data.data || data;
+          break;
+        }
+      } catch (err) {
+        console.warn(`Source API login check notice on ${url}:`, err);
       }
-
-      if (data && data.message && data.message !== "Unauthorised.") {
-        lastErrorMessage = data.message;
-      }
-    } catch (err) {
-      console.warn(`Auth attempt notice on ${url}:`, err);
     }
+    if (isVerifiedByApi) break;
   }
 
-  return { success: false, error: lastErrorMessage };
+  if (isVerifiedByApi) {
+    const spvrId = String(supervisor?.id || "").trim();
+    if (spvrId) {
+      try { localStorage.setItem(`hrhub_spvr_pwd_${spvrId}`, cleanPassword); } catch { }
+    }
+    return {
+      success: true,
+      token: "source-api-verified",
+      data: apiResponseData
+    };
+  }
+
+  // 2. Check if supervisor has a registered/activated password in HRHub cloud credentials
+  try {
+    const { data: cloudCreds } = await supabase
+      .from("user_settings")
+      .select("settings_json")
+      .eq("user_id", "company_activated_credentials")
+      .maybeSingle();
+
+    if (cloudCreds?.settings_json?.passwords) {
+      const passwords = cloudCreds.settings_json.passwords;
+      for (const u of candidateUsernames) {
+        if (passwords[u] && passwords[u] === cleanPassword) {
+          return { success: true, token: "cloud-verified", data: { username: u } };
+        }
+      }
+    }
+  } catch (cloudErr) {
+    console.warn("Cloud credentials check notice:", cloudErr);
+  }
+
+  // 3. Check previously verified local session password for this specific supervisor ID
+  if (supervisor?.id) {
+    try {
+      const savedPass = localStorage.getItem(`hrhub_spvr_pwd_${supervisor.id}`);
+      if (savedPass && savedPass === cleanPassword) {
+        return { success: true, token: "device-verified", data: { id: supervisor.id } };
+      }
+    } catch { }
+  }
+
+  return {
+    success: false,
+    error: "Invalid password. The password did not match your official Source API credentials."
+  };
 }
 
 export default function SupervisorMobilePwaView() {
@@ -271,7 +307,30 @@ export default function SupervisorMobilePwaView() {
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [loginError, setLoginError] = useState("");
 
-  // Handle Supervisor Login Submission with strict account link isolation
+  // Reactive URL listener: if URL params change or a new link is opened, synchronize supervisor identity immediately
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const idParam = params.get("id") || params.get("spvr") || params.get("supervisorId");
+    const usernameParam = params.get("username");
+
+    if (idParam) {
+      const match = SUPERVISORS.find((s) => String(s.id) === String(idParam));
+      if (match && String(match.id) !== String(currentSupervisor.id)) {
+        setCurrentSupervisor(match);
+        setIsAuthenticated(false);
+      }
+    } else if (usernameParam) {
+      const cleanUser = decodeURIComponent(usernameParam).toLowerCase().trim();
+      const match = SUPERVISORS.find((s) => isSupervisorAccountMatch(cleanUser, s));
+      if (match && String(match.id) !== String(currentSupervisor.id)) {
+        setCurrentSupervisor(match);
+        setIsAuthenticated(false);
+      }
+    }
+  }, [currentSupervisor.id]);
+
+  // Handle Supervisor Login Submission with strict account link isolation & Source API verification
   const handleSupervisorLogin = async (e) => {
     if (e && e.preventDefault) e.preventDefault();
     setLoginError("");
@@ -289,61 +348,52 @@ export default function SupervisorMobilePwaView() {
       return;
     }
 
-    let matchedSupervisor = null;
+    // 1. STRICT ACCOUNT-TO-LINK LOCK:
+    // This terminal strictly belongs to currentSupervisor (e.g. ARLFRED SABERON)
+    const isTargetSupervisor = isSupervisorAccountMatch(enteredUser, currentSupervisor);
 
-    // Strict Link-to-Account Enforcement:
-    if (isAssignedLink) {
-      // Must strictly match the supervisor assigned to this specific row link
-      if (isSupervisorAccountMatch(enteredUser, currentSupervisor)) {
-        matchedSupervisor = currentSupervisor;
-      } else {
-        // Explicitly check if the credentials belong to another supervisor in the directory
-        const otherSupervisor = SUPERVISORS.find(
-          (s) => String(s.id) !== String(currentSupervisor.id) && isSupervisorAccountMatch(enteredUser, s)
+    if (!isTargetSupervisor) {
+      // Find which supervisor the entered username belongs to
+      const otherSupervisor = SUPERVISORS.find((s) => isSupervisorAccountMatch(enteredUser, s));
+
+      if (otherSupervisor && String(otherSupervisor.id) !== String(currentSupervisor.id)) {
+        setLoginError(
+          `Access Denied: Ang terminal link na ito ay eksklusibo lamang para kay ${currentSupervisor.fullName} (ID #${currentSupervisor.id}). Hindi maaaring gamitin ang account ni ${otherSupervisor.fullName} dito. Mangyaring buksan ang sariling opisyal na link para sa iyong account.`
         );
-
-        if (otherSupervisor) {
-          setLoginError(
-            `Access Denied: Ang terminal link na ito ay eksklusibo lamang para kay ${currentSupervisor.fullName}. Hindi maaaring gamitin ang account ni ${otherSupervisor.fullName} dito. Mangyaring buksan ang sariling opisyal na link para sa iyong account.`
-          );
-        } else {
-          setLoginError("Invalid credentials for this terminal link. Please verify your assigned username and password.");
-        }
-        return;
-      }
-    } else {
-      // Generic unassigned link: match with current supervisor or any supervisor in directory
-      if (isSupervisorAccountMatch(enteredUser, currentSupervisor)) {
-        matchedSupervisor = currentSupervisor;
       } else {
-        matchedSupervisor = SUPERVISORS.find((s) => isSupervisorAccountMatch(enteredUser, s));
+        setLoginError(
+          `Access Denied: Hindi tugma ang account sa link na ito. Ang terminal link na ito ay nakalaan lamang para kay ${currentSupervisor.fullName}.`
+        );
       }
-
-      if (!matchedSupervisor) {
-        setLoginError("Invalid credentials. Please verify your supervisor username and password.");
-        return;
-      }
-
-      setCurrentSupervisor(matchedSupervisor);
+      return;
     }
 
+    // 2. STRICT SOURCE API PASSWORD VERIFICATION:
     setIsAuthenticating(true);
     try {
-      const authKey = `hrhub_spvr_auth_${matchedSupervisor.id}_${todayStr}`;
+      const authRes = await verifySourceApiCredentials(enteredUser, enteredPass, currentSupervisor);
+
+      if (!authRes.success) {
+        setLoginError(authRes.error || "Invalid password. The password did not match your official Source API credentials.");
+        setIsAuthenticating(false);
+        return;
+      }
+
+      const authKey = `hrhub_spvr_auth_${currentSupervisor.id}_${todayStr}`;
       const sessionData = {
         authenticated: true,
-        supervisorId: matchedSupervisor.id,
-        username: matchedSupervisor.username,
-        fullName: matchedSupervisor.fullName,
-        area: matchedSupervisor.area || "Mandaue City",
+        supervisorId: currentSupervisor.id,
+        username: currentSupervisor.username,
+        fullName: currentSupervisor.fullName,
+        area: currentSupervisor.area || "Mandaue City",
         loginTime: new Date().toISOString()
       };
 
       try {
         localStorage.setItem(authKey, JSON.stringify(sessionData));
         sessionStorage.setItem(authKey, JSON.stringify(sessionData));
-        localStorage.setItem("hrhub_pwa_supervisor", JSON.stringify(matchedSupervisor));
-        localStorage.setItem(`hrhub_spvr_pwd_${matchedSupervisor.id}`, enteredPass);
+        localStorage.setItem("hrhub_pwa_supervisor", JSON.stringify(currentSupervisor));
+        localStorage.setItem(`hrhub_spvr_pwd_${currentSupervisor.id}`, enteredPass);
       } catch { }
 
       setIsAuthenticated(true);
@@ -699,7 +749,7 @@ export default function SupervisorMobilePwaView() {
         fullName: currentSupervisor.fullName,
         username: currentSupervisor.username || "",
         timeIn: currentTime,
-        status: "Logged-in",
+        status: "Logged In",
         area: "Mandaue City",
         shift: "Morning Draw (06:00 AM - 02:30 PM)",
         latitude: parseFloat(lat),
@@ -981,7 +1031,7 @@ export default function SupervisorMobilePwaView() {
                     <p className="text-[10px] font-mono text-slate-400">
                       GPS: {todayRecord.latitude?.toFixed(5) || todayRecord.lat}, {todayRecord.longitude?.toFixed(5) || todayRecord.lng}
                     </p>
-                    <p className="text-[10px] text-teal-400">📍 Mandaue City Sector • Status: {todayRecord.status || "Logged-in"}</p>
+                    <p className="text-[10px] text-teal-400">📍 Mandaue City Sector • Status: {todayRecord.status || "Logged In"}</p>
                   </div>
                 </div>
 
