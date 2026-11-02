@@ -1,5 +1,5 @@
-// HRHub Progressive Web App Service Worker (v2.0.0)
-const CACHE_NAME = "hrhub-pwa-v2";
+// HRHub Progressive Web App Service Worker (v3.0.0)
+const CACHE_NAME = "hrhub-pwa-v3";
 const ASSETS_TO_CACHE = [
   "/",
   "/index.html",

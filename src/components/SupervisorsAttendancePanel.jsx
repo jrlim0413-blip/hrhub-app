@@ -103,15 +103,45 @@ export default function SupervisorsAttendancePanel({ onClose }) {
     const origin = typeof window !== "undefined" ? window.location.origin : "https://hrhub-app.vercel.app";
     const spvrId = supervisor.supervisorId || supervisor.id;
     const spvrName = supervisor.fullName || supervisor.supervisor_name || "Supervisor";
-    const spvrUsername = supervisor.username || "";
+    const spvrUsername = supervisor.username || `spvr_${spvrId}`;
     const spvrArea = supervisor.area && supervisor.area !== "5" ? supervisor.area : "Mandaue City";
     const pwaUrl = `${origin}/?pwa=supervisor&id=${spvrId}&username=${encodeURIComponent(spvrUsername)}&name=${encodeURIComponent(spvrName)}&area=${encodeURIComponent(spvrArea)}`;
 
+    // Enhanced executive message package with clear instructions ready for Messenger / Viber / SMS
+    const formattedMessage = [
+      `📱 HRHub Field Operations • Daily Login Portal`,
+      `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+      `👤 SUPERVISOR: ${spvrName}`,
+      `🆔 ID NUMBER: #${spvrId}`,
+      `📍 AREA / SECTOR: ${spvrArea}`,
+      `🔑 USERNAME: ${spvrUsername}`,
+      ``,
+      `🔗 PERSONAL ACCESS LINK:`,
+      `${pwaUrl}`,
+      ``,
+      `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+      `📋 MGA HAKBANG SA PAG-LOGIN AT ATTENDANCE:`,
+      `1️⃣ Buksan ang link sa iyong mobile browser (Google Chrome para sa Android o Safari para sa iPhone).`,
+      `2️⃣ I-enter ang iyong opisyal na Source API Password upang makapag-Daily Login.`,
+      `3️⃣ I-allow ang GPS Location at Front Camera verification.`,
+      `4️⃣ I-tap ang "Tap to Capture" para sa live photo proof, at pindutin ang "Confirm & Submit Daily Login".`,
+      ``,
+      `💡 PAALALA SA PAG-INSTALL (1-Tap App sa Cellphone):`,
+      `• Android / Chrome: Pindutin ang tatlong tuldok (⋮) sa itaas ➡️ Piliin ang "Install app" o "Add to Home screen".`,
+      `• iPhone / Safari: Pindutin ang Share button (⎋ sa ibaba) ➡️ Piliin ang "Add to Home Screen" (+).`,
+      `Magkakaroon ka na ng opisyal na HRHub icon sa iyong cellphone screen para sa mabilis na pag-login araw-araw!`,
+      ``,
+      `🔒 PAALALA SA SEGURIDAD:`,
+      `Ang link na ito ay eksklusibo lamang para sa iyong account (#${spvrId}). Huwag ibahagi sa ibang tao.`,
+      `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+      `Simpal Group of Companies • HR Technology Portal`
+    ].join("\n");
+
     if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(pwaUrl);
+      navigator.clipboard.writeText(formattedMessage);
     } else {
       const el = document.createElement("textarea");
-      el.value = pwaUrl;
+      el.value = formattedMessage;
       document.body.appendChild(el);
       el.select();
       document.execCommand("copy");
@@ -119,13 +149,13 @@ export default function SupervisorsAttendancePanel({ onClose }) {
     }
 
     setCopiedSupervisorId(String(spvrId));
-    setCopiedPwaNotice(`Copied PWA Mobile Link for ${spvrName}! Send this link via Messenger or SMS for auto-login and installation.`);
+    setCopiedPwaNotice(`Copied complete instructions & PWA link for ${spvrName}! Ready to paste into Messenger, Viber, or SMS.`);
     setTimeout(() => {
       setCopiedSupervisorId(null);
     }, 3000);
     setTimeout(() => {
       setCopiedPwaNotice("");
-    }, 6000);
+    }, 7000);
   };
 
   // Strict Live Camera State (Live Video Viewfinder - No File Uploads)
