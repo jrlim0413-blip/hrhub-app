@@ -491,7 +491,7 @@ export default function SupervisorMobilePwaView() {
   // Submit Attendance to Supabase Cloud
   const handleSubmitAttendance = async () => {
     if (!capturedPhotoUrl) {
-      alert("Please capture a live photo using the camera before submitting attendance.");
+      alert("Please capture a live photo using the camera before submitting Daily Login.");
       return;
     }
     if (!lat || !lng) {
@@ -535,7 +535,7 @@ export default function SupervisorMobilePwaView() {
       // 3. Upsert to Supabase
       const savedRes = await upsertCloudAttendance(recordPayload, todayStr);
       if (!savedRes.success) {
-        throw new Error(savedRes.error || "Failed to sync attendance to HR Cloud. Please try again.");
+        throw new Error(savedRes.error || "Failed to sync Daily Login to HR Cloud. Please try again.");
       }
 
       // Vibration confirmation
@@ -547,7 +547,7 @@ export default function SupervisorMobilePwaView() {
       await checkTodayAttendance();
     } catch (err) {
       console.error("Attendance submission error:", err);
-      setSubmitError(err.message || "Failed to record attendance.");
+      setSubmitError(err.message || "Failed to record Daily Login.");
       alert(`⚠️ Cloud Save Error: ${err.message}`);
     } finally {
       setIsSubmitting(false);
@@ -628,7 +628,7 @@ export default function SupervisorMobilePwaView() {
       {/* ================= MAIN CONTENT AREA ================= */}
       <main className="flex-1 max-w-lg w-full mx-auto p-4 space-y-4">
         {!isAuthenticated ? (
-          /* ================= LOGIN FORM (BEFORE ATTENDANCE) ================= */
+          /* ================= DAILY LOGIN FORM ================= */
           <div className="rounded-3xl border border-slate-800 bg-slate-950/80 p-5 shadow-2xl space-y-5 animate-in fade-in duration-300">
             {/* Header Lock Icon */}
             <div className="text-center space-y-2 pt-2">
@@ -637,26 +637,8 @@ export default function SupervisorMobilePwaView() {
               </div>
               <h2 className="text-base font-black text-white tracking-tight">Daily Login</h2>
               <p className="text-xs text-slate-400 max-w-xs mx-auto leading-relaxed">
-                Please enter your password to sign in for today's attendance.
+                Please enter your password to complete your Daily Login.
               </p>
-            </div>
-
-            {/* Target Supervisor Profile Banner */}
-            <div className="p-3.5 rounded-2xl bg-slate-900 border border-slate-800 flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-500 text-white font-extrabold flex items-center justify-center text-sm shadow-xs shrink-0">
-                {currentSupervisor.fullName?.charAt(0) || "S"}
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-[10px] font-mono font-bold text-emerald-400 bg-emerald-950 px-2 py-0.5 rounded border border-emerald-800/60">
-                    ID Number: {currentSupervisor.id}
-                  </span>
-                  <span className="text-[10px] font-bold text-slate-300 bg-slate-800 px-2 py-0.5 rounded border border-slate-700">
-                    Area: Area {currentSupervisor.area || "5"}
-                  </span>
-                </div>
-                <h3 className="text-xs font-black text-white truncate mt-0.5">{currentSupervisor.fullName}</h3>
-              </div>
             </div>
 
             {/* Error Message Notice */}
@@ -747,7 +729,7 @@ export default function SupervisorMobilePwaView() {
             </div>
           </div>
         ) : (
-          /* ================= AUTHENTICATED ATTENDANCE VIEW ================= */
+          /* ================= AUTHENTICATED FIELD VIEW ================= */
           <>
             {/* Supervisor Identity Card (NO DROPDOWN - Strictly locked to row link) */}
             <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 shadow-sm flex items-center justify-between">
@@ -787,7 +769,7 @@ export default function SupervisorMobilePwaView() {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <CheckCircle2 size={18} className="text-emerald-400" />
-                    <span className="text-xs font-black text-emerald-300">Daily Attendance Logged</span>
+                    <span className="text-xs font-black text-emerald-300">Daily Login Recorded</span>
                   </div>
                   <span className="text-[10px] font-mono text-emerald-400 bg-emerald-950 px-2 py-0.5 rounded border border-emerald-800">
                     {todayRecord.time_in || todayRecord.timeIn || "VERIFIED"}
@@ -815,7 +797,7 @@ export default function SupervisorMobilePwaView() {
                   className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5"
                 >
                   <RotateCw size={13} />
-                  Record a new attendance snapshot
+                  Record a new Daily Login snapshot
                 </button>
               </div>
             )}
@@ -827,7 +809,7 @@ export default function SupervisorMobilePwaView() {
                   <CheckCircle2 size={28} />
                 </div>
                 <div>
-                  <h3 className="text-sm font-black text-white">Attendance Confirmed &amp; Synced!</h3>
+                  <h3 className="text-sm font-black text-white">Daily Login Confirmed &amp; Synced!</h3>
                   <p className="text-xs text-emerald-300 mt-0.5">
                     Your field check-in was successfully recorded in HR Cloud at {currentTime}.
                   </p>
@@ -1057,7 +1039,7 @@ export default function SupervisorMobilePwaView() {
                   ) : (
                     <>
                       <CheckCircle2 size={18} />
-                      Confirm &amp; Sync Daily Attendance
+                      Confirm &amp; Sync Daily Login
                     </>
                   )}
                 </button>
