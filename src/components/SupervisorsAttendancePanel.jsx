@@ -67,13 +67,13 @@ export default function SupervisorsAttendancePanel({ onClose }) {
   const [attendanceRecords, setAttendanceRecords] = useState([]);
   const [loading, setLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  
+
   // Search & Filter State
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [areaFilter, setAreaFilter] = useState("all");
   const [viewMode, setViewMode] = useState("table"); // 'table' | 'cards'
-  
+
   // Viewing Agents Modal State (view tellers under a supervisor)
   const [viewingSupervisorAgents, setViewingSupervisorAgents] = useState(null);
 
@@ -122,7 +122,7 @@ export default function SupervisorsAttendancePanel({ onClose }) {
       `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
       `📋 MGA HAKBANG SA PAG-LOGIN AT ATTENDANCE:`,
       `1️⃣ Buksan ang link sa iyong mobile browser (Google Chrome para sa Android o Safari para sa iPhone).`,
-      `2️⃣ I-enter ang iyong opisyal na Source API Password upang makapag-Daily Login.`,
+      `2️⃣ I-enter ang iyong Username and Password(abc123) upang makapag-Daily Login.`,
       `3️⃣ I-allow ang GPS Location at Front Camera verification.`,
       `4️⃣ I-tap ang "Tap to Capture" para sa live photo proof, at pindutin ang "Confirm & Submit Daily Login".`,
       ``,
@@ -312,7 +312,7 @@ export default function SupervisorsAttendancePanel({ onClose }) {
             currentWorkingRecords = valid;
           }
         }
-      } catch {}
+      } catch { }
     }
 
     setAttendanceRecords(currentWorkingRecords);
@@ -358,7 +358,7 @@ export default function SupervisorsAttendancePanel({ onClose }) {
 
             try {
               localStorage.setItem(storageKey, JSON.stringify(merged));
-            } catch {}
+            } catch { }
             return merged;
           });
         }
@@ -400,7 +400,7 @@ export default function SupervisorsAttendancePanel({ onClose }) {
 
         try {
           localStorage.setItem(storageKey, JSON.stringify(updated));
-        } catch {}
+        } catch { }
         return updated;
       });
 
@@ -575,7 +575,7 @@ export default function SupervisorsAttendancePanel({ onClose }) {
       mediaStreamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        await videoRef.current.play().catch(() => {});
+        await videoRef.current.play().catch(() => { });
       }
       setIsCameraActive(true);
       setSimPhotoUrl("");
@@ -1001,11 +1001,10 @@ export default function SupervisorsAttendancePanel({ onClose }) {
             <button
               type="button"
               onClick={handleSetToday}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer shadow-2xs ${
-                selectedDate === getTodayString()
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer shadow-2xs ${selectedDate === getTodayString()
                   ? "bg-[#008559] text-white"
                   : "bg-white text-slate-700 border border-slate-200/80 hover:bg-slate-100"
-              }`}
+                }`}
             >
               Today
             </button>
@@ -1170,17 +1169,15 @@ export default function SupervisorsAttendancePanel({ onClose }) {
                 key={tab.id}
                 type="button"
                 onClick={() => setStatusFilter(tab.id)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer shrink-0 flex items-center gap-1.5 ${
-                  isSelected
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer shrink-0 flex items-center gap-1.5 ${isSelected
                     ? "bg-slate-900 text-white shadow-xs"
                     : "bg-slate-100 text-slate-600 hover:bg-slate-200/80"
-                }`}
+                  }`}
               >
                 <span>{tab.label}</span>
                 <span
-                  className={`text-[10px] px-1.5 py-0.2 rounded-md ${
-                    isSelected ? "bg-white/20 text-white" : "bg-white text-slate-600"
-                  }`}
+                  className={`text-[10px] px-1.5 py-0.2 rounded-md ${isSelected ? "bg-white/20 text-white" : "bg-white text-slate-600"
+                    }`}
                 >
                   {tab.count}
                 </span>
@@ -1207,9 +1204,8 @@ export default function SupervisorsAttendancePanel({ onClose }) {
             <button
               type="button"
               onClick={() => setViewMode("table")}
-              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
-                viewMode === "table" ? "bg-white text-slate-900 shadow-2xs" : "text-slate-500 hover:text-slate-900"
-              }`}
+              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${viewMode === "table" ? "bg-white text-slate-900 shadow-2xs" : "text-slate-500 hover:text-slate-900"
+                }`}
               title="Table View"
             >
               Table
@@ -1217,9 +1213,8 @@ export default function SupervisorsAttendancePanel({ onClose }) {
             <button
               type="button"
               onClick={() => setViewMode("cards")}
-              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
-                viewMode === "cards" ? "bg-white text-slate-900 shadow-2xs" : "text-slate-500 hover:text-slate-900"
-              }`}
+              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${viewMode === "cards" ? "bg-white text-slate-900 shadow-2xs" : "text-slate-500 hover:text-slate-900"
+                }`}
               title="Grid Cards View"
             >
               Cards
@@ -1313,8 +1308,7 @@ export default function SupervisorsAttendancePanel({ onClose }) {
                       {/* Status Badge */}
                       <td className="py-3 px-3">
                         <span
-                          className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold ${
-                            record.status === "Present"
+                          className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold ${record.status === "Present"
                               ? "bg-emerald-100 text-emerald-800"
                               : record.status === "Late"
                                 ? "bg-amber-100 text-amber-800"
@@ -1325,11 +1319,10 @@ export default function SupervisorsAttendancePanel({ onClose }) {
                                     : record.status === "Day Off"
                                       ? "bg-slate-200 text-slate-700"
                                       : "bg-slate-100 text-slate-600"
-                          }`}
+                            }`}
                         >
                           <span
-                            className={`w-1.5 h-1.5 rounded-full ${
-                              record.status === "Present"
+                            className={`w-1.5 h-1.5 rounded-full ${record.status === "Present"
                                 ? "bg-emerald-500"
                                 : record.status === "Late"
                                   ? "bg-amber-500"
@@ -1338,7 +1331,7 @@ export default function SupervisorsAttendancePanel({ onClose }) {
                                     : record.status === "On Leave"
                                       ? "bg-indigo-500"
                                       : "bg-slate-400"
-                            }`}
+                              }`}
                           />
                           {record.status}
                         </span>
@@ -1347,11 +1340,10 @@ export default function SupervisorsAttendancePanel({ onClose }) {
                       {/* Time In (ONLY) */}
                       <td className="py-3 px-3">
                         <span
-                          className={`inline-flex items-center gap-1.5 font-mono font-bold text-xs px-2.5 py-1 rounded-lg ${
-                            record.timeIn !== "--"
+                          className={`inline-flex items-center gap-1.5 font-mono font-bold text-xs px-2.5 py-1 rounded-lg ${record.timeIn !== "--"
                               ? "bg-emerald-50 text-emerald-800 border border-emerald-200/80"
                               : "bg-slate-100 text-slate-400"
-                          }`}
+                            }`}
                         >
                           <Clock size={12} className={record.timeIn !== "--" ? "text-emerald-600" : "text-slate-400"} />
                           {record.timeIn}
@@ -1416,11 +1408,10 @@ export default function SupervisorsAttendancePanel({ onClose }) {
                           <button
                             type="button"
                             onClick={() => handleCopyPwaLink(record)}
-                            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-bold text-xs shadow-2xs transition active:scale-95 cursor-pointer ${
-                              copiedSupervisorId === String(record.supervisorId)
+                            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-bold text-xs shadow-2xs transition active:scale-95 cursor-pointer ${copiedSupervisorId === String(record.supervisorId)
                                 ? "bg-emerald-600 text-white shadow-emerald-900/20"
                                 : "bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-200/80"
-                            }`}
+                              }`}
                             title="Copy personalized PWA auto-login link for this supervisor"
                           >
                             {copiedSupervisorId === String(record.supervisorId) ? (
@@ -1486,8 +1477,7 @@ export default function SupervisorsAttendancePanel({ onClose }) {
                     </div>
 
                     <span
-                      className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold ${
-                        record.status === "Present"
+                      className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold ${record.status === "Present"
                           ? "bg-emerald-100 text-emerald-800"
                           : record.status === "Late"
                             ? "bg-amber-100 text-amber-800"
@@ -1496,7 +1486,7 @@ export default function SupervisorsAttendancePanel({ onClose }) {
                               : record.status === "On Leave"
                                 ? "bg-indigo-100 text-indigo-800"
                                 : "bg-slate-100 text-slate-600"
-                      }`}
+                        }`}
                     >
                       {record.status}
                     </span>
@@ -1612,11 +1602,10 @@ export default function SupervisorsAttendancePanel({ onClose }) {
                     <button
                       type="button"
                       onClick={() => handleQuickStatusChange(record.supervisorId, "Present")}
-                      className={`px-2 py-1 rounded-lg text-[10px] font-bold transition cursor-pointer ${
-                        record.status === "Present"
+                      className={`px-2 py-1 rounded-lg text-[10px] font-bold transition cursor-pointer ${record.status === "Present"
                           ? "bg-emerald-600 text-white"
                           : "bg-slate-100 hover:bg-emerald-50 text-slate-700"
-                      }`}
+                        }`}
                     >
                       Present
                     </button>
@@ -1624,11 +1613,10 @@ export default function SupervisorsAttendancePanel({ onClose }) {
                     <button
                       type="button"
                       onClick={() => handleQuickStatusChange(record.supervisorId, "Late")}
-                      className={`px-2 py-1 rounded-lg text-[10px] font-bold transition cursor-pointer ${
-                        record.status === "Late"
+                      className={`px-2 py-1 rounded-lg text-[10px] font-bold transition cursor-pointer ${record.status === "Late"
                           ? "bg-amber-500 text-white"
                           : "bg-slate-100 hover:bg-amber-50 text-slate-700"
-                      }`}
+                        }`}
                     >
                       Late
                     </button>
@@ -1698,11 +1686,10 @@ export default function SupervisorsAttendancePanel({ onClose }) {
                       </div>
 
                       <span
-                        className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                          ag.isActive === 1 || ag.isActive === true || ag.status === "active"
+                        className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${ag.isActive === 1 || ag.isActive === true || ag.status === "active"
                             ? "bg-emerald-100 text-emerald-800"
                             : "bg-slate-200 text-slate-600"
-                        }`}
+                          }`}
                       >
                         {ag.isActive === 1 || ag.isActive === true || ag.status === "active" ? "Active" : "Inactive"}
                       </span>
@@ -1957,9 +1944,8 @@ export default function SupervisorsAttendancePanel({ onClose }) {
                     playsInline
                     autoPlay
                     muted
-                    className={`w-full h-full object-cover ${
-                      cameraFacingMode === "user" ? "scale-x-[-1]" : ""
-                    } ${isCameraActive && !simPhotoUrl ? "block" : "hidden"}`}
+                    className={`w-full h-full object-cover ${cameraFacingMode === "user" ? "scale-x-[-1]" : ""
+                      } ${isCameraActive && !simPhotoUrl ? "block" : "hidden"}`}
                   />
 
                   {/* Captured Photo Preview */}
@@ -2180,11 +2166,10 @@ export default function SupervisorsAttendancePanel({ onClose }) {
                   <button
                     type="submit"
                     disabled={isSubmittingCheckIn || !simPhotoUrl}
-                    className={`inline-flex items-center gap-2 px-6 py-2.5 rounded-xl text-xs font-bold text-white transition shadow-sm cursor-pointer ${
-                      !simPhotoUrl
+                    className={`inline-flex items-center gap-2 px-6 py-2.5 rounded-xl text-xs font-bold text-white transition shadow-sm cursor-pointer ${!simPhotoUrl
                         ? "bg-slate-400 cursor-not-allowed opacity-70"
                         : "bg-[#008559] hover:bg-emerald-700 shadow-md"
-                    }`}
+                      }`}
                   >
                     {isSubmittingCheckIn ? (
                       <>
