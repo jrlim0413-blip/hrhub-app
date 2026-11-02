@@ -85,7 +85,7 @@ async function verifySourceApiCredentials(username, password, supervisor = null)
     const spvrId = String(supervisor.id || "").trim();
     try {
       localStorage.setItem(`hrhub_spvr_pwd_${spvrId}`, cleanPassword);
-    } catch {}
+    } catch { }
 
     return {
       success: true,
@@ -173,7 +173,7 @@ export default function SupervisorMobilePwaView() {
           username: usernameParam ? decodeURIComponent(usernameParam) : match.username,
           area: resolvedArea
         };
-        try { localStorage.setItem("hrhub_pwa_supervisor", JSON.stringify(merged)); } catch {}
+        try { localStorage.setItem("hrhub_pwa_supervisor", JSON.stringify(merged)); } catch { }
         return merged;
       }
       if (nameParam) {
@@ -183,7 +183,7 @@ export default function SupervisorMobilePwaView() {
           username: usernameParam ? decodeURIComponent(usernameParam) : `spvr-${idParam}`,
           area: resolvedArea
         };
-        try { localStorage.setItem("hrhub_pwa_supervisor", JSON.stringify(custom)); } catch {}
+        try { localStorage.setItem("hrhub_pwa_supervisor", JSON.stringify(custom)); } catch { }
         return custom;
       }
     }
@@ -195,7 +195,7 @@ export default function SupervisorMobilePwaView() {
         if (!parsed.area || parsed.area === "5") parsed.area = "Mandaue City";
         return parsed;
       }
-    } catch {}
+    } catch { }
 
     return SUPERVISORS[0];
   });
@@ -226,7 +226,7 @@ export default function SupervisorMobilePwaView() {
         const parsed = JSON.parse(saved);
         if (parsed && parsed.authenticated) return true;
       }
-    } catch {}
+    } catch { }
     return false;
   });
 
@@ -300,7 +300,7 @@ export default function SupervisorMobilePwaView() {
         sessionStorage.setItem(authKey, JSON.stringify(sessionData));
         localStorage.setItem("hrhub_pwa_supervisor", JSON.stringify(matchedSupervisor));
         localStorage.setItem(`hrhub_spvr_pwd_${matchedSupervisor.id}`, enteredPass);
-      } catch {}
+      } catch { }
 
       setIsAuthenticated(true);
       setInputPassword("");
@@ -322,7 +322,7 @@ export default function SupervisorMobilePwaView() {
       const authKey = `hrhub_spvr_auth_${currentSupervisor.id}_${todayStr}`;
       localStorage.removeItem(authKey);
       sessionStorage.removeItem(authKey);
-    } catch {}
+    } catch { }
     setIsAuthenticated(false);
     setInputPassword("");
     setLoginError("");
@@ -465,7 +465,7 @@ export default function SupervisorMobilePwaView() {
       streamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        videoRef.current.play().catch(() => {});
+        videoRef.current.play().catch(() => { });
       }
       setIsCameraActive(true);
     } catch (err) {
@@ -787,11 +787,10 @@ export default function SupervisorMobilePwaView() {
               <button
                 type="submit"
                 disabled={isAuthenticating}
-                className={`w-full py-3.5 rounded-2xl font-black text-xs flex items-center justify-center gap-2 shadow-xl transition cursor-pointer ${
-                  isAuthenticating
+                className={`w-full py-3.5 rounded-2xl font-black text-xs flex items-center justify-center gap-2 shadow-xl transition cursor-pointer ${isAuthenticating
                     ? "bg-slate-800 text-slate-400 cursor-not-allowed"
                     : "bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 shadow-emerald-950/60 active:scale-[0.98]"
-                }`}
+                  }`}
               >
                 {isAuthenticating ? (
                   <>
@@ -859,18 +858,6 @@ export default function SupervisorMobilePwaView() {
                   <span>Sign Out</span>
                 </button>
               </div>
-
-              {/* Operational Shift & Sector Ribbon */}
-              <div className="mt-4 pt-3.5 border-t border-slate-800/80 grid grid-cols-2 gap-2 text-left">
-                <div className="bg-slate-900/70 border border-slate-800/70 rounded-xl p-2.5">
-                  <span className="text-[9px] font-bold uppercase tracking-wider text-slate-500 block mb-0.5">Shift Window</span>
-                  <span className="text-[11px] font-bold text-slate-200">Morning Draw (06:00 AM - 02:30 PM)</span>
-                </div>
-                <div className="bg-slate-900/70 border border-slate-800/70 rounded-xl p-2.5">
-                  <span className="text-[9px] font-bold uppercase tracking-wider text-slate-500 block mb-0.5">Assigned Sector</span>
-                  <span className="text-[11px] font-bold text-emerald-400">📍 Mandaue City</span>
-                </div>
-              </div>
             </div>
 
             {/* 2. TODAY'S RECORDED STATUS CARD */}
@@ -896,11 +883,11 @@ export default function SupervisorMobilePwaView() {
                     <ShieldCheck size={26} />
                   </div>
                   <div className="text-xs text-slate-300 space-y-1">
-                    <p className="font-bold text-white">Official Cloud Attendance Confirmed</p>
+                    <p className="font-bold text-white">Official Cloud Daily Login Confirmed</p>
                     <p className="text-[10px] font-mono text-slate-400">
                       GPS: {todayRecord.latitude?.toFixed(5) || todayRecord.lat}, {todayRecord.longitude?.toFixed(5) || todayRecord.lng}
                     </p>
-                    <p className="text-[10px] text-teal-400">📍 Mandaue City Sector • Status: {todayRecord.status || "Present"}</p>
+                    <p className="text-[10px] text-teal-400">📍 Mandaue City Sector • Status: {todayRecord.status || "Logged-in"}</p>
                   </div>
                 </div>
 
@@ -940,13 +927,79 @@ export default function SupervisorMobilePwaView() {
               </div>
             )}
 
-            {/* 4. STEP 1: LIVE PHOTO VERIFICATION */}
+            {/* 4. STEP 1: SATELLITE GPS & MANDAUE STATION LOCK (MOVED TO TOP) */}
             {(!todayRecord || submitSuccess === false) && (
               <div className="rounded-3xl border border-slate-800/90 bg-slate-950/80 p-5 shadow-2xl space-y-3.5">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <span className="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-400 font-bold text-[11px] flex items-center justify-center border border-emerald-500/40">
                       01
+                    </span>
+                    <span className="text-xs font-black text-white uppercase tracking-wider flex items-center gap-1.5">
+                      <MapPin size={14} className="text-emerald-400" />
+                      Satellite GPS &amp; Station Lock
+                    </span>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={requestGpsLocation}
+                    disabled={isGettingGps}
+                    className="text-[10px] font-bold text-slate-300 bg-slate-900 border border-slate-700/80 px-2.5 py-1 rounded-xl flex items-center gap-1.5 hover:text-white cursor-pointer disabled:opacity-50 transition active:scale-95"
+                  >
+                    <RefreshCw size={11} className={isGettingGps ? "animate-spin text-emerald-400" : "text-emerald-400"} />
+                    <span>{isGettingGps ? "Acquiring..." : "Re-detect GPS"}</span>
+                  </button>
+                </div>
+
+                {/* Embedded Interactive Map */}
+                <div className="w-full h-44 rounded-2xl overflow-hidden border border-slate-800 bg-slate-900 relative shadow-inner">
+                  {lat && lng ? (
+                    <iframe
+                      title="Supervisor Field Location Map"
+                      src={`https://maps.google.com/maps?q=${lat},${lng}&hl=en&z=17&output=embed`}
+                      className="w-full h-full border-0"
+                      loading="lazy"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex flex-col items-center justify-center p-4 text-center text-slate-500 space-y-1">
+                      <MapPin size={24} className="animate-bounce text-emerald-500" />
+                      <p className="text-xs font-semibold text-slate-400">Locking Mandaue City GPS position...</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* GPS Coordinates Strip */}
+                <div className="flex items-center justify-between text-[11px] font-mono text-slate-400 bg-slate-900/90 p-2.5 rounded-xl border border-slate-800">
+                  <div className="flex items-center gap-1.5 text-emerald-400 font-bold">
+                    <MapPin size={13} />
+                    <span>{lat || "Detecting..."}, {lng || "Detecting..."}</span>
+                  </div>
+                  <span className="text-[10px] text-teal-400 font-sans font-semibold">
+                    {accuracy ? `±${accuracy}m High Precision` : "📍 Mandaue City"}
+                  </span>
+                </div>
+
+                {/* Optional Mandaue Station/Landmark Note */}
+                <div>
+                  <input
+                    type="text"
+                    placeholder="Mandaue City Station / Landmark Note (Optional)"
+                    value={locationLandmark}
+                    onChange={(e) => setLocationLandmark(e.target.value)}
+                    className="w-full text-xs bg-slate-900 border border-slate-800 rounded-xl px-3 py-2.5 text-white placeholder-slate-500 focus:ring-1 focus:ring-emerald-500 outline-none shadow-inner"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* 5. STEP 2: LIVE PHOTO VERIFICATION (MOVED TO BOTTOM) */}
+            {(!todayRecord || submitSuccess === false) && (
+              <div className="rounded-3xl border border-slate-800/90 bg-slate-950/80 p-5 shadow-2xl space-y-3.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-400 font-bold text-[11px] flex items-center justify-center border border-emerald-500/40">
+                      02
                     </span>
                     <span className="text-xs font-black text-white uppercase tracking-wider flex items-center gap-1.5">
                       <Camera size={14} className="text-emerald-400" />
@@ -1070,72 +1123,6 @@ export default function SupervisorMobilePwaView() {
               </div>
             )}
 
-            {/* 5. STEP 2: SATELLITE GPS & MANDAUE STATION LOCK */}
-            {(!todayRecord || submitSuccess === false) && (
-              <div className="rounded-3xl border border-slate-800/90 bg-slate-950/80 p-5 shadow-2xl space-y-3.5">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-400 font-bold text-[11px] flex items-center justify-center border border-emerald-500/40">
-                      02
-                    </span>
-                    <span className="text-xs font-black text-white uppercase tracking-wider flex items-center gap-1.5">
-                      <MapPin size={14} className="text-emerald-400" />
-                      Satellite GPS &amp; Station Lock
-                    </span>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={requestGpsLocation}
-                    disabled={isGettingGps}
-                    className="text-[10px] font-bold text-slate-300 bg-slate-900 border border-slate-700/80 px-2.5 py-1 rounded-xl flex items-center gap-1.5 hover:text-white cursor-pointer disabled:opacity-50 transition active:scale-95"
-                  >
-                    <RefreshCw size={11} className={isGettingGps ? "animate-spin text-emerald-400" : "text-emerald-400"} />
-                    <span>{isGettingGps ? "Acquiring..." : "Re-detect GPS"}</span>
-                  </button>
-                </div>
-
-                {/* Embedded Interactive Map */}
-                <div className="w-full h-44 rounded-2xl overflow-hidden border border-slate-800 bg-slate-900 relative shadow-inner">
-                  {lat && lng ? (
-                    <iframe
-                      title="Supervisor Field Location Map"
-                      src={`https://maps.google.com/maps?q=${lat},${lng}&hl=en&z=17&output=embed`}
-                      className="w-full h-full border-0"
-                      loading="lazy"
-                    />
-                  ) : (
-                    <div className="w-full h-full flex flex-col items-center justify-center p-4 text-center text-slate-500 space-y-1">
-                      <MapPin size={24} className="animate-bounce text-emerald-500" />
-                      <p className="text-xs font-semibold text-slate-400">Locking Mandaue City GPS position...</p>
-                    </div>
-                  )}
-                </div>
-
-                {/* GPS Coordinates Strip */}
-                <div className="flex items-center justify-between text-[11px] font-mono text-slate-400 bg-slate-900/90 p-2.5 rounded-xl border border-slate-800">
-                  <div className="flex items-center gap-1.5 text-emerald-400 font-bold">
-                    <MapPin size={13} />
-                    <span>{lat || "Detecting..."}, {lng || "Detecting..."}</span>
-                  </div>
-                  <span className="text-[10px] text-teal-400 font-sans font-semibold">
-                    {accuracy ? `±${accuracy}m High Precision` : "📍 Mandaue City"}
-                  </span>
-                </div>
-
-                {/* Optional Mandaue Station/Landmark Note */}
-                <div>
-                  <input
-                    type="text"
-                    placeholder="Mandaue City Station / Landmark Note (Optional)"
-                    value={locationLandmark}
-                    onChange={(e) => setLocationLandmark(e.target.value)}
-                    className="w-full text-xs bg-slate-900 border border-slate-800 rounded-xl px-3 py-2.5 text-white placeholder-slate-500 focus:ring-1 focus:ring-emerald-500 outline-none shadow-inner"
-                  />
-                </div>
-              </div>
-            )}
-
             {/* 6. SUBMIT BUTTON DOCK */}
             {(!todayRecord || submitSuccess === false) && (
               <div className="pt-1">
@@ -1143,11 +1130,10 @@ export default function SupervisorMobilePwaView() {
                   type="button"
                   onClick={handleSubmitAttendance}
                   disabled={isSubmitting || !capturedPhotoUrl || !lat}
-                  className={`w-full py-4 rounded-2xl font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-2xl transition cursor-pointer ${
-                    capturedPhotoUrl && lat && !isSubmitting
+                  className={`w-full py-4 rounded-2xl font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-2xl transition cursor-pointer ${capturedPhotoUrl && lat && !isSubmitting
                       ? "bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 shadow-emerald-950/70 active:scale-[0.98]"
                       : "bg-slate-900 text-slate-500 border border-slate-800 cursor-not-allowed shadow-none"
-                  }`}
+                    }`}
                 >
                   {isSubmitting ? (
                     <>
