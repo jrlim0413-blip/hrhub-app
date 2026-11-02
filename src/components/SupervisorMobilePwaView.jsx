@@ -38,35 +38,47 @@ function getTodayString() {
 }
 
 /**
- * Helper to match any valid supervisor alias (e.g. "asaberon", "spvr-arlfred", "21", "arlfred")
+ * Generates strict, collision-free aliases for a supervisor
+ * e.g. "asaberon", "spvr-arlfred", "arlfred", "21", "arlfred saberon", "saberon"
+ */
+function getSupervisorAliases(s) {
+  if (!s) return [];
+  const aliases = new Set();
+  const rawUser = String(s.username || "").trim().toLowerCase();
+  const id = String(s.id || "").trim();
+  const fullName = String(s.fullName || "").trim().toLowerCase();
+
+  if (rawUser) {
+    aliases.add(rawUser);
+    aliases.add(rawUser.replace(/^spvr-/, ""));
+  }
+  if (id) aliases.add(id);
+  if (fullName) {
+    aliases.add(fullName);
+    const parts = fullName
+      .replace(/[^a-z0-9\s]/g, " ")
+      .split(/\s+/)
+      .filter((p) => p && p !== "jr" && p !== "sr" && p !== "iii" && p !== "ii");
+    if (parts.length >= 2) {
+      aliases.add(parts[0] + parts[parts.length - 1]);
+      aliases.add(parts[0][0] + parts[parts.length - 1]);
+      aliases.add(parts[0]);
+      aliases.add(parts[parts.length - 1]);
+    } else if (parts.length === 1) {
+      aliases.add(parts[0]);
+    }
+  }
+  return Array.from(aliases).filter(Boolean);
+}
+
+/**
+ * Strict equality check against supervisor's assigned aliases
  */
 function isSupervisorAccountMatch(enteredUser, supervisor) {
   if (!supervisor || !enteredUser) return false;
   const clean = String(enteredUser).trim().toLowerCase();
-  const rawUser = String(supervisor.username || "").trim().toLowerCase();
-  const id = String(supervisor.id || "").trim();
-  const fullName = String(supervisor.fullName || "").trim().toLowerCase();
-
-  if (clean === rawUser) return true;
-  if (clean === id) return true;
-  if (rawUser && clean === rawUser.replace(/^spvr-/, "")) return true;
-  if (clean === fullName) return true;
-
-  // First initial + last name alias (e.g. "asaberon" for "ARLFRED SABERON")
-  const parts = fullName.split(/\s+/).filter(Boolean);
-  if (parts.length >= 2) {
-    const firstInitialLastName = `${parts[0][0]}${parts[parts.length - 1]}`;
-    if (clean === firstInitialLastName) return true;
-    if (clean === parts[0]) return true;
-    if (clean === parts[parts.length - 1]) return true;
-  }
-
-  // Substring match for name parts
-  if (parts.length > 0 && parts.some((p) => clean === p || (p.length > 3 && clean.includes(p)))) {
-    return true;
-  }
-
-  return false;
+  const aliases = getSupervisorAliases(supervisor);
+  return aliases.includes(clean);
 }
 
 /**
@@ -154,6 +166,14 @@ export default function SupervisorMobilePwaView() {
   const [showIosTip, setShowIosTip] = useState(false);
 
   // Supervisor Identity (derived strictly from magic link or storage)
+  const isAssignedLink = Boolean(
+    typeof window !== "undefined" &&
+    (() => {
+      const params = new URLSearchParams(window.location.search);
+      return params.get("id") || params.get("spvr") || params.get("supervisorId") || params.get("username");
+    })()
+  );
+
   const [currentSupervisor, setCurrentSupervisor] = useState(() => {
     if (typeof window === "undefined") return SUPERVISORS[0];
     const params = new URLSearchParams(window.location.search);
@@ -188,6 +208,14 @@ export default function SupervisorMobilePwaView() {
       }
     }
 
+    if (usernameParam) {
+      const cleanUser = decodeURIComponent(usernameParam).toLowerCase().trim();
+      const match = SUPERVISORS.find((s) => isSupervisorAccountMatch(cleanUser, s));
+      if (match) {
+        return match;
+      }
+    }
+
     try {
       const saved = localStorage.getItem("hrhub_pwa_supervisor");
       if (saved) {
@@ -216,15 +244,22 @@ export default function SupervisorMobilePwaView() {
     return () => clearInterval(timer);
   }, []);
 
-  // Authentication State
+  // Authentication State with strict per-supervisor session isolation
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
     if (typeof window === "undefined") return false;
     try {
-      const authKey = `hrhub_spvr_auth_${currentSupervisor?.id}_${todayStr}`;
+      const params = new URLSearchParams(window.location.search);
+      const idParam = params.get("id") || params.get("spvr") || params.get("supervisorId");
+      const targetId = idParam || currentSupervisor?.id;
+      if (!targetId) return false;
+
+      const authKey = `hrhub_spvr_auth_${targetId}_${todayStr}`;
       const saved = localStorage.getItem(authKey) || sessionStorage.getItem(authKey);
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (parsed && parsed.authenticated) return true;
+        if (parsed && parsed.authenticated && String(parsed.supervisorId) === String(targetId)) {
+          return true;
+        }
       }
     } catch { }
     return false;
@@ -254,37 +289,46 @@ export default function SupervisorMobilePwaView() {
       return;
     }
 
-    // Check if the current URL has an explicit ID parameter
-    const params = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
-    const hasExplicitId = params && (params.get("id") || params.get("spvr") || params.get("supervisorId"));
-
     let matchedSupervisor = null;
 
-    if (hasExplicitId) {
+    // Strict Link-to-Account Enforcement:
+    if (isAssignedLink) {
       // Must strictly match the supervisor assigned to this specific row link
       if (isSupervisorAccountMatch(enteredUser, currentSupervisor)) {
         matchedSupervisor = currentSupervisor;
+      } else {
+        // Explicitly check if the credentials belong to another supervisor in the directory
+        const otherSupervisor = SUPERVISORS.find(
+          (s) => String(s.id) !== String(currentSupervisor.id) && isSupervisorAccountMatch(enteredUser, s)
+        );
+
+        if (otherSupervisor) {
+          setLoginError(
+            `Access Denied: Ang terminal link na ito ay eksklusibo lamang para kay ${currentSupervisor.fullName}. Hindi maaaring gamitin ang account ni ${otherSupervisor.fullName} dito. Mangyaring buksan ang sariling opisyal na link para sa iyong account.`
+          );
+        } else {
+          setLoginError("Invalid credentials for this terminal link. Please verify your assigned username and password.");
+        }
+        return;
       }
     } else {
-      // Generic link: match with current supervisor or any supervisor in directory
+      // Generic unassigned link: match with current supervisor or any supervisor in directory
       if (isSupervisorAccountMatch(enteredUser, currentSupervisor)) {
         matchedSupervisor = currentSupervisor;
       } else {
         matchedSupervisor = SUPERVISORS.find((s) => isSupervisorAccountMatch(enteredUser, s));
       }
-    }
 
-    if (!matchedSupervisor) {
-      setLoginError("Invalid credentials for this terminal link. Please verify your username and password.");
-      return;
+      if (!matchedSupervisor) {
+        setLoginError("Invalid credentials. Please verify your supervisor username and password.");
+        return;
+      }
+
+      setCurrentSupervisor(matchedSupervisor);
     }
 
     setIsAuthenticating(true);
     try {
-      if (matchedSupervisor.id !== currentSupervisor.id) {
-        setCurrentSupervisor(matchedSupervisor);
-      }
-
       const authKey = `hrhub_spvr_auth_${matchedSupervisor.id}_${todayStr}`;
       const sessionData = {
         authenticated: true,
@@ -308,7 +352,7 @@ export default function SupervisorMobilePwaView() {
 
       // Auto-request GPS and Camera upon login
       requestGpsLocation();
-      startCamera(cameraFacingMode);
+      startCamera("user");
     } catch (err) {
       setLoginError("Authentication error. Please try again.");
     } finally {
@@ -333,8 +377,9 @@ export default function SupervisorMobilePwaView() {
   const [todayRecord, setTodayRecord] = useState(null);
   const [isCheckingTodayRecord, setIsCheckingTodayRecord] = useState(true);
 
-  // Camera State
+  // Camera State with Fast Mobile Detection
   const [isCameraActive, setIsCameraActive] = useState(false);
+  const [isVideoReady, setIsVideoReady] = useState(false);
   const [cameraFacingMode, setCameraFacingMode] = useState("user"); // 'user' (selfie) | 'environment' (area)
   const [cameraError, setCameraError] = useState("");
   const [capturedPhotoUrl, setCapturedPhotoUrl] = useState("");
@@ -446,28 +491,61 @@ export default function SupervisorMobilePwaView() {
     );
   };
 
-  // Start Camera Stream
+  // Start Camera Stream with Instant Front Camera Detection
   const startCamera = async (facing = cameraFacingMode) => {
     stopCamera();
+    setIsVideoReady(false);
     setCameraError("");
+
+    if (typeof navigator === "undefined" || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      setCameraError("Camera API is not supported in this browser.");
+      return;
+    }
+
     try {
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        throw new Error("Camera API is not supported in this browser");
+      const targetFacing = facing === "user" ? "user" : "environment";
+      let stream;
+
+      // Tier 1: Try optimal mobile front-facing camera
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: { ideal: targetFacing },
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
+          },
+          audio: false
+        });
+      } catch (err1) {
+        try {
+          // Tier 2: Instant fallback without resolution constraints (prevents hardware delay on mobile)
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: targetFacing },
+            audio: false
+          });
+        } catch (err2) {
+          // Tier 3: Universal fallback to any available video track
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: true,
+            audio: false
+          });
+        }
       }
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: { ideal: facing },
-          width: { ideal: 1280 },
-          height: { ideal: 720 }
-        },
-        audio: false
-      });
+
       streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        videoRef.current.play().catch(() => { });
-      }
       setIsCameraActive(true);
+
+      // Attach immediately if videoRef element is already in DOM
+      if (videoRef.current) {
+        const video = videoRef.current;
+        video.srcObject = stream;
+        video.setAttribute("playsinline", "true");
+        video.setAttribute("webkit-playsinline", "true");
+        video.muted = true;
+        try {
+          await video.play();
+        } catch { }
+      }
     } catch (err) {
       console.warn("Camera start failed, fallback to native camera intent:", err);
       setCameraError(err.message || "Cannot open camera viewfinder directly.");
@@ -480,16 +558,32 @@ export default function SupervisorMobilePwaView() {
       streamRef.current.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
     }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
     setIsCameraActive(false);
+    setIsVideoReady(false);
   };
+
+  // Reactive binding: ensures stream is immediately attached to <video> when element renders
+  useEffect(() => {
+    if (isCameraActive && videoRef.current && streamRef.current) {
+      const video = videoRef.current;
+      if (video.srcObject !== streamRef.current) {
+        video.srcObject = streamRef.current;
+      }
+      video.setAttribute("playsinline", "true");
+      video.setAttribute("webkit-playsinline", "true");
+      video.muted = true;
+      video.play().catch(() => { });
+    }
+  }, [isCameraActive]);
 
   // Flip Camera Front / Back
   const toggleCameraFacing = () => {
     const nextMode = cameraFacingMode === "user" ? "environment" : "user";
     setCameraFacingMode(nextMode);
-    if (isCameraActive) {
-      startCamera(nextMode);
-    }
+    startCamera(nextMode);
   };
 
   // Shutter Snapshot
@@ -605,7 +699,7 @@ export default function SupervisorMobilePwaView() {
         fullName: currentSupervisor.fullName,
         username: currentSupervisor.username || "",
         timeIn: currentTime,
-        status: "Present",
+        status: "Logged-in",
         area: "Mandaue City",
         shift: "Morning Draw (06:00 AM - 02:30 PM)",
         latitude: parseFloat(lat),
@@ -788,8 +882,8 @@ export default function SupervisorMobilePwaView() {
                 type="submit"
                 disabled={isAuthenticating}
                 className={`w-full py-3.5 rounded-2xl font-black text-xs flex items-center justify-center gap-2 shadow-xl transition cursor-pointer ${isAuthenticating
-                    ? "bg-slate-800 text-slate-400 cursor-not-allowed"
-                    : "bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 shadow-emerald-950/60 active:scale-[0.98]"
+                  ? "bg-slate-800 text-slate-400 cursor-not-allowed"
+                  : "bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 shadow-emerald-950/60 active:scale-[0.98]"
                   }`}
               >
                 {isAuthenticating ? (
@@ -1044,15 +1138,25 @@ export default function SupervisorMobilePwaView() {
                       </button>
                     </div>
                   ) : isCameraActive ? (
-                    // Live Viewfinder with professional camera styling
+                    // Live Viewfinder with instant front camera detection
                     <>
                       <video
                         ref={videoRef}
                         playsInline
+                        webkit-playsinline="true"
                         autoPlay
                         muted
-                        className={`w-full h-full object-cover ${cameraFacingMode === "user" ? "scale-x-[-1]" : ""}`}
+                        onLoadedData={() => setIsVideoReady(true)}
+                        onCanPlay={() => setIsVideoReady(true)}
+                        className={`w-full h-full object-cover transition-opacity duration-300 ${isVideoReady ? "opacity-100" : "opacity-0"} ${cameraFacingMode === "user" ? "scale-x-[-1]" : ""}`}
                       />
+
+                      {!isVideoReady && (
+                        <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-950 space-y-2">
+                          <div className="w-9 h-9 rounded-full border-2 border-emerald-500/30 border-t-emerald-400 animate-spin" />
+                          <p className="text-[11px] text-emerald-400 font-bold tracking-wide animate-pulse">Detecting Front Camera...</p>
+                        </div>
+                      )}
 
                       {/* Viewfinder Reticle & Corner Brackets */}
                       <div className="absolute inset-5 pointer-events-none border border-white/15 rounded-2xl flex items-center justify-center">
@@ -1091,12 +1195,14 @@ export default function SupervisorMobilePwaView() {
                     <div className="text-center p-4 space-y-2">
                       <VideoOff size={32} className="mx-auto text-slate-600" />
                       <p className="text-xs text-slate-400">Camera viewfinder is inactive</p>
+                      {cameraError && <p className="text-[10px] text-rose-400 max-w-xs">{cameraError}</p>}
                       <button
                         type="button"
                         onClick={() => startCamera(cameraFacingMode)}
-                        className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl cursor-pointer transition shadow-sm"
+                        className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl cursor-pointer transition shadow-sm inline-flex items-center gap-1.5"
                       >
-                        Open Camera
+                        <Camera size={13} />
+                        <span>Start Front Camera</span>
                       </button>
                     </div>
                   )}
@@ -1131,8 +1237,8 @@ export default function SupervisorMobilePwaView() {
                   onClick={handleSubmitAttendance}
                   disabled={isSubmitting || !capturedPhotoUrl || !lat}
                   className={`w-full py-4 rounded-2xl font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-2xl transition cursor-pointer ${capturedPhotoUrl && lat && !isSubmitting
-                      ? "bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 shadow-emerald-950/70 active:scale-[0.98]"
-                      : "bg-slate-900 text-slate-500 border border-slate-800 cursor-not-allowed shadow-none"
+                    ? "bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 shadow-emerald-950/70 active:scale-[0.98]"
+                    : "bg-slate-900 text-slate-500 border border-slate-800 cursor-not-allowed shadow-none"
                     }`}
                 >
                   {isSubmitting ? (
