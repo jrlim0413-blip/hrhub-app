@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "./lib/supabase";
 import Dashboard from "./page/Dashboard";
 import SupervisorMobilePwaView from "./components/SupervisorMobilePwaView";
+import ErrorBoundary from "./components/ErrorBoundary";
 import {
   getStoredEmployees,
   saveActivatedPassword,
@@ -653,7 +654,11 @@ const App = () => {
   };
 
     if (isSupervisorPwaMode) {
-    return <SupervisorMobilePwaView />;
+    return (
+      <ErrorBoundary>
+        <SupervisorMobilePwaView />
+      </ErrorBoundary>
+    );
   }
 
   if (isLoggedIn) {

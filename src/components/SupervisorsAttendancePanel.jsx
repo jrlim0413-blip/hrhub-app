@@ -6,7 +6,7 @@ import {
   ChevronLeft, ChevronRight, ShieldCheck, TrendingUp,
   AlertCircle, Eye, Check, Camera, Smartphone,
   ExternalLink, Navigation, LocateFixed,
-  Map, Layers, Shield, Cloud, Loader2, Video, VideoOff, RotateCw,
+  Map as MapIcon, Layers, Shield, Cloud, Loader2, Video, VideoOff, RotateCw,
   UserPlus, Key, Trash2, ShieldAlert, Sparkles, EyeOff
 } from "lucide-react";
 import { API_CONFIG } from "../config/apiConfig";
@@ -2182,7 +2182,7 @@ export default function SupervisorsAttendancePanel({ onClose }) {
                         rel="noreferrer"
                         className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold text-center inline-flex items-center justify-center gap-1.5 transition shadow-xs"
                       >
-                        <Map size={14} />
+                        <MapIcon size={14} />
                         <span>Open Fullscreen in Google Maps</span>
                       </a>
                     )}

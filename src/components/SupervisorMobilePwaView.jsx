@@ -1,9 +1,9 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import {
   Camera, MapPin, CheckCircle2, AlertCircle, RefreshCw, Smartphone,
   RotateCw, Video, VideoOff, Download, ChevronRight, ShieldCheck,
   Clock, Calendar, User, ExternalLink, ArrowRight, LogOut, Check,
-  Sparkles, Layers, Map, Lock, Key, Eye, EyeOff, LogIn, Shield,
+  Sparkles, Layers, Lock, Key, Eye, EyeOff, LogIn, Shield,
   Crosshair, Radio, CheckCircle, Hash, AlertTriangle, Copy
 } from "lucide-react";
 import {
@@ -508,7 +508,7 @@ export default function SupervisorMobilePwaView() {
     }
 
     syncAccountIdentity();
-  }, [currentSupervisor.id]);
+  }, []);
 
   // Handle Supervisor Login Submission with strict account link isolation & Source API verification
   const handleSupervisorLogin = async (e) => {
