@@ -276,7 +276,7 @@ export default function SupervisorsAttendancePanel({ onClose }) {
       `🔒 PAALALA SA SEGURIDAD:`,
       `Ang link na ito ay eksklusibo lamang para sa iyong account (#${spvrId}). Huwag ibahagi sa ibang tao.`,
       `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
-      `Simpal Group of Companies • HR Technology Portal`
+      `SGC • HR Technology Portal`
     ].join("\n");
 
     if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -1172,8 +1172,8 @@ export default function SupervisorsAttendancePanel({ onClose }) {
               type="button"
               onClick={handleSetToday}
               className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer shadow-2xs ${selectedDate === getTodayString()
-                  ? "bg-[#008559] text-white"
-                  : "bg-white text-slate-700 border border-slate-200/80 hover:bg-slate-100"
+                ? "bg-[#008559] text-white"
+                : "bg-white text-slate-700 border border-slate-200/80 hover:bg-slate-100"
                 }`}
             >
               Today
@@ -1350,8 +1350,8 @@ export default function SupervisorsAttendancePanel({ onClose }) {
                 type="button"
                 onClick={() => setStatusFilter(tab.id)}
                 className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer shrink-0 flex items-center gap-1.5 ${isSelected
-                    ? "bg-slate-900 text-white shadow-xs"
-                    : "bg-slate-100 text-slate-600 hover:bg-slate-200/80"
+                  ? "bg-slate-900 text-white shadow-xs"
+                  : "bg-slate-100 text-slate-600 hover:bg-slate-200/80"
                   }`}
               >
                 <span>{tab.label}</span>
@@ -1535,28 +1535,28 @@ export default function SupervisorsAttendancePanel({ onClose }) {
                       <td className="py-3 px-3">
                         <span
                           className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold ${record.status === "Present"
-                              ? "bg-emerald-100 text-emerald-800"
-                              : record.status === "Late"
-                                ? "bg-amber-100 text-amber-800"
-                                : record.status === "Official Business"
-                                  ? "bg-sky-100 text-sky-800"
-                                  : record.status === "On Leave"
-                                    ? "bg-indigo-100 text-indigo-800"
-                                    : record.status === "Day Off"
-                                      ? "bg-slate-200 text-slate-700"
-                                      : "bg-slate-100 text-slate-600"
+                            ? "bg-emerald-100 text-emerald-800"
+                            : record.status === "Late"
+                              ? "bg-amber-100 text-amber-800"
+                              : record.status === "Official Business"
+                                ? "bg-sky-100 text-sky-800"
+                                : record.status === "On Leave"
+                                  ? "bg-indigo-100 text-indigo-800"
+                                  : record.status === "Day Off"
+                                    ? "bg-slate-200 text-slate-700"
+                                    : "bg-slate-100 text-slate-600"
                             }`}
                         >
                           <span
                             className={`w-1.5 h-1.5 rounded-full ${record.status === "Present"
-                                ? "bg-emerald-500"
-                                : record.status === "Late"
-                                  ? "bg-amber-500"
-                                  : record.status === "Official Business"
-                                    ? "bg-sky-500"
-                                    : record.status === "On Leave"
-                                      ? "bg-indigo-500"
-                                      : "bg-slate-400"
+                              ? "bg-emerald-500"
+                              : record.status === "Late"
+                                ? "bg-amber-500"
+                                : record.status === "Official Business"
+                                  ? "bg-sky-500"
+                                  : record.status === "On Leave"
+                                    ? "bg-indigo-500"
+                                    : "bg-slate-400"
                               }`}
                           />
                           {record.status}
@@ -1567,8 +1567,8 @@ export default function SupervisorsAttendancePanel({ onClose }) {
                       <td className="py-3 px-3">
                         <span
                           className={`inline-flex items-center gap-1.5 font-mono font-bold text-xs px-2.5 py-1 rounded-lg ${record.timeIn !== "--"
-                              ? "bg-emerald-50 text-emerald-800 border border-emerald-200/80"
-                              : "bg-slate-100 text-slate-400"
+                            ? "bg-emerald-50 text-emerald-800 border border-emerald-200/80"
+                            : "bg-slate-100 text-slate-400"
                             }`}
                         >
                           <Clock size={12} className={record.timeIn !== "--" ? "text-emerald-600" : "text-slate-400"} />
@@ -1635,8 +1635,8 @@ export default function SupervisorsAttendancePanel({ onClose }) {
                             type="button"
                             onClick={() => handleCopyPwaLink(record)}
                             className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-bold text-xs shadow-2xs transition active:scale-95 cursor-pointer ${copiedSupervisorId === String(record.supervisorId)
-                                ? "bg-emerald-600 text-white shadow-emerald-900/20"
-                                : "bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-200/80"
+                              ? "bg-emerald-600 text-white shadow-emerald-900/20"
+                              : "bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-200/80"
                               }`}
                             title="Copy personalized PWA auto-login link for this supervisor"
                           >
@@ -1704,14 +1704,14 @@ export default function SupervisorsAttendancePanel({ onClose }) {
 
                     <span
                       className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold ${record.status === "Present"
-                          ? "bg-emerald-100 text-emerald-800"
-                          : record.status === "Late"
-                            ? "bg-amber-100 text-amber-800"
-                            : record.status === "Official Business"
-                              ? "bg-sky-100 text-sky-800"
-                              : record.status === "On Leave"
-                                ? "bg-indigo-100 text-indigo-800"
-                                : "bg-slate-100 text-slate-600"
+                        ? "bg-emerald-100 text-emerald-800"
+                        : record.status === "Late"
+                          ? "bg-amber-100 text-amber-800"
+                          : record.status === "Official Business"
+                            ? "bg-sky-100 text-sky-800"
+                            : record.status === "On Leave"
+                              ? "bg-indigo-100 text-indigo-800"
+                              : "bg-slate-100 text-slate-600"
                         }`}
                     >
                       {record.status}
@@ -1829,8 +1829,8 @@ export default function SupervisorsAttendancePanel({ onClose }) {
                       type="button"
                       onClick={() => handleQuickStatusChange(record.supervisorId, "Present")}
                       className={`px-2 py-1 rounded-lg text-[10px] font-bold transition cursor-pointer ${record.status === "Present"
-                          ? "bg-emerald-600 text-white"
-                          : "bg-slate-100 hover:bg-emerald-50 text-slate-700"
+                        ? "bg-emerald-600 text-white"
+                        : "bg-slate-100 hover:bg-emerald-50 text-slate-700"
                         }`}
                     >
                       Present
@@ -1840,8 +1840,8 @@ export default function SupervisorsAttendancePanel({ onClose }) {
                       type="button"
                       onClick={() => handleQuickStatusChange(record.supervisorId, "Late")}
                       className={`px-2 py-1 rounded-lg text-[10px] font-bold transition cursor-pointer ${record.status === "Late"
-                          ? "bg-amber-500 text-white"
-                          : "bg-slate-100 hover:bg-amber-50 text-slate-700"
+                        ? "bg-amber-500 text-white"
+                        : "bg-slate-100 hover:bg-amber-50 text-slate-700"
                         }`}
                     >
                       Late
@@ -1913,8 +1913,8 @@ export default function SupervisorsAttendancePanel({ onClose }) {
 
                       <span
                         className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${ag.isActive === 1 || ag.isActive === true || ag.status === "active"
-                            ? "bg-emerald-100 text-emerald-800"
-                            : "bg-slate-200 text-slate-600"
+                          ? "bg-emerald-100 text-emerald-800"
+                          : "bg-slate-200 text-slate-600"
                           }`}
                       >
                         {ag.isActive === 1 || ag.isActive === true || ag.status === "active" ? "Active" : "Inactive"}
@@ -2393,8 +2393,8 @@ export default function SupervisorsAttendancePanel({ onClose }) {
                     type="submit"
                     disabled={isSubmittingCheckIn || !simPhotoUrl}
                     className={`inline-flex items-center gap-2 px-6 py-2.5 rounded-xl text-xs font-bold text-white transition shadow-sm cursor-pointer ${!simPhotoUrl
-                        ? "bg-slate-400 cursor-not-allowed opacity-70"
-                        : "bg-[#008559] hover:bg-emerald-700 shadow-md"
+                      ? "bg-slate-400 cursor-not-allowed opacity-70"
+                      : "bg-[#008559] hover:bg-emerald-700 shadow-md"
                       }`}
                   >
                     {isSubmittingCheckIn ? (

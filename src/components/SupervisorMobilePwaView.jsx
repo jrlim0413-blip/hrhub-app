@@ -219,7 +219,7 @@ async function verifySourceApiCredentials(username, password, supervisor = null)
 
   return {
     success: false,
-    error: "Invalid password. The password did not match your official Source API credentials."
+    error: "Invalid password. The password did not match your official credentials."
   };
 }
 
@@ -414,16 +414,34 @@ export default function SupervisorMobilePwaView() {
     const usernameParam = params.get("username");
 
     if (idParam) {
+      const fieldAccounts = getLocalFieldAccounts();
+      const fmMatch = fieldAccounts.find((f) => String(f.id).toLowerCase() === String(idParam).toLowerCase());
+      if (fmMatch) {
+        if (String(fmMatch.id) !== String(currentSupervisor.id)) {
+          setCurrentSupervisor({ ...fmMatch, role: "Field Monitoring" });
+          setIsAuthenticated(false);
+        }
+        return;
+      }
       const match = SUPERVISORS.find((s) => String(s.id) === String(idParam));
       if (match && String(match.id) !== String(currentSupervisor.id)) {
-        setCurrentSupervisor(match);
+        setCurrentSupervisor({ ...match, role: "Supervisor" });
         setIsAuthenticated(false);
       }
     } else if (usernameParam) {
       const cleanUser = decodeURIComponent(usernameParam).toLowerCase().trim();
+      const fieldAccounts = getLocalFieldAccounts();
+      const fmMatch = fieldAccounts.find((f) => f.username?.toLowerCase() === cleanUser);
+      if (fmMatch) {
+        if (String(fmMatch.id) !== String(currentSupervisor.id)) {
+          setCurrentSupervisor({ ...fmMatch, role: "Field Monitoring" });
+          setIsAuthenticated(false);
+        }
+        return;
+      }
       const match = SUPERVISORS.find((s) => isSupervisorAccountMatch(cleanUser, s));
       if (match && String(match.id) !== String(currentSupervisor.id)) {
-        setCurrentSupervisor(match);
+        setCurrentSupervisor({ ...match, role: "Supervisor" });
         setIsAuthenticated(false);
       }
     }
@@ -447,46 +465,32 @@ export default function SupervisorMobilePwaView() {
       return;
     }
 
-    // 1. ACCOUNT-TO-LINK LOCK (if opened with assigned link)
-    let targetAccount = currentSupervisor;
+    // 1. STRICT ACCOUNT-TO-LINK LOCK:
+    // This terminal strictly belongs to currentSupervisor (e.g. ARLFRED SABERON)
+    const isTargetSupervisor = isSupervisorAccountMatch(enteredUser, currentSupervisor);
 
-    if (isAssignedLink) {
-      const isTargetSupervisor = isSupervisorAccountMatch(enteredUser, currentSupervisor);
-      if (!isTargetSupervisor) {
-        const otherSupervisor = SUPERVISORS.find((s) => isSupervisorAccountMatch(enteredUser, s));
-        const fieldAccounts = getLocalFieldAccounts();
-        const otherFm = fieldAccounts.find((f) => isSupervisorAccountMatch(enteredUser, f));
-        const otherName = otherSupervisor?.fullName || otherFm?.fullName;
-
-        if (otherName) {
-          setLoginError(
-            `Access Denied: Ang terminal link na ito ay eksklusibo lamang para kay ${currentSupervisor.fullName} (ID #${currentSupervisor.id}). Hindi maaaring gamitin ang account ni ${otherName} dito. Mangyaring buksan ang sariling opisyal na link para sa iyong account.`
-          );
-        } else {
-          setLoginError(
-            `Access Denied: Hindi tugma ang account sa link na ito. Ang terminal link na ito ay nakalaan lamang para kay ${currentSupervisor.fullName}.`
-          );
-        }
-        return;
-      }
-    } else {
-      // Generic link: dynamically match supervisor or field monitor
+    if (!isTargetSupervisor) {
+      const otherSupervisor = SUPERVISORS.find((s) => isSupervisorAccountMatch(enteredUser, s));
       const fieldAccounts = getLocalFieldAccounts();
-      const matchedFm = fieldAccounts.find((f) => isSupervisorAccountMatch(enteredUser, f));
-      const matchedSpvr = SUPERVISORS.find((s) => isSupervisorAccountMatch(enteredUser, s));
-      if (matchedFm) {
-        targetAccount = { ...matchedFm, role: "Field Monitoring" };
-        setCurrentSupervisor(targetAccount);
-      } else if (matchedSpvr) {
-        targetAccount = { ...matchedSpvr, role: "Supervisor" };
-        setCurrentSupervisor(targetAccount);
+      const otherFm = fieldAccounts.find((f) => isSupervisorAccountMatch(enteredUser, f));
+      const otherName = otherSupervisor?.fullName || otherFm?.fullName;
+
+      if (otherName) {
+        setLoginError(
+          `Access Denied: Ang terminal link na ito ay eksklusibo lamang para kay ${currentSupervisor.fullName} (ID #${currentSupervisor.id}). Hindi maaaring gamitin ang account ni ${otherName} dito. Mangyaring buksan ang sariling opisyal na link para sa iyong account.`
+        );
+      } else {
+        setLoginError(
+          `Access Denied: Hindi tugma ang account sa link na ito. Ang terminal link na ito ay eksklusibo lamang para kay ${currentSupervisor.fullName} (ID #${currentSupervisor.id}).`
+        );
       }
+      return;
     }
 
     // 2. STRICT CREDENTIALS VERIFICATION:
     setIsAuthenticating(true);
     try {
-      const authRes = await verifySourceApiCredentials(enteredUser, enteredPass, targetAccount);
+      const authRes = await verifySourceApiCredentials(enteredUser, enteredPass, currentSupervisor);
 
       if (!authRes.success) {
         setLoginError(authRes.error || "Invalid password. The password did not match your official credentials.");
@@ -494,7 +498,7 @@ export default function SupervisorMobilePwaView() {
         return;
       }
 
-      const activeAccount = authRes.isFieldMonitoring ? { ...authRes.data, role: "Field Monitoring" } : targetAccount;
+      const activeAccount = authRes.isFieldMonitoring ? { ...authRes.data, role: "Field Monitoring" } : currentSupervisor;
       setCurrentSupervisor(activeAccount);
 
       const authKey = `hrhub_spvr_auth_${activeAccount.id}_${todayStr}`;
@@ -1215,6 +1219,30 @@ export default function SupervisorMobilePwaView() {
                 <span className="leading-snug">{loginError}</span>
               </div>
             )}
+
+            {/* Terminal Identity Card (Strictly Locked) */}
+            <div className="bg-slate-900 border border-slate-700/80 rounded-2xl p-3 flex items-center justify-between shadow-inner">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className={`w-8 h-8 rounded-xl font-black text-xs flex items-center justify-center shrink-0 ${
+                  currentSupervisor.role === "Field Monitoring"
+                    ? "bg-teal-500/20 text-teal-300 border border-teal-500/30"
+                    : "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
+                }`}>
+                  {currentSupervisor.role === "Field Monitoring" ? "FM" : "SP"}
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">
+                    {currentSupervisor.role === "Field Monitoring" ? "Assigned Field Monitor" : "Assigned Supervisor"}
+                  </p>
+                  <p className="text-xs font-black text-white truncate">
+                    {currentSupervisor.fullName} (#{currentSupervisor.id})
+                  </p>
+                </div>
+              </div>
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-950 text-emerald-400 border border-emerald-600/40 shrink-0">
+                🔒 LOCKED
+              </span>
+            </div>
 
             {/* Credentials Input Form */}
             <form onSubmit={handleSupervisorLogin} className="space-y-4">
