@@ -253,6 +253,13 @@ export default function SupervisorsAttendancePanel({ onClose }) {
     const roleParam = isFm ? "field_monitoring" : "supervisor";
     const pwaUrl = `${origin}/?pwa=supervisor&id=${spvrId}&username=${encodeURIComponent(spvrUsername)}&name=${encodeURIComponent(spvrName)}&role=${roleParam}&area=${encodeURIComponent(spvrArea)}`;
 
+    // Retrieve registered password if this is a Field Monitoring account
+    const fmMatch = fieldAccounts.find((f) =>
+      String(f.id).toLowerCase() === String(spvrId).toLowerCase() ||
+      String(f.username).toLowerCase() === String(spvrUsername).toLowerCase()
+    );
+    const spvrPassword = supervisor.password || fmMatch?.password || "";
+
     const titleText = isFm
       ? `📱 HRHub Field Monitoring • Daily Login Portal`
       : `📱 HRHub Field Operations • Daily Login Portal`;
@@ -266,6 +273,7 @@ export default function SupervisorsAttendancePanel({ onClose }) {
       `🆔 ID NUMBER: #${spvrId}`,
       `📍 AREA / SECTOR: ${spvrArea}`,
       `🔑 USERNAME: ${spvrUsername}`,
+      ...(isFm && spvrPassword ? [`🔐 PASSWORD: ${spvrPassword}`] : []),
       ``,
       `🔗 PERSONAL ACCESS LINK:`,
       `${pwaUrl}`,
@@ -275,7 +283,7 @@ export default function SupervisorsAttendancePanel({ onClose }) {
       `1️⃣ Pindutin ang link sa itaas para magbukas sa Messenger.`,
       `2️⃣ Sa pinaka-itaas na kanang bahagi, i-tap ang tatlong tuldok ( ••• ).`,
       `3️⃣ Piliin ang "Open in browser" (upang bumukas sa Google Chrome).`,
-      `4️⃣ I-enter ang iyong Username at Password.`,
+      `4️⃣ I-enter ang iyong Username ${isFm && spvrPassword ? `at Password (${spvrPassword})` : `at Password`}.`,
       `5️⃣ I-allow ang GPS at Live Camera para makapag-Daily Login!`,
       ``,
       `📲 PAANO I-INSTALL BILANG CELLPHONE APP:`,
@@ -1721,7 +1729,7 @@ export default function SupervisorsAttendancePanel({ onClose }) {
                             )}
                           </button>
                           <a
-                            href={`/?pwa=supervisor&id=${record.supervisorId}&username=${encodeURIComponent(record.username || "")}&name=${encodeURIComponent(record.fullName)}&area=${encodeURIComponent(record.area && record.area !== "5" ? record.area : "Mandaue City")}`}
+                            href={`/?pwa=supervisor&id=${record.supervisorId}&username=${encodeURIComponent(record.username || "")}&name=${encodeURIComponent(record.fullName)}&role=${record.role === "Field Monitoring" || String(record.supervisorId).toLowerCase().startsWith("fm-") ? "field_monitoring" : "supervisor"}&area=${encodeURIComponent(record.area && record.area !== "5" ? record.area : "Mandaue City")}`}
                             target="_blank"
                             rel="noreferrer"
                             className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-700 hover:bg-slate-100 border border-transparent hover:border-slate-200 transition"
@@ -1916,14 +1924,38 @@ export default function SupervisorsAttendancePanel({ onClose }) {
                     </button>
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={() => openEditModal(record)}
-                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-900 text-white text-[11px] font-bold hover:bg-emerald-700 transition cursor-pointer"
-                  >
-                    <Edit3 size={12} />
-                    <span>Edit</span>
-                  </button>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => handleCopyPwaLink(record)}
+                      className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold border transition cursor-pointer ${copiedSupervisorId === String(record.supervisorId)
+                        ? "bg-emerald-600 text-white border-emerald-600"
+                        : "bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-200/80"
+                        }`}
+                      title="Copy personalized mobile PWA link"
+                    >
+                      {copiedSupervisorId === String(record.supervisorId) ? (
+                        <>
+                          <Check size={11} className="text-white" />
+                          <span>Copied</span>
+                        </>
+                      ) : (
+                        <>
+                          <Smartphone size={11} className="text-emerald-600" />
+                          <span>Link</span>
+                        </>
+                      )}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => openEditModal(record)}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-900 text-white text-[11px] font-bold hover:bg-emerald-700 transition cursor-pointer"
+                    >
+                      <Edit3 size={12} />
+                      <span>Edit</span>
+                    </button>
+                  </div>
                 </div>
               </div>
             );

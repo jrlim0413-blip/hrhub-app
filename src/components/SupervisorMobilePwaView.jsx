@@ -281,9 +281,19 @@ export default function SupervisorMobilePwaView() {
     const resolvedArea = (areaParam && areaParam !== "5") ? decodeURIComponent(areaParam) : "Mandaue City";
     const fieldAccounts = getLocalFieldAccounts();
 
+    const isFmRole =
+      roleParam === "field_monitoring" ||
+      roleParam === "monitoring" ||
+      String(idParam || "").toLowerCase().startsWith("fm-") ||
+      String(usernameParam || "").toLowerCase().includes("monitor") ||
+      (nameParam && decodeURIComponent(nameParam).toLowerCase().includes("field monitor"));
+
     if (idParam) {
       // 1. Check Field Monitoring accounts first
-      const fmMatch = fieldAccounts.find((f) => String(f.id) === String(idParam));
+      const fmMatch = fieldAccounts.find((f) =>
+        String(f.id).toLowerCase() === String(idParam).toLowerCase() ||
+        String(f.username).toLowerCase() === String(usernameParam || idParam).toLowerCase()
+      );
       if (fmMatch) {
         const mergedFm = {
           id: fmMatch.id,
@@ -295,10 +305,10 @@ export default function SupervisorMobilePwaView() {
         try { localStorage.setItem("hrhub_pwa_supervisor", JSON.stringify(mergedFm)); } catch { }
         return mergedFm;
       }
-      if (String(idParam).startsWith("fm-") || roleParam === "monitoring") {
+      if (isFmRole) {
         const customFm = {
           id: idParam,
-          fullName: nameParam ? decodeURIComponent(nameParam) : "FIELD MONITORING",
+          fullName: nameParam ? decodeURIComponent(nameParam) : (usernameParam ? decodeURIComponent(usernameParam).toUpperCase() : "FIELD MONITORING"),
           username: usernameParam ? decodeURIComponent(usernameParam) : `fm-${idParam}`,
           area: resolvedArea,
           role: "Field Monitoring"
@@ -326,7 +336,7 @@ export default function SupervisorMobilePwaView() {
           fullName: decodeURIComponent(nameParam),
           username: usernameParam ? decodeURIComponent(usernameParam) : `spvr-${idParam}`,
           area: resolvedArea,
-          role: roleParam === "monitoring" ? "Field Monitoring" : "Supervisor"
+          role: isFmRole ? "Field Monitoring" : "Supervisor"
         };
         try { localStorage.setItem("hrhub_pwa_supervisor", JSON.stringify(custom)); } catch { }
         return custom;
@@ -336,11 +346,11 @@ export default function SupervisorMobilePwaView() {
     if (usernameParam) {
       const cleanUser = decodeURIComponent(usernameParam).toLowerCase().trim();
       const fmMatch = fieldAccounts.find((f) => f.username?.toLowerCase() === cleanUser);
-      if (fmMatch) {
+      if (fmMatch || isFmRole) {
         return {
-          id: fmMatch.id,
-          fullName: fmMatch.fullName,
-          username: fmMatch.username,
+          id: fmMatch?.id || idParam || "FM-01",
+          fullName: fmMatch?.fullName || (nameParam ? decodeURIComponent(nameParam) : "FIELD MONITORING"),
+          username: cleanUser,
           area: resolvedArea,
           role: "Field Monitoring"
         };
@@ -362,6 +372,30 @@ export default function SupervisorMobilePwaView() {
 
     return { ...SUPERVISORS[0], role: "Supervisor" };
   });
+
+  // Dynamic role determination: true if Field Monitoring account
+  const isFieldMonitoring = useMemo(() => {
+    if (!currentSupervisor) return false;
+    const role = String(currentSupervisor.role || "").toLowerCase();
+    const id = String(currentSupervisor.id || "").toLowerCase();
+    const user = String(currentSupervisor.username || "").toLowerCase();
+    const name = String(currentSupervisor.fullName || "").toLowerCase();
+    const params = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
+    const roleParam = params?.get("role")?.toLowerCase() || "";
+    const idParam = params?.get("id")?.toLowerCase() || "";
+    const userParam = params?.get("username")?.toLowerCase() || "";
+
+    return (
+      role.includes("field") ||
+      role.includes("monitoring") ||
+      roleParam.includes("monitor") ||
+      id.startsWith("fm-") ||
+      idParam.startsWith("fm-") ||
+      user.includes("monitor") ||
+      userParam.includes("monitor") ||
+      name.includes("field monitor")
+    );
+  }, [currentSupervisor]);
 
   // Today's Date & Clock
   const todayStr = getTodayString();
@@ -406,45 +440,74 @@ export default function SupervisorMobilePwaView() {
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [loginError, setLoginError] = useState("");
 
-  // Reactive URL listener: if URL params change or a new link is opened, synchronize supervisor identity immediately
+  // Reactive URL listener: if URL params change or a new link is opened, synchronize identity immediately
   useEffect(() => {
     if (typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
     const idParam = params.get("id") || params.get("spvr") || params.get("supervisorId");
+    const nameParam = params.get("name") || params.get("fullName");
     const usernameParam = params.get("username");
+    const roleParam = params.get("role");
 
-    if (idParam) {
-      const fieldAccounts = getLocalFieldAccounts();
-      const fmMatch = fieldAccounts.find((f) => String(f.id).toLowerCase() === String(idParam).toLowerCase());
-      if (fmMatch) {
-        if (String(fmMatch.id) !== String(currentSupervisor.id)) {
-          setCurrentSupervisor({ ...fmMatch, role: "Field Monitoring" });
-          setIsAuthenticated(false);
+    const isFmRole =
+      roleParam === "field_monitoring" ||
+      roleParam === "monitoring" ||
+      String(idParam || "").toLowerCase().startsWith("fm-") ||
+      String(usernameParam || "").toLowerCase().includes("monitor");
+
+    async function syncAccountIdentity() {
+      let accounts = [];
+      try {
+        accounts = await fetchFieldMonitoringAccounts();
+      } catch {
+        accounts = getLocalFieldAccounts();
+      }
+
+      if (idParam) {
+        const fmMatch = accounts.find((f) => String(f.id).toLowerCase() === String(idParam).toLowerCase());
+        if (fmMatch) {
+          setCurrentSupervisor({
+            ...fmMatch,
+            fullName: nameParam ? decodeURIComponent(nameParam) : fmMatch.fullName,
+            role: "Field Monitoring"
+          });
+          return;
         }
-        return;
-      }
-      const match = SUPERVISORS.find((s) => String(s.id) === String(idParam));
-      if (match && String(match.id) !== String(currentSupervisor.id)) {
-        setCurrentSupervisor({ ...match, role: "Supervisor" });
-        setIsAuthenticated(false);
-      }
-    } else if (usernameParam) {
-      const cleanUser = decodeURIComponent(usernameParam).toLowerCase().trim();
-      const fieldAccounts = getLocalFieldAccounts();
-      const fmMatch = fieldAccounts.find((f) => f.username?.toLowerCase() === cleanUser);
-      if (fmMatch) {
-        if (String(fmMatch.id) !== String(currentSupervisor.id)) {
-          setCurrentSupervisor({ ...fmMatch, role: "Field Monitoring" });
-          setIsAuthenticated(false);
+        if (isFmRole) {
+          setCurrentSupervisor((prev) => ({
+            ...prev,
+            id: idParam,
+            fullName: nameParam ? decodeURIComponent(nameParam) : prev.fullName,
+            username: usernameParam ? decodeURIComponent(usernameParam) : prev.username,
+            role: "Field Monitoring"
+          }));
+          return;
         }
-        return;
-      }
-      const match = SUPERVISORS.find((s) => isSupervisorAccountMatch(cleanUser, s));
-      if (match && String(match.id) !== String(currentSupervisor.id)) {
-        setCurrentSupervisor({ ...match, role: "Supervisor" });
-        setIsAuthenticated(false);
+        const match = SUPERVISORS.find((s) => String(s.id) === String(idParam));
+        if (match && String(match.id) !== String(currentSupervisor.id)) {
+          setCurrentSupervisor({ ...match, role: "Supervisor" });
+        }
+      } else if (usernameParam) {
+        const cleanUser = decodeURIComponent(usernameParam).toLowerCase().trim();
+        const fmMatch = accounts.find((f) => String(f.username || "").toLowerCase() === cleanUser);
+        if (fmMatch || isFmRole) {
+          setCurrentSupervisor({
+            id: fmMatch?.id || "FM-01",
+            fullName: fmMatch?.fullName || (nameParam ? decodeURIComponent(nameParam) : "FIELD MONITORING"),
+            username: cleanUser,
+            area: "Mandaue City",
+            role: "Field Monitoring"
+          });
+          return;
+        }
+        const match = SUPERVISORS.find((s) => isSupervisorAccountMatch(cleanUser, s));
+        if (match && String(match.id) !== String(currentSupervisor.id)) {
+          setCurrentSupervisor({ ...match, role: "Supervisor" });
+        }
       }
     }
+
+    syncAccountIdentity();
   }, [currentSupervisor.id]);
 
   // Handle Supervisor Login Submission with strict account link isolation & Source API verification
@@ -962,9 +1025,11 @@ export default function SupervisorMobilePwaView() {
           </div>
           <div>
             <h1 className="text-xs font-black tracking-tight text-white flex items-center gap-1.5 uppercase">
-              HRHub <span className="text-emerald-400 font-extrabold">Executive</span>
+              HRHub <span className="text-emerald-400 font-extrabold">{isFieldMonitoring ? "Field Monitor" : "Executive"}</span>
             </h1>
-            <p className="text-[10px] text-slate-400 font-medium">Mandaue Operations Portal</p>
+            <p className="text-[10px] text-slate-400 font-medium">
+              {isFieldMonitoring ? "Field Monitoring Operations Portal" : "Mandaue Operations Portal"}
+            </p>
           </div>
         </div>
 
@@ -1208,7 +1273,7 @@ export default function SupervisorMobilePwaView() {
               </div>
               <h2 className="text-lg font-black text-white tracking-tight">Daily Login</h2>
               <p className="text-xs text-slate-400 max-w-xs mx-auto leading-relaxed">
-                Sign in with your registered supervisor password to complete today's Daily Login.
+                Sign in with your registered {isFieldMonitoring ? "Field Monitoring" : "supervisor"} password to complete today's Daily Login.
               </p>
             </div>
 
@@ -1225,7 +1290,7 @@ export default function SupervisorMobilePwaView() {
               {/* Username Field */}
               <div className="space-y-1.5">
                 <label className="text-[11px] font-bold text-slate-300 uppercase tracking-wider block">
-                  Username
+                  {isFieldMonitoring ? "Field Monitor Username" : "Supervisor Username"}
                 </label>
                 <div className="relative flex items-center">
                   <div className="absolute left-3.5 text-slate-500 pointer-events-none">
@@ -1236,7 +1301,7 @@ export default function SupervisorMobilePwaView() {
                     required
                     value={inputUsername}
                     onChange={(e) => setInputUsername(e.target.value)}
-                    placeholder="Enter your username"
+                    placeholder={isFieldMonitoring ? "Enter Field Monitor username" : "Enter your username"}
                     className="w-full text-xs font-mono bg-slate-900 border border-slate-700 focus:border-emerald-500 rounded-xl pl-9 pr-3 py-2.5 text-white placeholder-slate-600 outline-none transition"
                   />
                 </div>
@@ -1245,7 +1310,7 @@ export default function SupervisorMobilePwaView() {
               {/* Password Field */}
               <div className="space-y-1.5">
                 <label className="text-[11px] font-bold text-slate-300 uppercase tracking-wider block">
-                  Password
+                  {isFieldMonitoring ? "Field Monitor Password" : "Supervisor Password"}
                 </label>
                 <div className="relative flex items-center">
                   <div className="absolute left-3.5 text-slate-500 pointer-events-none">
