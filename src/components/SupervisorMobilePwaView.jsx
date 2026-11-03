@@ -195,11 +195,16 @@ async function verifySourceApiCredentials(username, password, supervisor = null)
 
 export default function SupervisorMobilePwaView() {
   // PWA Install Prompt State
-  const [deferredPrompt, setDeferredPrompt] = useState(null);
-  const [isInstallable, setIsInstallable] = useState(false);
+  const [deferredPrompt, setDeferredPrompt] = useState(() => {
+    return typeof window !== "undefined" ? window.__PWA_PROMPT__ : null;
+  });
+  const [isInstallable, setIsInstallable] = useState(() => {
+    return typeof window !== "undefined" && Boolean(window.__PWA_PROMPT__);
+  });
   const [isInstalled, setIsInstalled] = useState(false);
   const [isIos, setIsIos] = useState(false);
   const [showIosTip, setShowIosTip] = useState(false);
+  const [showAndroidTip, setShowAndroidTip] = useState(false);
 
   // Supervisor Identity (derived strictly from magic link or storage)
   const isAssignedLink = Boolean(
@@ -453,25 +458,55 @@ export default function SupervisorMobilePwaView() {
   // PWA Install Prompt Listener
   useEffect(() => {
     const isStandalone =
-      (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) ||
-      window.navigator.standalone === true;
+      (typeof window !== "undefined" && window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) ||
+      (typeof navigator !== "undefined" && navigator.standalone === true);
     if (isStandalone) {
       setIsInstalled(true);
     }
 
+    // Check early capture in index.html
+    if (typeof window !== "undefined" && window.__PWA_PROMPT__) {
+      setDeferredPrompt(window.__PWA_PROMPT__);
+      setIsInstallable(true);
+    }
+
     // iOS check
-    const userAgent = window.navigator.userAgent.toLowerCase();
+    const userAgent = typeof window !== "undefined" ? window.navigator.userAgent.toLowerCase() : "";
     const isIosDevice = /iphone|ipad|ipod/.test(userAgent);
     setIsIos(isIosDevice);
 
     const handleBeforeInstall = (e) => {
       e.preventDefault();
+      window.__PWA_PROMPT__ = e;
       setDeferredPrompt(e);
       setIsInstallable(true);
     };
 
+    const handlePromptReady = () => {
+      if (typeof window !== "undefined" && window.__PWA_PROMPT__) {
+        setDeferredPrompt(window.__PWA_PROMPT__);
+        setIsInstallable(true);
+      }
+    };
+
+    const handleAppInstalled = () => {
+      setIsInstalled(true);
+      setIsInstallable(false);
+      setDeferredPrompt(null);
+      if (typeof window !== "undefined") {
+        window.__PWA_PROMPT__ = null;
+      }
+    };
+
     window.addEventListener("beforeinstallprompt", handleBeforeInstall);
-    return () => window.removeEventListener("beforeinstallprompt", handleBeforeInstall);
+    window.addEventListener("pwa-prompt-ready", handlePromptReady);
+    window.addEventListener("appinstalled", handleAppInstalled);
+
+    return () => {
+      window.removeEventListener("beforeinstallprompt", handleBeforeInstall);
+      window.removeEventListener("pwa-prompt-ready", handlePromptReady);
+      window.removeEventListener("appinstalled", handleAppInstalled);
+    };
   }, []);
 
   const handleInstallClick = async () => {
@@ -479,17 +514,26 @@ export default function SupervisorMobilePwaView() {
       setShowIosTip(true);
       return;
     }
-    if (!deferredPrompt) {
-      alert("To install on your mobile device: Open your browser menu (⋮ or Share) and select 'Install app' or 'Add to Home screen'.");
-      return;
+    const promptEvent = deferredPrompt || (typeof window !== "undefined" ? window.__PWA_PROMPT__ : null);
+    if (promptEvent) {
+      try {
+        await promptEvent.prompt();
+        const { outcome } = await promptEvent.userChoice;
+        if (outcome === "accepted") {
+          setIsInstalled(true);
+          setIsInstallable(false);
+        }
+        setDeferredPrompt(null);
+        if (typeof window !== "undefined") {
+          window.__PWA_PROMPT__ = null;
+        }
+        return;
+      } catch (err) {
+        console.warn("PWA install error:", err);
+      }
     }
-    deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
-    if (outcome === "accepted") {
-      setIsInstalled(true);
-      setIsInstallable(false);
-    }
-    setDeferredPrompt(null);
+    // If native prompt is not available or already consumed, show clear visual modal guide instead of alert()
+    setShowAndroidTip(true);
   };
 
   // Fetch Existing Today Attendance for this Supervisor
@@ -849,6 +893,65 @@ export default function SupervisorMobilePwaView() {
               className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xs cursor-pointer"
             >
               Got it
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Android Chrome Installation Guide Modal */}
+      {showAndroidTip && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-slate-900 border border-emerald-500/30 rounded-3xl p-5 max-w-sm w-full space-y-3.5 shadow-2xl relative text-left">
+            <div className="flex items-center justify-between pb-1 border-b border-slate-800">
+              <h3 className="text-sm font-black text-white flex items-center gap-2">
+                <Smartphone size={18} className="text-emerald-400" />
+                Paano i-Install sa Android Phone:
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowAndroidTip(false)}
+                className="text-slate-400 hover:text-white text-sm p-1 rounded-lg"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="bg-emerald-950/40 border border-emerald-500/20 rounded-xl p-3 text-[11px] text-emerald-200 leading-relaxed">
+              💡 <strong>Paalala:</strong> Ang Web App ay <strong>hindi nagda-download ng APK sa Downloads folder</strong>. Direktang lilitaw ang <strong>HRHub App Icon</strong> sa iyong Home Screen o App Menu ng cellphone!
+            </div>
+
+            <div className="space-y-2 text-xs text-slate-300">
+              <div className="flex items-start gap-2.5 bg-slate-950/60 p-2.5 rounded-xl border border-slate-800/80">
+                <span className="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-400 font-black text-[11px] flex items-center justify-center shrink-0 mt-0.5">1</span>
+                <div>
+                  <p className="font-semibold text-white">I-tap ang tatlong tuldok ( <span className="text-emerald-400 font-bold">⋮</span> )</p>
+                  <p className="text-[10px] text-slate-400">Nasa kanang-itaas ng iyong Chrome browser katabi ng tab number.</p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-2.5 bg-slate-950/60 p-2.5 rounded-xl border border-slate-800/80">
+                <span className="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-400 font-black text-[11px] flex items-center justify-center shrink-0 mt-0.5">2</span>
+                <div>
+                  <p className="font-semibold text-white">Piliin ang <span className="text-emerald-300 font-bold">"Install app"</span> o <span className="text-emerald-300 font-bold">"Add to Home screen"</span></p>
+                  <p className="text-[10px] text-slate-400">Makikita ito sa dropdown menu ng Chrome.</p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-2.5 bg-slate-950/60 p-2.5 rounded-xl border border-slate-800/80">
+                <span className="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-400 font-black text-[11px] flex items-center justify-center shrink-0 mt-0.5">3</span>
+                <div>
+                  <p className="font-semibold text-white">I-tap ang <span className="text-emerald-400 font-bold">"Install"</span> o <span className="text-emerald-400 font-bold">"Add"</span></p>
+                  <p className="text-[10px] text-slate-400">Tapos na! May HRHub app icon ka na sa phone desktop.</p>
+                </div>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setShowAndroidTip(false)}
+              className="w-full py-3 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-black rounded-xl text-xs cursor-pointer shadow-lg shadow-emerald-950/50 transition active:scale-[0.98]"
+            >
+              Naintindihan ko (Sige)
             </button>
           </div>
         </div>

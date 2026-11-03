@@ -28,6 +28,21 @@
         }, 220);
       })();
 
+      // Global early capture for PWA Install Prompt (Chrome Android)
+      window.__PWA_PROMPT__ = null;
+      window.addEventListener('beforeinstallprompt', function(e) {
+        e.preventDefault();
+        window.__PWA_PROMPT__ = e;
+        window.dispatchEvent(new CustomEvent('pwa-prompt-ready'));
+        console.log('[HRHub PWA] beforeinstallprompt captured early');
+      });
+
+      window.addEventListener('appinstalled', function() {
+        window.__PWA_PROMPT__ = null;
+        window.dispatchEvent(new CustomEvent('pwa-installed'));
+        console.log('[HRHub PWA] App installed to home screen successfully');
+      });
+
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', function() {
           navigator.serviceWorker.register('/sw.js').then(function(reg) {
