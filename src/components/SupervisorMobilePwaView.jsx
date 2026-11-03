@@ -1220,30 +1220,6 @@ export default function SupervisorMobilePwaView() {
               </div>
             )}
 
-            {/* Terminal Identity Card (Strictly Locked) */}
-            <div className="bg-slate-900 border border-slate-700/80 rounded-2xl p-3 flex items-center justify-between shadow-inner">
-              <div className="flex items-center gap-2.5 min-w-0">
-                <div className={`w-8 h-8 rounded-xl font-black text-xs flex items-center justify-center shrink-0 ${
-                  currentSupervisor.role === "Field Monitoring"
-                    ? "bg-teal-500/20 text-teal-300 border border-teal-500/30"
-                    : "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
-                }`}>
-                  {currentSupervisor.role === "Field Monitoring" ? "FM" : "SP"}
-                </div>
-                <div className="min-w-0">
-                  <p className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">
-                    {currentSupervisor.role === "Field Monitoring" ? "Assigned Field Monitor" : "Assigned Supervisor"}
-                  </p>
-                  <p className="text-xs font-black text-white truncate">
-                    {currentSupervisor.fullName} (#{currentSupervisor.id})
-                  </p>
-                </div>
-              </div>
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-950 text-emerald-400 border border-emerald-600/40 shrink-0">
-                🔒 LOCKED
-              </span>
-            </div>
-
             {/* Credentials Input Form */}
             <form onSubmit={handleSupervisorLogin} className="space-y-4">
               {/* Username Field */}
