@@ -258,7 +258,7 @@ export default function SupervisorsAttendancePanel({ onClose }) {
       String(f.id).toLowerCase() === String(spvrId).toLowerCase() ||
       String(f.username).toLowerCase() === String(spvrUsername).toLowerCase()
     );
-    const spvrPassword = supervisor.password || fmMatch?.password || "";
+    const spvrPassword = supervisor.password || fmMatch?.password || "Password123!";
 
     const titleText = isFm
       ? `📱 HRHub Field Monitoring • Daily Login Portal`
@@ -273,7 +273,7 @@ export default function SupervisorsAttendancePanel({ onClose }) {
       `🆔 ID NUMBER: #${spvrId}`,
       `📍 AREA / SECTOR: ${spvrArea}`,
       `🔑 USERNAME: ${spvrUsername}`,
-      ...(isFm && spvrPassword ? [`🔐 PASSWORD: ${spvrPassword}`] : []),
+      ...(isFm ? [`🔐 PASSWORD: ${spvrPassword}`] : []),
       ``,
       `🔗 PERSONAL ACCESS LINK:`,
       `${pwaUrl}`,
@@ -283,7 +283,7 @@ export default function SupervisorsAttendancePanel({ onClose }) {
       `1️⃣ Pindutin ang link sa itaas para magbukas sa Messenger.`,
       `2️⃣ Sa pinaka-itaas na kanang bahagi, i-tap ang tatlong tuldok ( ••• ).`,
       `3️⃣ Piliin ang "Open in browser" (upang bumukas sa Google Chrome).`,
-      `4️⃣ I-enter ang iyong Username ${isFm && spvrPassword ? `at Password (${spvrPassword})` : `at Password`}.`,
+      `4️⃣ I-enter ang iyong Username ${isFm ? `at Password (${spvrPassword})` : `at Password`}.`,
       `5️⃣ I-allow ang GPS at Live Camera para makapag-Daily Login!`,
       ``,
       `📲 PAANO I-INSTALL BILANG CELLPHONE APP:`,
@@ -464,6 +464,7 @@ export default function SupervisorsAttendancePanel({ onClose }) {
         supervisorId: fm.id,
         fullName: fm.fullName,
         username: fm.username,
+        password: fm.password || "Password123!",
         area: fm.area || "Mandaue City",
         role: "Field Monitoring",
         status: "Awaiting Check-in",
@@ -503,6 +504,7 @@ export default function SupervisorsAttendancePanel({ onClose }) {
                   ...initRec,
                   ...saved,
                   role: initRec.role, // Always preserve authoritative role
+                  password: initRec.password || saved.password,
                   fullName: initRec.fullName || saved.fullName,
                   username: initRec.username || saved.username,
                   area: String(saved.area && saved.area !== "5" ? saved.area : initRec.area)
@@ -545,7 +547,7 @@ export default function SupervisorsAttendancePanel({ onClose }) {
 
             const fullBaseList = initialRecords.map((initRec) => {
               const existing = prevMap.get(String(initRec.supervisorId));
-              return existing ? { ...initRec, ...existing, role: initRec.role } : initRec;
+              return existing ? { ...initRec, ...existing, role: initRec.role, password: initRec.password || existing.password } : initRec;
             });
 
             const merged = fullBaseList.map((item) => {

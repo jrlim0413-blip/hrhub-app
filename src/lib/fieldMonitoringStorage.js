@@ -24,7 +24,7 @@ function mapDbToAccount(row) {
     id: String(row.id || ""),
     fullName: row.full_name || row.fullName || "",
     username: row.username || "",
-    password: row.password || "",
+    password: row.password || "Password123!",
     area: row.area && row.area !== "all" ? row.area : "Mandaue City",
     role: row.role || "Field Monitoring",
     isActive: row.is_active !== undefined ? Boolean(row.is_active) : (row.isActive !== undefined ? Boolean(row.isActive) : true),
@@ -38,7 +38,7 @@ function mapAccountToDb(acc) {
     id: String(acc.id || "").trim(),
     full_name: String(acc.fullName || "").trim().toUpperCase(),
     username: String(acc.username || "").trim().toLowerCase(),
-    password: String(acc.password || "").trim(),
+    password: String(acc.password || "Password123!").trim(),
     area: acc.area && acc.area !== "all" ? acc.area : "Mandaue City",
     role: "Field Monitoring",
     is_active: acc.isActive !== false
@@ -91,7 +91,10 @@ export async function loadFieldMonitoringAccounts() {
         .maybeSingle();
 
       if (settingsData?.settings_json?.accounts && Array.isArray(settingsData.settings_json.accounts) && settingsData.settings_json.accounts.length > 0) {
-        accounts = settingsData.settings_json.accounts;
+        accounts = settingsData.settings_json.accounts.map((acc) => ({
+          ...acc,
+          password: acc.password || "Password123!"
+        }));
       }
     } catch (settingsErr) {
       console.warn("[fieldMonitoringStorage] Fallback settings load notice:", settingsErr);
@@ -105,7 +108,10 @@ export async function loadFieldMonitoringAccounts() {
       if (raw) {
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          accounts = parsed;
+          accounts = parsed.map((acc) => ({
+            ...acc,
+            password: acc.password || "Password123!"
+          }));
         }
       }
     } catch { }
@@ -134,7 +140,10 @@ export function getCachedFieldMonitoringAccounts() {
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed;
+        return parsed.map((acc) => ({
+          ...acc,
+          password: acc.password || "Password123!"
+        }));
       }
     }
   } catch { }
