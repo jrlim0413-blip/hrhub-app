@@ -12,6 +12,11 @@ import {
   fetchCloudAttendance,
   upsertCloudAttendance
 } from "../lib/supervisorAttendanceStorage";
+import {
+  verifyFieldMonitoringLogin,
+  getLocalFieldAccounts,
+  fetchFieldMonitoringAccounts
+} from "../lib/fieldMonitoringStorage";
 
 // Active Mandaue Supervisors (Strictly Mandaue City)
 const SUPERVISORS = [
@@ -72,18 +77,23 @@ function getSupervisorAliases(s) {
 }
 
 /**
- * Strict equality check against supervisor's assigned aliases
+ * Strict equality check against supervisor's assigned aliases or Field Monitoring account
  */
 function isSupervisorAccountMatch(enteredUser, supervisor) {
   if (!supervisor || !enteredUser) return false;
   const clean = String(enteredUser).trim().toLowerCase();
+  if (supervisor.role === "Field Monitoring" || String(supervisor.id).toLowerCase().startsWith("fm-")) {
+    const accUser = String(supervisor.username || "").trim().toLowerCase();
+    const accId = String(supervisor.id || "").trim().toLowerCase();
+    return clean === accUser || clean === accId;
+  }
   const aliases = getSupervisorAliases(supervisor);
   return aliases.includes(clean);
 }
 
 /**
- * Strictly authenticates supervisor credentials against official Source API endpoints
- * and verified credentials store. Checks that the password is valid.
+ * Strictly authenticates credentials against official Field Monitoring accounts
+ * or official Source API endpoints for supervisors.
  */
 async function verifySourceApiCredentials(username, password, supervisor = null) {
   const cleanUsername = String(username || "").trim();
@@ -91,6 +101,26 @@ async function verifySourceApiCredentials(username, password, supervisor = null)
 
   if (!cleanUsername || !cleanPassword) {
     return { success: false, error: "Please enter both username and password." };
+  }
+
+  // 0. Check if this is a Field Monitoring account created by the system
+  try {
+    const fmResult = await verifyFieldMonitoringLogin(cleanUsername, cleanPassword);
+    if (fmResult.success) {
+      return {
+        success: true,
+        token: "field-monitoring-verified",
+        data: fmResult.account,
+        isFieldMonitoring: true
+      };
+    } else if (!fmResult.notFound) {
+      return {
+        success: false,
+        error: fmResult.error
+      };
+    }
+  } catch (fmErr) {
+    console.warn("Field Monitoring auth check notice:", fmErr);
   }
 
   // 1. Candidate usernames to check against Source API
@@ -240,23 +270,52 @@ export default function SupervisorMobilePwaView() {
   );
 
   const [currentSupervisor, setCurrentSupervisor] = useState(() => {
-    if (typeof window === "undefined") return SUPERVISORS[0];
+    if (typeof window === "undefined") return { ...SUPERVISORS[0], role: "Supervisor" };
     const params = new URLSearchParams(window.location.search);
     const idParam = params.get("id") || params.get("spvr") || params.get("supervisorId");
     const nameParam = params.get("name") || params.get("fullName");
     const usernameParam = params.get("username");
     const areaParam = params.get("area");
+    const roleParam = params.get("role");
 
     const resolvedArea = (areaParam && areaParam !== "5") ? decodeURIComponent(areaParam) : "Mandaue City";
+    const fieldAccounts = getLocalFieldAccounts();
 
     if (idParam) {
+      // 1. Check Field Monitoring accounts first
+      const fmMatch = fieldAccounts.find((f) => String(f.id) === String(idParam));
+      if (fmMatch) {
+        const mergedFm = {
+          id: fmMatch.id,
+          fullName: nameParam ? decodeURIComponent(nameParam) : fmMatch.fullName,
+          username: usernameParam ? decodeURIComponent(usernameParam) : fmMatch.username,
+          area: resolvedArea,
+          role: "Field Monitoring"
+        };
+        try { localStorage.setItem("hrhub_pwa_supervisor", JSON.stringify(mergedFm)); } catch { }
+        return mergedFm;
+      }
+      if (String(idParam).startsWith("fm-") || roleParam === "monitoring") {
+        const customFm = {
+          id: idParam,
+          fullName: nameParam ? decodeURIComponent(nameParam) : "FIELD MONITORING",
+          username: usernameParam ? decodeURIComponent(usernameParam) : `fm-${idParam}`,
+          area: resolvedArea,
+          role: "Field Monitoring"
+        };
+        try { localStorage.setItem("hrhub_pwa_supervisor", JSON.stringify(customFm)); } catch { }
+        return customFm;
+      }
+
+      // 2. Check Supervisors list (Source API)
       const match = SUPERVISORS.find((s) => String(s.id) === String(idParam));
       if (match) {
         const merged = {
           ...match,
           fullName: nameParam ? decodeURIComponent(nameParam) : match.fullName,
           username: usernameParam ? decodeURIComponent(usernameParam) : match.username,
-          area: resolvedArea
+          area: resolvedArea,
+          role: "Supervisor"
         };
         try { localStorage.setItem("hrhub_pwa_supervisor", JSON.stringify(merged)); } catch { }
         return merged;
@@ -266,7 +325,8 @@ export default function SupervisorMobilePwaView() {
           id: idParam,
           fullName: decodeURIComponent(nameParam),
           username: usernameParam ? decodeURIComponent(usernameParam) : `spvr-${idParam}`,
-          area: resolvedArea
+          area: resolvedArea,
+          role: roleParam === "monitoring" ? "Field Monitoring" : "Supervisor"
         };
         try { localStorage.setItem("hrhub_pwa_supervisor", JSON.stringify(custom)); } catch { }
         return custom;
@@ -275,9 +335,19 @@ export default function SupervisorMobilePwaView() {
 
     if (usernameParam) {
       const cleanUser = decodeURIComponent(usernameParam).toLowerCase().trim();
+      const fmMatch = fieldAccounts.find((f) => f.username?.toLowerCase() === cleanUser);
+      if (fmMatch) {
+        return {
+          id: fmMatch.id,
+          fullName: fmMatch.fullName,
+          username: fmMatch.username,
+          area: resolvedArea,
+          role: "Field Monitoring"
+        };
+      }
       const match = SUPERVISORS.find((s) => isSupervisorAccountMatch(cleanUser, s));
       if (match) {
-        return match;
+        return { ...match, role: "Supervisor" };
       }
     }
 
@@ -290,7 +360,7 @@ export default function SupervisorMobilePwaView() {
       }
     } catch { }
 
-    return SUPERVISORS[0];
+    return { ...SUPERVISORS[0], role: "Supervisor" };
   });
 
   // Today's Date & Clock
@@ -377,52 +447,72 @@ export default function SupervisorMobilePwaView() {
       return;
     }
 
-    // 1. STRICT ACCOUNT-TO-LINK LOCK:
-    // This terminal strictly belongs to currentSupervisor (e.g. ARLFRED SABERON)
-    const isTargetSupervisor = isSupervisorAccountMatch(enteredUser, currentSupervisor);
+    // 1. ACCOUNT-TO-LINK LOCK (if opened with assigned link)
+    let targetAccount = currentSupervisor;
 
-    if (!isTargetSupervisor) {
-      // Find which supervisor the entered username belongs to
-      const otherSupervisor = SUPERVISORS.find((s) => isSupervisorAccountMatch(enteredUser, s));
+    if (isAssignedLink) {
+      const isTargetSupervisor = isSupervisorAccountMatch(enteredUser, currentSupervisor);
+      if (!isTargetSupervisor) {
+        const otherSupervisor = SUPERVISORS.find((s) => isSupervisorAccountMatch(enteredUser, s));
+        const fieldAccounts = getLocalFieldAccounts();
+        const otherFm = fieldAccounts.find((f) => isSupervisorAccountMatch(enteredUser, f));
+        const otherName = otherSupervisor?.fullName || otherFm?.fullName;
 
-      if (otherSupervisor && String(otherSupervisor.id) !== String(currentSupervisor.id)) {
-        setLoginError(
-          `Access Denied: Ang terminal link na ito ay eksklusibo lamang para kay ${currentSupervisor.fullName} (ID #${currentSupervisor.id}). Hindi maaaring gamitin ang account ni ${otherSupervisor.fullName} dito. Mangyaring buksan ang sariling opisyal na link para sa iyong account.`
-        );
-      } else {
-        setLoginError(
-          `Access Denied: Hindi tugma ang account sa link na ito. Ang terminal link na ito ay nakalaan lamang para kay ${currentSupervisor.fullName}.`
-        );
+        if (otherName) {
+          setLoginError(
+            `Access Denied: Ang terminal link na ito ay eksklusibo lamang para kay ${currentSupervisor.fullName} (ID #${currentSupervisor.id}). Hindi maaaring gamitin ang account ni ${otherName} dito. Mangyaring buksan ang sariling opisyal na link para sa iyong account.`
+          );
+        } else {
+          setLoginError(
+            `Access Denied: Hindi tugma ang account sa link na ito. Ang terminal link na ito ay nakalaan lamang para kay ${currentSupervisor.fullName}.`
+          );
+        }
+        return;
       }
-      return;
+    } else {
+      // Generic link: dynamically match supervisor or field monitor
+      const fieldAccounts = getLocalFieldAccounts();
+      const matchedFm = fieldAccounts.find((f) => isSupervisorAccountMatch(enteredUser, f));
+      const matchedSpvr = SUPERVISORS.find((s) => isSupervisorAccountMatch(enteredUser, s));
+      if (matchedFm) {
+        targetAccount = { ...matchedFm, role: "Field Monitoring" };
+        setCurrentSupervisor(targetAccount);
+      } else if (matchedSpvr) {
+        targetAccount = { ...matchedSpvr, role: "Supervisor" };
+        setCurrentSupervisor(targetAccount);
+      }
     }
 
-    // 2. STRICT SOURCE API PASSWORD VERIFICATION:
+    // 2. STRICT CREDENTIALS VERIFICATION:
     setIsAuthenticating(true);
     try {
-      const authRes = await verifySourceApiCredentials(enteredUser, enteredPass, currentSupervisor);
+      const authRes = await verifySourceApiCredentials(enteredUser, enteredPass, targetAccount);
 
       if (!authRes.success) {
-        setLoginError(authRes.error || "Invalid password. The password did not match your official Source API credentials.");
+        setLoginError(authRes.error || "Invalid password. The password did not match your official credentials.");
         setIsAuthenticating(false);
         return;
       }
 
-      const authKey = `hrhub_spvr_auth_${currentSupervisor.id}_${todayStr}`;
+      const activeAccount = authRes.isFieldMonitoring ? { ...authRes.data, role: "Field Monitoring" } : targetAccount;
+      setCurrentSupervisor(activeAccount);
+
+      const authKey = `hrhub_spvr_auth_${activeAccount.id}_${todayStr}`;
       const sessionData = {
         authenticated: true,
-        supervisorId: currentSupervisor.id,
-        username: currentSupervisor.username,
-        fullName: currentSupervisor.fullName,
-        area: currentSupervisor.area || "Mandaue City",
+        supervisorId: activeAccount.id,
+        username: activeAccount.username,
+        fullName: activeAccount.fullName,
+        area: activeAccount.area || "Mandaue City",
+        role: activeAccount.role || "Supervisor",
         loginTime: new Date().toISOString()
       };
 
       try {
         localStorage.setItem(authKey, JSON.stringify(sessionData));
         sessionStorage.setItem(authKey, JSON.stringify(sessionData));
-        localStorage.setItem("hrhub_pwa_supervisor", JSON.stringify(currentSupervisor));
-        localStorage.setItem(`hrhub_spvr_pwd_${currentSupervisor.id}`, enteredPass);
+        localStorage.setItem("hrhub_pwa_supervisor", JSON.stringify(activeAccount));
+        localStorage.setItem(`hrhub_spvr_pwd_${activeAccount.id}`, enteredPass);
       } catch { }
 
       setIsAuthenticated(true);
@@ -735,7 +825,8 @@ export default function SupervisorMobilePwaView() {
 
     ctx.fillStyle = "#10b981";
     ctx.font = "bold 13px monospace";
-    ctx.fillText(`HRHUB VERIFIED • ${currentSupervisor.fullName} (#${currentSupervisor.id}) • MANDAUE CITY`, 20, canvas.height - 34);
+    const roleTag = currentSupervisor.role === "Field Monitoring" ? "FIELD MONITOR" : "SUPERVISOR";
+    ctx.fillText(`HRHUB VERIFIED • ${currentSupervisor.fullName} (${roleTag} #${currentSupervisor.id}) • MANDAUE CITY`, 20, canvas.height - 34);
 
     ctx.fillStyle = "#ffffff";
     ctx.font = "11px sans-serif";
@@ -830,7 +921,9 @@ export default function SupervisorMobilePwaView() {
         locationAccuracy: accuracy ? parseFloat(accuracy) : null,
         locationName: locationLandmark || `Mandaue City Station (±${accuracy || 0}m)`,
         photoProof: cloudPhotoUrl || capturedPhotoUrl,
-        remarks: "Logged via Official Supervisor Mobile PWA • Mandaue City Operations"
+        remarks: currentSupervisor.role === "Field Monitoring"
+          ? "Logged via Official Field Monitoring Mobile PWA • Mandaue City Operations"
+          : "Logged via Official Supervisor Mobile PWA • Mandaue City Operations"
       };
 
       // 3. Upsert to Supabase

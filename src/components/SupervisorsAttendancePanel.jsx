@@ -6,7 +6,8 @@ import {
   ChevronLeft, ChevronRight, ShieldCheck, TrendingUp,
   AlertCircle, Eye, Check, Camera, Smartphone,
   ExternalLink, Navigation, LocateFixed,
-  Map, Layers, Shield, Cloud, Loader2, Video, VideoOff, RotateCw
+  Map, Layers, Shield, Cloud, Loader2, Video, VideoOff, RotateCw,
+  UserPlus, Key, Trash2, ShieldAlert, Sparkles, EyeOff
 } from "lucide-react";
 import { API_CONFIG } from "../config/apiConfig";
 import {
@@ -16,6 +17,12 @@ import {
   upsertCloudAttendance,
   subscribeToAttendanceRealtime
 } from "../lib/supervisorAttendanceStorage";
+import {
+  loadFieldMonitoringAccounts,
+  addFieldMonitoringAccount,
+  updateFieldMonitoringAccount,
+  deleteFieldMonitoringAccount
+} from "../lib/fieldMonitoringStorage";
 
 // Fallback active supervisors (matching live STL Mandaue API IDs 21 to 32)
 const FALLBACK_SUPERVISORS = [
@@ -99,19 +106,153 @@ export default function SupervisorsAttendancePanel({ onClose }) {
   const [copiedSupervisorId, setCopiedSupervisorId] = useState(null);
   const [copiedPwaNotice, setCopiedPwaNotice] = useState("");
 
+  // Field Monitoring Accounts State (System Discretion Accounts)
+  const [fieldAccounts, setFieldAccounts] = useState([]);
+  const [isFieldAccountsModalOpen, setIsFieldAccountsModalOpen] = useState(false);
+  const [fieldAccountForm, setFieldAccountForm] = useState({
+    fullName: "",
+    username: "",
+    password: "",
+    area: "Mandaue City"
+  });
+  const [editingFieldAccountId, setEditingFieldAccountId] = useState(null);
+  const [fieldAccountFormError, setFieldAccountFormError] = useState("");
+  const [fieldAccountShowPasswords, setFieldAccountShowPasswords] = useState({});
+  const [isSubmittingFieldAccount, setIsSubmittingFieldAccount] = useState(false);
+  const [rosterCategoryFilter, setRosterCategoryFilter] = useState("all"); // "all" | "supervisors" | "monitoring"
+
+  // Fetch Field Monitoring Accounts from Cloud Storage
+  const refreshFieldAccounts = async () => {
+    try {
+      const accs = await loadFieldMonitoringAccounts();
+      setFieldAccounts(accs);
+    } catch (err) {
+      console.warn("Failed loading field accounts:", err);
+    }
+  };
+
+  useEffect(() => {
+    refreshFieldAccounts();
+  }, []);
+
+  const handleOpenAddAccount = () => {
+    setEditingFieldAccountId(null);
+    setFieldAccountForm({
+      fullName: "",
+      username: "",
+      password: "",
+      area: "Mandaue City"
+    });
+    setFieldAccountFormError("");
+    setIsFieldAccountsModalOpen(true);
+  };
+
+  const handleEditFieldAccount = (account) => {
+    setEditingFieldAccountId(account.id);
+    setFieldAccountForm({
+      fullName: account.fullName || "",
+      username: account.username || "",
+      password: account.password || "",
+      area: account.area || "Mandaue City"
+    });
+    setFieldAccountFormError("");
+  };
+
+  const handleSaveFieldAccount = async (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    setFieldAccountFormError("");
+
+    const name = String(fieldAccountForm.fullName || "").trim();
+    const user = String(fieldAccountForm.username || "").trim();
+    const pass = String(fieldAccountForm.password || "").trim();
+
+    if (!name) {
+      setFieldAccountFormError("Please enter the Full Name of the Field Monitoring personnel.");
+      return;
+    }
+    if (!user) {
+      setFieldAccountFormError("Please enter a login Username.");
+      return;
+    }
+    if (!pass) {
+      setFieldAccountFormError("Please enter a login Password.");
+      return;
+    }
+
+    setIsSubmittingFieldAccount(true);
+    try {
+      if (editingFieldAccountId) {
+        await updateFieldMonitoringAccount(editingFieldAccountId, {
+          fullName: name,
+          username: user,
+          password: pass,
+          area: fieldAccountForm.area
+        });
+        showToast(`✅ Updated account for ${name}`);
+      } else {
+        await addFieldMonitoringAccount({
+          fullName: name,
+          username: user,
+          password: pass,
+          area: fieldAccountForm.area
+        });
+        showToast(`✅ Created Field Monitoring account for ${name}`);
+      }
+      await refreshFieldAccounts();
+      setEditingFieldAccountId(null);
+      setFieldAccountForm({
+        fullName: "",
+        username: "",
+        password: "",
+        area: "Mandaue City"
+      });
+    } catch (err) {
+      setFieldAccountFormError("Failed saving account: " + err.message);
+    } finally {
+      setIsSubmittingFieldAccount(false);
+    }
+  };
+
+  const handleDeleteFieldAccount = async (account) => {
+    const confirmDelete = window.confirm(`Sigurado ka bang nais mong tanggalin ang Field Monitoring account ni "${account.fullName}"?`);
+    if (!confirmDelete) return;
+
+    try {
+      await deleteFieldMonitoringAccount(account.id);
+      showToast(`🗑️ Account ${account.fullName} removed.`);
+      await refreshFieldAccounts();
+    } catch (err) {
+      alert("Error removing account: " + err.message);
+    }
+  };
+
+  const toggleAccountPasswordVisibility = (id) => {
+    setFieldAccountShowPasswords((prev) => ({
+      ...prev,
+      [id]: !prev[id]
+    }));
+  };
+
   const handleCopyPwaLink = (supervisor) => {
     const origin = typeof window !== "undefined" ? window.location.origin : "https://hrhub-app.vercel.app";
     const spvrId = supervisor.supervisorId || supervisor.id;
     const spvrName = supervisor.fullName || supervisor.supervisor_name || "Supervisor";
     const spvrUsername = supervisor.username || `spvr_${spvrId}`;
     const spvrArea = supervisor.area && supervisor.area !== "5" ? supervisor.area : "Mandaue City";
-    const pwaUrl = `${origin}/?pwa=supervisor&id=${spvrId}&username=${encodeURIComponent(spvrUsername)}&name=${encodeURIComponent(spvrName)}&area=${encodeURIComponent(spvrArea)}`;
+    const isFm = supervisor.role === "Field Monitoring" || String(spvrId).toLowerCase().startsWith("fm-");
+    const roleParam = isFm ? "field_monitoring" : "supervisor";
+    const pwaUrl = `${origin}/?pwa=supervisor&id=${spvrId}&username=${encodeURIComponent(spvrUsername)}&name=${encodeURIComponent(spvrName)}&role=${roleParam}&area=${encodeURIComponent(spvrArea)}`;
+
+    const titleText = isFm
+      ? `📱 HRHub Field Monitoring • Daily Login Portal`
+      : `📱 HRHub Field Operations • Daily Login Portal`;
+    const roleLabel = isFm ? `FIELD MONITOR` : `SUPERVISOR`;
 
     // Enhanced executive message package with clear instructions ready for Messenger / Viber / SMS
     const formattedMessage = [
-      `📱 HRHub Field Operations • Daily Login Portal`,
+      titleText,
       `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
-      `👤 SUPERVISOR: ${spvrName}`,
+      `👤 ${roleLabel}: ${spvrName}`,
       `🆔 ID NUMBER: #${spvrId}`,
       `📍 AREA / SECTOR: ${spvrArea}`,
       `🔑 USERNAME: ${spvrUsername}`,
@@ -279,13 +420,14 @@ export default function SupervisorsAttendancePanel({ onClose }) {
     const storageKey = `hrhub_spvr_attendance_v3_${selectedDate}`;
     const cached = localStorage.getItem(storageKey);
 
-    // Initialize clean attendance records from real API data
-    const initialRecords = supervisorsList.map((spvr, index) => {
+    // Initialize clean attendance records from real API data + registered Field Monitoring accounts
+    const supervisorRecords = supervisorsList.map((spvr, index) => {
       return {
         supervisorId: spvr.id,
         fullName: spvr.fullName || spvr.username || `Supervisor ${spvr.id}`,
         username: spvr.username || `spvr_${spvr.id}`,
         area: String(spvr.area && spvr.area !== "5" ? spvr.area : "Mandaue City"),
+        role: "Supervisor",
         status: "Awaiting Check-in",
         timeIn: "--",
         latitude: null,
@@ -298,6 +440,28 @@ export default function SupervisorsAttendancePanel({ onClose }) {
         lastUpdated: ""
       };
     });
+
+    const monitoringRecords = fieldAccounts.map((fm) => {
+      return {
+        supervisorId: fm.id,
+        fullName: fm.fullName,
+        username: fm.username,
+        area: fm.area || "Mandaue City",
+        role: "Field Monitoring",
+        status: "Awaiting Check-in",
+        timeIn: "--",
+        latitude: null,
+        longitude: null,
+        locationAccuracy: null,
+        locationName: "",
+        photoProof: null,
+        shift: "Full Day Field Operations (07:00 AM - 05:00 PM)",
+        remarks: "Field Monitoring Account • Pending Mobile Check-in",
+        lastUpdated: ""
+      };
+    });
+
+    const initialRecords = [...supervisorRecords, ...monitoringRecords];
 
     let currentWorkingRecords = initialRecords;
 
@@ -412,7 +576,7 @@ export default function SupervisorsAttendancePanel({ onClose }) {
       isMounted = false;
       if (typeof unsubscribe === "function") unsubscribe();
     };
-  }, [selectedDate, supervisorsList]);
+  }, [selectedDate, supervisorsList, fieldAccounts]);
 
   // Save current records to localStorage
   const saveRecordsToStorage = (updated) => {
@@ -895,11 +1059,16 @@ export default function SupervisorsAttendancePanel({ onClose }) {
   // Filtered Records
   const filteredRecords = useMemo(() => {
     return attendanceRecords.filter((r) => {
+      // Category filter (Source API Supervisors vs Field Monitoring)
+      if (rosterCategoryFilter === "supervisors" && r.role === "Field Monitoring") return false;
+      if (rosterCategoryFilter === "monitoring" && r.role !== "Field Monitoring") return false;
+
       const searchMatch =
         searchTerm === "" ||
         r.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
         r.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
         String(r.supervisorId).includes(searchTerm) ||
+        (r.role && r.role.toLowerCase().includes(searchTerm.toLowerCase())) ||
         r.remarks.toLowerCase().includes(searchTerm.toLowerCase());
 
       let statusMatch = true;
@@ -921,7 +1090,7 @@ export default function SupervisorsAttendancePanel({ onClose }) {
 
       return searchMatch && statusMatch && areaMatch;
     });
-  }, [attendanceRecords, searchTerm, statusFilter, areaFilter]);
+  }, [attendanceRecords, searchTerm, statusFilter, areaFilter, rosterCategoryFilter]);
 
   // Formatted date header
   const formattedDateTitle = useMemo(() => {
@@ -1055,7 +1224,17 @@ export default function SupervisorsAttendancePanel({ onClose }) {
             <strong className="text-slate-900 font-bold">{formattedDateTitle}</strong>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={handleOpenAddAccount}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold transition shadow-xs hover:shadow-emerald-950/20 active:scale-95 cursor-pointer"
+              title="Add or manage Field Monitoring login accounts"
+            >
+              <UserPlus size={13} />
+              <span>Field Monitoring Accounts ({fieldAccounts.length})</span>
+            </button>
+
             <button
               type="button"
               onClick={handleExportCSV}
@@ -1187,6 +1366,35 @@ export default function SupervisorsAttendancePanel({ onClose }) {
           })}
         </div>
 
+        {/* Category Pill: All vs Supervisors vs Field Monitoring */}
+        <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200 shrink-0">
+          <button
+            type="button"
+            onClick={() => setRosterCategoryFilter("all")}
+            className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${rosterCategoryFilter === "all" ? "bg-white text-slate-900 shadow-2xs" : "text-slate-500 hover:text-slate-900"
+              }`}
+          >
+            All
+          </button>
+          <button
+            type="button"
+            onClick={() => setRosterCategoryFilter("supervisors")}
+            className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${rosterCategoryFilter === "supervisors" ? "bg-white text-slate-900 shadow-2xs" : "text-slate-500 hover:text-slate-900"
+              }`}
+          >
+            Supervisors
+          </button>
+          <button
+            type="button"
+            onClick={() => setRosterCategoryFilter("monitoring")}
+            className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1 ${rosterCategoryFilter === "monitoring" ? "bg-emerald-600 text-white shadow-2xs" : "text-slate-600 hover:text-slate-900"
+              }`}
+          >
+            <ShieldCheck size={11} />
+            Field Monitor ({fieldAccounts.length})
+          </button>
+        </div>
+
         {/* Area dropdown & View Toggle */}
         <div className="flex items-center gap-2 shrink-0">
           <select
@@ -1280,6 +1488,16 @@ export default function SupervisorsAttendancePanel({ onClose }) {
                             <div className="font-bold text-slate-900 tracking-tight flex items-center gap-1.5">
                               <span>{record.fullName}</span>
                               <span className="text-[10px] font-mono text-slate-400">#{record.supervisorId}</span>
+                              {record.role === "Field Monitoring" ? (
+                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-teal-50 border border-teal-200 text-teal-800 text-[9px] font-black uppercase tracking-wider">
+                                  <ShieldCheck size={9} className="text-teal-600" />
+                                  Field Monitor
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-emerald-50 border border-emerald-100 text-emerald-700 text-[9px] font-semibold">
+                                  Source API
+                                </span>
+                              )}
                             </div>
                             <div className="text-[11px] text-slate-500">
                               @{record.username}
@@ -1290,20 +1508,27 @@ export default function SupervisorsAttendancePanel({ onClose }) {
 
                       {/* Assigned Agents (Real Count from API) */}
                       <td className="py-3 px-3">
-                        <button
-                          type="button"
-                          onClick={() => setViewingSupervisorAgents({
-                            supervisorName: record.fullName,
-                            supervisorId: record.supervisorId,
-                            stats: spvrStats
-                          })}
-                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-sky-50 text-sky-800 hover:bg-sky-100 border border-sky-200/80 font-bold transition cursor-pointer group text-left"
-                          title="Click to view full list of assigned agents"
-                        >
-                          <Users size={12} className="text-sky-600 group-hover:scale-110 transition-transform" />
-                          <span>{spvrStats.total} Agents</span>
-                          <span className="text-[10px] font-normal text-sky-600">({spvrStats.active} Active)</span>
-                        </button>
+                        {record.role === "Field Monitoring" ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-teal-50/70 text-teal-800 text-xs font-semibold border border-teal-200/50">
+                            <ShieldCheck size={12} className="text-teal-600" />
+                            <span>Field Inspector</span>
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setViewingSupervisorAgents({
+                              supervisorName: record.fullName,
+                              supervisorId: record.supervisorId,
+                              stats: spvrStats
+                            })}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-sky-50 text-sky-800 hover:bg-sky-100 border border-sky-200/80 font-bold transition cursor-pointer group text-left"
+                            title="Click to view full list of assigned agents"
+                          >
+                            <Users size={12} className="text-sky-600 group-hover:scale-110 transition-transform" />
+                            <span>{spvrStats.total} Agents</span>
+                            <span className="text-[10px] font-normal text-sky-600">({spvrStats.active} Active)</span>
+                          </button>
+                        )}
                       </td>
 
                       {/* Status Badge */}
@@ -2348,6 +2573,255 @@ export default function SupervisorsAttendancePanel({ onClose }) {
           </div>
         </div>
       )}
+      {/* ================= FIELD MONITORING ACCOUNTS MANAGEMENT MODAL ================= */}
+      {isFieldAccountsModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="w-full max-w-2xl rounded-3xl border border-slate-200 bg-white shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-emerald-800 via-teal-800 to-slate-900 p-5 text-white flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-emerald-500/20 border border-emerald-400/30 flex items-center justify-center text-emerald-300">
+                  <ShieldCheck size={20} />
+                </div>
+                <div>
+                  <div className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wider text-emerald-300 bg-emerald-950/60 px-2 py-0.5 rounded-full border border-emerald-500/30 mb-0.5">
+                    <Sparkles size={10} />
+                    <span>System Discretion Accounts</span>
+                  </div>
+                  <h3 className="text-base font-black text-white">
+                    Field Monitoring Accounts Management
+                  </h3>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsFieldAccountsModalOpen(false);
+                  setEditingFieldAccountId(null);
+                }}
+                className="text-white/70 hover:text-white p-2 rounded-xl hover:bg-white/10 transition cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Content Body */}
+            <div className="p-5 overflow-y-auto space-y-5 custom-scrollbar flex-1">
+              {/* Add / Edit Form Box */}
+              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-black uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
+                    <UserPlus size={14} className="text-emerald-600" />
+                    <span>{editingFieldAccountId ? "Edit Field Monitoring Account" : "Add New Field Monitoring Account"}</span>
+                  </h4>
+                  {editingFieldAccountId && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingFieldAccountId(null);
+                        setFieldAccountForm({ fullName: "", username: "", password: "", area: "Mandaue City" });
+                        setFieldAccountFormError("");
+                      }}
+                      className="text-[11px] text-slate-500 hover:text-slate-800 font-bold underline cursor-pointer"
+                    >
+                      Cancel Edit (Create New Instead)
+                    </button>
+                  )}
+                </div>
+
+                {fieldAccountFormError && (
+                  <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold flex items-center gap-2">
+                    <AlertCircle size={14} className="shrink-0" />
+                    <span>{fieldAccountFormError}</span>
+                  </div>
+                )}
+
+                <form onSubmit={handleSaveFieldAccount} className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                      Full Name *
+                    </label>
+                    <input
+                      type="text"
+                      value={fieldAccountForm.fullName}
+                      onChange={(e) => setFieldAccountForm({ ...fieldAccountForm, fullName: e.target.value })}
+                      placeholder="e.g. JUAN DELA CRUZ / MONITOR 02"
+                      className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl font-medium text-slate-900 focus:outline-none focus:border-emerald-600 uppercase"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                      Assigned Area / Sector *
+                    </label>
+                    <select
+                      value={fieldAccountForm.area}
+                      onChange={(e) => setFieldAccountForm({ ...fieldAccountForm, area: e.target.value })}
+                      className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl font-semibold text-slate-800 focus:outline-none focus:border-emerald-600 cursor-pointer"
+                    >
+                      <option value="Mandaue City">Mandaue City (General Operations)</option>
+                      <option value="Area 1 - Subangdaku / SIMCON">Area 1 - Subangdaku / SIMCON</option>
+                      <option value="Area 2 - Centro & Cabancalan">Area 2 - Centro & Cabancalan</option>
+                      <option value="Area 3 - Basak & Canduman">Area 3 - Basak & Canduman</option>
+                      <option value="Area 4 - Tipolo & Guiso">Area 4 - Tipolo & Guiso</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                      Login Username *
+                    </label>
+                    <input
+                      type="text"
+                      value={fieldAccountForm.username}
+                      onChange={(e) => setFieldAccountForm({ ...fieldAccountForm, username: e.target.value })}
+                      placeholder="e.g. monitor.mandaue2"
+                      className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl font-mono text-slate-900 focus:outline-none focus:border-emerald-600 lowercase"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                      Login Password *
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={fieldAccountShowPasswords["new"] ? "text" : "password"}
+                        value={fieldAccountForm.password}
+                        onChange={(e) => setFieldAccountForm({ ...fieldAccountForm, password: e.target.value })}
+                        placeholder="e.g. Password123!"
+                        className="w-full pl-3 pr-8 py-2 bg-white border border-slate-200 rounded-xl font-mono text-slate-900 focus:outline-none focus:border-emerald-600"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => toggleAccountPasswordVisibility("new")}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5"
+                      >
+                        {fieldAccountShowPasswords["new"] ? <EyeOff size={14} /> : <Eye size={14} />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="sm:col-span-2 pt-1 flex items-center justify-end gap-2">
+                    <button
+                      type="submit"
+                      disabled={isSubmittingFieldAccount}
+                      className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-[#008559] hover:bg-emerald-700 text-white font-black text-xs shadow-md transition active:scale-95 cursor-pointer disabled:opacity-50"
+                    >
+                      <Save size={14} />
+                      <span>{isSubmittingFieldAccount ? "Saving to Cloud..." : editingFieldAccountId ? "Update Account" : "Add Account"}</span>
+                    </button>
+                  </div>
+                </form>
+              </div>
+
+              {/* Registered Accounts List */}
+              <div className="space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-black uppercase tracking-wider text-slate-800">
+                    Active Field Monitoring Accounts ({fieldAccounts.length})
+                  </h4>
+                  <span className="text-[11px] text-slate-500 font-medium">
+                    Credentials synced with HRHub Cloud
+                  </span>
+                </div>
+
+                {fieldAccounts.length === 0 ? (
+                  <div className="p-6 text-center bg-slate-50 rounded-2xl border border-slate-200 text-slate-500 text-xs">
+                    Walang naka-register na Field Monitoring accounts. Gamitin ang form sa itaas para mag-add.
+                  </div>
+                ) : (
+                  <div className="divide-y divide-slate-100 border border-slate-200 rounded-2xl overflow-hidden bg-white shadow-2xs">
+                    {fieldAccounts.map((acc) => (
+                      <div key={acc.id} className="p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-slate-50/70 transition">
+                        <div className="flex items-start gap-3 min-w-0">
+                          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-teal-600 to-emerald-500 text-white font-black text-xs flex items-center justify-center shrink-0 shadow-2xs">
+                            FM
+                          </div>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <p className="font-extrabold text-slate-900 text-xs truncate">{acc.fullName}</p>
+                              <span className="px-1.5 py-0.5 rounded-md bg-teal-50 border border-teal-200 text-teal-800 text-[9px] font-black uppercase tracking-wider">
+                                {acc.id}
+                              </span>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500 mt-0.5 font-medium">
+                              <span>📍 {acc.area}</span>
+                              <span>•</span>
+                              <span>User: <strong className="font-mono text-slate-800">{acc.username}</strong></span>
+                              <span>•</span>
+                              <span className="flex items-center gap-1 font-mono">
+                                Pass:{" "}
+                                <strong className="text-slate-800">
+                                  {fieldAccountShowPasswords[acc.id] ? acc.password : "••••••••"}
+                                </strong>
+                                <button
+                                  type="button"
+                                  onClick={() => toggleAccountPasswordVisibility(acc.id)}
+                                  className="text-slate-400 hover:text-slate-600 p-0.5 cursor-pointer"
+                                  title="Toggle password view"
+                                >
+                                  {fieldAccountShowPasswords[acc.id] ? <EyeOff size={11} /> : <Eye size={11} />}
+                                </button>
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Actions */}
+                        <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-center">
+                          <button
+                            type="button"
+                            onClick={() => handleCopyPwaLink(acc)}
+                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-[11px] font-bold border border-emerald-200/80 transition cursor-pointer"
+                            title="Copy PWA Link with Instructions"
+                          >
+                            <Smartphone size={12} />
+                            <span>Copy Link</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => handleEditFieldAccount(acc)}
+                            className="p-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 transition cursor-pointer"
+                            title="Edit Account"
+                          >
+                            <Edit3 size={13} />
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteFieldAccount(acc)}
+                            className="p-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 transition cursor-pointer"
+                            title="Delete Account"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="bg-slate-50 border-t border-slate-200 px-5 py-3 flex items-center justify-between text-xs text-slate-500">
+              <p className="text-[11px]">
+                💡 Ang mga account na ito ay awtomatikong makakapag-login sa <strong>HRHub Mobile PWA</strong>.
+              </p>
+              <button
+                type="button"
+                onClick={() => setIsFieldAccountsModalOpen(false)}
+                className="px-4 py-1.5 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold transition cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ================= FLOATING TOAST: COPIED PWA NOTICE ================= */}
       {copiedPwaNotice && (
         <div className="fixed bottom-6 right-6 z-50 max-w-md bg-slate-900 text-white px-4 py-3 rounded-2xl shadow-2xl border border-emerald-500/50 flex items-center gap-3 animate-in fade-in slide-in-from-bottom-4 duration-200">
