@@ -188,6 +188,12 @@ export default function PwaInstallModal({ isOpen, onClose }) {
             {/* Android Instructions */}
             {activeTab === "android" && (
               <div className="space-y-2.5 text-xs text-slate-700 bg-slate-50 rounded-2xl p-4 border border-slate-200">
+                <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-[11px] text-amber-900 flex items-start gap-2 mb-2">
+                  <Info size={14} className="text-amber-600 shrink-0 mt-0.5" />
+                  <span>
+                    <strong>Kung galing sa Messenger:</strong> I-tap muna ang <strong>••• (tatlong tuldok sa itaas)</strong> ➔ piliin ang <strong>"Open in browser"</strong> para lumipat sa Google Chrome.
+                  </span>
+                </div>
                 <div className="flex items-start gap-2.5">
                   <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-[10px] font-black text-white">
                     1

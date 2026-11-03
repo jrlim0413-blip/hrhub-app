@@ -4,7 +4,7 @@ import {
   RotateCw, Video, VideoOff, Download, ChevronRight, ShieldCheck,
   Clock, Calendar, User, ExternalLink, ArrowRight, LogOut, Check,
   Sparkles, Layers, Map, Lock, Key, Eye, EyeOff, LogIn, Shield,
-  Crosshair, Radio, CheckCircle, Hash
+  Crosshair, Radio, CheckCircle, Hash, AlertTriangle, Copy
 } from "lucide-react";
 import {
   compressImage,
@@ -205,6 +205,30 @@ export default function SupervisorMobilePwaView() {
   const [isIos, setIsIos] = useState(false);
   const [showIosTip, setShowIosTip] = useState(false);
   const [showAndroidTip, setShowAndroidTip] = useState(false);
+  const [showMessengerTip, setShowMessengerTip] = useState(false);
+  const [copiedLinkSuccess, setCopiedLinkSuccess] = useState(false);
+  const [isInAppBrowser, setIsInAppBrowser] = useState(() => {
+    if (typeof window === "undefined") return false;
+    const ua = window.navigator.userAgent || "";
+    return /FBAN|FBAV|FB_IAB|FB4A|Messenger|Instagram|Line|WhatsApp/i.test(ua);
+  });
+
+  const handleCopyCurrentUrl = () => {
+    if (typeof window === "undefined") return;
+    const url = window.location.href;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(url);
+    } else {
+      const el = document.createElement("textarea");
+      el.value = url;
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand("copy");
+      document.body.removeChild(el);
+    }
+    setCopiedLinkSuccess(true);
+    setTimeout(() => setCopiedLinkSuccess(false), 3000);
+  };
 
   // Supervisor Identity (derived strictly from magic link or storage)
   const isAssignedLink = Boolean(
@@ -510,6 +534,11 @@ export default function SupervisorMobilePwaView() {
   }, []);
 
   const handleInstallClick = async () => {
+    // If opened inside Facebook Messenger / In-App browser, guide them to "Open in browser"
+    if (isInAppBrowser) {
+      setShowMessengerTip(true);
+      return;
+    }
     if (isIos) {
       setShowIosTip(true);
       return;
@@ -852,6 +881,33 @@ export default function SupervisorMobilePwaView() {
         </div>
       </header>
 
+      {/* ================= MESSENGER IN-APP BROWSER ALERT BANNER ================= */}
+      {isInAppBrowser && (
+        <div className="bg-gradient-to-r from-amber-950 via-slate-900 to-amber-950 border-b border-amber-500/40 px-4 py-2.5 flex items-center justify-between gap-2 shadow-inner">
+          <div className="flex items-start gap-2 text-xs min-w-0">
+            <div className="w-7 h-7 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0 mt-0.5">
+              <AlertTriangle size={15} />
+            </div>
+            <div className="min-w-0">
+              <p className="font-bold text-amber-300 text-[11px] leading-tight flex items-center gap-1">
+                Binuksan sa Messenger Link
+              </p>
+              <p className="text-[10px] text-slate-300 leading-snug">
+                I-tap ang <strong className="text-white font-mono">•••</strong> sa itaas ➔ piliin ang <strong className="text-emerald-400 font-bold">"Open in browser"</strong>
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowMessengerTip(true)}
+            className="px-2.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 active:scale-95 text-slate-950 text-[11px] font-black shadow-md flex items-center gap-1 shrink-0 cursor-pointer transition"
+          >
+            <ExternalLink size={12} />
+            Paano
+          </button>
+        </div>
+      )}
+
       {/* ================= PWA INSTALLATION BANNER ================= */}
       {!isInstalled && (
         <div className="bg-gradient-to-r from-emerald-950/90 via-slate-900 to-slate-950 border-b border-emerald-600/30 px-4 py-2.5 flex items-center justify-between gap-3 shadow-inner">
@@ -872,6 +928,88 @@ export default function SupervisorMobilePwaView() {
             <Download size={13} />
             Install
           </button>
+        </div>
+      )}
+
+      {/* Messenger In-App Browser Guide Modal */}
+      {showMessengerTip && (
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-end sm:items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-slate-900 border border-emerald-500/40 rounded-3xl p-5 max-w-sm w-full space-y-3.5 shadow-2xl relative text-left">
+            <div className="flex items-center justify-between pb-1.5 border-b border-slate-800">
+              <h3 className="text-sm font-black text-white flex items-center gap-2">
+                <ExternalLink size={18} className="text-emerald-400" />
+                Galing ka sa Messenger Link:
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowMessengerTip(false)}
+                className="text-slate-400 hover:text-white text-sm p-1 rounded-lg"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="bg-amber-950/40 border border-amber-500/30 rounded-xl p-3 text-[11px] text-amber-200 leading-relaxed">
+              ⚠️ <strong>Pansin:</strong> Hindi pinapayagan ng Messenger na mag-install ng App sa loob ng chat. Kailangan itong buksan sa <strong>Google Chrome</strong>.
+            </div>
+
+            <div className="space-y-2 text-xs text-slate-300">
+              <div className="flex items-start gap-2.5 bg-slate-950/60 p-2.5 rounded-xl border border-slate-800/80">
+                <span className="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-400 font-black text-[11px] flex items-center justify-center shrink-0 mt-0.5">1</span>
+                <div>
+                  <p className="font-semibold text-white">I-tap ang tatlong tuldok ( <span className="text-emerald-400 font-bold">•••</span> )</p>
+                  <p className="text-[10px] text-slate-400">Nasa pinaka-itaas na kanang bahagi ng Messenger (katabi ng link name).</p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-2.5 bg-emerald-950/30 p-2.5 rounded-xl border border-emerald-500/30">
+                <span className="w-5 h-5 rounded-full bg-emerald-500 text-slate-950 font-black text-[11px] flex items-center justify-center shrink-0 mt-0.5">2</span>
+                <div>
+                  <p className="font-black text-emerald-300 flex items-center gap-1">
+                    Piliin ang "Open in browser" <ExternalLink size={12} />
+                  </p>
+                  <p className="text-[10px] text-slate-300">Ito ang opsyon sa menu na lumabas sa screen mo ngayon. Kusa itong bubukas sa <strong>Google Chrome</strong>.</p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-2.5 bg-slate-950/60 p-2.5 rounded-xl border border-slate-800/80">
+                <span className="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-400 font-black text-[11px] flex items-center justify-center shrink-0 mt-0.5">3</span>
+                <div>
+                  <p className="font-semibold text-white">Pagkabukas sa Chrome ➔ I-tap ang "Install"</p>
+                  <p className="text-[10px] text-slate-400">Pindutin ang berdeng "Install" button sa itaas. Kusa nang lilitaw ang HRHub app icon sa iyong cellphone desktop!</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Quick Copy URL Option */}
+            <div className="pt-1 space-y-2">
+              <button
+                type="button"
+                onClick={handleCopyCurrentUrl}
+                className="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold rounded-xl text-xs flex items-center justify-center gap-2 border border-slate-700 cursor-pointer transition"
+              >
+                {copiedLinkSuccess ? (
+                  <>
+                    <Check size={14} className="text-emerald-400" />
+                    <span className="text-emerald-400">Na-copy na! Buksan ang Chrome at i-Paste</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy size={14} />
+                    <span>O kaya: Kopyahin ang Link (Copy link)</span>
+                  </>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowMessengerTip(false)}
+                className="w-full py-3 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-black rounded-xl text-xs cursor-pointer shadow-lg shadow-emerald-950/50 transition active:scale-[0.98]"
+              >
+                Naintindihan ko (Pipiliin ko ang "Open in browser")
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -944,6 +1082,10 @@ export default function SupervisorMobilePwaView() {
                   <p className="text-[10px] text-slate-400">Tapos na! May HRHub app icon ka na sa phone desktop.</p>
                 </div>
               </div>
+            </div>
+
+            <div className="bg-slate-950/70 p-2.5 rounded-xl border border-slate-800 text-[11px] text-slate-400">
+              <span className="text-amber-400 font-bold">📲 Galing sa Messenger?</span> Kung lumabas ang "More options", i-tap ang <strong className="text-emerald-400">"Open in browser"</strong> para lumipat sa Google Chrome kung saan puwede itong i-install.
             </div>
 
             <button
@@ -1423,7 +1565,7 @@ export default function SupervisorMobilePwaView() {
 
         {/* Executive Footer */}
         <div className="pt-4 pb-8 text-center text-xs text-slate-500 space-y-1">
-          <p className="font-semibold text-slate-400">Simpal Group of Companies • HR Technology Systems</p>
+          <p className="font-semibold text-slate-400">SGC • HR Technology Systems</p>
           <p className="text-[10px] text-slate-600 font-medium">Mandaue City Field Verification Portal • SSL Encrypted</p>
         </div>
       </main>
