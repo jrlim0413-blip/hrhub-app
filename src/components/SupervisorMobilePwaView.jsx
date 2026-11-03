@@ -20,18 +20,18 @@ import {
 
 // Active Mandaue Supervisors (Strictly Mandaue City)
 const SUPERVISORS = [
-  { id: 21, fullName: "ARLFRED SABERON", area: "Mandaue City", username: "spvr-arlfred" },
-  { id: 22, fullName: "RAFFY BAGUIO", area: "Mandaue City", username: "spvr-raffy" },
-  { id: 23, fullName: "ROEL CATALAN", area: "Mandaue City", username: "spvr-roel" },
-  { id: 24, fullName: "MICHAEL DE GUZMAN", area: "Mandaue City", username: "spvr-michael" },
-  { id: 25, fullName: "JOEL ESTORCO", area: "Mandaue City", username: "spvr-joel" },
-  { id: 26, fullName: "HARRY EYA", area: "Mandaue City", username: "spvr-eya" },
-  { id: 27, fullName: "CARL MANGRUBAN", area: "Mandaue City", username: "spvr-carl" },
-  { id: 28, fullName: "JED MELENDREZ", area: "Mandaue City", username: "spvr-jed" },
-  { id: 29, fullName: "NYOR SESALDO", area: "Mandaue City", username: "spvr-nyor" },
-  { id: 30, fullName: "NARCISO TAGUD JR.", area: "Mandaue City", username: "spvr-jason" },
-  { id: 31, fullName: "MOLLY BATUBALANOS", area: "Mandaue City", username: "spvr-molly" },
-  { id: 32, fullName: "COORDINATOR - APPLEGROUP", area: "Mandaue City", username: "spvr-apple" }
+  { id: 21, fullName: "ARLFRED SABERON", area: "Mandaue City", username: "spvr-arlfred", password: "Password123!" },
+  { id: 22, fullName: "RAFFY BAGUIO", area: "Mandaue City", username: "spvr-raffy", password: "Password123!" },
+  { id: 23, fullName: "ROEL CATALAN", area: "Mandaue City", username: "spvr-roel", password: "Password123!" },
+  { id: 24, fullName: "MICHAEL DE GUZMAN", area: "Mandaue City", username: "spvr-michael", password: "Password123!" },
+  { id: 25, fullName: "JOEL ESTORCO", area: "Mandaue City", username: "spvr-joel", password: "Password123!" },
+  { id: 26, fullName: "HARRY EYA", area: "Mandaue City", username: "spvr-eya", password: "Password123!" },
+  { id: 27, fullName: "CARL MANGRUBAN", area: "Mandaue City", username: "spvr-carl", password: "Password123!" },
+  { id: 28, fullName: "JED MELENDREZ", area: "Mandaue City", username: "spvr-jed", password: "Password123!" },
+  { id: 29, fullName: "NYOR SESALDO", area: "Mandaue City", username: "spvr-nyor", password: "Password123!" },
+  { id: 30, fullName: "NARCISO TAGUD JR.", area: "Mandaue City", username: "spvr-jason", password: "Password123!" },
+  { id: 31, fullName: "MOLLY BATUBALANOS", area: "Mandaue City", username: "spvr-molly", password: "Password123!" },
+  { id: 32, fullName: "COORDINATOR - APPLEGROUP", area: "Mandaue City", username: "spvr-apple", password: "Password123!" }
 ];
 
 function getTodayString() {
@@ -217,6 +217,20 @@ async function verifySourceApiCredentials(username, password, supervisor = null)
     } catch { }
   }
 
+  // 4. Check registered / default portal password (e.g. Password123!)
+  const expectedPassword = supervisor?.password || "Password123!";
+  if (cleanPassword === expectedPassword || cleanPassword === "Password123!") {
+    const spvrId = String(supervisor?.id || "").trim();
+    if (spvrId) {
+      try { localStorage.setItem(`hrhub_spvr_pwd_${spvrId}`, cleanPassword); } catch { }
+    }
+    return {
+      success: true,
+      token: "portal-verified",
+      data: { id: supervisor?.id, username: cleanUsername, role: "Supervisor" }
+    };
+  }
+
   return {
     success: false,
     error: "Invalid password. The password did not match your official credentials."
@@ -335,6 +349,7 @@ export default function SupervisorMobilePwaView() {
           id: idParam,
           fullName: decodeURIComponent(nameParam),
           username: usernameParam ? decodeURIComponent(usernameParam) : `spvr-${idParam}`,
+          password: "Password123!",
           area: resolvedArea,
           role: isFmRole ? "Field Monitoring" : "Supervisor"
         };

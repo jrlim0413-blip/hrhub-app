@@ -28,18 +28,18 @@ import {
 
 // Fallback active supervisors (matching live STL Mandaue API IDs 21 to 32)
 const FALLBACK_SUPERVISORS = [
-  { id: 21, fullName: "ARLFRED SABERON", area: "Mandaue City", username: "spvr-arlfred", isActive: 1 },
-  { id: 22, fullName: "RAFFY BAGUIO", area: "Mandaue City", username: "spvr-raffy", isActive: 1 },
-  { id: 23, fullName: "ROEL CATALAN", area: "Mandaue City", username: "spvr-roel", isActive: 1 },
-  { id: 24, fullName: "MICHAEL DE GUZMAN", area: "Mandaue City", username: "spvr-michael", isActive: 1 },
-  { id: 25, fullName: "JOEL ESTORCO", area: "Mandaue City", username: "spvr-joel", isActive: 1 },
-  { id: 26, fullName: "HARRY EYA", area: "Mandaue City", username: "spvr-eya", isActive: 1 },
-  { id: 27, fullName: "CARL MANGRUBAN", area: "Mandaue City", username: "spvr-carl", isActive: 1 },
-  { id: 28, fullName: "JED MELENDREZ", area: "Mandaue City", username: "spvr-jed", isActive: 1 },
-  { id: 29, fullName: "NYOR SESALDO", area: "Mandaue City", username: "spvr-nyor", isActive: 1 },
-  { id: 30, fullName: "NARCISO TAGUD JR.", area: "Mandaue City", username: "spvr-jason", isActive: 1 },
-  { id: 31, fullName: "MOLLY BATUBALANOS", area: "Mandaue City", username: "spvr-molly", isActive: 1 },
-  { id: 32, fullName: "COORDINATOR - APPLEGROUP", area: "Mandaue City", username: "spvr-apple", isActive: 1 }
+  { id: 21, fullName: "ARLFRED SABERON", area: "Mandaue City", username: "spvr-arlfred", password: "Password123!", isActive: 1 },
+  { id: 22, fullName: "RAFFY BAGUIO", area: "Mandaue City", username: "spvr-raffy", password: "Password123!", isActive: 1 },
+  { id: 23, fullName: "ROEL CATALAN", area: "Mandaue City", username: "spvr-roel", password: "Password123!", isActive: 1 },
+  { id: 24, fullName: "MICHAEL DE GUZMAN", area: "Mandaue City", username: "spvr-michael", password: "Password123!", isActive: 1 },
+  { id: 25, fullName: "JOEL ESTORCO", area: "Mandaue City", username: "spvr-joel", password: "Password123!", isActive: 1 },
+  { id: 26, fullName: "HARRY EYA", area: "Mandaue City", username: "spvr-eya", password: "Password123!", isActive: 1 },
+  { id: 27, fullName: "CARL MANGRUBAN", area: "Mandaue City", username: "spvr-carl", password: "Password123!", isActive: 1 },
+  { id: 28, fullName: "JED MELENDREZ", area: "Mandaue City", username: "spvr-jed", password: "Password123!", isActive: 1 },
+  { id: 29, fullName: "NYOR SESALDO", area: "Mandaue City", username: "spvr-nyor", password: "Password123!", isActive: 1 },
+  { id: 30, fullName: "NARCISO TAGUD JR.", area: "Mandaue City", username: "spvr-jason", password: "Password123!", isActive: 1 },
+  { id: 31, fullName: "MOLLY BATUBALANOS", area: "Mandaue City", username: "spvr-molly", password: "Password123!", isActive: 1 },
+  { id: 32, fullName: "COORDINATOR - APPLEGROUP", area: "Mandaue City", username: "spvr-apple", password: "Password123!", isActive: 1 }
 ];
 
 // Areas filter reference
@@ -273,7 +273,7 @@ export default function SupervisorsAttendancePanel({ onClose }) {
       `🆔 ID NUMBER: #${spvrId}`,
       `📍 AREA / SECTOR: ${spvrArea}`,
       `🔑 USERNAME: ${spvrUsername}`,
-      ...(isFm ? [`🔐 PASSWORD: ${spvrPassword}`] : []),
+      `🔐 PASSWORD: ${spvrPassword}`,
       ``,
       `🔗 PERSONAL ACCESS LINK:`,
       `${pwaUrl}`,
@@ -283,7 +283,7 @@ export default function SupervisorsAttendancePanel({ onClose }) {
       `1️⃣ Pindutin ang link sa itaas para magbukas sa Messenger.`,
       `2️⃣ Sa pinaka-itaas na kanang bahagi, i-tap ang tatlong tuldok ( ••• ).`,
       `3️⃣ Piliin ang "Open in browser" (upang bumukas sa Google Chrome).`,
-      `4️⃣ I-enter ang iyong Username ${isFm ? `at Password (${spvrPassword})` : `at Password`}.`,
+      `4️⃣ I-enter ang iyong Username at Password (${spvrPassword}).`,
       `5️⃣ I-allow ang GPS at Live Camera para makapag-Daily Login!`,
       ``,
       `📲 PAANO I-INSTALL BILANG CELLPHONE APP:`,
@@ -444,6 +444,7 @@ export default function SupervisorsAttendancePanel({ onClose }) {
         supervisorId: spvr.id,
         fullName: spvr.fullName || spvr.username || `Supervisor ${spvr.id}`,
         username: spvr.username || `spvr_${spvr.id}`,
+        password: spvr.password || "Password123!",
         area: String(spvr.area && spvr.area !== "5" ? spvr.area : "Mandaue City"),
         role: "Supervisor",
         status: "Awaiting Check-in",
