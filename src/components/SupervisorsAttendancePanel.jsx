@@ -21,7 +21,9 @@ import {
   loadFieldMonitoringAccounts,
   addFieldMonitoringAccount,
   updateFieldMonitoringAccount,
-  deleteFieldMonitoringAccount
+  deleteFieldMonitoringAccount,
+  getCachedFieldMonitoringAccounts,
+  subscribeToFieldAccountsRealtime
 } from "../lib/fieldMonitoringStorage";
 
 // Fallback active supervisors (matching live STL Mandaue API IDs 21 to 32)
@@ -107,7 +109,7 @@ export default function SupervisorsAttendancePanel({ onClose }) {
   const [copiedPwaNotice, setCopiedPwaNotice] = useState("");
 
   // Field Monitoring Accounts State (System Discretion Accounts)
-  const [fieldAccounts, setFieldAccounts] = useState([]);
+  const [fieldAccounts, setFieldAccounts] = useState(() => getCachedFieldMonitoringAccounts());
   const [isFieldAccountsModalOpen, setIsFieldAccountsModalOpen] = useState(false);
   const [fieldAccountForm, setFieldAccountForm] = useState({
     fullName: "",
@@ -121,11 +123,13 @@ export default function SupervisorsAttendancePanel({ onClose }) {
   const [isSubmittingFieldAccount, setIsSubmittingFieldAccount] = useState(false);
   const [rosterCategoryFilter, setRosterCategoryFilter] = useState("all"); // "all" | "supervisors" | "monitoring"
 
-  // Fetch Field Monitoring Accounts from Cloud Storage
+  // Fetch Field Monitoring Accounts from Supabase Table & Realtime listener
   const refreshFieldAccounts = async () => {
     try {
       const accs = await loadFieldMonitoringAccounts();
-      setFieldAccounts(accs);
+      if (Array.isArray(accs) && accs.length > 0) {
+        setFieldAccounts(accs);
+      }
     } catch (err) {
       console.warn("Failed loading field accounts:", err);
     }
@@ -133,6 +137,12 @@ export default function SupervisorsAttendancePanel({ onClose }) {
 
   useEffect(() => {
     refreshFieldAccounts();
+    const unsub = subscribeToFieldAccountsRealtime(() => {
+      refreshFieldAccounts();
+    });
+    return () => {
+      if (typeof unsub === "function") unsub();
+    };
   }, []);
 
   const handleOpenAddAccount = () => {
@@ -474,7 +484,31 @@ export default function SupervisorsAttendancePanel({ onClose }) {
             return !(id >= 13 && id <= 20) && !String(r.fullName).startsWith("SPVR ");
           });
           if (valid.length > 0) {
-            currentWorkingRecords = valid;
+            const validMap = new Map();
+            valid.forEach((r) => validMap.set(String(r.supervisorId), r));
+
+            // Merge cache into initialRecords, preserving role and field monitoring identity
+            currentWorkingRecords = initialRecords.map((initRec) => {
+              const saved = validMap.get(String(initRec.supervisorId));
+              if (saved) {
+                return {
+                  ...initRec,
+                  ...saved,
+                  role: initRec.role, // Always preserve authoritative role
+                  fullName: initRec.fullName || saved.fullName,
+                  username: initRec.username || saved.username,
+                  area: String(saved.area && saved.area !== "5" ? saved.area : initRec.area)
+                };
+              }
+              return initRec;
+            });
+
+            // Also keep any extra valid records in cache if any
+            const initIds = new Set(initialRecords.map((r) => String(r.supervisorId)));
+            const extra = valid.filter((r) => !initIds.has(String(r.supervisorId)));
+            if (extra.length > 0) {
+              currentWorkingRecords = [...currentWorkingRecords, ...extra];
+            }
           }
         }
       } catch { }
@@ -497,8 +531,16 @@ export default function SupervisorsAttendancePanel({ onClose }) {
           });
 
           setAttendanceRecords((prev) => {
-            const baseList = prev.length > 0 ? prev : initialRecords;
-            const merged = baseList.map((item) => {
+            // Guarantee baseList has all initialRecords (Supervisors + Field Monitors)
+            const prevMap = new Map();
+            (prev || []).forEach((r) => prevMap.set(String(r.supervisorId), r));
+
+            const fullBaseList = initialRecords.map((initRec) => {
+              const existing = prevMap.get(String(initRec.supervisorId));
+              return existing ? { ...initRec, ...existing, role: initRec.role } : initRec;
+            });
+
+            const merged = fullBaseList.map((item) => {
               const cloudRow = cloudMap.get(String(item.supervisorId));
               if (cloudRow) {
                 return {
@@ -541,7 +583,25 @@ export default function SupervisorsAttendancePanel({ onClose }) {
       if (!row || !row.supervisor_id) return;
 
       setAttendanceRecords((prev) => {
-        const updated = prev.map((item) => {
+        const prevMap = new Map();
+        (prev || []).forEach((r) => prevMap.set(String(r.supervisorId), r));
+
+        let currentList = prev || [];
+        if (!prevMap.has(String(row.supervisor_id))) {
+          const initRec = initialRecords.find((r) => String(r.supervisorId) === String(row.supervisor_id)) || {
+            supervisorId: row.supervisor_id,
+            fullName: row.supervisor_name || `Personnel ${row.supervisor_id}`,
+            username: row.username || "",
+            area: String(row.area && row.area !== "5" ? row.area : "Mandaue City"),
+            role: String(row.supervisor_id).toLowerCase().startsWith("fm-") ? "Field Monitoring" : "Supervisor",
+            status: "Awaiting Check-in",
+            timeIn: "--",
+            shift: row.shift || "Morning Draw"
+          };
+          currentList = [...currentList, initRec];
+        }
+
+        const updated = currentList.map((item) => {
           if (String(item.supervisorId) === String(row.supervisor_id)) {
             return {
               ...item,
@@ -569,7 +629,7 @@ export default function SupervisorsAttendancePanel({ onClose }) {
         return updated;
       });
 
-      showToast(`🔔 Live attendance check-in synced for Supervisor #${row.supervisor_id}!`);
+      showToast(`🔔 Live attendance check-in synced for #${row.supervisor_id}!`);
     });
 
     return () => {
@@ -852,7 +912,7 @@ export default function SupervisorsAttendancePanel({ onClose }) {
       return;
     }
 
-    const targetSpvr = supervisorsList.find((s) => String(s.id) === String(simSupervisorId));
+    const targetSpvr = [...supervisorsList, ...fieldAccounts].find((s) => String(s.id) === String(simSupervisorId));
     if (!targetSpvr) return;
 
     setIsSubmittingCheckIn(true);
@@ -1374,7 +1434,7 @@ export default function SupervisorsAttendancePanel({ onClose }) {
             className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${rosterCategoryFilter === "all" ? "bg-white text-slate-900 shadow-2xs" : "text-slate-500 hover:text-slate-900"
               }`}
           >
-            All
+            All ({attendanceRecords.length})
           </button>
           <button
             type="button"
@@ -1382,7 +1442,7 @@ export default function SupervisorsAttendancePanel({ onClose }) {
             className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${rosterCategoryFilter === "supervisors" ? "bg-white text-slate-900 shadow-2xs" : "text-slate-500 hover:text-slate-900"
               }`}
           >
-            Supervisors
+            Supervisors ({attendanceRecords.filter((r) => r.role !== "Field Monitoring").length})
           </button>
           <button
             type="button"
@@ -1391,7 +1451,7 @@ export default function SupervisorsAttendancePanel({ onClose }) {
               }`}
           >
             <ShieldCheck size={11} />
-            Field Monitor ({fieldAccounts.length})
+            Field Monitor ({attendanceRecords.filter((r) => r.role === "Field Monitoring").length || fieldAccounts.length})
           </button>
         </div>
 
@@ -1436,9 +1496,17 @@ export default function SupervisorsAttendancePanel({ onClose }) {
       {filteredRecords.length === 0 ? (
         <div className="rounded-2xl border border-slate-200 bg-white p-12 text-center">
           <AlertCircle className="mx-auto text-slate-300 mb-3" size={40} />
-          <h3 className="text-base font-bold text-slate-800">No supervisor records found</h3>
+          <h3 className="text-base font-bold text-slate-800">
+            {rosterCategoryFilter === "monitoring"
+              ? "No Field Monitor records found"
+              : rosterCategoryFilter === "supervisors"
+                ? "No supervisor records found"
+                : "No attendance records found"}
+          </h3>
           <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
-            Try adjusting your search keyword or clearing status filters.
+            {rosterCategoryFilter === "monitoring"
+              ? "Click \"Add Account\" at the top right to register Field Monitoring personnel."
+              : "Try adjusting your search keyword or clearing status filters."}
           </p>
           <button
             type="button"
@@ -2305,14 +2373,25 @@ export default function SupervisorsAttendancePanel({ onClose }) {
                     onChange={(e) => setSimSupervisorId(e.target.value)}
                     className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:border-[#008559] transition cursor-pointer shadow-2xs"
                   >
-                    {supervisorsList.map((s) => {
-                      const count = agentStatsBySupervisor[String(s.id)]?.total || 0;
-                      return (
-                        <option key={s.id} value={s.id}>
-                          #{s.id} - {s.fullName} ({count} Assigned Agents • {s.area === "Mandaue City" || s.area === "5" || !s.area ? "Mandaue City" : `Area ${s.area}`})
-                        </option>
-                      );
-                    })}
+                    <optgroup label="STL Supervisors (Source API)">
+                      {supervisorsList.map((s) => {
+                        const count = agentStatsBySupervisor[String(s.id)]?.total || 0;
+                        return (
+                          <option key={s.id} value={s.id}>
+                            #{s.id} - {s.fullName} ({count} Assigned Agents • {s.area === "Mandaue City" || s.area === "5" || !s.area ? "Mandaue City" : `Area ${s.area}`})
+                          </option>
+                        );
+                      })}
+                    </optgroup>
+                    {fieldAccounts.length > 0 && (
+                      <optgroup label="Field Monitoring Personnel">
+                        {fieldAccounts.map((fm) => (
+                          <option key={fm.id} value={fm.id}>
+                            #{fm.id} - {fm.fullName} ({fm.area || "Mandaue City"})
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
                   </select>
                 </div>
 
