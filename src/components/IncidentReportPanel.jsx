@@ -327,6 +327,43 @@ export default function IncidentReportPanel({
   const [transmittingMessage, setTransmittingMessage] = useState("");
   const [openDossierCaseId, setOpenDossierCaseId] = useState(null);
 
+  // Custom High-Fidelity Confirmation Modal State (Replaces native browser window.confirm & alerts)
+  const [confirmDialog, setConfirmDialog] = useState({
+    isOpen: false,
+    title: "",
+    subtitle: "",
+    badgeText: "",
+    message: "",
+    warningNote: "",
+    impactItems: [],
+    confirmText: "Confirm",
+    cancelText: "Cancel",
+    confirmVariant: "danger", // "danger" | "emerald" | "amber"
+    iconType: "purge", // "purge" | "archive" | "warning"
+    isAlert: false,
+    isProcessing: false,
+    onConfirm: null
+  });
+
+  const showAlertModal = ({ title, subtitle, message, badgeText = "DUE PROCESS NOTICE", variant = "amber" }) => {
+    setConfirmDialog({
+      isOpen: true,
+      title,
+      subtitle: subtitle || "Simpal Group of Companies • HR Compliance Desk",
+      badgeText,
+      message,
+      warningNote: "",
+      impactItems: [],
+      confirmText: "Understood",
+      cancelText: "Close",
+      confirmVariant: variant,
+      iconType: variant === "danger" ? "purge" : "warning",
+      isAlert: true,
+      isProcessing: false,
+      onConfirm: () => setConfirmDialog((prev) => ({ ...prev, isOpen: false }))
+    });
+  };
+
   // Auto-dismiss Dossier popovers on outside clicks
   useEffect(() => {
     const handleGlobalClick = (e) => {
@@ -337,6 +374,98 @@ export default function IncidentReportPanel({
     document.addEventListener("click", handleGlobalClick);
     return () => document.removeEventListener("click", handleGlobalClick);
   }, []);
+
+  // Secret Key State: Clean Process (Purge) Button is hidden by default
+  const [showCleanProcessBtn, setShowCleanProcessBtn] = useState(() => {
+    try {
+      return sessionStorage.getItem("hrhub_show_clean_process") === "true";
+    } catch {
+      return false;
+    }
+  });
+
+  const secretClickCountRef = useRef(0);
+  const secretClickTimerRef = useRef(null);
+
+  const toggleCleanProcessBtn = () => {
+    setShowCleanProcessBtn((prev) => {
+      const nextState = !prev;
+      try {
+        sessionStorage.setItem("hrhub_show_clean_process", String(nextState));
+      } catch {}
+      if (nextState) {
+        playAiVoiceAnnouncement("Developer Clean Process button unlocked.");
+      } else {
+        playAiVoiceAnnouncement("Clean Process button locked and hidden.");
+      }
+      return nextState;
+    });
+  };
+
+  // Keyboard shortcut listener: Ctrl+Alt+C, Alt+Shift+C, or typing "clean" / "purge"
+  useEffect(() => {
+    let keyBuffer = "";
+    let bufferTimer = null;
+
+    const handleKeyDown = (e) => {
+      // Hotkey: Ctrl+Alt+C or Alt+Shift+C or Ctrl+Alt+P
+      const isCtrlAltC = (e.ctrlKey || e.metaKey) && e.altKey && e.key?.toLowerCase() === "c";
+      const isAltShiftC = e.altKey && e.shiftKey && e.key?.toLowerCase() === "c";
+      const isPurgeHotkey = (e.ctrlKey || e.metaKey) && e.altKey && e.key?.toLowerCase() === "p";
+
+      if (isCtrlAltC || isAltShiftC || isPurgeHotkey) {
+        e.preventDefault();
+        toggleCleanProcessBtn();
+        return;
+      }
+
+      // Ignore typing when focused in an input, textarea, or contentEditable
+      const tag = e.target?.tagName?.toUpperCase();
+      if (tag === "INPUT" || tag === "TEXTAREA" || e.target?.isContentEditable) {
+        return;
+      }
+
+      // Secret keyword typing sequence: "clean" or "purge"
+      if (e.key && e.key.length === 1) {
+        keyBuffer += e.key.toLowerCase();
+        if (keyBuffer.length > 10) {
+          keyBuffer = keyBuffer.slice(-10);
+        }
+
+        if (keyBuffer.endsWith("clean") || keyBuffer.endsWith("purge")) {
+          keyBuffer = "";
+          toggleCleanProcessBtn();
+          return;
+        }
+
+        clearTimeout(bufferTimer);
+        bufferTimer = setTimeout(() => {
+          keyBuffer = "";
+        }, 2000);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      clearTimeout(bufferTimer);
+    };
+  }, []);
+
+  // Multi-click secret trigger: clicking the role badge / user identity 5 times quickly
+  const handleSecretBadgeClick = () => {
+    secretClickCountRef.current += 1;
+    clearTimeout(secretClickTimerRef.current);
+
+    if (secretClickCountRef.current >= 5) {
+      secretClickCountRef.current = 0;
+      toggleCleanProcessBtn();
+    } else {
+      secretClickTimerRef.current = setTimeout(() => {
+        secretClickCountRef.current = 0;
+      }, 2500);
+    }
+  };
 
   // Compute effective role & capabilities STRICTLY based on the logged-in account (currentUser)
   const effectiveRole = useMemo(() => {
@@ -1942,12 +2071,7 @@ export default function IncidentReportPanel({
   };
 
   // 6. Direct Case Closure (No file upload required for Decision)
-  const handleCloseCaseDirectly = async (report) => {
-    if (!report) return;
-    if (!window.confirm(`Close and archive Case ${report.caseNumber} for ${report.employeeName} in HR 201 File?`)) {
-      return;
-    }
-
+  const executeCloseCaseDirectly = async (report) => {
     const timestampStr = new Date().toLocaleString("en-US", {
       month: "long",
       day: "numeric",
@@ -1982,21 +2106,101 @@ export default function IncidentReportPanel({
       playAiVoiceAnnouncement(`Case ${report.caseNumber} is now officially closed and archived in HR 201 records.`);
     } catch (err) {
       console.error("Close case error:", err);
-      alert("Failed to close case. Please try again.");
+      showAlertModal({
+        title: "Case Closure Error",
+        message: "Failed to close and archive case to database. Please check your connection and try again.",
+        variant: "danger"
+      });
     } finally {
       setIsTransmitting(false);
       setTransmittingMessage("");
     }
   };
 
+  const handleCloseCaseDirectly = (report) => {
+    if (!report) return;
+    setConfirmDialog({
+      isOpen: true,
+      title: `Close & Archive Case ${report.caseNumber}?`,
+      subtitle: `${report.employeeName} • ${report.company || "Subsidiary HR Operations"}`,
+      badgeText: "OFFICIAL 201 RECORD ARCHIVE",
+      message: `You are about to officially close and archive Case ${report.caseNumber} for ${report.employeeName} into the permanent HR 201 File records. This legally concludes the administrative due process workflow.`,
+      warningNote: "Due Process Standard: Ensure all required notices, employee explanations, or warning memos have been duly documented before finalizing this closure.",
+      impactItems: [
+        `Case ${report.caseNumber} status will be set to "CASE_CLOSED"`,
+        `Outcome (${report.adminDecisionSanction || report.warningNoticePenalty || "Administrative Resolution"}) will be locked in permanent 201 records`,
+        "Permanent closure timestamp and HR audit log entry will be recorded"
+      ],
+      confirmText: "Confirm Case Closure & Archive",
+      cancelText: "Cancel & Keep Active",
+      confirmVariant: "emerald",
+      iconType: "archive",
+      isAlert: false,
+      onConfirm: async () => {
+        setConfirmDialog((prev) => ({ ...prev, isProcessing: true }));
+        try {
+          await executeCloseCaseDirectly(report);
+          setConfirmDialog((prev) => ({ ...prev, isOpen: false, isProcessing: false }));
+        } catch (err) {
+          console.error("Close case modal error:", err);
+          setConfirmDialog((prev) => ({ ...prev, isProcessing: false }));
+        }
+      }
+    });
+  };
+
   // Purge test / mock data to start with pure live process
-  const handleClearAllMockData = async () => {
-    if (window.confirm("Purge all incident reports to start with a completely clean process?")) {
+  const executeClearAllMockData = async () => {
+    setIsTransmitting(true);
+    setTransmittingMessage("Purging all incident reports and resetting database...");
+    try {
       await clearAllIncidentReports();
       setReports([]);
       setSelectedReport(null);
       playAiVoiceAnnouncement("All test records purged. You are now starting with a completely clean incident reporting process.");
+    } catch (err) {
+      console.error("Purge error:", err);
+      showAlertModal({
+        title: "Purge Error",
+        message: "Failed to purge database records. Please try again.",
+        variant: "danger"
+      });
+    } finally {
+      setIsTransmitting(false);
+      setTransmittingMessage("");
     }
+  };
+
+  const handleClearAllMockData = () => {
+    setConfirmDialog({
+      isOpen: true,
+      title: "Purge Disciplinary Registry & Reset Pipeline?",
+      subtitle: "Simpal Group of Companies (SGC HRMD) • Disciplinary Due Process Command",
+      badgeText: "DESTRUCTIVE REPOSITORY PURGE",
+      message: "Are you sure you want to permanently purge all incident reports, Notices to Explain (NTE), written explanations, hearing minutes, and disciplinary documents from the database?",
+      warningNote: "Caution: In accordance with DOLE Due Process and SGC Corporate Governance, this action is permanent and cannot be reversed. Ensure that any physical documents or compliance files needed have been archived before executing this clean process.",
+      impactItems: [
+        `${reports.length} Incident Report & Case records will be permanently erased`,
+        "All Branch HR Incident Outbox drafts and transmitted IRs will be removed",
+        "All Head Office NTE determinations, digital signatures, and hearing logs will be wiped",
+        "Disciplinary dossiers will be reset to a fresh zero state"
+      ],
+      confirmText: "Yes, Purge Database & Reset",
+      cancelText: "Cancel & Keep Records",
+      confirmVariant: "danger",
+      iconType: "purge",
+      isAlert: false,
+      onConfirm: async () => {
+        setConfirmDialog((prev) => ({ ...prev, isProcessing: true }));
+        try {
+          await executeClearAllMockData();
+          setConfirmDialog((prev) => ({ ...prev, isOpen: false, isProcessing: false }));
+        } catch (err) {
+          console.error("Purge execution error:", err);
+          setConfirmDialog((prev) => ({ ...prev, isProcessing: false }));
+        }
+      }
+    });
   };
 
   const handleSaveAndReturnNte = async (updatedDraft) => {
@@ -2357,7 +2561,11 @@ export default function IncidentReportPanel({
       {/* 1. LOGGED-IN ACCOUNT IDENTITY & ROLE BANNER                                */}
       {/* ========================================================================= */}
       <div className="rounded-2xl border border-slate-200 bg-white p-3.5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3">
-        <div className="flex items-center gap-2.5 flex-wrap">
+        <div
+          className="flex items-center gap-2.5 flex-wrap cursor-pointer select-none"
+          onClick={handleSecretBadgeClick}
+          title="Administrative Profile • (Tap 5 times or press Ctrl+Alt+C to toggle maintenance tools)"
+        >
           {/* Identity of Logged-In User */}
           <div className="flex items-center gap-1.5">
             <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">Signed In:</span>
@@ -2417,15 +2625,18 @@ export default function IncidentReportPanel({
             <span className="hidden sm:inline">{isRefreshing ? "Syncing..." : "Sync Cloud"}</span>
           </button>
 
-          <button
-            type="button"
-            onClick={handleClearAllMockData}
-            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 transition cursor-pointer"
-            title="Purge all test/mock data to start with a completely clean process"
-          >
-            <Trash2 size={13} className="text-rose-600" />
-            <span className="hidden sm:inline">Clean Process</span>
-          </button>
+          {/* Clean Process Button: HIDDEN BY DEFAULT. Unlocked via secret key (Ctrl+Alt+C or 5 clicks on Signed In badge) */}
+          {showCleanProcessBtn && (
+            <button
+              type="button"
+              onClick={handleClearAllMockData}
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 transition cursor-pointer animate-in fade-in zoom-in-95"
+              title="Purge all test/mock data to start with a completely clean process (Press Ctrl+Alt+C to hide)"
+            >
+              <Trash2 size={13} className="text-rose-600" />
+              <span className="hidden sm:inline">Clean Process</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -2807,9 +3018,47 @@ export default function IncidentReportPanel({
                 });
               }
 
+              // Check actual completion of each due process instrument
+              const hasActualAdminDecision = Boolean(
+                report.status === "ADMIN_DECISION_ISSUED" ||
+                (report.adminDecisionIssuedAt && (report.adminDecisionPenalty || report.adminDecisionSanction || report.adminDecisionSubject))
+              );
+
+              const hasActualWarning = Boolean(
+                report.status === "NOTICE_OF_WARNING_ISSUED" ||
+                (report.warningIssuedAt && (report.warningNoticePenalty || report.warningNoticeSubject))
+              );
+
+              const hasActualNoi = Boolean(
+                report.status === "NOI_ISSUED" ||
+                (report.noiIssuedAt && (report.zoomMeetingDate || report.noiSubject))
+              );
+
+              const hasActualExplanation = Boolean(
+                report.hasSignedNteProof ||
+                report.hasExplanationProof ||
+                report.nteSignedProof ||
+                report.explanationProof ||
+                report.explanationReceivedAt ||
+                isNteAcknowledged ||
+                isExplanation
+              );
+
+              const hasActualNte = Boolean(
+                report.hasNte ||
+                report.nteIssuedAt ||
+                report.nteDate ||
+                isNteIssued ||
+                isNteAcknowledged ||
+                isServed ||
+                isExplanation ||
+                hasActualWarning ||
+                hasActualNoi ||
+                hasActualAdminDecision
+              );
+
               // 2. Official Notice to Explain (NTE)
-              const hasNteDoc = report.hasNte || report.nteIssuedAt || isNteIssued || isNteAcknowledged || isServed || isExplanation || isWarning || isNoi || isAdminDecision || isClosed;
-              if (hasNteDoc && !isNteIssued && !isServed) {
+              if (hasActualNte && !isNteIssued && !isServed) {
                 pastDossier.push({
                   id: "nte",
                   title: "Notice to Explain (NTE)",
@@ -2823,9 +3072,7 @@ export default function IncidentReportPanel({
               }
 
               // 3. Signed NTE & Employee Written Explanation
-              const hasDualProof = report.hasSignedNteProof || report.hasExplanationProof || report.nteSignedProof || report.explanationProof || isNteAcknowledged || isExplanation;
-              const isPastExplanation = isWarning || isNoi || isAdminDecision || isClosed;
-              if (hasDualProof && isPastExplanation) {
+              if (hasActualExplanation && (hasActualWarning || hasActualNoi || hasActualAdminDecision || isClosed)) {
                 pastDossier.push({
                   id: "explanation",
                   title: "Signed NTE & Written Explanation",
@@ -2842,8 +3089,7 @@ export default function IncidentReportPanel({
               }
 
               // 4. Notice of Investigation (if NOI was conducted and case moved forward)
-              const hasNoiRecord = report.noiIssuedAt || report.noiSubject || report.zoomMeetingDate;
-              if ((isAdminDecision || isClosed) && hasNoiRecord) {
+              if (hasActualNoi && (hasActualAdminDecision || isClosed)) {
                 pastDossier.push({
                   id: "noi",
                   title: "Notice of Investigation Memo",
@@ -2857,7 +3103,7 @@ export default function IncidentReportPanel({
               }
 
               // 5. Notice of Warning (if warning was issued and case is archived/closed)
-              if (isClosed && (report.warningIssuedAt || report.warningNoticePenalty)) {
+              if (hasActualWarning && isClosed) {
                 pastDossier.push({
                   id: "warning",
                   title: "Notice of Warning Memo",
@@ -2870,12 +3116,12 @@ export default function IncidentReportPanel({
                 });
               }
 
-              // 6. Decision of Administrative Case (if case is closed)
-              if (isClosed && (report.adminDecisionIssuedAt || report.adminDecisionSubject || report.adminDecisionSanction)) {
+              // 6. Decision of Administrative Case (ONLY if decision actually proceeded and was issued!)
+              if (hasActualAdminDecision && isClosed) {
                 pastDossier.push({
                   id: "adminDecision",
                   title: "Decision of Administrative Case",
-                  subtitle: `Sanction: ${report.adminDecisionSanction || "Final Stern Warning"}`,
+                  subtitle: `Sanction: ${report.adminDecisionSanction || report.adminDecisionPenalty || "Final Stern Warning"}`,
                   statusText: "Resolution",
                   statusColor: "text-rose-700 bg-rose-50 border-rose-200",
                   icon: Scale,
@@ -2884,18 +3130,18 @@ export default function IncidentReportPanel({
                 });
               }
 
-              // Compute 5 Due Process Levels status & states:
+              // Compute accurate Due Process Level:
               let currentLevelNumber = 1;
-              if (isPendingSgc || isFiledForRecord) {
-                currentLevelNumber = 1;
-              } else if (isNteIssued || isServed) {
-                currentLevelNumber = 2;
-              } else if (isNteAcknowledged || isExplanation) {
-                currentLevelNumber = 3;
-              } else if (isWarning || isNoi) {
-                currentLevelNumber = 4;
-              } else if (isAdminDecision || isClosed) {
+              if (hasActualAdminDecision || isAdminDecision) {
                 currentLevelNumber = 5;
+              } else if (hasActualWarning || hasActualNoi || isWarning || isNoi) {
+                currentLevelNumber = 4;
+              } else if (hasActualExplanation || isNteAcknowledged || isExplanation) {
+                currentLevelNumber = 3;
+              } else if (hasActualNte || isNteIssued || isServed) {
+                currentLevelNumber = 2;
+              } else {
+                currentLevelNumber = 1;
               }
 
               const levelPercent = isClosed
@@ -2911,26 +3157,24 @@ export default function IncidentReportPanel({
                         : 20;
 
               // Level 1: Incident Filing (IR)
-              const isLv1Done = !isPendingSgc;
-              const isLv1Active = isPendingSgc;
+              const isLv1Done = !isPendingSgc || isClosed;
+              const isLv1Active = isPendingSgc && !isClosed;
 
               // Level 2: Notice to Explain (NTE)
-              const hasNteIssued = report.hasNte || report.nteIssuedAt || isNteIssued || isNteAcknowledged || isServed || isExplanation || isWarning || isNoi || isAdminDecision || isClosed;
-              const isLv2Done = hasNteIssued && !isNteIssued && !isServed;
-              const isLv2Active = isNteIssued || isServed;
+              const isLv2Done = hasActualNte && !isNteIssued && !isServed;
+              const isLv2Active = (isNteIssued || isServed) && !isClosed;
 
               // Level 3: Explanation & Evidence
-              const hasExplanation = report.hasSignedNteProof || report.hasExplanationProof || report.nteSignedProof || report.explanationProof || isExplanation || isWarning || isNoi || isAdminDecision || isClosed;
-              const isLv3Done = hasExplanation && !isNteAcknowledged && (isWarning || isNoi || isAdminDecision || isClosed);
-              const isLv3Active = isNteAcknowledged || isExplanation || ((isNteIssued || isServed) && !isLv3Done);
+              const isLv3Done = hasActualExplanation && (hasActualWarning || hasActualNoi || hasActualAdminDecision || (isClosed && !isNteAcknowledged && !isExplanation));
+              const isLv3Active = (isNteAcknowledged || isExplanation) && !isClosed;
 
-              // Level 4: Investigation / Hearing
-              const isLv4Done = isAdminDecision || isClosed;
-              const isLv4Active = isWarning || isNoi;
+              // Level 4: Investigation / Hearing / Warning
+              const isLv4Done = hasActualWarning || hasActualNoi || hasActualAdminDecision;
+              const isLv4Active = (isWarning || isNoi) && !isClosed;
 
               // Level 5: Administrative Decision & Closure
-              const isLv5Done = isClosed;
-              const isLv5Active = isAdminDecision;
+              const isLv5Done = hasActualAdminDecision && isClosed;
+              const isLv5Active = isAdminDecision && !isClosed;
 
               return (
                 <div
@@ -2950,22 +3194,31 @@ export default function IncidentReportPanel({
                         <button
                           type="button"
                           onClick={() => {
-                            const summary = `Case ${report.caseNumber}. Issued by ${senderComp} HR ${senderHr} for ${report.employeeName}. Sent to ${receiverComp} Head Office HRMD. Current stage: Level ${currentLevelNumber} of 5. Status: ${isPendingSgc
-                              ? "Awaiting Head Office SGC Notice to Explain issuance."
-                              : isNteIssued
-                                ? "Notice to Explain has been issued by SGC and returned to branch HR for serving."
-                                : isServed
-                                  ? "Notice to Explain has been served to employee."
-                                  : isExplanation
-                                    ? "Written explanation received."
-                                    : isWarning
-                                      ? "Notice of Warning issued."
-                                      : isNoi
-                                        ? "Notice of Investigation hearing scheduled."
-                                        : isAdminDecision
-                                          ? "Decision on Administrative Case issued."
-                                          : "Case closed and archived."
-                              }`;
+                            const summary = `Case ${report.caseNumber}. Issued by ${senderComp} HR ${senderHr} for ${report.employeeName}. Sent to ${receiverComp} Head Office HRMD. Current stage: ${isClosed ? "Case closed and archived in HR 201 file" : `Level ${currentLevelNumber} of 5`}. Status: ${
+                              isClosed
+                                ? hasActualAdminDecision
+                                  ? "Case closed following official Decision on Administrative Case."
+                                  : hasActualWarning
+                                    ? "Case closed following Notice of Warning."
+                                    : hasActualNte
+                                      ? "Case closed and resolved following Notice to Explain."
+                                      : "Case closed and archived directly in HR 201 File without administrative case."
+                                : isPendingSgc
+                                  ? "Awaiting Head Office SGC Notice to Explain issuance."
+                                  : isNteIssued
+                                    ? "Notice to Explain has been issued by SGC and returned to branch HR for serving."
+                                    : isServed
+                                      ? "Notice to Explain has been served to employee."
+                                      : isExplanation
+                                        ? "Written explanation received."
+                                        : isWarning
+                                          ? "Notice of Warning issued."
+                                          : isNoi
+                                            ? "Notice of Investigation hearing scheduled."
+                                            : isAdminDecision
+                                              ? "Decision on Administrative Case issued."
+                                              : "Case closed and archived."
+                            }`;
                             playAiVoiceAnnouncement(summary);
                           }}
                           title="Listen to case summary via AI Buddy"
@@ -3016,7 +3269,13 @@ export default function IncidentReportPanel({
                         {(isNteIssued || isServed || isPendingSgc) && <Clock size={12} className="text-amber-600" />}
                         <span>
                           {isClosed
-                            ? "✅ Closed & 201 Archived"
+                            ? hasActualAdminDecision
+                              ? "✅ Closed (Decision Promulgated)"
+                              : hasActualWarning
+                                ? "✅ Closed (Warning Issued)"
+                                : hasActualNte
+                                  ? "✅ Closed (NTE Resolved)"
+                                  : "✅ Closed (IR Resolved)"
                             : isAdminDecision
                               ? "Level 5: Decision Promulgated"
                               : isNoi
@@ -3132,7 +3391,15 @@ export default function IncidentReportPanel({
                                     ? "bg-amber-50 text-amber-800 border-amber-300"
                                     : "bg-slate-100 text-slate-700 border-slate-300"
                         }`}>
-                          {isClosed ? "✓ Completed (5/5)" : `Level ${currentLevelNumber} of 5`}
+                          {isClosed
+                            ? hasActualAdminDecision
+                              ? "✓ Completed (5/5)"
+                              : hasActualWarning
+                                ? "✓ Closed (Warning Issued)"
+                                : hasActualNte
+                                  ? "✓ Closed (NTE Resolved)"
+                                  : "✓ Closed at Lv 1 (IR)"
+                            : `Level ${currentLevelNumber} of 5`}
                         </span>
                       </div>
 
@@ -3195,7 +3462,9 @@ export default function IncidentReportPanel({
                               ? "bg-emerald-500 text-white border-emerald-600 shadow-2xs"
                               : isLv2Active
                                 ? "bg-amber-500 text-white border-amber-600 animate-pulse"
-                                : "bg-white text-slate-400 border-slate-300"
+                                : isClosed
+                                  ? "bg-slate-100 text-slate-400 border-slate-200"
+                                  : "bg-white text-slate-400 border-slate-300"
                           }`}>
                             {isLv2Done ? <Check size={12} strokeWidth={3} /> : "2"}
                           </div>
@@ -3207,12 +3476,21 @@ export default function IncidentReportPanel({
                                   Active 120h
                                 </span>
                               )}
+                              {isClosed && !hasActualNte && (
+                                <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-slate-100 text-slate-500">
+                                  Not Required
+                                </span>
+                              )}
                             </div>
                             <div className="text-[10px] text-slate-500 truncate">
-                              {hasNteIssued ? `Issued ${report.nteIssuedAt || "by SGC"}` : "Pending SGC evaluation"}
+                              {hasActualNte
+                                ? `Issued ${report.nteIssuedAt || "by SGC"}`
+                                : isClosed
+                                  ? "Case resolved without NTE"
+                                  : "Pending SGC evaluation"}
                             </div>
                           </div>
-                          {hasNteIssued ? (
+                          {hasActualNte ? (
                             <button
                               type="button"
                               onClick={() => handleViewNteDocument(report)}
@@ -3222,6 +3500,8 @@ export default function IncidentReportPanel({
                               <Eye size={11} className="text-slate-500" />
                               <span>View NTE</span>
                             </button>
+                          ) : isClosed ? (
+                            <span className="text-[10px] text-slate-400 italic font-medium">N/A</span>
                           ) : (
                             <span className="text-[10px] text-slate-400 italic">Pending</span>
                           )}
@@ -3234,7 +3514,9 @@ export default function IncidentReportPanel({
                               ? "bg-emerald-500 text-white border-emerald-600 shadow-2xs"
                               : isLv3Active
                                 ? "bg-purple-600 text-white border-purple-700 animate-pulse"
-                                : "bg-white text-slate-400 border-slate-300"
+                                : isClosed
+                                  ? "bg-slate-100 text-slate-400 border-slate-200"
+                                  : "bg-white text-slate-400 border-slate-300"
                           }`}>
                             {isLv3Done ? <Check size={12} strokeWidth={3} /> : "3"}
                           </div>
@@ -3246,14 +3528,21 @@ export default function IncidentReportPanel({
                                   1/2 Done
                                 </span>
                               )}
+                              {isClosed && !hasActualExplanation && (
+                                <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-slate-100 text-slate-500">
+                                  Not Required
+                                </span>
+                              )}
                             </div>
                             <div className="text-[10px] text-slate-500 truncate">
-                              {hasExplanation
+                              {hasActualExplanation
                                 ? "Serving proof & employee answer attached"
-                                : "Signed copy & written explanation"}
+                                : isClosed
+                                  ? "Case resolved without written answer"
+                                  : "Signed copy & written explanation"}
                             </div>
                           </div>
-                          {hasExplanation ? (
+                          {hasActualExplanation ? (
                             <button
                               type="button"
                               onClick={() => {
@@ -3266,6 +3555,8 @@ export default function IncidentReportPanel({
                               <FileCheck size={11} className="text-teal-600" />
                               <span>Proof</span>
                             </button>
+                          ) : isClosed ? (
+                            <span className="text-[10px] text-slate-400 italic font-medium">N/A</span>
                           ) : (
                             <span className="text-[10px] text-slate-400 italic">Pending</span>
                           )}
@@ -3278,7 +3569,9 @@ export default function IncidentReportPanel({
                               ? "bg-emerald-500 text-white border-emerald-600 shadow-2xs"
                               : isLv4Active
                                 ? (isWarning ? "bg-amber-500 text-white border-amber-600 animate-pulse" : "bg-indigo-600 text-white border-indigo-700 animate-pulse")
-                                : "bg-white text-slate-400 border-slate-300"
+                                : isClosed
+                                  ? "bg-slate-100 text-slate-400 border-slate-200"
+                                  : "bg-white text-slate-400 border-slate-300"
                           }`}>
                             {isLv4Done ? <Check size={12} strokeWidth={3} /> : "4"}
                           </div>
@@ -3290,23 +3583,30 @@ export default function IncidentReportPanel({
                                   Zoom Hearing
                                 </span>
                               )}
-                              {isWarning && (
+                              {hasActualWarning && (
                                 <span className="text-[9px] font-black px-1.5 py-0.2 rounded bg-amber-100 text-amber-800">
                                   Warning
                                 </span>
                               )}
+                              {isClosed && !hasActualWarning && !hasActualNoi && !hasActualAdminDecision && (
+                                <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-slate-100 text-slate-500">
+                                  Not Required
+                                </span>
+                              )}
                             </div>
                             <div className="text-[10px] text-slate-500 truncate">
-                              {isWarning
+                              {hasActualWarning
                                 ? "Notice of Warning issued"
-                                : hasNoiRecord
+                                : hasActualNoi
                                   ? `NOI Zoom • ${report.zoomMeetingDate || "Conducted"}`
-                                  : (isAdminDecision || isClosed)
+                                  : hasActualAdminDecision
                                     ? "Executive Due Process Evaluation"
-                                    : "Formal hearing committee evaluation"}
+                                    : isClosed
+                                      ? "Case resolved without formal hearing"
+                                      : "Formal hearing committee evaluation"}
                             </div>
                           </div>
-                          {isWarning ? (
+                          {hasActualWarning ? (
                             <button
                               type="button"
                               onClick={() => handleViewWarningDocument(report)}
@@ -3316,7 +3616,7 @@ export default function IncidentReportPanel({
                               <AlertTriangle size={11} className="text-amber-600" />
                               <span>Warning</span>
                             </button>
-                          ) : hasNoiRecord ? (
+                          ) : hasActualNoi ? (
                             <div className="flex items-center gap-1">
                               <button
                                 type="button"
@@ -3339,10 +3639,10 @@ export default function IncidentReportPanel({
                                 <Video size={11} />
                               </button>
                             </div>
+                          ) : isClosed ? (
+                            <span className="text-[10px] text-slate-400 italic font-medium">N/A</span>
                           ) : (
-                            <span className="text-[10px] text-slate-400 italic">
-                              {(isAdminDecision || isClosed) ? "Evaluated" : "Pending"}
-                            </span>
+                            <span className="text-[10px] text-slate-400 italic">Pending</span>
                           )}
                         </div>
 
@@ -3353,13 +3653,21 @@ export default function IncidentReportPanel({
                               ? "bg-emerald-600 text-white border-emerald-700 shadow-2xs"
                               : isLv5Active
                                 ? "bg-rose-600 text-white border-rose-700 animate-pulse"
-                                : "bg-white text-slate-400 border-slate-300"
+                                : isClosed
+                                  ? "bg-slate-100 text-slate-400 border-slate-200"
+                                  : "bg-white text-slate-400 border-slate-300"
                           }`}>
-                            {isLv5Done ? <CheckCheck size={12} strokeWidth={2.5} /> : "5"}
+                            {isLv5Done ? <CheckCheck size={12} strokeWidth={2.5} /> : isClosed ? <Check size={12} strokeWidth={3} /> : "5"}
                           </div>
                           <div className="min-w-0 flex-1">
                             <div className="text-xs font-bold text-slate-900 leading-tight flex items-center gap-1">
-                              <span>Lv 5: Decision & Closure</span>
+                              <span>
+                                {hasActualAdminDecision
+                                  ? "Lv 5: Decision on Admin Case"
+                                  : isClosed
+                                    ? "Lv 5: Case Closure"
+                                    : "Lv 5: Decision on Admin Case"}
+                              </span>
                               {isAdminDecision && (
                                 <span className="text-[9px] font-black px-1.5 py-0.2 rounded bg-rose-100 text-rose-800">
                                   Promulgated
@@ -3372,14 +3680,18 @@ export default function IncidentReportPanel({
                               )}
                             </div>
                             <div className="text-[10px] text-slate-500 truncate">
-                              {isClosed
-                                ? "Case Closed & 201 Archived"
-                                : isAdminDecision
-                                  ? `Sanction: ${report.adminDecisionSanction || report.adminDecisionPenalty || "Stern Warning"}`
+                              {hasActualAdminDecision
+                                ? isClosed
+                                  ? "Case Closed with Promulgated Decision"
+                                  : `Sanction: ${report.adminDecisionSanction || report.adminDecisionPenalty || "Stern Warning"}`
+                                : isClosed
+                                  ? hasActualWarning
+                                    ? "Case Closed via Notice of Warning"
+                                    : "Case Closed & 201 Archived"
                                   : "2nd Notice — Administrative Ruling"}
                             </div>
                           </div>
-                          {(isAdminDecision || isClosed) ? (
+                          {hasActualAdminDecision ? (
                             <button
                               type="button"
                               onClick={() => handleViewAdminDecisionDocument(report)}
@@ -3389,6 +3701,10 @@ export default function IncidentReportPanel({
                               <Scale size={11} className="text-rose-600" />
                               <span>Decision</span>
                             </button>
+                          ) : isClosed ? (
+                            <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                              Archived
+                            </span>
                           ) : (
                             <span className="text-[10px] text-slate-400 italic">Pending</span>
                           )}
@@ -3697,19 +4013,47 @@ export default function IncidentReportPanel({
                       {/* 8. STAGE: CASE CLOSED */}
                       {isClosed && (
                         <div className="space-y-1.5">
-                          <button
-                            type="button"
-                            onClick={() => handleViewAdminDecisionDocument(report)}
-                            className="w-full py-2 px-3 rounded-xl text-xs font-black bg-white hover:bg-slate-50 text-slate-800 border border-slate-300 transition cursor-pointer inline-flex items-center justify-center gap-1.5 shadow-2xs"
-                            title="View Official Decision of Administrative Case Document"
-                          >
-                            <Printer size={14} className="text-slate-600" />
-                            <span>⚖️ View Decision Document</span>
-                          </button>
+                          {hasActualAdminDecision ? (
+                            <button
+                              type="button"
+                              onClick={() => handleViewAdminDecisionDocument(report)}
+                              className="w-full py-2 px-3 rounded-xl text-xs font-black bg-white hover:bg-slate-50 text-slate-800 border border-slate-300 transition cursor-pointer inline-flex items-center justify-center gap-1.5 shadow-2xs"
+                              title="View Official Decision of Administrative Case Document"
+                            >
+                              <Printer size={14} className="text-slate-600" />
+                              <span>⚖️ View Decision Document</span>
+                            </button>
+                          ) : hasActualWarning ? (
+                            <button
+                              type="button"
+                              onClick={() => handleViewWarningDocument(report)}
+                              className="w-full py-2 px-3 rounded-xl text-xs font-black bg-amber-500 hover:bg-amber-600 text-slate-950 transition cursor-pointer inline-flex items-center justify-center gap-1.5 shadow-2xs"
+                              title="View & Print Official Notice of Warning Memo"
+                            >
+                              <Printer size={14} />
+                              <span>⚠️ View Warning Memo</span>
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => handleViewIrDocument(report)}
+                              className="w-full py-2 px-3 rounded-xl text-xs font-black bg-white hover:bg-slate-50 text-slate-800 border border-slate-300 transition cursor-pointer inline-flex items-center justify-center gap-1.5 shadow-2xs"
+                              title="View Initial Incident Report"
+                            >
+                              <Eye size={14} className="text-[#7ea741]" />
+                              <span>📄 View Incident Report (IR)</span>
+                            </button>
+                          )}
 
                           <div className="w-full py-1.5 px-3 rounded-xl text-xs font-bold bg-emerald-50 text-emerald-900 border border-emerald-200 flex items-center justify-center gap-1.5">
                             <CheckCheck size={14} className="text-emerald-700" />
-                            <span>Case Closed & Archived in 201 File</span>
+                            <span>
+                              {hasActualAdminDecision
+                                ? "Case Closed with Promulgated Decision"
+                                : hasActualWarning
+                                  ? "Case Closed & Archived via Warning Memo"
+                                  : "Case Closed & Archived in 201 File"}
+                            </span>
                           </div>
                         </div>
                       )}
@@ -8755,7 +9099,215 @@ export default function IncidentReportPanel({
         </div>
       )}
 
+      {/* ========================================================================= */}
+      {/* HIGH-FIDELITY CONFIRMATION MODAL: DUE PROCESS & REGISTRY SAFEGUARD        */}
+      {/* ========================================================================= */}
+      {confirmDialog.isOpen && (
+        <div className="fixed inset-0 z-[95] bg-slate-950/75 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-200">
+          <div
+            className="relative bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-lg w-full overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col"
+            role="dialog"
+            aria-modal="true"
+          >
+            {/* Top Accent Gradient Bar */}
+            <div
+              className={`h-2 w-full bg-gradient-to-r ${
+                confirmDialog.confirmVariant === "danger"
+                  ? "from-rose-600 via-red-500 to-amber-500"
+                  : confirmDialog.confirmVariant === "emerald"
+                    ? "from-emerald-600 via-teal-500 to-blue-500"
+                    : "from-amber-500 via-orange-500 to-yellow-500"
+              }`}
+            />
 
+            {/* Modal Header */}
+            <div className="bg-slate-950 text-white px-6 py-5 relative overflow-hidden border-b border-slate-800">
+              {/* Background ambient glow */}
+              <div
+                className={`absolute -right-8 -top-8 w-44 h-44 rounded-full blur-3xl pointer-events-none opacity-40 ${
+                  confirmDialog.confirmVariant === "danger"
+                    ? "bg-rose-500"
+                    : confirmDialog.confirmVariant === "emerald"
+                      ? "bg-emerald-500"
+                      : "bg-amber-500"
+                }`}
+              />
+
+              <div className="relative z-10 flex items-start justify-between gap-4">
+                <div className="flex items-start gap-3.5 min-w-0">
+                  {/* Themed Icon Container */}
+                  <div
+                    className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 border shadow-inner ${
+                      confirmDialog.confirmVariant === "danger"
+                        ? "bg-rose-500/15 border-rose-500/30 text-rose-400"
+                        : confirmDialog.confirmVariant === "emerald"
+                          ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-400"
+                          : "bg-amber-500/15 border-amber-500/30 text-amber-400"
+                    }`}
+                  >
+                    {confirmDialog.iconType === "purge" ? (
+                      <Trash2 size={22} className="animate-pulse" />
+                    ) : confirmDialog.iconType === "archive" ? (
+                      <FolderArchive size={22} />
+                    ) : (
+                      <AlertTriangle size={22} />
+                    )}
+                  </div>
+
+                  <div className="min-w-0 space-y-1">
+                    {/* Official Category Tag */}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span
+                        className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border inline-flex items-center gap-1 ${
+                          confirmDialog.confirmVariant === "danger"
+                            ? "bg-rose-500/20 text-rose-300 border-rose-500/40"
+                            : confirmDialog.confirmVariant === "emerald"
+                              ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
+                              : "bg-amber-500/20 text-amber-300 border-amber-500/40"
+                        }`}
+                      >
+                        <ShieldAlert size={10} />
+                        <span>{confirmDialog.badgeText || "SYSTEM DUE PROCESS NOTICE"}</span>
+                      </span>
+                    </div>
+
+                    <h3 className="text-base sm:text-lg font-black text-white tracking-tight leading-snug">
+                      {confirmDialog.title}
+                    </h3>
+
+                    {confirmDialog.subtitle && (
+                      <p className="text-xs text-slate-400 truncate">
+                        {confirmDialog.subtitle}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Dismiss Button */}
+                <button
+                  type="button"
+                  onClick={() => setConfirmDialog((prev) => ({ ...prev, isOpen: false }))}
+                  disabled={confirmDialog.isProcessing}
+                  className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer shrink-0 disabled:opacity-40"
+                  title="Close Dialog"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto">
+              {/* Core Message */}
+              <p className="text-slate-700 text-sm font-medium leading-relaxed">
+                {confirmDialog.message}
+              </p>
+
+              {/* Impact Items Scope (if provided) */}
+              {confirmDialog.impactItems && confirmDialog.impactItems.length > 0 && (
+                <div className="bg-slate-50 border border-slate-200/90 rounded-2xl p-4 space-y-2.5">
+                  <div className="flex items-center justify-between text-[11px] font-black uppercase tracking-wider text-slate-500">
+                    <span className="flex items-center gap-1.5">
+                      <Scale size={13} className="text-slate-400" />
+                      Action Scope & Impact:
+                    </span>
+                    <span className="font-mono text-[10px] text-slate-400">
+                      DOLE & SGC Protocol
+                    </span>
+                  </div>
+
+                  <ul className="space-y-2">
+                    {confirmDialog.impactItems.map((item, idx) => (
+                      <li key={idx} className="flex items-start gap-2.5 text-xs text-slate-600">
+                        <span
+                          className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${
+                            confirmDialog.confirmVariant === "danger"
+                              ? "bg-rose-500"
+                              : confirmDialog.confirmVariant === "emerald"
+                                ? "bg-emerald-500"
+                                : "bg-amber-500"
+                          }`}
+                        />
+                        <span className="leading-tight">{item}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Due Process Compliance & Caution Note */}
+              {confirmDialog.warningNote && (
+                <div className="bg-amber-50 border border-amber-200/80 rounded-2xl p-3.5 flex items-start gap-3 text-xs text-amber-950 leading-relaxed">
+                  <AlertTriangle size={16} className="text-amber-600 shrink-0 mt-0.5" />
+                  <div className="space-y-0.5">
+                    <span className="font-bold text-amber-900 block">Due Process Compliance Advisory:</span>
+                    <span className="text-amber-800">{confirmDialog.warningNote}</span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer / Action Dock */}
+            <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex flex-col-reverse sm:flex-row items-center justify-between gap-3">
+              <div className="text-[11px] text-slate-400 font-medium hidden sm:flex items-center gap-1.5">
+                <ShieldCheck size={13} className="text-emerald-600" />
+                <span>Protected by SGC HR Governance</span>
+              </div>
+
+              <div className="flex items-center gap-2.5 w-full sm:w-auto justify-end">
+                {!confirmDialog.isAlert && (
+                  <button
+                    type="button"
+                    onClick={() => setConfirmDialog((prev) => ({ ...prev, isOpen: false }))}
+                    disabled={confirmDialog.isProcessing}
+                    className="flex-1 sm:flex-none px-4 py-2.5 rounded-xl text-xs font-bold bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 transition cursor-pointer inline-flex items-center justify-center gap-1.5 shadow-2xs disabled:opacity-50"
+                  >
+                    <X size={14} className="text-slate-500" />
+                    <span>{confirmDialog.cancelText || "Cancel"}</span>
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (typeof confirmDialog.onConfirm === "function") {
+                      await confirmDialog.onConfirm();
+                    } else {
+                      setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
+                    }
+                  }}
+                  disabled={confirmDialog.isProcessing}
+                  className={`flex-1 sm:flex-none px-5 py-2.5 rounded-xl text-xs font-black transition cursor-pointer inline-flex items-center justify-center gap-2 shadow-md active:scale-95 disabled:opacity-60 text-white ${
+                    confirmDialog.confirmVariant === "danger"
+                      ? "bg-rose-600 hover:bg-rose-700 shadow-rose-600/25"
+                      : confirmDialog.confirmVariant === "emerald"
+                        ? "bg-emerald-600 hover:bg-emerald-700 shadow-emerald-600/25"
+                        : "bg-amber-600 hover:bg-amber-700 shadow-amber-600/25"
+                  }`}
+                >
+                  {confirmDialog.isProcessing ? (
+                    <>
+                      <RefreshCw size={14} className="animate-spin" />
+                      <span>Processing...</span>
+                    </>
+                  ) : (
+                    <>
+                      {confirmDialog.confirmVariant === "danger" ? (
+                        <Trash2 size={14} />
+                      ) : confirmDialog.confirmVariant === "emerald" ? (
+                        <CheckCheck size={14} />
+                      ) : (
+                        <CheckCircle2 size={14} />
+                      )}
+                      <span>{confirmDialog.confirmText}</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ========================================================================= */}
       {/* GLOBAL LOADING & TRANSMITTING ANIMATION OVERLAY                            */}
