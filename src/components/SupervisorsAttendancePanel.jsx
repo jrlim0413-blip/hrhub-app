@@ -192,14 +192,14 @@ function getDaysForPeriod(periodType, baseDateStr) {
       shortLabel: `2nd Cutoff (16th–${daysInMonth}th)`
     };
   } else {
-    // Default: Weekly (Monday to Sunday, 7 Days)
-    const mondayStr = getMondayOfDate(baseDateStr);
-    const [my, mm, md] = mondayStr.split("-").map(Number);
-    const monDate = new Date(my, mm - 1, md);
+    // Discretionary 7 Consecutive Days: starts on whatever date is picked by the user!
+    const cleanBaseStr = baseDateStr || getTodayString();
+    const [by, bm, bd] = cleanBaseStr.split("-").map(Number);
+    const startDateObj = new Date(by, bm - 1, bd);
     const days = [];
     for (let i = 0; i < 7; i++) {
-      const cur = new Date(monDate);
-      cur.setDate(monDate.getDate() + i);
+      const cur = new Date(startDateObj);
+      cur.setDate(startDateObj.getDate() + i);
       const dateStr = [
         cur.getFullYear(),
         String(cur.getMonth() + 1).padStart(2, "0"),
@@ -219,16 +219,20 @@ function getDaysForPeriod(periodType, baseDateStr) {
         isToday: dateStr === getTodayString()
       });
     }
-    const startStr = `${days[0].monthName} ${days[0].dayNum}`;
-    const endStr = `${days[6].monthName} ${days[6].dayNum}, ${days[6].date.split("-")[0]}`;
+    const startYear = days[0].date.split("-")[0];
+    const endYear = days[6].date.split("-")[0];
+    const titleStr = startYear === endYear
+      ? `${days[0].monthName} ${days[0].dayNum} – ${days[6].monthName} ${days[6].dayNum}, ${endYear}`
+      : `${days[0].monthName} ${days[0].dayNum}, ${startYear} – ${days[6].monthName} ${days[6].dayNum}, ${endYear}`;
+
     return {
       type: "weekly",
       days,
       startDate: days[0].date,
       endDate: days[days.length - 1].date,
-      title: `${startStr} – ${endStr}`,
-      subtitle: `Weekly Attendance (7 Days)`,
-      shortLabel: `Weekly (Mon–Sun)`
+      title: titleStr,
+      subtitle: `7-Day Attendance Range (${days[0].shortName} to ${days[6].shortName})`,
+      shortLabel: `7 Days (${days[0].shortName}–${days[6].shortName})`
     };
   }
 }
@@ -4006,8 +4010,9 @@ export default function SupervisorsAttendancePanel({ onClose }) {
                         ? "bg-white text-indigo-900 shadow-2xs"
                         : "text-slate-600 hover:text-slate-900"
                     }`}
+                    title="Choose any start date to view 7 consecutive days"
                   >
-                    Weekly (7 Days)
+                    Custom 7 Days
                   </button>
                   <button
                     type="button"
@@ -4033,21 +4038,38 @@ export default function SupervisorsAttendancePanel({ onClose }) {
                   </button>
                 </div>
 
-                <div className="h-4 w-px bg-slate-300 mx-1" />
+                <div className="h-4 w-px bg-slate-300 mx-1 hidden sm:block" />
 
-                {/* Period Navigator */}
-                <div className="flex items-center gap-1.5">
+                {/* Period Navigator & Discretionary Date Picker */}
+                <div className="flex flex-wrap items-center gap-1.5">
                   <button
                     type="button"
                     onClick={handlePrevPeriod}
                     className="p-1.5 rounded-xl bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 transition cursor-pointer shadow-2xs"
-                    title={reportPeriodType === "weekly" ? "Previous Week" : "Previous Month"}
+                    title={reportPeriodType === "weekly" ? "Shift Back 7 Days" : "Previous Month"}
                   >
                     <ChevronLeft size={15} />
                   </button>
 
-                  <div className="flex items-center gap-2 px-3 py-1 bg-white rounded-xl border border-slate-200 font-bold text-slate-900 shadow-2xs">
-                    <Calendar size={14} className="text-indigo-600" />
+                  {/* Discretionary Date Picker Input */}
+                  <div className="flex items-center gap-1.5 px-2.5 py-1 bg-white rounded-xl border border-slate-200 font-bold text-slate-900 shadow-2xs">
+                    <Calendar size={14} className="text-indigo-600 shrink-0" />
+                    <span className="text-[11px] font-semibold text-slate-500 whitespace-nowrap">
+                      {reportPeriodType === "weekly" ? "Start Date:" : "Date:"}
+                    </span>
+                    <input
+                      type="date"
+                      value={reportBaseDate}
+                      onChange={(e) => {
+                        if (e.target.value) setReportBaseDate(e.target.value);
+                      }}
+                      className="bg-transparent text-xs font-bold text-slate-800 focus:outline-none cursor-pointer border-none p-0"
+                      title={reportPeriodType === "weekly" ? "Pick any starting date (covers 7 consecutive days)" : "Pick date to change month"}
+                    />
+                  </div>
+
+                  {/* Current Period Span Display */}
+                  <div className="flex items-center gap-1.5 px-3 py-1 bg-indigo-50/80 border border-indigo-200/80 rounded-xl text-indigo-900 font-bold text-xs shadow-2xs">
                     <span>{currentPeriodInfo.title}</span>
                   </div>
 
@@ -4055,7 +4077,7 @@ export default function SupervisorsAttendancePanel({ onClose }) {
                     type="button"
                     onClick={handleNextPeriod}
                     className="p-1.5 rounded-xl bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 transition cursor-pointer shadow-2xs"
-                    title={reportPeriodType === "weekly" ? "Next Week" : "Next Month"}
+                    title={reportPeriodType === "weekly" ? "Shift Forward 7 Days" : "Next Month"}
                   >
                     <ChevronRight size={15} />
                   </button>
@@ -4065,8 +4087,19 @@ export default function SupervisorsAttendancePanel({ onClose }) {
                     onClick={handleCurrentPeriod}
                     className="px-2.5 py-1 rounded-xl bg-indigo-50 text-indigo-700 hover:bg-indigo-100 font-bold transition cursor-pointer border border-indigo-200/80 shadow-2xs"
                   >
-                    {reportPeriodType === "weekly" ? "This Week" : "Current Month"}
+                    Today
                   </button>
+
+                  {reportPeriodType === "weekly" && (
+                    <button
+                      type="button"
+                      onClick={() => setReportBaseDate(getMondayOfDate(reportBaseDate || getTodayString()))}
+                      className="px-2.5 py-1 rounded-xl bg-white text-slate-700 hover:bg-slate-100 font-semibold transition cursor-pointer border border-slate-200 shadow-2xs text-[11px]"
+                      title="Snap start date to Monday of this week"
+                    >
+                      Mon–Sun
+                    </button>
+                  )}
                 </div>
               </div>
 
