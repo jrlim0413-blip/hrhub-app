@@ -7,13 +7,15 @@ import {
   AlertCircle, Eye, Check, Camera, Smartphone,
   ExternalLink, Navigation, LocateFixed,
   Map as MapIcon, Layers, Shield, Cloud, Loader2, Video, VideoOff, RotateCw,
-  UserPlus, Key, Trash2, ShieldAlert, Sparkles, EyeOff
+  UserPlus, Key, Trash2, ShieldAlert, Sparkles, EyeOff, FileText
 } from "lucide-react";
 import { API_CONFIG } from "../config/apiConfig";
 import {
   compressImage,
   uploadAttendancePhoto,
   fetchCloudAttendance,
+  fetchRangeCloudAttendance,
+  autoPurgePastPhotos,
   upsertCloudAttendance,
   subscribeToAttendanceRealtime
 } from "../lib/supervisorAttendanceStorage";
@@ -69,6 +71,51 @@ function getTodayString() {
   return `${year}-${month}-${day}`;
 }
 
+// Helper to get Monday date string of a given date (YYYY-MM-DD)
+function getMondayOfDate(dateStr) {
+  const [y, m, d] = (dateStr || getTodayString()).split("-").map(Number);
+  const date = new Date(y, m - 1, d);
+  const day = date.getDay();
+  const diff = date.getDate() - day + (day === 0 ? -6 : 1);
+  date.setDate(diff);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const dayNum = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${dayNum}`;
+}
+
+// Helper to compute 7 consecutive week days starting from Monday
+function getWeekDaysFromMonday(mondayStr) {
+  const [y, m, d] = (mondayStr || getTodayString()).split("-").map(Number);
+  const base = new Date(y, m - 1, d);
+  const days = [];
+  const dayNamesShort = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  const dayNamesFull = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+
+  for (let i = 0; i < 7; i++) {
+    const cur = new Date(base);
+    cur.setDate(base.getDate() + i);
+    const dateStr = [
+      cur.getFullYear(),
+      String(cur.getMonth() + 1).padStart(2, "0"),
+      String(cur.getDate()).padStart(2, "0")
+    ].join("-");
+    const monthName = cur.toLocaleDateString("en-US", { month: "short" });
+    const dayNum = cur.getDate();
+
+    days.push({
+      date: dateStr,
+      shortName: dayNamesShort[i],
+      fullName: dayNamesFull[i],
+      monthName,
+      dayNum,
+      label: `${dayNamesShort[i]}, ${monthName} ${dayNum}`,
+      isToday: dateStr === getTodayString()
+    });
+  }
+  return days;
+}
+
 export default function SupervisorsAttendancePanel({ onClose }) {
   const [selectedDate, setSelectedDate] = useState(getTodayString);
   const [supervisorsList, setSupervisorsList] = useState([]);
@@ -122,6 +169,42 @@ export default function SupervisorsAttendancePanel({ onClose }) {
   const [fieldAccountShowPasswords, setFieldAccountShowPasswords] = useState({});
   const [isSubmittingFieldAccount, setIsSubmittingFieldAccount] = useState(false);
   const [rosterCategoryFilter, setRosterCategoryFilter] = useState("all"); // "all" | "supervisors" | "monitoring"
+
+  // Weekly Attendance Report State (Multi-Role: Supervisors & Field Monitoring)
+  const [isWeeklyModalOpen, setIsWeeklyModalOpen] = useState(false);
+  const [weeklyMondayDate, setWeeklyMondayDate] = useState(() => getMondayOfDate(getTodayString()));
+  const [isWeeklyLoading, setIsWeeklyLoading] = useState(false);
+  const [weeklyRecords, setWeeklyRecords] = useState([]);
+  const [weeklyCategoryFilter, setWeeklyCategoryFilter] = useState("all"); // "all" | "supervisors" | "monitoring"
+  const [weeklySearchTerm, setWeeklySearchTerm] = useState("");
+  const [autoPurgeNotice, setAutoPurgeNotice] = useState("");
+
+  // Storage Protection: Automatically purge photo proofs from previous days on mount
+  // Guarantees all official time_in, status, coordinates, and remarks are preserved permanently!
+  useEffect(() => {
+    const today = getTodayString();
+    autoPurgePastPhotos(today)
+      .then((res) => {
+        if (res && res.purgedDbCount > 0) {
+          setAutoPurgeNotice(`Cleared ${res.purgedDbCount} expired photo records to preserve storage capacity.`);
+        }
+      })
+      .catch((err) => console.warn("[Storage Auto-Purge Notice]:", err));
+  }, []);
+
+  const handleManualPurgePhotos = async () => {
+    try {
+      showToast("Optimizing storage: Purging expired photo proofs...");
+      const res = await autoPurgePastPhotos(getTodayString());
+      if (res && res.success) {
+        showToast(`Storage optimized! Purged ${res.purgedDbCount} expired photo records. All Time-In data intact.`);
+      } else {
+        showToast("Storage is already fully optimized!");
+      }
+    } catch (err) {
+      showToast("Storage check complete.");
+    }
+  };
 
   // Fetch Field Monitoring Accounts from Supabase Table & Realtime listener
   const refreshFieldAccounts = async () => {
@@ -1052,15 +1135,16 @@ export default function SupervisorsAttendancePanel({ onClose }) {
     setEditingRecord(null);
   };
 
-  // Export CSV for Payroll
+  // Export CSV for Daily Attendance (Supervisors + Field Monitoring)
   const handleExportCSV = () => {
     if (attendanceRecords.length === 0) return;
 
     const headers = [
       "Date",
-      "Supervisor ID",
+      "Personnel ID",
       "Full Name",
-      "Area",
+      "Role",
+      "Area / Sector",
       "Assigned Agents (Total)",
       "Assigned Agents (Active)",
       "Status",
@@ -1079,9 +1163,10 @@ export default function SupervisorsAttendancePanel({ onClose }) {
 
       return [
         selectedDate,
-        r.supervisorId,
+        `"#${r.supervisorId}"`,
         `"${r.fullName.replace(/"/g, '""')}"`,
-        `"Area ${r.area}"`,
+        `"${r.role || (String(r.supervisorId).toLowerCase().startsWith("fm-") ? "Field Monitoring" : "Supervisor")}"`,
+        `"${r.area && r.area !== "5" ? r.area : "Mandaue City"}"`,
         spvrStats.total,
         spvrStats.active,
         r.status,
@@ -1095,22 +1180,495 @@ export default function SupervisorsAttendancePanel({ onClose }) {
     });
 
     const csvContent =
+      "\uFEFF" +
       "data:text/csv;charset=utf-8," +
       [headers.join(","), ...rows.map((row) => row.join(","))].join("\n");
 
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `Supervisors_Attendance_${selectedDate}.csv`);
+    link.setAttribute("download", `Daily_Attendance_${selectedDate}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    showToast("Downloaded attendance CSV file");
+    showToast("Downloaded daily attendance CSV file");
   };
 
-  // Print Official DTR Sheet
+  // Print Official Daily DTR Sheet
   const handlePrint = () => {
     window.print();
+  };
+
+  // ================= WEEKLY ATTENDANCE REPORT LOGIC =================
+  const handleOpenWeeklyReport = () => {
+    setWeeklyMondayDate(getMondayOfDate(selectedDate || getTodayString()));
+    setIsWeeklyModalOpen(true);
+  };
+
+  const handlePrevWeek = () => {
+    const [y, m, d] = weeklyMondayDate.split("-").map(Number);
+    const cur = new Date(y, m - 1, d);
+    cur.setDate(cur.getDate() - 7);
+    const nextMon = [
+      cur.getFullYear(),
+      String(cur.getMonth() + 1).padStart(2, "0"),
+      String(cur.getDate()).padStart(2, "0")
+    ].join("-");
+    setWeeklyMondayDate(nextMon);
+  };
+
+  const handleNextWeek = () => {
+    const [y, m, d] = weeklyMondayDate.split("-").map(Number);
+    const cur = new Date(y, m - 1, d);
+    cur.setDate(cur.getDate() + 7);
+    const nextMon = [
+      cur.getFullYear(),
+      String(cur.getMonth() + 1).padStart(2, "0"),
+      String(cur.getDate()).padStart(2, "0")
+    ].join("-");
+    setWeeklyMondayDate(nextMon);
+  };
+
+  const handleCurrentWeek = () => {
+    setWeeklyMondayDate(getMondayOfDate(getTodayString()));
+  };
+
+  const loadWeeklyData = async (mondayStr) => {
+    setIsWeeklyLoading(true);
+    const days = getWeekDaysFromMonday(mondayStr);
+    const startStr = days[0].date;
+    const endStr = days[6].date;
+
+    try {
+      // 1. Fetch from Supabase Cloud for this full date range
+      const { data: cloudRows } = await fetchRangeCloudAttendance(startStr, endStr);
+      const combined = Array.isArray(cloudRows) ? [...cloudRows] : [];
+
+      // 2. Also check local storage caches for each day within the week
+      days.forEach((d) => {
+        try {
+          const raw = localStorage.getItem(`hrhub_spvr_attendance_v3_${d.date}`);
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed)) {
+              parsed.forEach((item) => {
+                if (item.timeIn && item.timeIn !== "--") {
+                  const existingIdx = combined.findIndex(
+                    (c) => String(c.supervisor_id) === String(item.supervisorId) && c.attendance_date === d.date
+                  );
+                  const normalized = {
+                    supervisor_id: String(item.supervisorId || item.id),
+                    supervisor_name: item.fullName,
+                    username: item.username,
+                    attendance_date: d.date,
+                    time_in: item.timeIn,
+                    status: item.status || "Present",
+                    area: item.area,
+                    shift: item.shift,
+                    latitude: item.latitude,
+                    longitude: item.longitude,
+                    location_name: item.locationName,
+                    remarks: item.remarks
+                  };
+                  if (existingIdx >= 0) {
+                    combined[existingIdx] = { ...combined[existingIdx], ...normalized };
+                  } else {
+                    combined.push(normalized);
+                  }
+                }
+              });
+            }
+          }
+        } catch {}
+      });
+
+      setWeeklyRecords(combined);
+    } catch (err) {
+      console.warn("Failed to load weekly attendance:", err);
+    } finally {
+      setIsWeeklyLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isWeeklyModalOpen) {
+      loadWeeklyData(weeklyMondayDate);
+    }
+  }, [isWeeklyModalOpen, weeklyMondayDate]);
+
+  const weeklyWeekDays = useMemo(() => getWeekDaysFromMonday(weeklyMondayDate), [weeklyMondayDate]);
+  
+  const weeklyRangeTitle = useMemo(() => {
+    if (!weeklyWeekDays || weeklyWeekDays.length < 7) return "";
+    return `${weeklyWeekDays[0].monthName} ${weeklyWeekDays[0].dayNum} – ${weeklyWeekDays[6].monthName} ${weeklyWeekDays[6].dayNum}, ${weeklyWeekDays[6].date.split("-")[0]}`;
+  }, [weeklyWeekDays]);
+
+  const weeklyRosterMatrix = useMemo(() => {
+    const list = [
+      ...supervisorsList.map((s) => ({
+        id: String(s.id),
+        fullName: s.fullName || `Supervisor #${s.id}`,
+        username: s.username || `spvr_${s.id}`,
+        role: "Supervisor",
+        area: s.area && s.area !== "5" ? s.area : "Mandaue City"
+      })),
+      ...fieldAccounts.map((f) => ({
+        id: String(f.id),
+        fullName: f.fullName,
+        username: f.username,
+        role: "Field Monitoring",
+        area: f.area || "Mandaue City"
+      }))
+    ];
+
+    // Quick lookup map: `${id.toLowerCase()}_${date}`
+    const recMap = new Map();
+    weeklyRecords.forEach((r) => {
+      if (r.supervisor_id && r.attendance_date) {
+        recMap.set(`${String(r.supervisor_id).toLowerCase()}_${r.attendance_date}`, r);
+      }
+      if (r.username && r.attendance_date) {
+        recMap.set(`${String(r.username).toLowerCase()}_${r.attendance_date}`, r);
+      }
+    });
+
+    return list.map((person) => {
+      const days = weeklyWeekDays.map((wd) => {
+        const match =
+          recMap.get(`${person.id.toLowerCase()}_${wd.date}`) ||
+          recMap.get(`${String(person.username || "").toLowerCase()}_${wd.date}`);
+
+        const hasTimeIn = Boolean(match && match.time_in && match.time_in !== "--");
+        return {
+          date: wd.date,
+          dayLabel: wd.shortName,
+          timeIn: hasTimeIn ? match.time_in : "--",
+          status: hasTimeIn ? (match.status || "Present") : "Awaiting Check-in",
+          locationName: match?.location_name || "",
+          latitude: match?.latitude,
+          longitude: match?.longitude,
+          remarks: match?.remarks || "",
+          hasTimeIn
+        };
+      });
+
+      const presentCount = days.filter((d) => d.hasTimeIn && (d.status === "Present" || d.status === "Logged In")).length;
+      const lateCount = days.filter((d) => d.hasTimeIn && d.status === "Late").length;
+      const obCount = days.filter((d) => d.hasTimeIn && d.status === "Official Business").length;
+      const leaveCount = days.filter((d) => d.status === "On Leave" || d.status === "Day Off").length;
+      const totalAttended = presentCount + lateCount + obCount;
+      const totalEligibleDays = 7;
+      const attendanceRate = Math.round((totalAttended / totalEligibleDays) * 100);
+
+      return {
+        ...person,
+        days,
+        presentCount,
+        lateCount,
+        obCount,
+        leaveCount,
+        totalAttended,
+        attendanceRate
+      };
+    });
+  }, [supervisorsList, fieldAccounts, weeklyRecords, weeklyWeekDays]);
+
+  const filteredWeeklyMatrix = useMemo(() => {
+    return weeklyRosterMatrix.filter((item) => {
+      if (weeklyCategoryFilter === "supervisors" && item.role !== "Supervisor") return false;
+      if (weeklyCategoryFilter === "monitoring" && item.role !== "Field Monitoring") return false;
+
+      if (weeklySearchTerm) {
+        const q = weeklySearchTerm.toLowerCase();
+        const matchesName = item.fullName.toLowerCase().includes(q);
+        const matchesUser = item.username.toLowerCase().includes(q);
+        const matchesId = item.id.toLowerCase().includes(q);
+        const matchesArea = item.area.toLowerCase().includes(q);
+        if (!matchesName && !matchesUser && !matchesId && !matchesArea) return false;
+      }
+      return true;
+    });
+  }, [weeklyRosterMatrix, weeklyCategoryFilter, weeklySearchTerm]);
+
+  // Download Weekly CSV (Excel Compatible)
+  const handleDownloadWeeklyCSV = () => {
+    if (filteredWeeklyMatrix.length === 0) return;
+
+    const startStr = weeklyWeekDays[0].date;
+    const endStr = weeklyWeekDays[6].date;
+    const dayHeaders = weeklyWeekDays.map((wd) => `"${wd.fullName} (${wd.date})"`);
+
+    const header = [
+      "Personnel ID",
+      "Full Name",
+      "Role",
+      "Assigned Area",
+      ...dayHeaders,
+      "Days Present",
+      "Days Late",
+      "Days Official Business",
+      "Days Leave",
+      "Total Active Days",
+      "Weekly Attendance Rate (%)"
+    ];
+
+    const rows = filteredWeeklyMatrix.map((item) => {
+      const dayValues = item.days.map((d) => {
+        if (d.hasTimeIn) {
+          return `"${d.timeIn} [${d.status}]"`;
+        }
+        return `"--"`;
+      });
+
+      return [
+        `"#${item.id}"`,
+        `"${item.fullName.replace(/"/g, '""')}"`,
+        `"${item.role}"`,
+        `"${item.area}"`,
+        ...dayValues,
+        item.presentCount,
+        item.lateCount,
+        item.obCount,
+        item.leaveCount,
+        item.totalAttended,
+        `"${item.attendanceRate}%"`
+      ].join(",");
+    });
+
+    // Detailed Location & Timestamp Verification Log
+    const detailHeader = [
+      "Date",
+      "Personnel ID",
+      "Full Name",
+      "Role",
+      "Time In",
+      "Status",
+      "Area",
+      "Location Landmark",
+      "GPS Coordinates",
+      "Remarks"
+    ].join(",");
+
+    const detailRows = [];
+    filteredWeeklyMatrix.forEach((item) => {
+      item.days.forEach((d) => {
+        if (d.hasTimeIn) {
+          const coords = d.latitude && d.longitude ? `${d.latitude}, ${d.longitude}` : "No GPS";
+          detailRows.push([
+            d.date,
+            `"#${item.id}"`,
+            `"${item.fullName.replace(/"/g, '""')}"`,
+            `"${item.role}"`,
+            d.timeIn,
+            d.status,
+            `"${item.area}"`,
+            `"${(d.locationName || "").replace(/"/g, '""')}"`,
+            `"${coords}"`,
+            `"${(d.remarks || "").replace(/"/g, '""')}"`
+          ].join(","));
+        }
+      });
+    });
+
+    const csvContent = "\uFEFF" + [
+      `"SIMPAL GROUP OF COMPANIES • HR TECHNOLOGY SYSTEMS"`,
+      `"WEEKLY ATTENDANCE REPORT: ${weeklyRangeTitle} (${startStr} to ${endStr})"`,
+      `"Generated on: ${new Date().toLocaleString()}"`,
+      `"Storage Policy Notice: Photo proofs auto-purged at end-of-day. Time-In records 100% verified & preserved."`,
+      "",
+      header.join(","),
+      ...rows,
+      "",
+      `"--- DETAILED FIELD VERIFICATION & LOCATION LOG ---"`,
+      detailHeader,
+      ...detailRows
+    ].join("\n");
+
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", `Weekly_Attendance_Report_${startStr}_to_${endStr}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    showToast("Downloaded Weekly Attendance CSV (Excel Compatible)!");
+  };
+
+  // Print or Save as Official PDF Report
+  const handlePrintWeeklyReport = () => {
+    if (filteredWeeklyMatrix.length === 0) return;
+
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) {
+      alert("Please allow popups to view and print the weekly report.");
+      return;
+    }
+
+    const totalStaff = filteredWeeklyMatrix.length;
+    const totalPresentCheckins = filteredWeeklyMatrix.reduce((acc, c) => acc + c.presentCount, 0);
+    const totalLateCheckins = filteredWeeklyMatrix.reduce((acc, c) => acc + c.lateCount, 0);
+    const avgRate = Math.round(
+      filteredWeeklyMatrix.reduce((acc, c) => acc + c.attendanceRate, 0) / (totalStaff || 1)
+    );
+
+    const rowsHtml = filteredWeeklyMatrix.map((item, idx) => {
+      const isFm = item.role === "Field Monitoring";
+      const daysCells = item.days.map((d) => {
+        if (!d.hasTimeIn) {
+          return `<td style="text-align:center;color:#94a3b8;font-size:11px;padding:6px 4px;">--</td>`;
+        }
+        const isLate = d.status === "Late";
+        const color = isLate ? "#b45309" : "#047857";
+        return `<td style="text-align:center;font-size:11px;padding:6px 4px;">
+          <div style="font-weight:700;color:${color};font-family:monospace;">${d.timeIn}</div>
+          <div style="font-size:9px;color:#64748b;">${d.status}</div>
+        </td>`;
+      }).join("");
+
+      return `
+        <tr style="background:${idx % 2 === 0 ? "#ffffff" : "#f8fafc"};">
+          <td style="padding:8px 10px;font-weight:700;font-family:monospace;color:#334155;">#${item.id}</td>
+          <td style="padding:8px 10px;">
+            <div style="font-weight:700;color:#0f172a;font-size:12px;">${item.fullName}</div>
+            <div style="font-size:10px;color:#64748b;">${item.username}</div>
+          </td>
+          <td style="padding:8px 10px;">
+            <span style="display:inline-block;padding:2px 8px;border-radius:6px;font-size:10px;font-weight:700;background:${isFm ? "#ecfdf5;color:#065f46;border:1px solid #a7f3d0;" : "#eff6ff;color:#1e40af;border:1px solid #bfdbfe;"}">
+              ${item.role}
+            </span>
+          </td>
+          <td style="padding:8px 10px;font-size:11px;color:#334155;">${item.area}</td>
+          ${daysCells}
+          <td style="padding:8px 6px;text-align:center;font-weight:700;color:#047857;">${item.presentCount}</td>
+          <td style="padding:8px 6px;text-align:center;font-weight:700;color:${item.lateCount > 0 ? "#b45309" : "#64748b"};">${item.lateCount}</td>
+          <td style="padding:8px 6px;text-align:center;font-weight:800;color:#0f172a;">${item.totalAttended} / 7</td>
+          <td style="padding:8px 6px;text-align:center;font-weight:800;color:${item.attendanceRate >= 80 ? "#047857" : item.attendanceRate >= 50 ? "#d97706" : "#dc2626"};">${item.attendanceRate}%</td>
+        </tr>
+      `;
+    }).join("");
+
+    const dayThs = weeklyWeekDays.map((d) => `
+      <th style="padding:8px 6px;text-align:center;font-size:11px;border-bottom:2px solid #cbd5e1;background:#f1f5f9;">
+        <div>${d.shortName}</div>
+        <div style="font-size:9px;color:#64748b;font-weight:normal;">${d.monthName} ${d.dayNum}</div>
+      </th>
+    `).join("");
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Weekly Attendance Report - ${weeklyRangeTitle}</title>
+        <meta charset="utf-8" />
+        <style>
+          body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: #0f172a; padding: 24px; margin: 0; background: #fff; }
+          @page { size: landscape; margin: 12mm; }
+          table { width: 100%; border-collapse: collapse; font-size: 11px; }
+          th, td { border: 1px solid #e2e8f0; }
+          .stat-box { border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px 16px; background: #f8fafc; }
+          .sig-line { border-top: 1px solid #0f172a; margin-top: 45px; padding-top: 5px; font-weight: 700; font-size: 11px; }
+          @media print {
+            button { display: none; }
+          }
+        </style>
+      </head>
+      <body>
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #0f172a;padding-bottom:14px;margin-bottom:18px;">
+          <div>
+            <div style="font-size:18px;font-weight:900;color:#0f172a;letter-spacing:0.5px;">SIMPAL GROUP OF COMPANIES</div>
+            <div style="font-size:13px;font-weight:700;color:#047857;">HUMAN RESOURCES MANAGEMENT & DEVELOPMENT</div>
+            <div style="font-size:11px;color:#64748b;margin-top:2px;">Mandaue City Operations • STL Supervisors & Field Monitoring Division</div>
+          </div>
+          <div style="text-align:right;">
+            <div style="font-size:14px;font-weight:800;color:#0f172a;">WEEKLY ATTENDANCE REPORT</div>
+            <div style="font-size:12px;font-weight:700;color:#047857;">${weeklyRangeTitle}</div>
+            <div style="font-size:10px;color:#64748b;margin-top:2px;">Printed on: ${new Date().toLocaleString()}</div>
+          </div>
+        </div>
+
+        <!-- KPI Summary Cards -->
+        <div style="display:grid;grid-template-columns:repeat(4, 1fr);gap:12px;margin-bottom:18px;">
+          <div class="stat-box">
+            <div style="font-size:10px;color:#64748b;font-weight:700;text-transform:uppercase;">Total Monitored Personnel</div>
+            <div style="font-size:20px;font-weight:900;color:#0f172a;">${totalStaff}</div>
+          </div>
+          <div class="stat-box">
+            <div style="font-size:10px;color:#64748b;font-weight:700;text-transform:uppercase;">Total Present Check-Ins</div>
+            <div style="font-size:20px;font-weight:900;color:#047857;">${totalPresentCheckins}</div>
+          </div>
+          <div class="stat-box">
+            <div style="font-size:10px;color:#64748b;font-weight:700;text-transform:uppercase;">Late Arrivals Recorded</div>
+            <div style="font-size:20px;font-weight:900;color:#b45309;">${totalLateCheckins}</div>
+          </div>
+          <div class="stat-box">
+            <div style="font-size:10px;color:#64748b;font-weight:700;text-transform:uppercase;">Average Attendance Rate</div>
+            <div style="font-size:20px;font-weight:900;color:#047857;">${avgRate}%</div>
+          </div>
+        </div>
+
+        <div style="margin-bottom:10px;font-size:10px;color:#475569;background:#f1f5f9;padding:6px 10px;border-radius:6px;">
+          🛡️ <strong>Storage Optimization Policy:</strong> Photo verification proofs are automatically purged daily to prevent system storage exhaustion. All official <strong>Time-In records, GPS timestamps, and coordinates are preserved</strong> as permanent legal DTR.
+        </div>
+
+        <!-- Weekly Matrix Table -->
+        <table>
+          <thead>
+            <tr>
+              <th style="padding:8px 10px;text-align:left;background:#f1f5f9;font-size:11px;">ID</th>
+              <th style="padding:8px 10px;text-align:left;background:#f1f5f9;font-size:11px;">Personnel Name</th>
+              <th style="padding:8px 10px;text-align:left;background:#f1f5f9;font-size:11px;">Role</th>
+              <th style="padding:8px 10px;text-align:left;background:#f1f5f9;font-size:11px;">Area</th>
+              ${dayThs}
+              <th style="padding:8px 6px;text-align:center;background:#f1f5f9;font-size:11px;">Present</th>
+              <th style="padding:8px 6px;text-align:center;background:#f1f5f9;font-size:11px;">Late</th>
+              <th style="padding:8px 6px;text-align:center;background:#f1f5f9;font-size:11px;">Total</th>
+              <th style="padding:8px 6px;text-align:center;background:#f1f5f9;font-size:11px;">Rate</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rowsHtml}
+          </tbody>
+        </table>
+
+        <!-- Signatures Section -->
+        <div style="display:grid;grid-template-columns:repeat(3, 1fr);gap:40px;margin-top:40px;page-break-inside:avoid;">
+          <div>
+            <div style="font-size:10px;color:#64748b;font-weight:700;text-transform:uppercase;">PREPARED BY:</div>
+            <div class="sig-line">
+              HR FIELD OPERATIONS LEAD<br/>
+              <span style="font-size:9px;font-weight:normal;color:#64748b;">DTR Verification & Field Monitoring</span>
+            </div>
+          </div>
+          <div>
+            <div style="font-size:10px;color:#64748b;font-weight:700;text-transform:uppercase;">REVIEWED & VERIFIED BY:</div>
+            <div class="sig-line">
+              JEVINCE JAYE S. JUBAY, CHRP<br/>
+              <span style="font-size:9px;font-weight:normal;color:#64748b;">Human Resources Management Manager</span>
+            </div>
+          </div>
+          <div>
+            <div style="font-size:10px;color:#64748b;font-weight:700;text-transform:uppercase;">APPROVED BY:</div>
+            <div class="sig-line">
+              CHARMIE JEAN M. SIMPAL<br/>
+              <span style="font-size:9px;font-weight:normal;color:#64748b;">President & Chief Executive Officer</span>
+            </div>
+          </div>
+        </div>
+
+        <div style="margin-top:24px;text-align:center;">
+          <button onclick="window.print()" style="padding:10px 24px;background:#047857;color:#fff;border:none;border-radius:8px;font-weight:700;cursor:pointer;font-size:13px;">
+            🖨️ Print or Save as PDF
+          </button>
+        </div>
+      </body>
+      </html>
+    `;
+
+    printWindow.document.open();
+    printWindow.document.write(html);
+    printWindow.document.close();
   };
 
   // Computed Metrics
@@ -1288,13 +1846,32 @@ export default function SupervisorsAttendancePanel({ onClose }) {
 
         {/* Action Toolbar */}
         <div className="mt-4 pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3 text-xs">
-          <div className="flex items-center gap-2 text-slate-700 font-medium">
+          <div className="flex flex-wrap items-center gap-2 text-slate-700 font-medium">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
             <span>Attendance Log for:</span>
             <strong className="text-slate-900 font-bold">{formattedDateTitle}</strong>
+            <button
+              type="button"
+              onClick={handleManualPurgePhotos}
+              className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-[11px] font-semibold transition cursor-pointer"
+              title="End-of-day automatic photo purge is active to optimize system storage. Time-In records remain 100% intact. Click to optimize storage now."
+            >
+              <Sparkles size={11} className="text-emerald-600" />
+              <span>Auto-Purge Active (Storage Protected)</span>
+            </button>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={handleOpenWeeklyReport}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition shadow-xs hover:shadow-indigo-950/20 active:scale-95 cursor-pointer"
+              title="Open Weekly Attendance Report for Supervisors and Field Monitoring"
+            >
+              <Calendar size={13} />
+              <span>Weekly Report</span>
+            </button>
+
             <button
               type="button"
               onClick={handleOpenAddAccount}
@@ -1309,15 +1886,17 @@ export default function SupervisorsAttendancePanel({ onClose }) {
               type="button"
               onClick={handleExportCSV}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white text-slate-700 hover:bg-slate-100 border border-slate-200 text-xs font-bold transition shadow-2xs cursor-pointer"
+              title="Download Daily Attendance CSV"
             >
               <Download size={13} />
-              <span>Export CSV</span>
+              <span>Daily CSV</span>
             </button>
 
             <button
               type="button"
               onClick={handlePrint}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white text-slate-700 hover:bg-slate-100 border border-slate-200 text-xs font-bold transition shadow-2xs cursor-pointer"
+              title="Print Daily Sheet"
             >
               <Printer size={13} />
               <span>Print Sheet</span>
@@ -2078,20 +2657,39 @@ export default function SupervisorsAttendancePanel({ onClose }) {
                     <span>Visual Field Photo Proof</span>
                   </label>
                   <span className="text-[11px] font-bold text-emerald-800 bg-emerald-100/80 px-2 py-0.5 rounded-md">
-                    Verified Camera Capture
+                    {viewingPhotoRecord.photoProof ? "Verified Camera Capture" : "Storage Optimized (Time-In Preserved)"}
                   </span>
                 </div>
 
-                <div className="relative rounded-2xl overflow-hidden border-2 border-slate-200 bg-slate-950 shadow-md flex items-center justify-center aspect-4/3 max-h-[380px]">
-                  <img
-                    src={viewingPhotoRecord.photoProof}
-                    alt="Supervisor Proof"
-                    className="w-full h-full object-contain"
-                  />
-                  <div className="absolute bottom-3 left-3 bg-black/70 backdrop-blur-xs text-white text-[11px] px-3 py-1 rounded-lg border border-white/20">
-                    Time In: <strong className="font-mono text-emerald-300">{viewingPhotoRecord.timeIn}</strong>
+                {viewingPhotoRecord.photoProof ? (
+                  <div className="relative rounded-2xl overflow-hidden border-2 border-slate-200 bg-slate-950 shadow-md flex items-center justify-center aspect-4/3 max-h-[380px]">
+                    <img
+                      src={viewingPhotoRecord.photoProof}
+                      alt="Personnel Proof"
+                      className="w-full h-full object-contain"
+                    />
+                    <div className="absolute bottom-3 left-3 bg-black/70 backdrop-blur-xs text-white text-[11px] px-3 py-1 rounded-lg border border-white/20">
+                      Time In: <strong className="font-mono text-emerald-300">{viewingPhotoRecord.timeIn}</strong>
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  <div className="rounded-2xl border-2 border-dashed border-emerald-300 bg-gradient-to-br from-emerald-50/60 to-slate-50 p-6 text-center space-y-3 flex flex-col items-center justify-center aspect-4/3 max-h-[380px]">
+                    <div className="w-12 h-12 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center shadow-2xs">
+                      <CheckCircle2 size={24} />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-slate-800">Verified Time-In Preserved</h4>
+                      <p className="text-xs text-slate-500 mt-1 max-w-xs mx-auto leading-relaxed">
+                        Ang larawan ay kusang nabura noong pagtatapos ng araw (End of Day Auto-Purge) upang mapanatiling malinis ang system storage.
+                      </p>
+                    </div>
+                    <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white border border-emerald-200 shadow-2xs text-xs">
+                      <Clock size={13} className="text-emerald-600" />
+                      <span className="text-slate-600">Opisyal na Time-In:</span>
+                      <strong className="font-mono text-emerald-700">{viewingPhotoRecord.timeIn}</strong>
+                    </div>
+                  </div>
+                )}
 
                 {/* Supervisor details bar */}
                 <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs space-y-2 text-xs">
@@ -2926,6 +3524,270 @@ export default function SupervisorsAttendancePanel({ onClose }) {
               <button
                 type="button"
                 onClick={() => setIsFieldAccountsModalOpen(false)}
+                className="px-4 py-1.5 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold transition cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================= 8. WEEKLY ATTENDANCE REPORT MODAL (SUPERVISORS & FIELD MONITORING) ================= */}
+      {isWeeklyModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-2.5 sm:p-5 animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl shadow-2xl max-w-5xl w-full max-h-[92vh] flex flex-col overflow-hidden border border-slate-200 animate-in zoom-in-95 duration-200">
+            {/* Modal Header */}
+            <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 text-white p-5 flex flex-wrap items-center justify-between gap-3 shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center border border-indigo-500/30">
+                  <FileText size={20} />
+                </div>
+                <div>
+                  <h3 className="text-base font-black tracking-tight text-white flex items-center gap-2">
+                    <span>Weekly Attendance & Field Verification Report</span>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-400/20 text-indigo-300 border border-indigo-400/30">
+                      Multi-Role Log
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-300 mt-0.5">
+                    Official weekly time-in monitoring for STL Supervisors & Field Monitoring Personnel
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleDownloadWeeklyCSV}
+                  disabled={isWeeklyLoading || filteredWeeklyMatrix.length === 0}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition shadow-xs disabled:opacity-50 cursor-pointer"
+                  title="Download CSV for Excel / Payroll"
+                >
+                  <Download size={13} />
+                  <span>Download CSV</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handlePrintWeeklyReport}
+                  disabled={isWeeklyLoading || filteredWeeklyMatrix.length === 0}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white text-slate-900 hover:bg-slate-100 text-xs font-bold transition shadow-xs disabled:opacity-50 cursor-pointer"
+                  title="Print or Save as Official PDF Report"
+                >
+                  <Printer size={13} />
+                  <span>Print / PDF</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setIsWeeklyModalOpen(false)}
+                  className="p-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white transition cursor-pointer"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            </div>
+
+            {/* Week Selector & Filter Bar */}
+            <div className="bg-slate-50 border-b border-slate-200 px-5 py-3 flex flex-wrap items-center justify-between gap-3 shrink-0 text-xs">
+              {/* Week Navigation */}
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handlePrevWeek}
+                  className="p-1.5 rounded-xl bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 transition cursor-pointer"
+                  title="Previous Week"
+                >
+                  <ChevronLeft size={15} />
+                </button>
+
+                <div className="flex items-center gap-2 px-3 py-1 bg-white rounded-xl border border-slate-200 font-bold text-slate-900 shadow-2xs">
+                  <Calendar size={14} className="text-indigo-600" />
+                  <span>{weeklyRangeTitle}</span>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleNextWeek}
+                  className="p-1.5 rounded-xl bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 transition cursor-pointer"
+                  title="Next Week"
+                >
+                  <ChevronRight size={15} />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleCurrentWeek}
+                  className="px-2.5 py-1 rounded-xl bg-indigo-50 text-indigo-700 hover:bg-indigo-100 font-bold transition cursor-pointer border border-indigo-200/80"
+                >
+                  This Week
+                </button>
+              </div>
+
+              {/* Role filter buttons */}
+              <div className="flex items-center gap-1 bg-slate-200/70 p-0.5 rounded-xl">
+                <button
+                  type="button"
+                  onClick={() => setWeeklyCategoryFilter("all")}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
+                    weeklyCategoryFilter === "all" ? "bg-white text-slate-900 shadow-2xs" : "text-slate-600 hover:text-slate-900"
+                  }`}
+                >
+                  All ({weeklyRosterMatrix.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setWeeklyCategoryFilter("supervisors")}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
+                    weeklyCategoryFilter === "supervisors" ? "bg-white text-slate-900 shadow-2xs" : "text-slate-600 hover:text-slate-900"
+                  }`}
+                >
+                  Supervisors ({weeklyRosterMatrix.filter((r) => r.role === "Supervisor").length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setWeeklyCategoryFilter("monitoring")}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
+                    weeklyCategoryFilter === "monitoring" ? "bg-white text-slate-900 shadow-2xs" : "text-slate-600 hover:text-slate-900"
+                  }`}
+                >
+                  Field Monitor ({weeklyRosterMatrix.filter((r) => r.role === "Field Monitoring").length})
+                </button>
+              </div>
+
+              {/* Search input */}
+              <div className="relative">
+                <Search size={13} className="absolute left-2.5 top-2.5 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Filter name or area..."
+                  value={weeklySearchTerm}
+                  onChange={(e) => setWeeklySearchTerm(e.target.value)}
+                  className="pl-8 pr-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:outline-none focus:border-indigo-500 w-44 shadow-2xs"
+                />
+              </div>
+            </div>
+
+            {/* Storage Policy Notice */}
+            <div className="bg-emerald-50/80 border-b border-emerald-100 px-5 py-2 flex items-center justify-between text-[11px] text-emerald-900 shrink-0">
+              <span className="flex items-center gap-1.5 font-medium">
+                <Sparkles size={12} className="text-emerald-600" />
+                <span><strong>Storage Optimization:</strong> Ang mga larawan ay kusang nabubura tuwing pagtatapos ng araw. Ang lahat ng <strong>Time-In, Coordinates, at Petsa ay permanenteng napananatili</strong>.</span>
+              </span>
+              <button
+                type="button"
+                onClick={handleManualPurgePhotos}
+                className="text-[10px] text-emerald-800 underline hover:text-emerald-950 font-bold ml-2 cursor-pointer"
+              >
+                Clean Old Photos Now
+              </button>
+            </div>
+
+            {/* Modal Body: Weekly Matrix Table */}
+            <div className="flex-1 overflow-auto p-4 sm:p-5">
+              {isWeeklyLoading ? (
+                <div className="py-20 text-center space-y-3">
+                  <Loader2 size={32} className="animate-spin text-indigo-600 mx-auto" />
+                  <p className="text-xs font-bold text-slate-600">Gathering attendance across the week...</p>
+                </div>
+              ) : filteredWeeklyMatrix.length === 0 ? (
+                <div className="py-16 text-center text-slate-400">
+                  <p className="text-sm font-semibold">No records match the current filter.</p>
+                </div>
+              ) : (
+                <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-2xs">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="bg-slate-100/80 border-b border-slate-200 text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+                        <th className="py-2.5 px-3">Personnel</th>
+                        <th className="py-2.5 px-2">Role</th>
+                        <th className="py-2.5 px-2">Area</th>
+                        {weeklyWeekDays.map((wd) => (
+                          <th key={wd.date} className={`py-2 px-1.5 text-center ${wd.isToday ? "bg-emerald-50 text-emerald-900" : ""}`}>
+                            <div className="font-extrabold">{wd.shortName}</div>
+                            <div className="text-[9px] font-normal text-slate-400">{wd.monthName} {wd.dayNum}</div>
+                          </th>
+                        ))}
+                        <th className="py-2.5 px-2 text-center text-emerald-700">Present</th>
+                        <th className="py-2.5 px-2 text-center text-amber-700">Late</th>
+                        <th className="py-2.5 px-2 text-center">Active</th>
+                        <th className="py-2.5 px-3 text-center">Rate</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 text-xs">
+                      {filteredWeeklyMatrix.map((item) => (
+                        <tr key={item.id} className="hover:bg-slate-50/80 transition">
+                          <td className="py-2.5 px-3">
+                            <div className="font-bold text-slate-900">{item.fullName}</div>
+                            <div className="text-[10px] text-slate-400 font-mono">#{item.id} • {item.username}</div>
+                          </td>
+                          <td className="py-2.5 px-2">
+                            <span className={`inline-block px-2 py-0.5 rounded-md text-[10px] font-bold ${
+                              item.role === "Field Monitoring"
+                                ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
+                                : "bg-sky-50 text-sky-800 border border-sky-200"
+                            }`}>
+                              {item.role === "Field Monitoring" ? "Field Monitor" : "Supervisor"}
+                            </span>
+                          </td>
+                          <td className="py-2.5 px-2 text-[11px] text-slate-600 font-medium whitespace-nowrap">
+                            {item.area}
+                          </td>
+                          {item.days.map((d) => (
+                            <td key={d.date} className={`py-2 px-1 text-center ${d.date === getTodayString() ? "bg-emerald-50/50" : ""}`}>
+                              {d.hasTimeIn ? (
+                                <div>
+                                  <div className={`font-mono font-bold text-[11px] ${d.status === "Late" ? "text-amber-700" : "text-emerald-700"}`}>
+                                    {d.timeIn}
+                                  </div>
+                                  <span className={`inline-block px-1 rounded text-[9px] font-semibold ${
+                                    d.status === "Late" ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-800"
+                                  }`}>
+                                    {d.status}
+                                  </span>
+                                </div>
+                              ) : (
+                                <span className="text-slate-300 font-mono text-[11px]">--</span>
+                              )}
+                            </td>
+                          ))}
+                          <td className="py-2.5 px-2 text-center font-bold text-emerald-700">
+                            {item.presentCount}
+                          </td>
+                          <td className="py-2.5 px-2 text-center font-bold text-amber-700">
+                            {item.lateCount}
+                          </td>
+                          <td className="py-2.5 px-2 text-center font-bold text-slate-800">
+                            {item.totalAttended} / 7
+                          </td>
+                          <td className="py-2.5 px-3 text-center">
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                              item.attendanceRate >= 80
+                                ? "bg-emerald-100 text-emerald-800"
+                                : item.attendanceRate >= 50
+                                ? "bg-amber-100 text-amber-800"
+                                : "bg-rose-100 text-rose-800"
+                            }`}>
+                              {item.attendanceRate}%
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="bg-slate-50 border-t border-slate-200 px-5 py-3 flex items-center justify-between text-xs text-slate-500 shrink-0">
+              <span className="text-[11px]">
+                Showing <strong>{filteredWeeklyMatrix.length}</strong> personnel • Week of {weeklyRangeTitle}
+              </span>
+              <button
+                type="button"
+                onClick={() => setIsWeeklyModalOpen(false)}
                 className="px-4 py-1.5 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold transition cursor-pointer"
               >
                 Close

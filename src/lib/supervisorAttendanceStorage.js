@@ -205,3 +205,151 @@ export function subscribeToAttendanceRealtime(dateStr, onRowChange) {
   }
 }
 
+/**
+ * Fetches attendance records across a full date range (e.g. for Weekly Attendance Reports).
+ */
+export async function fetchRangeCloudAttendance(startDateStr, endDateStr) {
+  try {
+    const { data, error } = await supabase
+      .from("supervisor_attendance")
+      .select("*")
+      .gte("attendance_date", startDateStr)
+      .lte("attendance_date", endDateStr)
+      .order("attendance_date", { ascending: true });
+
+    if (error) {
+      console.warn("fetchRangeCloudAttendance warning:", error.message);
+      return { data: null, error: error.message, isCloudAvailable: false };
+    }
+    return { data, error: null, isCloudAvailable: true };
+  } catch (err) {
+    console.warn("fetchRangeCloudAttendance exception:", err.message);
+    return { data: null, error: err.message, isCloudAvailable: false };
+  }
+}
+
+/**
+ * Automatically purges photo proofs from past days (end of day cleanup).
+ * All attendance metadata (time_in, status, location, coordinates, remarks) remains 100% intact!
+ */
+export async function autoPurgePastPhotos(currentDateStr = null) {
+  try {
+    const today = currentDateStr || new Date().toISOString().split("T")[0];
+    let purgedDbCount = 0;
+    let purgedFilesCount = 0;
+
+    // 1. Purge from Supabase Database Table: nullify photo_url for records prior to today
+    try {
+      const { data: rowsToClean, error: selectErr } = await supabase
+        .from("supervisor_attendance")
+        .select("id, attendance_date, photo_url")
+        .lt("attendance_date", today)
+        .not("photo_url", "is", null);
+
+      if (!selectErr && Array.isArray(rowsToClean) && rowsToClean.length > 0) {
+        const ids = rowsToClean.map((r) => r.id);
+        const { error: updateErr } = await supabase
+          .from("supervisor_attendance")
+          .update({ photo_url: null, photo_storage_path: null })
+          .in("id", ids);
+
+        if (!updateErr) {
+          purgedDbCount = ids.length;
+        } else {
+          console.warn("[autoPurgePastPhotos] DB photo update notice:", updateErr.message);
+        }
+      }
+    } catch (dbErr) {
+      console.warn("[autoPurgePastPhotos] DB photo purge notice:", dbErr.message);
+    }
+
+    // 2. Purge image files from Supabase Storage bucket 'supervisor-attendance'
+    try {
+      const { data: rootItems, error: listErr } = await supabase.storage
+        .from("supervisor-attendance")
+        .list();
+
+      if (!listErr && Array.isArray(rootItems)) {
+        for (const item of rootItems) {
+          // Date folders are named YYYY-MM-DD
+          if (!item.id && item.name && item.name.length === 10 && item.name < today) {
+            const folderName = item.name;
+            const { data: subFiles } = await supabase.storage
+              .from("supervisor-attendance")
+              .list(folderName);
+
+            if (Array.isArray(subFiles) && subFiles.length > 0) {
+              const filePaths = subFiles
+                .filter((f) => f.name && !f.name.startsWith("."))
+                .map((f) => `${folderName}/${f.name}`);
+
+              if (filePaths.length > 0) {
+                const { error: delErr } = await supabase.storage
+                  .from("supervisor-attendance")
+                  .remove(filePaths);
+
+                if (!delErr) {
+                  purgedFilesCount += filePaths.length;
+                }
+              }
+            }
+          }
+        }
+      }
+    } catch (storageErr) {
+      console.warn("[autoPurgePastPhotos] Storage bucket purge notice:", storageErr.message);
+    }
+
+    // 3. Purge base64 / URLs from Browser localStorage for past dates to prevent storage quota limits
+    try {
+      if (typeof window !== "undefined" && window.localStorage) {
+        const keysToClean = [];
+        for (let i = 0; i < window.localStorage.length; i++) {
+          const key = window.localStorage.key(i);
+          if (key && (key.startsWith("hrhub_spvr_attendance_v3_") || key.startsWith("hrhub_spvr_attendance_"))) {
+            const datePart = key.split("_").pop();
+            if (datePart && datePart.length === 10 && datePart < today) {
+              keysToClean.push(key);
+            }
+          }
+        }
+
+        for (const key of keysToClean) {
+          try {
+            const raw = window.localStorage.getItem(key);
+            if (raw) {
+              const records = JSON.parse(raw);
+              if (Array.isArray(records)) {
+                let hasChanges = false;
+                const cleaned = records.map((rec) => {
+                  if (rec.photoProof) {
+                    hasChanges = true;
+                    return { ...rec, photoProof: null };
+                  }
+                  return rec;
+                });
+                if (hasChanges) {
+                  window.localStorage.setItem(key, JSON.stringify(cleaned));
+                }
+              }
+            }
+          } catch { }
+        }
+      }
+    } catch (localErr) {
+      console.warn("[autoPurgePastPhotos] LocalStorage purge notice:", localErr);
+    }
+
+    return {
+      success: true,
+      purgedDbCount,
+      purgedFilesCount,
+      cutoffDate: today
+    };
+  } catch (err) {
+    console.warn("[autoPurgePastPhotos] Overall purge exception:", err.message);
+    return { success: false, error: err.message };
+  }
+}
+
+
