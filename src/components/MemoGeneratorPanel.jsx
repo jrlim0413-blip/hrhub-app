@@ -11,7 +11,7 @@ import {
   Upload, Image, CheckSquare, Square, XCircle, Code, ShieldCheck, Key,
   Camera, Download, Bold, Italic, Underline, Strikethrough, Highlighter,
   List, ListOrdered, Shapes, Minus, Palette, Heading, Type, Eraser,
-  ALargeSmall, CaseUpper, Undo2, Redo2
+  ALargeSmall, CaseUpper, Undo2, Redo2, Search
 } from "lucide-react";
 import { processSignatureToTransparentPng } from "../lib/signatureImageProcessor";
 import { mergeProfilesWithStored } from "../lib/employeeStorage";
@@ -553,11 +553,109 @@ export function getCompanySpecificMemoRef(companyCode = "LBC", baseRef = "") {
   if (!baseRef) return `MEMO-${new Date().getFullYear()}-${companyCode}`;
   const parts = String(baseRef).trim().split("-");
   if (parts.length >= 4) {
+    const existingCode = parts[2];
+    // If the baseRef already has this exact code or recognized alias (like SARG for 5ARG), keep it!
+    if (
+      existingCode === companyCode ||
+      (companyCode === "5ARG" && existingCode === "SARG") ||
+      (companyCode === "SARG" && existingCode === "5ARG")
+    ) {
+      return baseRef;
+    }
     const prefix = parts.slice(0, 2).join("-"); // "MEMO-2026"
     const suffix = parts.slice(3).join("-"); // "261023-01" or "001"
     return `${prefix}-${companyCode}-${suffix}`;
   }
-  return baseRef.replace(/-(?:LBC|SARG|SIMCON|GTI|RMC|FES|OPC)-/i, `-${companyCode}-`);
+  return baseRef.replace(/-(?:LBC|SARG|5ARG|SIMCON|GFC|GLOW|IMP|SGC|GTI|RMC|FES|OPC)-/i, `-${companyCode}-`);
+}
+
+/**
+ * Resolves the matching company entity strictly based on the memorandum reference string.
+ * Example:
+ * - "MEMO-2026-GFC-261104-09" -> Glowing Fortune OPC (code: GFC)
+ * - "MEMO-2026-SARG-261104-02" -> 5A Royal Gaming OPC (code: 5ARG / SARG)
+ * - "MEMO-2026-LBC-..." -> Lucky Betplay Corporation (code: LBC)
+ * - "MEMO-2026-SIMCON-..." -> Simpal Construction (code: SIMCON)
+ * - "MEMO-2026-SGC-..." -> Simpal Group of Companies (code: SGC)
+ * - "MEMO-2026-IMP-..." -> Imperial Gaming OPC (code: IMP)
+ */
+export function resolveCompanyFromMemoRef(ref = "", m = null, allCompanies = COMPANIES) {
+  const cleanRef = String(ref || m?.ref || "").trim().toUpperCase();
+
+  if (cleanRef) {
+    // 1. Direct segment check: MEMO-YYYY-CODE-... or MEMO-CODE-...
+    const parts = cleanRef.split("-");
+    const extractedCode = parts.length >= 3 ? parts[2] : (parts.length >= 2 ? parts[1] : "");
+
+    if (extractedCode) {
+      const match = allCompanies.find((c) => {
+        const cCode = String(c.code).toUpperCase();
+        if (cCode === extractedCode) return true;
+        if (c.id === "5a_royal" && (extractedCode === "SARG" || extractedCode === "5ARG" || extractedCode === "5A")) return true;
+        if (c.id === "glowing_fortune" && (extractedCode === "GFC" || extractedCode === "GLOW")) return true;
+        if (c.id === "lucky_betplay" && (extractedCode === "LBC" || extractedCode === "LB")) return true;
+        if (c.id === "simcon" && (extractedCode === "SIMCON" || extractedCode === "SIM")) return true;
+        if (c.id === "sgc" && extractedCode === "SGC") return true;
+        if (c.id === "imperial_gaming" && extractedCode === "IMP") return true;
+        return false;
+      });
+      if (match) return match;
+    }
+
+    // 2. Substring fallback within reference
+    if (cleanRef.includes("-GFC-") || cleanRef.includes("-GLOW-") || cleanRef.includes("GFC")) {
+      const c = allCompanies.find((x) => x.id === "glowing_fortune");
+      if (c) return c;
+    }
+    if (cleanRef.includes("-SARG-") || cleanRef.includes("-5ARG-") || cleanRef.includes("SARG") || cleanRef.includes("5ARG")) {
+      const c = allCompanies.find((x) => x.id === "5a_royal");
+      if (c) return c;
+    }
+    if (cleanRef.includes("-LBC-") || cleanRef.includes("-LB-")) {
+      const c = allCompanies.find((x) => x.id === "lucky_betplay");
+      if (c) return c;
+    }
+    if (cleanRef.includes("-SIMCON-") || cleanRef.includes("-SIM-")) {
+      const c = allCompanies.find((x) => x.id === "simcon");
+      if (c) return c;
+    }
+    if (cleanRef.includes("-SGC-")) {
+      const c = allCompanies.find((x) => x.id === "sgc");
+      if (c) return c;
+    }
+    if (cleanRef.includes("-IMP-")) {
+      const c = allCompanies.find((x) => x.id === "imperial_gaming");
+      if (c) return c;
+    }
+  }
+
+  // 3. Fallback to m.companyId
+  if (m?.companyId) {
+    const comp = allCompanies.find((c) => c.id === m.companyId);
+    if (comp) return comp;
+  }
+
+  // 4. Fallback to m.companyCode
+  if (m?.companyCode) {
+    const cCode = String(m.companyCode).toUpperCase();
+    const comp = allCompanies.find((c) => 
+      c.code.toUpperCase() === cCode || 
+      (c.id === "5a_royal" && (cCode === "SARG" || cCode === "5ARG"))
+    );
+    if (comp) return comp;
+  }
+
+  // 5. Fallback to m.companyName
+  if (m?.companyName) {
+    const nameLow = String(m.companyName).toLowerCase();
+    const comp = allCompanies.find((c) => 
+      c.name.toLowerCase().includes(nameLow) || nameLow.includes(c.name.toLowerCase()) ||
+      (c.legalName && c.legalName.toLowerCase().includes(nameLow))
+    );
+    if (comp) return comp;
+  }
+
+  return allCompanies[0];
 }
 
 /**
@@ -1018,6 +1116,8 @@ export default function MemoGeneratorPanel({
   }, [currentUser]);
 
   const [archiveModalOpen, setArchiveModalOpen] = useState(false);
+  const [archiveSearchQuery, setArchiveSearchQuery] = useState("");
+  const [archiveCompanyFilter, setArchiveCompanyFilter] = useState("ALL");
   const [saveSuccessNotice, setSaveSuccessNotice] = useState(false);
 
   // Email & Dispatch States (Company-Specific Segregation)
@@ -1375,6 +1475,8 @@ export default function MemoGeneratorPanel({
     const comp = companies.find((company) => company.id === companyId);
     if (!comp) return;
     setSelectedCompanyId(companyId);
+    // Strictly scope distribution and viewer to this chosen entity only
+    setIncludedCompanyIds([companyId]);
     setSignatoryCompany(comp.name);
     setMemoRef((prevRef) => getCompanySpecificMemoRef(comp.code, prevRef));
     setLetterheadStatus(null);
@@ -1500,22 +1602,33 @@ export default function MemoGeneratorPanel({
 
   // Save Memo to Records / Database Archive (Supabase 'saved_memos' table per account)
   const handleSaveMemoToArchive = async () => {
+    // 1. Strictly resolve the exact entity this memo is drafted for
+    const currentViewing = companiesToPreview[safePreviewIndex];
+    const targetComp = resolveCompanyFromMemoRef(
+      memoRef,
+      { companyId: currentViewing?.id || selectedCompanyId },
+      companies
+    ) || currentViewing || selectedCompany;
+
+    const actualRef = getCompanySpecificMemoRef(targetComp.code, memoRef);
+
     const newMemo = {
       id: "memo_" + Date.now(),
-      ref: distributionMemoRef,
+      ref: actualRef,
       subject: memoSubject,
       date: memoDate,
       to: memoTo,
       from: memoFrom,
       category: memoCategory,
       content: memoContent,
-      companyId: distributionCompany.id,
-      companyName: distributionCompany.name,
-      companyCode: distributionCompany.code,
+      companyId: targetComp.id,
+      companyName: targetComp.name,
+      companyCode: targetComp.code,
+      includedCompanyIds: [targetComp.id], // Strictly scoped to only this entity!
       signatoryLabel,
       signatoryName,
       signatoryTitle,
-      signatoryCompany: getSignatoryAffiliation(distributionCompany),
+      signatoryCompany: getSignatoryAffiliation(targetComp),
       approverLabel,
       approverName,
       approverTitle,
@@ -1533,16 +1646,21 @@ export default function MemoGeneratorPanel({
       savedAt: new Date().toISOString()
     };
 
-    const updated = [newMemo, ...savedMemos.filter((m) => m.ref !== distributionMemoRef || m.companyId !== distributionCompany.id)];
+    // Keep viewer strictly focused on ONLY this entity
+    setIncludedCompanyIds([targetComp.id]);
+    setSelectedCompanyId(targetComp.id);
+    setPreviewEntityIndex(0);
+
+    const updated = [newMemo, ...savedMemos.filter((m) => m.ref !== actualRef || m.companyId !== targetComp.id)];
     setSavedMemos(updated);
-    registerUsedMemoRef(distributionMemoRef);
+    registerUsedMemoRef(actualRef);
 
     try {
       const res = await saveMemoRecordToDb(currentUser, newMemo);
       if (res.syncedToSupabase) {
         setImageCopyToast({
           type: "success",
-          message: `✓ Memo '${distributionMemoRef}' saved to Supabase table for ${userAccountKey}!`
+          message: `✓ Memo '${actualRef}' for ${targetComp.name} saved to Supabase!`
         });
       }
     } catch (e) {
@@ -1565,8 +1683,20 @@ export default function MemoGeneratorPanel({
 
   // Load saved memo into current editor
   const handleLoadSavedMemo = (m) => {
-    const memoCompany = COMPANIES.find((company) => company.id === m.companyId) || selectedCompany;
-    if (m.companyId) setSelectedCompanyId(memoCompany.id);
+    // 1. Resolve matching company entity strictly based on the memorandum reference!
+    const memoCompany = resolveCompanyFromMemoRef(m.ref, m, companies);
+
+    // 2. Set the selected company so Step 1, Step 2, Step 3, and Step 4 letterhead use this company
+    setSelectedCompanyId(memoCompany.id);
+
+    // 3. STRICT REQUIREMENT: Only the entity this memo was made for must appear in the viewer!
+    // Set includedCompanyIds to ONLY this company (zero other entities in the viewer)
+    setIncludedCompanyIds([memoCompany.id]);
+
+    // 4. Set preview index to 0 so Step 4 immediately displays this single entity
+    setPreviewEntityIndex(0);
+
+    // 5. Populate form fields
     if (m.ref) setMemoRef(m.ref);
     if (m.date) setMemoDate(m.date);
     if (m.to) setMemoTo(m.to);
@@ -1582,6 +1712,13 @@ export default function MemoGeneratorPanel({
     if (m.approverName) setApproverName(m.approverName);
     if (m.approverTitle) setApproverTitle(m.approverTitle);
     if (m.signatoryLayout) setSignatoryLayout(m.signatoryLayout);
+
+    if (m.directivesFontFamily) setDirectivesFontFamily(m.directivesFontFamily);
+    if (m.directivesFontSize) setDirectivesFontSize(m.directivesFontSize);
+    if (m.signatorySignature) setSignatorySignature(m.signatorySignature);
+    if (m.approverSignature) setApproverSignature(m.approverSignature);
+
+    // 6. Close archive modal and jump to Step 4 to immediately preview ONLY this authentic letterhead!
     setArchiveModalOpen(false);
     setCurrentStep(4);
   };
@@ -5322,16 +5459,18 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5">
                 {/* Left: Previous, Active Entity Details, Next */}
                 <div className="flex items-center gap-2 flex-wrap">
-                  <button
-                    type="button"
-                    onClick={() => setPreviewEntityIndex((prev) => Math.max(0, prev - 1))}
-                    disabled={safePreviewIndex === 0}
-                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-800 font-bold text-xs shadow-2xs transition disabled:opacity-30 disabled:pointer-events-none cursor-pointer"
-                    title="Previous Entity Memo (Keyboard: Left Arrow ←)"
-                  >
-                    <ChevronLeft size={16} />
-                    <span>Prev</span>
-                  </button>
+                  {companiesToPreview.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => setPreviewEntityIndex((prev) => Math.max(0, prev - 1))}
+                      disabled={safePreviewIndex === 0}
+                      className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-800 font-bold text-xs shadow-2xs transition disabled:opacity-30 disabled:pointer-events-none cursor-pointer"
+                      title="Previous Entity Memo (Keyboard: Left Arrow ←)"
+                    >
+                      <ChevronLeft size={16} />
+                      <span>Prev</span>
+                    </button>
+                  )}
 
                   <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-100/90 border border-slate-200 text-xs">
                     <span className="h-5 w-5 rounded-md bg-slate-900 text-white text-[10.5px] font-black flex items-center justify-center shrink-0">
@@ -5343,21 +5482,29 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                     <span className="font-mono text-[10px] font-bold text-slate-700 bg-white px-1.5 py-0.5 rounded border border-slate-200">
                       {companiesToPreview[safePreviewIndex]?.code}
                     </span>
-                    <span className="text-[10px] font-semibold text-slate-500">
-                      ({safePreviewIndex + 1} of {companiesToPreview.length})
-                    </span>
+                    {companiesToPreview.length > 1 ? (
+                      <span className="text-[10px] font-semibold text-slate-500">
+                        ({safePreviewIndex + 1} of {companiesToPreview.length})
+                      </span>
+                    ) : (
+                      <span className="text-[10px] font-black uppercase text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded border border-emerald-300">
+                        Active Entity
+                      </span>
+                    )}
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={() => setPreviewEntityIndex((prev) => Math.min(companiesToPreview.length - 1, prev + 1))}
-                    disabled={safePreviewIndex >= companiesToPreview.length - 1}
-                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-800 font-bold text-xs shadow-2xs transition disabled:opacity-30 disabled:pointer-events-none cursor-pointer"
-                    title="Next Entity Memo (Keyboard: Right Arrow →)"
-                  >
-                    <span>Next</span>
-                    <ChevronRight size={16} />
-                  </button>
+                  {companiesToPreview.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => setPreviewEntityIndex((prev) => Math.min(companiesToPreview.length - 1, prev + 1))}
+                      disabled={safePreviewIndex >= companiesToPreview.length - 1}
+                      className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-800 font-bold text-xs shadow-2xs transition disabled:opacity-30 disabled:pointer-events-none cursor-pointer"
+                      title="Next Entity Memo (Keyboard: Right Arrow →)"
+                    >
+                      <span>Next</span>
+                      <ChevronRight size={16} />
+                    </button>
+                  )}
                 </div>
 
                 {/* Right: Keyboard Hint & View Mode Switcher */}
@@ -5435,26 +5582,30 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
             {previewViewMode === "slide" ? (
               <div className="relative w-full overflow-hidden py-8 px-0 bg-slate-100/80 border border-slate-200/90 rounded-3xl shadow-inner select-none flex flex-col items-center">
                 {/* Floating Left Navigation Arrow Button */}
-                <button
-                  type="button"
-                  onClick={() => setPreviewEntityIndex((prev) => Math.max(0, prev - 1))}
-                  disabled={safePreviewIndex === 0}
-                  className="absolute left-3 sm:left-6 top-1/2 -translate-y-1/2 z-30 h-12 w-12 sm:h-14 sm:w-14 rounded-full bg-white/95 hover:bg-white text-slate-800 shadow-2xl border border-slate-200/90 flex items-center justify-center cursor-pointer transition hover:scale-110 active:scale-95 disabled:opacity-20 disabled:pointer-events-none"
-                  title="Previous Entity (Keyboard: Left Arrow ←)"
-                >
-                  <ChevronLeft size={28} className="text-slate-800" />
-                </button>
+                {companiesToPreview.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => setPreviewEntityIndex((prev) => Math.max(0, prev - 1))}
+                    disabled={safePreviewIndex === 0}
+                    className="absolute left-3 sm:left-6 top-1/2 -translate-y-1/2 z-30 h-12 w-12 sm:h-14 sm:w-14 rounded-full bg-white/95 hover:bg-white text-slate-800 shadow-2xl border border-slate-200/90 flex items-center justify-center cursor-pointer transition hover:scale-110 active:scale-95 disabled:opacity-20 disabled:pointer-events-none"
+                    title="Previous Entity (Keyboard: Left Arrow ←)"
+                  >
+                    <ChevronLeft size={28} className="text-slate-800" />
+                  </button>
+                )}
 
                 {/* Floating Right Navigation Arrow Button */}
-                <button
-                  type="button"
-                  onClick={() => setPreviewEntityIndex((prev) => Math.min(companiesToPreview.length - 1, prev + 1))}
-                  disabled={safePreviewIndex >= companiesToPreview.length - 1}
-                  className="absolute right-3 sm:right-6 top-1/2 -translate-y-1/2 z-30 h-12 w-12 sm:h-14 sm:w-14 rounded-full bg-white/95 hover:bg-white text-slate-800 shadow-2xl border border-slate-200/90 flex items-center justify-center cursor-pointer transition hover:scale-110 active:scale-95 disabled:opacity-20 disabled:pointer-events-none"
-                  title="Next Entity (Keyboard: Right Arrow →)"
-                >
-                  <ChevronRight size={28} className="text-slate-800" />
-                </button>
+                {companiesToPreview.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => setPreviewEntityIndex((prev) => Math.min(companiesToPreview.length - 1, prev + 1))}
+                    disabled={safePreviewIndex >= companiesToPreview.length - 1}
+                    className="absolute right-3 sm:right-6 top-1/2 -translate-y-1/2 z-30 h-12 w-12 sm:h-14 sm:w-14 rounded-full bg-white/95 hover:bg-white text-slate-800 shadow-2xl border border-slate-200/90 flex items-center justify-center cursor-pointer transition hover:scale-110 active:scale-95 disabled:opacity-20 disabled:pointer-events-none"
+                    title="Next Entity (Keyboard: Right Arrow →)"
+                  >
+                    <ChevronRight size={28} className="text-slate-800" />
+                  </button>
+                )}
 
                 {/* Coverflow Sliding Track: All cards visible in horizontal line, center card highlighted & full size */}
                 <div
@@ -5496,23 +5647,25 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                 </div>
 
                 {/* Bottom Pagination Pill Indicators */}
-                <div className="flex items-center justify-center gap-1.5 pt-6 pb-1">
-                  {companiesToPreview.map((comp, idx) => {
-                    const isActive = idx === safePreviewIndex;
-                    return (
-                      <button
-                        key={comp.id}
-                        type="button"
-                        onClick={() => setPreviewEntityIndex(idx)}
-                        className={`h-2 rounded-full transition-all duration-300 cursor-pointer ${isActive
-                            ? "w-8 sm:w-10 bg-slate-900 shadow-xs"
-                            : "w-3 sm:w-4 bg-slate-300 hover:bg-slate-400"
-                          }`}
-                        title={`Go to ${comp.name} (${comp.code})`}
-                      />
-                    );
-                  })}
-                </div>
+                {companiesToPreview.length > 1 && (
+                  <div className="flex items-center justify-center gap-1.5 pt-6 pb-1">
+                    {companiesToPreview.map((comp, idx) => {
+                      const isActive = idx === safePreviewIndex;
+                      return (
+                        <button
+                          key={comp.id}
+                          type="button"
+                          onClick={() => setPreviewEntityIndex(idx)}
+                          className={`h-2 rounded-full transition-all duration-300 cursor-pointer ${isActive
+                              ? "w-8 sm:w-10 bg-slate-900 shadow-xs"
+                              : "w-3 sm:w-4 bg-slate-300 hover:bg-slate-400"
+                            }`}
+                          title={`Go to ${comp.name} (${comp.code})`}
+                        />
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             ) : (
               /* Continuous Scroll: View All */
@@ -6200,102 +6353,234 @@ function doGet(e) {
       )}
 
       {/* ================= MODAL: SAVED MEMOS ARCHIVE ================= */}
-      {archiveModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 p-4 backdrop-blur-sm animate-in fade-in duration-150">
-          <div className="w-full max-w-2xl rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl space-y-4 max-h-[85vh] flex flex-col">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3 shrink-0">
-              <div className="flex items-center gap-2.5">
-                <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-800">
-                  <Archive size={20} />
+      {archiveModalOpen && (() => {
+        const filteredMemos = savedMemos.filter((m) => {
+          const comp = resolveCompanyFromMemoRef(m.ref, m, companies);
+          if (archiveCompanyFilter !== "ALL") {
+            if (archiveCompanyFilter === "GFC" && comp.id !== "glowing_fortune" && !String(m.ref).includes("GFC")) return false;
+            if (archiveCompanyFilter === "5ARG" && comp.id !== "5a_royal" && !String(m.ref).includes("SARG") && !String(m.ref).includes("5ARG")) return false;
+            if (archiveCompanyFilter === "LBC" && comp.id !== "lucky_betplay" && !String(m.ref).includes("LBC")) return false;
+            if (archiveCompanyFilter === "SIMCON" && comp.id !== "simcon" && !String(m.ref).includes("SIMCON")) return false;
+            if (archiveCompanyFilter === "SGC" && comp.id !== "sgc" && !String(m.ref).includes("SGC")) return false;
+            if (archiveCompanyFilter === "IMP" && comp.id !== "imperial_gaming" && !String(m.ref).includes("IMP")) return false;
+          }
+          if (!archiveSearchQuery.trim()) return true;
+          const q = archiveSearchQuery.toLowerCase().trim();
+          return (
+            String(m.ref || "").toLowerCase().includes(q) ||
+            String(m.subject || "").toLowerCase().includes(q) ||
+            String(m.to || "").toLowerCase().includes(q) ||
+            String(m.from || "").toLowerCase().includes(q) ||
+            String(comp.name || "").toLowerCase().includes(q) ||
+            String(comp.legalName || "").toLowerCase().includes(q)
+          );
+        });
+
+        // Compute company filter badges
+        const companyCodes = [
+          { code: "ALL", label: "All Memos", count: savedMemos.length },
+          { code: "GFC", label: "GFC", count: savedMemos.filter(m => resolveCompanyFromMemoRef(m.ref, m, companies).id === "glowing_fortune" || String(m.ref).includes("GFC")).length },
+          { code: "5ARG", label: "5ARG / SARG", count: savedMemos.filter(m => resolveCompanyFromMemoRef(m.ref, m, companies).id === "5a_royal" || String(m.ref).includes("SARG") || String(m.ref).includes("5ARG")).length },
+          { code: "LBC", label: "LBC", count: savedMemos.filter(m => resolveCompanyFromMemoRef(m.ref, m, companies).id === "lucky_betplay" || String(m.ref).includes("LBC")).length },
+          { code: "SIMCON", label: "SIMCON", count: savedMemos.filter(m => resolveCompanyFromMemoRef(m.ref, m, companies).id === "simcon" || String(m.ref).includes("SIMCON")).length },
+          { code: "SGC", label: "SGC", count: savedMemos.filter(m => resolveCompanyFromMemoRef(m.ref, m, companies).id === "sgc" || String(m.ref).includes("SGC")).length },
+          { code: "IMP", label: "IMP", count: savedMemos.filter(m => resolveCompanyFromMemoRef(m.ref, m, companies).id === "imperial_gaming" || String(m.ref).includes("IMP")).length },
+        ].filter(item => item.code === "ALL" || item.count > 0);
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 p-3 sm:p-5 backdrop-blur-sm animate-in fade-in duration-150">
+            <div className="w-full max-w-4xl lg:max-w-5xl rounded-3xl border border-slate-200 bg-white p-5 sm:p-7 shadow-2xl space-y-4 max-h-[88vh] flex flex-col">
+              {/* Header */}
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3 shrink-0">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-800 shadow-2xs">
+                    <Archive size={22} />
+                  </div>
+                  <div>
+                    <h4 className="text-base sm:text-lg font-black text-slate-900 tracking-tight">
+                      Saved Memorandums Archive ({savedMemos.length})
+                    </h4>
+                    <p className="text-xs text-slate-500 font-medium">
+                      Stored official memorandums saved in HrHub system • Select a memo to load its authentic letterhead &amp; content
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <h4 className="text-sm font-black text-slate-900">
-                    Saved Memorandums Archive ({savedMemos.length})
-                  </h4>
-                  <p className="text-[11px] text-slate-500 font-medium">
-                    Stored official memorandums saved in HrHub system
-                  </p>
+
+                <button
+                  type="button"
+                  onClick={() => setArchiveModalOpen(false)}
+                  className="rounded-xl p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 cursor-pointer transition"
+                  title="Close Archive"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              {/* Search and Company Filter Controls */}
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 shrink-0">
+                <div className="relative flex-1">
+                  <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    value={archiveSearchQuery}
+                    onChange={(e) => setArchiveSearchQuery(e.target.value)}
+                    placeholder="Search by reference code (e.g. GFC, SARG, LBC), subject, or recipient..."
+                    className="w-full pl-9 pr-8 py-2 text-xs rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:border-emerald-500 focus:outline-none transition shadow-2xs"
+                  />
+                  {archiveSearchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setArchiveSearchQuery("")}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                    >
+                      <X size={14} />
+                    </button>
+                  )}
+                </div>
+
+                {/* Company Filter Badges */}
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
+                  {companyCodes.map((item) => {
+                    const isActive = archiveCompanyFilter === item.code;
+                    return (
+                      <button
+                        key={item.code}
+                        type="button"
+                        onClick={() => setArchiveCompanyFilter(item.code)}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer whitespace-nowrap inline-flex items-center gap-1.5 border ${
+                          isActive
+                            ? "bg-slate-900 text-white border-slate-900 shadow-xs"
+                            : "bg-slate-50 hover:bg-slate-100 text-slate-600 border-slate-200"
+                        }`}
+                      >
+                        <span>{item.label}</span>
+                        <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
+                          isActive ? "bg-white/20 text-white" : "bg-slate-200 text-slate-700"
+                        }`}>
+                          {item.count}
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
-              <button
-                type="button"
-                onClick={() => setArchiveModalOpen(false)}
-                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 cursor-pointer"
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto space-y-2.5 pr-1">
-              {savedMemos.length === 0 ? (
-                <div className="py-12 text-center text-slate-400 space-y-2">
-                  <FileText size={32} className="mx-auto text-slate-300" />
-                  <p className="text-xs font-semibold">No saved memorandums in records yet.</p>
-                  <p className="text-[11px]">When you finish drafting a memo, click "Save to Records" in Step 4.</p>
-                </div>
-              ) : (
-                savedMemos.map((m) => (
-                  <div
-                    key={m.id}
-                    className="p-3.5 rounded-2xl border border-slate-200 bg-slate-50/70 hover:bg-white hover:border-emerald-300 transition flex items-center justify-between gap-3 shadow-2xs"
-                  >
-                    <div className="min-w-0 flex-1 space-y-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono text-[10px] font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded border border-emerald-200">
-                          {m.ref}
-                        </span>
-                        <span className="text-[10px] font-black uppercase text-slate-500">
-                          {m.companyCode || m.companyName}
-                        </span>
-                        <span className="text-[10px] text-slate-400 font-mono">
-                          {m.date}
-                        </span>
-                      </div>
-                      <h5 className="text-xs font-black text-slate-900 truncate">
-                        {m.subject}
-                      </h5>
-                      <p className="text-[11px] text-slate-500 truncate">
-                        TO: {m.to} | FROM: {m.from}
-                      </p>
-                    </div>
-
-                    <div className="flex items-center gap-2 shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => handleLoadSavedMemo(m)}
-                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-2xs transition cursor-pointer"
-                      >
-                        <Eye size={12} />
-                        <span>Load Memo</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteSavedMemo(m.id)}
-                        className="p-1.5 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer"
-                        title="Delete from records"
-                      >
-                        <Trash2 size={15} />
-                      </button>
-                    </div>
+              {/* Records List Container */}
+              <div className="flex-1 overflow-y-auto space-y-3 pr-1.5">
+                {savedMemos.length === 0 ? (
+                  <div className="py-16 text-center text-slate-400 space-y-2">
+                    <FileText size={36} className="mx-auto text-slate-300" />
+                    <p className="text-sm font-bold text-slate-700">No saved memorandums in records yet.</p>
+                    <p className="text-xs">When you finish drafting a memo, click &quot;Save to Records&quot; in Step 4.</p>
                   </div>
-                ))
-              )}
-            </div>
+                ) : filteredMemos.length === 0 ? (
+                  <div className="py-16 text-center text-slate-400 space-y-3">
+                    <Search size={32} className="mx-auto text-slate-300" />
+                    <p className="text-sm font-bold text-slate-700">No memorandums matched your search filter.</p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setArchiveSearchQuery("");
+                        setArchiveCompanyFilter("ALL");
+                      }}
+                      className="px-4 py-1.5 rounded-xl text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 transition cursor-pointer"
+                    >
+                      Clear Filters
+                    </button>
+                  </div>
+                ) : (
+                  filteredMemos.map((m) => {
+                    const comp = resolveCompanyFromMemoRef(m.ref, m, companies);
+                    return (
+                      <div
+                        key={m.id}
+                        className="p-4 sm:p-4.5 rounded-2xl border border-slate-200/90 bg-slate-50/60 hover:bg-white hover:border-emerald-400 hover:shadow-md transition-all duration-150 flex flex-col md:flex-row md:items-center justify-between gap-3.5 group shadow-2xs"
+                      >
+                        <div className="flex items-start gap-3.5 min-w-0 flex-1">
+                          {/* Company Logo Badge */}
+                          <div className="w-13 h-13 p-1 rounded-2xl bg-white border border-slate-200 flex items-center justify-center shrink-0 shadow-2xs group-hover:border-emerald-300 transition">
+                            <img
+                              src={comp.logoUrl}
+                              alt={comp.name}
+                              className="max-h-full max-w-full object-contain"
+                              onError={(e) => { e.target.style.display = "none"; }}
+                            />
+                          </div>
 
-            <div className="pt-2 border-t border-slate-100 flex justify-end shrink-0">
-              <button
-                type="button"
-                onClick={() => setArchiveModalOpen(false)}
-                className="rounded-xl border border-slate-200 px-4 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-50 cursor-pointer"
-              >
-                Close Archive
-              </button>
+                          {/* Memo Metadata & Subject */}
+                          <div className="min-w-0 flex-1 space-y-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-mono text-xs font-black text-emerald-900 bg-emerald-100 px-2.5 py-0.5 rounded-md border border-emerald-300 shadow-2xs">
+                                {m.ref}
+                              </span>
+                              <span className="text-[11px] font-extrabold uppercase px-2 py-0.5 rounded-md bg-white text-slate-700 border border-slate-200 shadow-2xs">
+                                {comp.name}
+                              </span>
+                              <span className="text-[11px] text-slate-500 font-medium inline-flex items-center gap-1 font-mono">
+                                <Calendar size={12} className="text-slate-400" />
+                                {m.date}
+                              </span>
+                            </div>
+
+                            <h5 className="text-sm font-black text-slate-900 leading-snug group-hover:text-emerald-800 transition-colors">
+                              {m.subject}
+                            </h5>
+
+                            <p className="text-xs text-slate-500 truncate">
+                              TO: <strong className="text-slate-700">{m.to}</strong> | FROM: <strong className="text-slate-700">{m.from}</strong>
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Actions */}
+                        <div className="flex items-center gap-2 shrink-0 self-end md:self-center">
+                          <button
+                            type="button"
+                            onClick={() => handleLoadSavedMemo(m)}
+                            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs shadow-xs hover:shadow-md transition cursor-pointer active:scale-95"
+                            title={`Load memo and display ${comp.name} letterhead`}
+                          >
+                            <Eye size={13} />
+                            <span>Load Memo</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (window.confirm(`Delete saved memo ${m.ref} from records?`)) {
+                                handleDeleteSavedMemo(m.id);
+                              }
+                            }}
+                            className="p-2 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer"
+                            title="Delete from records"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              {/* Modal Footer */}
+              <div className="pt-3 border-t border-slate-100 flex items-center justify-between shrink-0">
+                <span className="text-xs text-slate-400 font-semibold">
+                  Showing {filteredMemos.length} of {savedMemos.length} memorandums
+                </span>
+
+                <button
+                  type="button"
+                  onClick={() => setArchiveModalOpen(false)}
+                  className="rounded-xl border border-slate-200 bg-white hover:bg-slate-50 px-4 py-2 text-xs font-bold text-slate-700 shadow-2xs cursor-pointer transition"
+                >
+                  Close Archive
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Floating Action Feedback Toast for Image Copy & Download */}
       {imageCopyToast && (
