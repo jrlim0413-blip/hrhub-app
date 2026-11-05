@@ -638,8 +638,8 @@ export function resolveCompanyFromMemoRef(ref = "", m = null, allCompanies = COM
   // 4. Fallback to m.companyCode
   if (m?.companyCode) {
     const cCode = String(m.companyCode).toUpperCase();
-    const comp = allCompanies.find((c) => 
-      c.code.toUpperCase() === cCode || 
+    const comp = allCompanies.find((c) =>
+      c.code.toUpperCase() === cCode ||
       (c.id === "5a_royal" && (cCode === "SARG" || cCode === "5ARG"))
     );
     if (comp) return comp;
@@ -648,7 +648,7 @@ export function resolveCompanyFromMemoRef(ref = "", m = null, allCompanies = COM
   // 5. Fallback to m.companyName
   if (m?.companyName) {
     const nameLow = String(m.companyName).toLowerCase();
-    const comp = allCompanies.find((c) => 
+    const comp = allCompanies.find((c) =>
       c.name.toLowerCase().includes(nameLow) || nameLow.includes(c.name.toLowerCase()) ||
       (c.legalName && c.legalName.toLowerCase().includes(nameLow))
     );
@@ -3343,8 +3343,8 @@ ${renderMemoDirectivesHtml(memoContent)}
               {compMemoRef}
             </span>
             <span className={`text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded-full border ${isIncluded
-                ? "bg-emerald-50 text-emerald-800 border-emerald-200"
-                : "bg-rose-50 text-rose-700 border-rose-200"
+              ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+              : "bg-rose-50 text-rose-700 border-rose-200"
               }`}>
               {isIncluded ? "✓ Included" : "✕ Excluded"}
             </span>
@@ -3409,8 +3409,8 @@ ${renderMemoDirectivesHtml(memoContent)}
               type="button"
               onClick={() => toggleCompanyInclusion(company.id)}
               className={`inline-flex items-center gap-1 rounded-lg font-bold px-2.5 py-1.5 text-xs transition cursor-pointer border ${isIncluded
-                  ? "border-slate-200 bg-white hover:bg-rose-50 hover:border-rose-300 text-slate-600 hover:text-rose-700 shadow-2xs"
-                  : "border-emerald-600 bg-emerald-600 hover:bg-emerald-500 text-white shadow-xs"
+                ? "border-slate-200 bg-white hover:bg-rose-50 hover:border-rose-300 text-slate-600 hover:text-rose-700 shadow-2xs"
+                : "border-emerald-600 bg-emerald-600 hover:bg-emerald-500 text-white shadow-xs"
                 }`}
               title={isIncluded ? `Exclude ${company.name} from memo distribution` : `Include ${company.name} in memo distribution`}
             >
@@ -3823,18 +3823,18 @@ ${renderMemoDirectivesHtml(memoContent)}
                 type="button"
                 onClick={() => setCurrentStep(item.step)}
                 className={`flex items-center gap-3 p-3 rounded-2xl border text-left transition cursor-pointer ${isActive
-                    ? "bg-emerald-600 text-white border-emerald-600 shadow-md shadow-emerald-600/20 ring-2 ring-emerald-400/40"
-                    : isCompleted
-                      ? "bg-white border-emerald-300 text-slate-900 hover:border-emerald-500 hover:bg-emerald-50/50"
-                      : "bg-white border-slate-200 text-slate-500 hover:border-emerald-300 hover:bg-emerald-50/20"
+                  ? "bg-emerald-600 text-white border-emerald-600 shadow-md shadow-emerald-600/20 ring-2 ring-emerald-400/40"
+                  : isCompleted
+                    ? "bg-white border-emerald-300 text-slate-900 hover:border-emerald-500 hover:bg-emerald-50/50"
+                    : "bg-white border-slate-200 text-slate-500 hover:border-emerald-300 hover:bg-emerald-50/20"
                   }`}
               >
                 <div
                   className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl font-black text-xs transition ${isActive
-                      ? "bg-white text-emerald-800 shadow-xs"
-                      : isCompleted
-                        ? "bg-emerald-100 text-emerald-700 border border-emerald-300"
-                        : "bg-slate-100 text-slate-600"
+                    ? "bg-white text-emerald-800 shadow-xs"
+                    : isCompleted
+                      ? "bg-emerald-100 text-emerald-700 border border-emerald-300"
+                      : "bg-slate-100 text-slate-600"
                     }`}
                 >
                   {isCompleted ? <Check size={16} className="stroke-[3]" /> : item.step}
@@ -4248,8 +4248,8 @@ ${renderMemoDirectivesHtml(memoContent)}
                     type="button"
                     onClick={() => setIsSourceMode(!isSourceMode)}
                     className={`inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1.5 rounded-lg transition cursor-pointer border ${isSourceMode
-                        ? "bg-slate-900 text-emerald-400 border-slate-800 shadow-xs"
-                        : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
+                      ? "bg-slate-900 text-emerald-400 border-slate-800 shadow-xs"
+                      : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
                       }`}
                     title="Toggle between Live WYSIWYG Sheet and HTML Source Code"
                   >
@@ -4381,8 +4381,8 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                   type="button"
                   onClick={() => setSignatoryLayout("dual")}
                   className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${signatoryLayout === "dual"
-                      ? "bg-emerald-600 text-white shadow-xs"
-                      : "text-slate-600 hover:text-slate-900"
+                    ? "bg-emerald-600 text-white shadow-xs"
+                    : "text-slate-600 hover:text-slate-900"
                     }`}
                 >
                   Dual Signatory (HRMD + CEO)
@@ -4391,8 +4391,8 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                   type="button"
                   onClick={() => setSignatoryLayout("single")}
                   className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${signatoryLayout === "single"
-                      ? "bg-emerald-600 text-white shadow-xs"
-                      : "text-slate-600 hover:text-slate-900"
+                    ? "bg-emerald-600 text-white shadow-xs"
+                    : "text-slate-600 hover:text-slate-900"
                     }`}
                 >
                   Single Signatory (HRMD Only)
@@ -5052,8 +5052,8 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                       type="button"
                       onClick={() => toggleCompanyInclusion(comp.id)}
                       className={`relative flex flex-col items-center text-center p-3 rounded-xl border-2 transition cursor-pointer ${isIncluded
-                          ? "bg-emerald-50/70 border-emerald-500 shadow-2xs"
-                          : "bg-slate-50/80 border-slate-200 opacity-60 hover:opacity-90"
+                        ? "bg-emerald-50/70 border-emerald-500 shadow-2xs"
+                        : "bg-slate-50/80 border-slate-200 opacity-60 hover:opacity-90"
                         }`}
                     >
                       {/* Checkbox Status Icon */}
@@ -5078,8 +5078,8 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
 
                       <span
                         className={`mt-2 text-[9px] font-black uppercase px-2 py-0.5 rounded-full border ${isIncluded
-                            ? "bg-emerald-100 text-emerald-800 border-emerald-300"
-                            : "bg-rose-50 text-rose-700 border-rose-200"
+                          ? "bg-emerald-100 text-emerald-800 border-emerald-300"
+                          : "bg-rose-50 text-rose-700 border-rose-200"
                           }`}
                       >
                         {isIncluded ? "✓ Included" : "✕ Excluded"}
@@ -5111,8 +5111,8 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                         if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
                       }}
                       className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[11px] font-bold transition cursor-pointer ${isIncluded
-                          ? "bg-emerald-50/80 hover:bg-emerald-100 text-emerald-900 border-emerald-200"
-                          : "bg-slate-100 text-slate-500 border-slate-200 opacity-60"
+                        ? "bg-emerald-50/80 hover:bg-emerald-100 text-emerald-900 border-emerald-200"
+                        : "bg-slate-100 text-slate-500 border-slate-200 opacity-60"
                         }`}
                       title={`Jump to ${company.name}`}
                     >
@@ -5161,8 +5161,8 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                       }
                     }}
                     className={`inline-flex items-center gap-2 rounded-xl font-bold px-3.5 py-2 text-xs transition cursor-pointer ${totalCompanyRecipients === 0
-                        ? "border border-amber-200 bg-amber-50 hover:bg-amber-100 text-amber-900 shadow-2xs"
-                        : "bg-emerald-700 hover:bg-emerald-600 text-white shadow-xs"
+                      ? "border border-amber-200 bg-amber-50 hover:bg-amber-100 text-amber-900 shadow-2xs"
+                      : "bg-emerald-700 hover:bg-emerald-600 text-white shadow-xs"
                       }`}
                     title={
                       totalCompanyRecipients === 0
@@ -5212,8 +5212,8 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                       type="button"
                       onClick={() => setPaperSize("auto")}
                       className={`px-2.5 py-1 rounded-md cursor-pointer transition ${paperSize === "auto"
-                          ? "bg-slate-900 text-white shadow-2xs font-bold"
-                          : "text-slate-600 hover:text-slate-900 font-medium"
+                        ? "bg-slate-900 text-white shadow-2xs font-bold"
+                        : "text-slate-600 hover:text-slate-900 font-medium"
                         }`}
                       title="Auto-detect Short, A4 or Long/Legal based on directives length"
                     >
@@ -5223,8 +5223,8 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                       type="button"
                       onClick={() => setPaperSize("short")}
                       className={`px-2.5 py-1 rounded-md cursor-pointer transition ${paperSize === "short"
-                          ? "bg-slate-900 text-white shadow-2xs font-bold"
-                          : "text-slate-600 hover:text-slate-900 font-medium"
+                        ? "bg-slate-900 text-white shadow-2xs font-bold"
+                        : "text-slate-600 hover:text-slate-900 font-medium"
                         }`}
                       title="Philippine Short Bond Paper / US Letter (8.5 x 11 in / 215.9 x 279.4 mm)"
                     >
@@ -5234,8 +5234,8 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                       type="button"
                       onClick={() => setPaperSize("a4")}
                       className={`px-2.5 py-1 rounded-md cursor-pointer transition ${paperSize === "a4"
-                          ? "bg-slate-900 text-white shadow-2xs font-bold"
-                          : "text-slate-600 hover:text-slate-900 font-medium"
+                        ? "bg-slate-900 text-white shadow-2xs font-bold"
+                        : "text-slate-600 hover:text-slate-900 font-medium"
                         }`}
                       title="Standard A4 Paper (210 x 297 mm)"
                     >
@@ -5245,8 +5245,8 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                       type="button"
                       onClick={() => setPaperSize("legal13")}
                       className={`px-2.5 py-1 rounded-md cursor-pointer transition ${paperSize === "legal13"
-                          ? "bg-slate-900 text-white shadow-2xs font-bold"
-                          : "text-slate-600 hover:text-slate-900 font-medium"
+                        ? "bg-slate-900 text-white shadow-2xs font-bold"
+                        : "text-slate-600 hover:text-slate-900 font-medium"
                         }`}
                       title="Philippine Long Bond Paper / Folio (8.5 x 13 in)"
                     >
@@ -5256,8 +5256,8 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                       type="button"
                       onClick={() => setPaperSize("legal14")}
                       className={`px-2.5 py-1 rounded-md cursor-pointer transition ${paperSize === "legal14"
-                          ? "bg-slate-900 text-white shadow-2xs font-bold"
-                          : "text-slate-600 hover:text-slate-900 font-medium"
+                        ? "bg-slate-900 text-white shadow-2xs font-bold"
+                        : "text-slate-600 hover:text-slate-900 font-medium"
                         }`}
                       title="US Legal Paper (8.5 x 14 in)"
                     >
@@ -5518,8 +5518,8 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                       type="button"
                       onClick={() => setPreviewViewMode("slide")}
                       className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md cursor-pointer transition ${previewViewMode === "slide"
-                          ? "bg-slate-900 text-white font-bold shadow-2xs"
-                          : "text-slate-600 hover:text-slate-900 font-medium"
+                        ? "bg-slate-900 text-white font-bold shadow-2xs"
+                        : "text-slate-600 hover:text-slate-900 font-medium"
                         }`}
                       title="Slide View (Focus 1 memo at a time, flip with Left / Right arrows)"
                     >
@@ -5530,8 +5530,8 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                       type="button"
                       onClick={() => setPreviewViewMode("scroll")}
                       className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md cursor-pointer transition ${previewViewMode === "scroll"
-                          ? "bg-slate-900 text-white font-bold shadow-2xs"
-                          : "text-slate-600 hover:text-slate-900 font-medium"
+                        ? "bg-slate-900 text-white font-bold shadow-2xs"
+                        : "text-slate-600 hover:text-slate-900 font-medium"
                         }`}
                       title="Continuous Scroll View (Show all sheets vertically)"
                     >
@@ -5561,8 +5561,8 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                         }
                       }}
                       className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs transition cursor-pointer shrink-0 ${isSelected
-                          ? "bg-slate-900 text-white border-slate-900 font-bold shadow-xs"
-                          : "bg-white hover:bg-slate-50 text-slate-700 border-slate-200 font-medium"
+                        ? "bg-slate-900 text-white border-slate-900 font-bold shadow-xs"
+                        : "bg-white hover:bg-slate-50 text-slate-700 border-slate-200 font-medium"
                         }`}
                       title={`Jump to ${comp.name}`}
                     >
@@ -5625,8 +5625,8 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                         }}
                         style={{ width: "min(760px, 86vw)" }}
                         className={`shrink-0 relative transition-all duration-500 ease-out origin-center flex flex-col items-center ${isCenter
-                            ? "scale-100 opacity-100 z-20 pointer-events-auto shadow-2xl ring-1 ring-slate-900/10 rounded-2xl"
-                            : "scale-[0.84] sm:scale-[0.88] opacity-40 hover:opacity-75 z-10 cursor-pointer pointer-events-auto filter brightness-[0.97] hover:scale-[0.86] sm:hover:scale-[0.90]"
+                          ? "scale-100 opacity-100 z-20 pointer-events-auto shadow-2xl ring-1 ring-slate-900/10 rounded-2xl"
+                          : "scale-[0.84] sm:scale-[0.88] opacity-40 hover:opacity-75 z-10 cursor-pointer pointer-events-auto filter brightness-[0.97] hover:scale-[0.86] sm:hover:scale-[0.90]"
                           }`}
                       >
                         {!isCenter && (
@@ -5657,8 +5657,8 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                           type="button"
                           onClick={() => setPreviewEntityIndex(idx)}
                           className={`h-2 rounded-full transition-all duration-300 cursor-pointer ${isActive
-                              ? "w-8 sm:w-10 bg-slate-900 shadow-xs"
-                              : "w-3 sm:w-4 bg-slate-300 hover:bg-slate-400"
+                            ? "w-8 sm:w-10 bg-slate-900 shadow-xs"
+                            : "w-3 sm:w-4 bg-slate-300 hover:bg-slate-400"
                             }`}
                           title={`Go to ${comp.name} (${comp.code})`}
                         />
@@ -5786,8 +5786,8 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                   <div
                     key={dispatch.companyId}
                     className={`rounded-2xl border p-3.5 space-y-2 transition ${dispatch.recipients.length > 0
-                        ? "border-slate-200 bg-slate-50/80 hover:border-slate-300"
-                        : "border-rose-200 bg-rose-50/40"
+                      ? "border-slate-200 bg-slate-50/80 hover:border-slate-300"
+                      : "border-rose-200 bg-rose-50/40"
                       }`}
                   >
                     <div className="flex items-center justify-between flex-wrap gap-2">
@@ -5801,8 +5801,8 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                         </span>
                       </div>
                       <span className={`font-mono font-bold text-[11px] px-2.5 py-0.5 rounded-full border ${dispatch.recipients.length > 0
-                          ? "text-emerald-700 bg-emerald-100/70 border-emerald-200"
-                          : "text-rose-700 bg-rose-100/80 border-rose-300"
+                        ? "text-emerald-700 bg-emerald-100/70 border-emerald-200"
+                        : "text-rose-700 bg-rose-100/80 border-rose-300"
                         }`}>
                         {dispatch.recipients.length > 0
                           ? `${dispatch.recipients.length} Recipient${dispatch.recipients.length === 1 ? "" : "s"}`
@@ -5906,8 +5906,8 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
             {directSendStatus && (
               <div
                 className={`rounded-2xl p-3 text-xs flex items-center gap-2 border ${directSendStatus.type === "success"
-                    ? "bg-emerald-50 text-emerald-800 border-emerald-300"
-                    : "bg-rose-50 text-rose-800 border-rose-300"
+                  ? "bg-emerald-50 text-emerald-800 border-emerald-300"
+                  : "bg-rose-50 text-rose-800 border-rose-300"
                   }`}
               >
                 {directSendStatus.type === "success" ? (
@@ -5931,8 +5931,8 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                 }
               }}
               className={`w-full inline-flex items-center justify-center gap-2 rounded-2xl px-6 py-3.5 text-xs font-black text-white shadow-lg transition cursor-pointer ${totalCompanyRecipients === 0
-                  ? "bg-amber-600 hover:bg-amber-500 shadow-amber-700/20"
-                  : "bg-[#008559] hover:bg-[#00704a] shadow-emerald-700/20"
+                ? "bg-amber-600 hover:bg-amber-500 shadow-amber-700/20"
+                : "bg-[#008559] hover:bg-[#00704a] shadow-emerald-700/20"
                 }`}
             >
               {isSendingDirect ? (
@@ -6380,7 +6380,7 @@ function doGet(e) {
         const companyCodes = [
           { code: "ALL", label: "All Memos", count: savedMemos.length },
           { code: "GFC", label: "GFC", count: savedMemos.filter(m => resolveCompanyFromMemoRef(m.ref, m, companies).id === "glowing_fortune" || String(m.ref).includes("GFC")).length },
-          { code: "5ARG", label: "5ARG / SARG", count: savedMemos.filter(m => resolveCompanyFromMemoRef(m.ref, m, companies).id === "5a_royal" || String(m.ref).includes("SARG") || String(m.ref).includes("5ARG")).length },
+          { code: "5ARG", label: "5ARG", count: savedMemos.filter(m => resolveCompanyFromMemoRef(m.ref, m, companies).id === "5a_royal" || String(m.ref).includes("SARG") || String(m.ref).includes("5ARG")).length },
           { code: "LBC", label: "LBC", count: savedMemos.filter(m => resolveCompanyFromMemoRef(m.ref, m, companies).id === "lucky_betplay" || String(m.ref).includes("LBC")).length },
           { code: "SIMCON", label: "SIMCON", count: savedMemos.filter(m => resolveCompanyFromMemoRef(m.ref, m, companies).id === "simcon" || String(m.ref).includes("SIMCON")).length },
           { code: "SGC", label: "SGC", count: savedMemos.filter(m => resolveCompanyFromMemoRef(m.ref, m, companies).id === "sgc" || String(m.ref).includes("SGC")).length },
@@ -6447,16 +6447,14 @@ function doGet(e) {
                         key={item.code}
                         type="button"
                         onClick={() => setArchiveCompanyFilter(item.code)}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer whitespace-nowrap inline-flex items-center gap-1.5 border ${
-                          isActive
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer whitespace-nowrap inline-flex items-center gap-1.5 border ${isActive
                             ? "bg-slate-900 text-white border-slate-900 shadow-xs"
                             : "bg-slate-50 hover:bg-slate-100 text-slate-600 border-slate-200"
-                        }`}
+                          }`}
                       >
                         <span>{item.label}</span>
-                        <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
-                          isActive ? "bg-white/20 text-white" : "bg-slate-200 text-slate-700"
-                        }`}>
+                        <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${isActive ? "bg-white/20 text-white" : "bg-slate-200 text-slate-700"
+                          }`}>
                           {item.count}
                         </span>
                       </button>
@@ -6587,10 +6585,10 @@ function doGet(e) {
         <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 px-4 py-3 rounded-2xl bg-slate-950 text-white shadow-2xl border border-slate-800 animate-in fade-in slide-in-from-bottom-3 duration-200">
           <div
             className={`p-1.5 rounded-xl shrink-0 ${imageCopyToast.type === "success"
-                ? "bg-emerald-500/20 text-emerald-400"
-                : imageCopyToast.type === "download" || imageCopyToast.type === "fallback"
-                  ? "bg-sky-500/20 text-sky-400"
-                  : "bg-rose-500/20 text-rose-400"
+              ? "bg-emerald-500/20 text-emerald-400"
+              : imageCopyToast.type === "download" || imageCopyToast.type === "fallback"
+                ? "bg-sky-500/20 text-sky-400"
+                : "bg-rose-500/20 text-rose-400"
               }`}
           >
             {imageCopyToast.type === "success" ? (
