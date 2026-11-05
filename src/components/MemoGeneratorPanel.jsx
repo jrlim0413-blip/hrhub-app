@@ -11,7 +11,7 @@ import {
   Upload, Image, CheckSquare, Square, XCircle, Code, ShieldCheck, Key,
   Camera, Download, Bold, Italic, Underline, Strikethrough, Highlighter,
   List, ListOrdered, Shapes, Minus, Palette, Heading, Type, Eraser,
-  ALargeSmall, CaseUpper, Undo2, Redo2, Search
+  ALargeSmall, CaseUpper, Undo2, Redo2, Search, Award
 } from "lucide-react";
 import { processSignatureToTransparentPng } from "../lib/signatureImageProcessor";
 import { mergeProfilesWithStored } from "../lib/employeeStorage";
