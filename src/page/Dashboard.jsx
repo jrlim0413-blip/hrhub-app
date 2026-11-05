@@ -18,6 +18,7 @@ import ShiftAttendanceOverviewPanel from "../components/ShiftAttendanceOverviewP
 import PoliciesHandbooksPanel from "../components/PoliciesHandbooksPanel";
 import WeatherWidget from "../components/WeatherWidget";
 import MemoGeneratorPanel from "../components/MemoGeneratorPanel";
+import DocumentStudioPanel from "../components/DocumentStudioPanel";
 import IncidentReportPanel from "../components/IncidentReportPanel";
 import SupervisorsAttendancePanel from "../components/SupervisorsAttendancePanel";
 import RolePermissionMatrixPanel from "../components/RolePermissionMatrixPanel";
@@ -232,6 +233,14 @@ const WORKSPACE_TAB_DEFS = {
     activeClass: "bg-emerald-600 text-white ring-2 ring-emerald-300",
     activeIconClass: "text-white",
     inactiveIconClass: "text-emerald-600"
+  },
+  doc_studio: {
+    id: "doc_studio",
+    label: "Document Studio (Coupon Bond)",
+    icon: Award,
+    activeClass: "bg-amber-600 text-white ring-2 ring-amber-300",
+    activeIconClass: "text-white",
+    inactiveIconClass: "text-amber-600"
   },
   gross: {
     id: "gross",
@@ -2135,10 +2144,22 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
               currentUser={currentUser}
               initialDraft={aiGeneratedMemoDraft}
               onOpenAiBuddy={() => setAiDrawerOpen(true)}
+              onSwitchToDocStudio={() => handleOpenWorkspaceTab("doc_studio")}
               onNavigateToDirectory={() => {
                 setActiveView("communication");
                 setCommunicationTab("directory");
               }}
+            />
+          )}
+
+          {/* TAB: DOCUMENT & CERTIFICATE STUDIO (COUPON BOND) */}
+          {workspaceTab === "doc_studio" && (
+            <DocumentStudioPanel
+              currentUser={currentUser}
+              profiles={supabaseProfiles}
+              onClose={() => handleCloseWorkspaceTab(null, "doc_studio")}
+              onOpenAiBuddy={() => setAiDrawerOpen(true)}
+              onSwitchToMemo={() => handleOpenWorkspaceTab("memo")}
             />
           )}
 

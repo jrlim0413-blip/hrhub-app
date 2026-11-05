@@ -5,7 +5,7 @@ import {
   ChevronLeft, ChevronRight, User, ShieldCheck, FileText,
   AlertCircle, Search, Link2, Monitor, ArrowRight, Zap,
   Mic, MicOff, VideoOff, Maximize2, Minimize2, MessageSquare,
-  PhoneOff, ScreenShare, X, Send, Share2, Key, Tag
+  PhoneOff, ScreenShare, X, Send, Share2, Key, Tag, Award
 } from "lucide-react";
 import { API_CONFIG } from "../config/apiConfig";
 import {
@@ -1167,6 +1167,18 @@ Sent via HRHub Enterprise Portal`;
                   <span>Generate Official Memo</span>
                 </div>
                 <ArrowRight size={14} className="text-slate-400" />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setWorkspaceTab("doc_studio")}
+                className="w-full flex items-center justify-between p-2.5 rounded-xl border border-amber-200 bg-amber-50/40 hover:bg-amber-100/60 text-xs font-bold text-amber-900 transition cursor-pointer"
+              >
+                <div className="flex items-center gap-2">
+                  <Award size={15} className="text-amber-600" />
+                  <span>Document Studio (Coupon Bond)</span>
+                </div>
+                <ArrowRight size={14} className="text-amber-500" />
               </button>
 
               <button

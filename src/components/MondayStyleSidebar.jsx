@@ -42,6 +42,14 @@ export const FUNCTIONAL_WORKSPACE_TABS = [
     color: "text-emerald-600"
   },
   {
+    id: "doc_studio",
+    label: "Document Studio (Coupon Bond)",
+    icon: Award,
+    tag: "Certificates & Notices",
+    category: "hr",
+    color: "text-amber-600"
+  },
+  {
     id: "gross",
     label: "Gross Report",
     icon: BarChart3,
@@ -254,6 +262,13 @@ export default function MondayStyleSidebar({
           icon: FileText,
           tag: "Official Memo",
           tabId: "memo"
+        },
+        {
+          id: "doc_studio",
+          label: "Document Studio (Coupon Bond)",
+          icon: Award,
+          tag: "Certificates & Letters",
+          tabId: "doc_studio"
         },
         {
           id: "agents",

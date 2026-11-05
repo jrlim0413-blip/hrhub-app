@@ -715,7 +715,8 @@ export default function MemoGeneratorPanel({
   currentUser = null,
   initialDraft = null,
   onOpenAiBuddy,
-  onNavigateToDirectory
+  onNavigateToDirectory,
+  onSwitchToDocStudio
 }) {
   const userAccountKey = useMemo(() => getUserAccountKey(currentUser), [currentUser]);
   const initialUserSettings = useMemo(() => getLocalUserSettings(currentUser), [currentUser]);
@@ -3768,6 +3769,18 @@ ${renderMemoDirectivesHtml(memoContent)}
               <Archive size={14} className="text-emerald-400" />
               <span>Saved Records ({savedMemos.length})</span>
             </button>
+
+            {onSwitchToDocStudio && (
+              <button
+                type="button"
+                onClick={onSwitchToDocStudio}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-amber-500/40 bg-amber-500/20 px-3.5 py-2 text-xs font-bold text-amber-200 hover:bg-amber-500/30 hover:text-white transition shadow-sm cursor-pointer"
+                title="Open Coupon Bond Document & Certificate Studio"
+              >
+                <Award size={14} className="text-amber-300" />
+                <span>Document Studio</span>
+              </button>
+            )}
 
 
             {onOpenAiBuddy && (
