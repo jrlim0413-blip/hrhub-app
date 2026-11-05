@@ -45,7 +45,7 @@ export async function getSavedMemosFromDb(currentUser = null) {
       // Map database row columns to Memo object format
       const mapped = targetRows.map((row) => ({
         id: row.id,
-        ref: row.ref_no,
+        ref: (row.ref_no || "").replace(/-SARG-/gi, "-5ARG-").replace(/\bSARG\b/gi, "5ARG"),
         date: row.date,
         to: row.to_field,
         from: row.from_field,
@@ -89,7 +89,9 @@ export async function getAllGlobalMemoRefs() {
       .order("created_at", { ascending: false });
 
     if (!error && Array.isArray(data)) {
-      return data.map((r) => r.ref_no).filter(Boolean);
+      return data
+        .map((r) => (r.ref_no || "").replace(/-SARG-/gi, "-5ARG-").replace(/\bSARG\b/gi, "5ARG"))
+        .filter(Boolean);
     }
   } catch (err) {
     console.warn("Notice: Querying all global memo refs fallback to memory:", err);
@@ -100,7 +102,9 @@ export async function getAllGlobalMemoRefs() {
   memoryMemosStore.forEach((memoList) => {
     if (Array.isArray(memoList)) {
       memoList.forEach((m) => {
-        if (m.ref) allInMemory.push(m.ref);
+        if (m.ref) {
+          allInMemory.push(String(m.ref).replace(/-SARG-/gi, "-5ARG-").replace(/\bSARG\b/gi, "5ARG"));
+        }
       });
     }
   });
@@ -115,11 +119,13 @@ export async function saveMemoRecordToDb(currentUser = null, memoRecord = {}) {
 
   const id = memoRecord.id || `memo_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
   const now = new Date().toISOString();
+  const rawRef = memoRecord.ref || memoRecord.ref_no || `MEMO-${new Date().getFullYear()}-01`;
+  const cleanRef = String(rawRef).replace(/-SARG-/gi, "-5ARG-").replace(/\bSARG\b/gi, "5ARG");
 
   const payload = {
     id,
     user_id: accountKey,
-    ref_no: memoRecord.ref || memoRecord.ref_no || `MEMO-${new Date().getFullYear()}-01`,
+    ref_no: cleanRef,
     date: memoRecord.date || "",
     to_field: memoRecord.to || memoRecord.to_field || "",
     from_field: memoRecord.from || memoRecord.from_field || "",

@@ -547,40 +547,46 @@ export const DIRECTIVE_FONT_SIZES = [
 const sessionUsedRefs = new Set();
 
 /**
+ * Normalizes legacy references to guarantee official company codes (e.g. SARG -> 5ARG).
+ */
+export function sanitizeMemoRef(ref = "") {
+  if (!ref) return "";
+  return String(ref)
+    .replace(/-SARG-/gi, "-5ARG-")
+    .replace(/\bSARG\b/gi, "5ARG");
+}
+
+/**
  * Replace company code in a reference while strictly preserving the date-sequence suffix (e.g. 261023-01).
  */
 export function getCompanySpecificMemoRef(companyCode = "LBC", baseRef = "") {
-  if (!baseRef) return `MEMO-${new Date().getFullYear()}-${companyCode}`;
-  const parts = String(baseRef).trim().split("-");
+  const sanitizedRef = sanitizeMemoRef(baseRef);
+  if (!sanitizedRef) return `MEMO-${new Date().getFullYear()}-${companyCode}`;
+  const parts = sanitizedRef.trim().split("-");
   if (parts.length >= 4) {
     const existingCode = parts[2];
-    // If the baseRef already has this exact code or recognized alias (like SARG for 5ARG), keep it!
-    if (
-      existingCode === companyCode ||
-      (companyCode === "5ARG" && existingCode === "SARG") ||
-      (companyCode === "SARG" && existingCode === "5ARG")
-    ) {
-      return baseRef;
+    if (existingCode === companyCode) {
+      return sanitizedRef;
     }
     const prefix = parts.slice(0, 2).join("-"); // "MEMO-2026"
     const suffix = parts.slice(3).join("-"); // "261023-01" or "001"
     return `${prefix}-${companyCode}-${suffix}`;
   }
-  return baseRef.replace(/-(?:LBC|SARG|5ARG|SIMCON|GFC|GLOW|IMP|SGC|GTI|RMC|FES|OPC)-/i, `-${companyCode}-`);
+  return sanitizedRef.replace(/-(?:LBC|5ARG|SIMCON|GFC|GLOW|IMP|SGC|GTI|RMC|FES|OPC)-/i, `-${companyCode}-`);
 }
 
 /**
  * Resolves the matching company entity strictly based on the memorandum reference string.
  * Example:
  * - "MEMO-2026-GFC-261104-09" -> Glowing Fortune OPC (code: GFC)
- * - "MEMO-2026-SARG-261104-02" -> 5A Royal Gaming OPC (code: 5ARG / SARG)
+ * - "MEMO-2026-5ARG-261104-02" -> 5A Royal Gaming OPC (code: 5ARG)
  * - "MEMO-2026-LBC-..." -> Lucky Betplay Corporation (code: LBC)
  * - "MEMO-2026-SIMCON-..." -> Simpal Construction (code: SIMCON)
  * - "MEMO-2026-SGC-..." -> Simpal Group of Companies (code: SGC)
  * - "MEMO-2026-IMP-..." -> Imperial Gaming OPC (code: IMP)
  */
 export function resolveCompanyFromMemoRef(ref = "", m = null, allCompanies = COMPANIES) {
-  const cleanRef = String(ref || m?.ref || "").trim().toUpperCase();
+  const cleanRef = sanitizeMemoRef(String(ref || m?.ref || "").trim().toUpperCase());
 
   if (cleanRef) {
     // 1. Direct segment check: MEMO-YYYY-CODE-... or MEMO-CODE-...
@@ -591,7 +597,7 @@ export function resolveCompanyFromMemoRef(ref = "", m = null, allCompanies = COM
       const match = allCompanies.find((c) => {
         const cCode = String(c.code).toUpperCase();
         if (cCode === extractedCode) return true;
-        if (c.id === "5a_royal" && (extractedCode === "SARG" || extractedCode === "5ARG" || extractedCode === "5A")) return true;
+        if (c.id === "5a_royal" && (extractedCode === "5ARG" || extractedCode === "5A")) return true;
         if (c.id === "glowing_fortune" && (extractedCode === "GFC" || extractedCode === "GLOW")) return true;
         if (c.id === "lucky_betplay" && (extractedCode === "LBC" || extractedCode === "LB")) return true;
         if (c.id === "simcon" && (extractedCode === "SIMCON" || extractedCode === "SIM")) return true;
@@ -607,7 +613,7 @@ export function resolveCompanyFromMemoRef(ref = "", m = null, allCompanies = COM
       const c = allCompanies.find((x) => x.id === "glowing_fortune");
       if (c) return c;
     }
-    if (cleanRef.includes("-SARG-") || cleanRef.includes("-5ARG-") || cleanRef.includes("SARG") || cleanRef.includes("5ARG")) {
+    if (cleanRef.includes("-5ARG-") || cleanRef.includes("5ARG")) {
       const c = allCompanies.find((x) => x.id === "5a_royal");
       if (c) return c;
     }
@@ -637,10 +643,10 @@ export function resolveCompanyFromMemoRef(ref = "", m = null, allCompanies = COM
 
   // 4. Fallback to m.companyCode
   if (m?.companyCode) {
-    const cCode = String(m.companyCode).toUpperCase();
+    const cCode = sanitizeMemoRef(String(m.companyCode).toUpperCase());
     const comp = allCompanies.find((c) =>
       c.code.toUpperCase() === cCode ||
-      (c.id === "5a_royal" && (cCode === "SARG" || cCode === "5ARG"))
+      (c.id === "5a_royal" && cCode === "5ARG")
     );
     if (comp) return comp;
   }
@@ -1098,7 +1104,11 @@ export default function MemoGeneratorPanel({
           getAllGlobalMemoRefs()
         ]);
         if (isMounted) {
-          setSavedMemos(memos || []);
+          const sanitizedMemos = (memos || []).map((m) => ({
+            ...m,
+            ref: sanitizeMemoRef(m.ref)
+          }));
+          setSavedMemos(sanitizedMemos);
           if (!initialDraft?.ref && !initialUserSettings?.activeDraft?.ref) {
             setMemoRef((prevRef) => {
               const compCode = selectedCompany?.code || "LBC";
@@ -1610,7 +1620,7 @@ export default function MemoGeneratorPanel({
       companies
     ) || currentViewing || selectedCompany;
 
-    const actualRef = getCompanySpecificMemoRef(targetComp.code, memoRef);
+    const actualRef = sanitizeMemoRef(getCompanySpecificMemoRef(targetComp.code, memoRef));
 
     const newMemo = {
       id: "memo_" + Date.now(),
@@ -1683,8 +1693,9 @@ export default function MemoGeneratorPanel({
 
   // Load saved memo into current editor
   const handleLoadSavedMemo = (m) => {
+    const cleanRef = sanitizeMemoRef(m.ref);
     // 1. Resolve matching company entity strictly based on the memorandum reference!
-    const memoCompany = resolveCompanyFromMemoRef(m.ref, m, companies);
+    const memoCompany = resolveCompanyFromMemoRef(cleanRef, { ...m, ref: cleanRef }, companies);
 
     // 2. Set the selected company so Step 1, Step 2, Step 3, and Step 4 letterhead use this company
     setSelectedCompanyId(memoCompany.id);
@@ -1697,7 +1708,7 @@ export default function MemoGeneratorPanel({
     setPreviewEntityIndex(0);
 
     // 5. Populate form fields
-    if (m.ref) setMemoRef(m.ref);
+    if (cleanRef) setMemoRef(cleanRef);
     if (m.date) setMemoDate(m.date);
     if (m.to) setMemoTo(m.to);
     if (m.from) setMemoFrom(m.from);
@@ -6358,7 +6369,7 @@ function doGet(e) {
           const comp = resolveCompanyFromMemoRef(m.ref, m, companies);
           if (archiveCompanyFilter !== "ALL") {
             if (archiveCompanyFilter === "GFC" && comp.id !== "glowing_fortune" && !String(m.ref).includes("GFC")) return false;
-            if (archiveCompanyFilter === "5ARG" && comp.id !== "5a_royal" && !String(m.ref).includes("SARG") && !String(m.ref).includes("5ARG")) return false;
+            if (archiveCompanyFilter === "5ARG" && comp.id !== "5a_royal" && !String(m.ref).includes("5ARG")) return false;
             if (archiveCompanyFilter === "LBC" && comp.id !== "lucky_betplay" && !String(m.ref).includes("LBC")) return false;
             if (archiveCompanyFilter === "SIMCON" && comp.id !== "simcon" && !String(m.ref).includes("SIMCON")) return false;
             if (archiveCompanyFilter === "SGC" && comp.id !== "sgc" && !String(m.ref).includes("SGC")) return false;
@@ -6380,7 +6391,7 @@ function doGet(e) {
         const companyCodes = [
           { code: "ALL", label: "All Memos", count: savedMemos.length },
           { code: "GFC", label: "GFC", count: savedMemos.filter(m => resolveCompanyFromMemoRef(m.ref, m, companies).id === "glowing_fortune" || String(m.ref).includes("GFC")).length },
-          { code: "5ARG", label: "5ARG", count: savedMemos.filter(m => resolveCompanyFromMemoRef(m.ref, m, companies).id === "5a_royal" || String(m.ref).includes("SARG") || String(m.ref).includes("5ARG")).length },
+          { code: "5ARG", label: "5ARG", count: savedMemos.filter(m => resolveCompanyFromMemoRef(m.ref, m, companies).id === "5a_royal" || String(m.ref).includes("5ARG")).length },
           { code: "LBC", label: "LBC", count: savedMemos.filter(m => resolveCompanyFromMemoRef(m.ref, m, companies).id === "lucky_betplay" || String(m.ref).includes("LBC")).length },
           { code: "SIMCON", label: "SIMCON", count: savedMemos.filter(m => resolveCompanyFromMemoRef(m.ref, m, companies).id === "simcon" || String(m.ref).includes("SIMCON")).length },
           { code: "SGC", label: "SGC", count: savedMemos.filter(m => resolveCompanyFromMemoRef(m.ref, m, companies).id === "sgc" || String(m.ref).includes("SGC")).length },
@@ -6424,7 +6435,7 @@ function doGet(e) {
                     type="text"
                     value={archiveSearchQuery}
                     onChange={(e) => setArchiveSearchQuery(e.target.value)}
-                    placeholder="Search by reference code (e.g. GFC, SARG, LBC), subject, or recipient..."
+                    placeholder="Search by reference code (e.g. GFC, 5ARG, LBC), subject, or recipient..."
                     className="w-full pl-9 pr-8 py-2 text-xs rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:border-emerald-500 focus:outline-none transition shadow-2xs"
                   />
                   {archiveSearchQuery && (
@@ -6448,8 +6459,8 @@ function doGet(e) {
                         type="button"
                         onClick={() => setArchiveCompanyFilter(item.code)}
                         className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer whitespace-nowrap inline-flex items-center gap-1.5 border ${isActive
-                            ? "bg-slate-900 text-white border-slate-900 shadow-xs"
-                            : "bg-slate-50 hover:bg-slate-100 text-slate-600 border-slate-200"
+                          ? "bg-slate-900 text-white border-slate-900 shadow-xs"
+                          : "bg-slate-50 hover:bg-slate-100 text-slate-600 border-slate-200"
                           }`}
                       >
                         <span>{item.label}</span>
@@ -6509,7 +6520,7 @@ function doGet(e) {
                           <div className="min-w-0 flex-1 space-y-1">
                             <div className="flex items-center gap-2 flex-wrap">
                               <span className="font-mono text-xs font-black text-emerald-900 bg-emerald-100 px-2.5 py-0.5 rounded-md border border-emerald-300 shadow-2xs">
-                                {m.ref}
+                                {sanitizeMemoRef(m.ref)}
                               </span>
                               <span className="text-[11px] font-extrabold uppercase px-2 py-0.5 rounded-md bg-white text-slate-700 border border-slate-200 shadow-2xs">
                                 {comp.name}
@@ -6545,7 +6556,7 @@ function doGet(e) {
                           <button
                             type="button"
                             onClick={() => {
-                              if (window.confirm(`Delete saved memo ${m.ref} from records?`)) {
+                              if (window.confirm(`Delete saved memo ${sanitizeMemoRef(m.ref)} from records?`)) {
                                 handleDeleteSavedMemo(m.id);
                               }
                             }}
