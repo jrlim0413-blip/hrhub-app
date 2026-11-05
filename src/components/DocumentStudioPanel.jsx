@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import {
-  FileText, Award, ShieldAlert, X, Printer, Save, Archive,
+  FileText, Award, ShieldAlert, X, Printer, Save, Archive, Star, Pencil, Bookmark, PlusCircle, FilePlus,
   Search, RefreshCw, CheckCircle2, ChevronRight, Copy, Check,
   Sliders, Move, ArrowRight, ArrowUp, ArrowDown, Building2, UserCheck, Calendar,
   Download, Eye, Trash2, FileCheck, HelpCircle, Sparkles,
@@ -13,6 +13,7 @@ import {
   resolveCompanyFromMemoRef,
   sanitizeMemoRef
 } from "./MemoGeneratorPanel";
+import { getUserSettings, saveUserSettings } from "../lib/userSettingsStorage";
 import {
   generateUniqueDocRef,
   registerUsedDocRef,
@@ -794,6 +795,731 @@ function ElementVisualPreview({ item, selectedCompany, docRef, docDate }) {
   return null;
 }
 
+// ================= CUSTOM REUSABLE TEMPLATES STORAGE =================
+export const CUSTOM_TEMPLATES_STORAGE_KEY = "hrhub_doc_studio_custom_templates";
+
+export function getStoredCustomTemplates() {
+  try {
+    const raw = localStorage.getItem(CUSTOM_TEMPLATES_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveStoredCustomTemplates(templates = []) {
+  try {
+    localStorage.setItem(CUSTOM_TEMPLATES_STORAGE_KEY, JSON.stringify(templates));
+  } catch (e) {
+    console.error("Failed to save custom templates to localStorage:", e);
+  }
+}
+
+
+// ================= MODAL: EXECUTIVE TEMPLATE STUDIO & CUSTOMIZER =================
+// Full-featured, spacious, highly presentable customizer for all element categories
+function TemplateEditorModal({
+  isOpen,
+  initialData,
+  selectedCompany,
+  docRef,
+  docDate,
+  onClose,
+  onSave,
+  onSaveAndApply
+}) {
+  if (!isOpen) return null;
+
+  const [name, setName] = useState(initialData?.name || "");
+  const [description, setDescription] = useState(initialData?.description || "");
+  const [category, setCategory] = useState(initialData?.category || "body");
+  const [variant, setVariant] = useState(initialData?.variant || "body_standard");
+  const [formData, setFormData] = useState(initialData?.data || {});
+
+  const updateField = (key, val) => {
+    setFormData((prev) => ({ ...prev, [key]: val }));
+  };
+
+  const insertTag = (tag) => {
+    const current = formData.bodyText || "";
+    updateField("bodyText", current + (current ? " " : "") + tag);
+  };
+
+  const handleFormSubmit = (e) => {
+    e.preventDefault();
+    if (!name.trim()) return;
+    onSave({
+      id: initialData?.id || (initialData?.isCustom ? initialData.id : null),
+      name: name.trim(),
+      description: description.trim() || `Custom ${category} template`,
+      category,
+      variant,
+      data: formData,
+      isCustom: true
+    });
+  };
+
+  const handleSaveAndAddToPaper = () => {
+    if (!name.trim()) return;
+    const templateObj = {
+      id: initialData?.id || (initialData?.isCustom ? initialData.id : null),
+      name: name.trim(),
+      description: description.trim() || `Custom ${category} template`,
+      category,
+      variant,
+      data: formData,
+      isCustom: true
+    };
+    if (onSaveAndApply) {
+      onSaveAndApply(templateObj);
+    } else {
+      onSave(templateObj);
+    }
+  };
+
+  // Live preview representation
+  const previewItem = {
+    category,
+    variant,
+    name: name || "Custom Template",
+    data: formData
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-3 sm:p-6 backdrop-blur-md animate-in fade-in duration-200">
+      <div className="w-full max-w-6xl xl:max-w-7xl rounded-3xl border border-slate-200/90 bg-white p-6 sm:p-8 shadow-2xl space-y-5 max-h-[95vh] flex flex-col">
+        {/* Modal Top Header */}
+        <div className="flex items-center justify-between border-b border-slate-100 pb-4 shrink-0">
+          <div className="flex items-center gap-3.5">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-400 to-amber-500 text-slate-950 shadow-md">
+              <Bookmark size={24} />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight">
+                  Executive Template Studio
+                </h3>
+                <span className="text-[10px] font-black uppercase text-amber-900 bg-amber-100 px-2.5 py-0.5 rounded-full border border-amber-300">
+                  {category} • {variant}
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 font-medium mt-0.5">
+                Customize content, phrasing, and signatories. Changes are saved locally for instant 1-click reuse.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-2xl p-2.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 cursor-pointer transition"
+              title="Close Customizer"
+            >
+              <X size={22} />
+            </button>
+          </div>
+        </div>
+
+        {/* Modal Main Grid: Left (Rich Form Editor) & Right (Drafting Table & Real Bond Paper Preview) */}
+        <div className="flex-1 overflow-y-auto grid grid-cols-1 lg:grid-cols-12 gap-6 pr-1">
+          {/* LEFT COLUMN: Form Inputs (7 Cols) */}
+          <form onSubmit={handleFormSubmit} id="custom-template-form" className="lg:col-span-6 space-y-4 text-xs pr-1">
+            {/* Template Identity Card */}
+            <div className="p-4 rounded-2xl bg-slate-50/80 border border-slate-200 space-y-3">
+              <span className="text-[11px] font-black uppercase tracking-wider text-slate-500 block">
+                1. Template Identity &amp; Classification
+              </span>
+              <div>
+                <label className="block text-[11px] font-black text-slate-800 mb-1">
+                  Template Name *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="e.g. Mindanao Operations Mandatory Memo Directives"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 focus:outline-none font-bold text-slate-900 bg-white text-xs transition"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                  Description / Purpose
+                </label>
+                <input
+                  type="text"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="e.g. Standard 5-point directive block for branch audits and cash cutoff"
+                  className="w-full px-3.5 py-2 rounded-xl border border-slate-300 focus:border-amber-500 focus:outline-none text-slate-700 bg-white text-xs transition"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 text-slate-600">
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 block mb-0.5">Category</span>
+                  <span className="font-black text-xs text-slate-900 bg-white px-3 py-1.5 rounded-lg border border-slate-200 block truncate uppercase">
+                    {category}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 block mb-0.5">Design Variant</span>
+                  <span className="font-mono text-[11px] text-slate-700 bg-white px-3 py-1.5 rounded-lg border border-slate-200 block truncate">
+                    {variant}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* DYNAMIC CONTENT FIELDS ACCORDING TO VARIANT */}
+            <div className="p-4 rounded-2xl bg-slate-50/80 border border-slate-200 space-y-3.5">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-black uppercase tracking-wider text-slate-500">
+                  2. Content &amp; Document Text
+                </span>
+                <span className="text-[10px] font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                  Entity: {selectedCompany.name}
+                </span>
+              </div>
+
+              {/* Addressing Grid */}
+              {variant === "address_memo_grid" && (
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-[11px] font-black text-slate-700 mb-1">FOR / TO:</label>
+                    <input
+                      type="text"
+                      value={formData.to || ""}
+                      onChange={(e) => updateField("to", e.target.value)}
+                      placeholder="ALL BRANCH MANAGERS, AREA COORDINATORS & FIELD STAFF"
+                      className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs text-slate-800 bg-white font-semibold"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-black text-slate-700 mb-1">FROM:</label>
+                    <input
+                      type="text"
+                      value={formData.from || ""}
+                      onChange={(e) => updateField("from", e.target.value)}
+                      placeholder="HUMAN RESOURCES DEPARTMENT"
+                      className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs text-slate-800 bg-white font-semibold"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-black text-slate-700 mb-1">SUBJECT:</label>
+                    <input
+                      type="text"
+                      value={formData.subject || ""}
+                      onChange={(e) => updateField("subject", e.target.value)}
+                      placeholder="MANDATORY DIRECTIVES & OPERATIONAL PROTOCOLS"
+                      className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs text-slate-900 bg-white uppercase font-black"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Formal Letter Heading */}
+              {variant === "address_formal_letter" && (
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-[11px] font-black text-slate-700 mb-1">Recipient Full Name:</label>
+                    <input
+                      type="text"
+                      value={formData.recipientName || ""}
+                      onChange={(e) => updateField("recipientName", e.target.value)}
+                      placeholder="MR. ROBERTO TAN"
+                      className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs text-slate-900 bg-white font-black"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Designation / Title:</label>
+                      <input
+                        type="text"
+                        value={formData.recipientTitle || ""}
+                        onChange={(e) => updateField("recipientTitle", e.target.value)}
+                        placeholder="Accredited Coordinator / Branch Supervisor"
+                        className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs text-slate-800 bg-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Company / Station:</label>
+                      <input
+                        type="text"
+                        value={formData.recipientCompany || ""}
+                        onChange={(e) => updateField("recipientCompany", e.target.value)}
+                        placeholder="Central Operations Station"
+                        className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs text-slate-800 bg-white"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-black text-slate-700 mb-1">Formal Salutation:</label>
+                    <input
+                      type="text"
+                      value={formData.salutation || ""}
+                      onChange={(e) => updateField("salutation", e.target.value)}
+                      placeholder="DEAR MR. TAN:"
+                      className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs text-slate-900 bg-white font-black"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Public Advisory Notice Banner */}
+              {variant === "address_public_notice" && (
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-[11px] font-black text-slate-700 mb-1">Banner Headline Title:</label>
+                    <input
+                      type="text"
+                      value={formData.bannerTitle || ""}
+                      onChange={(e) => updateField("bannerTitle", e.target.value)}
+                      placeholder="PUBLIC ADVISORY & FORMAL NOTICE"
+                      className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs text-slate-900 bg-white font-black uppercase"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Addressed Public / Group:</label>
+                    <input
+                      type="text"
+                      value={formData.to || ""}
+                      onChange={(e) => updateField("to", e.target.value)}
+                      placeholder="TO THE GENERAL PATRONIZING PUBLIC AND ALL GAMING OUTLETS"
+                      className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs text-slate-800 bg-white font-semibold"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Certificate Ribbon */}
+              {variant === "address_certificate_ribbon" && (
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Conferral Phrasing:</label>
+                    <input
+                      type="text"
+                      value={formData.conferralText || ""}
+                      onChange={(e) => updateField("conferralText", e.target.value)}
+                      placeholder="THIS CERTIFICATE IS PROUDLY CONFERRED UPON"
+                      className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs text-slate-700 bg-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-black text-slate-700 mb-1">Awardee Name:</label>
+                    <input
+                      type="text"
+                      value={formData.awardeeName || ""}
+                      onChange={(e) => updateField("awardeeName", e.target.value)}
+                      placeholder="MS. MARIA SANTOS"
+                      className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs text-slate-900 bg-white font-black uppercase"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Awardee Title / Division:</label>
+                    <input
+                      type="text"
+                      value={formData.awardeeTitle || ""}
+                      onChange={(e) => updateField("awardeeTitle", e.target.value)}
+                      placeholder="Senior Area Coordinator • Operations Division"
+                      className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs text-slate-800 bg-white"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Rewards Voucher */}
+              {variant === "body_rewards_voucher" && (
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-[11px] font-black text-slate-700 mb-1">Voucher Instrument Title:</label>
+                    <input
+                      type="text"
+                      value={formData.title || ""}
+                      onChange={(e) => updateField("title", e.target.value)}
+                      placeholder="CERTIFICATE OF MERIT & INCENTIVE VOUCHER"
+                      className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs text-slate-900 bg-white font-black"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Commendation / Citation Text:</label>
+                    <textarea
+                      rows={3}
+                      value={formData.citation || ""}
+                      onChange={(e) => updateField("citation", e.target.value)}
+                      placeholder="In sincere appreciation of outstanding dedication, exemplary teamwork, and consistent quota achievement..."
+                      className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs text-slate-800 bg-white leading-relaxed"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-black text-emerald-800 mb-1">Monetary Grant (Amount):</label>
+                      <input
+                        type="text"
+                        value={formData.voucherAmount || ""}
+                        onChange={(e) => updateField("voucherAmount", e.target.value)}
+                        placeholder="₱5,000.00"
+                        className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs font-black text-emerald-800 bg-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Voucher Serial Code:</label>
+                      <input
+                        type="text"
+                        value={formData.voucherCode || ""}
+                        onChange={(e) => updateField("voucherCode", e.target.value)}
+                        placeholder="VCH-2026-REWARD"
+                        className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs font-mono font-bold bg-white"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-600 mb-1">Validity:</label>
+                      <input
+                        type="text"
+                        value={formData.voucherValidity || ""}
+                        onChange={(e) => updateField("voucherValidity", e.target.value)}
+                        placeholder="Valid within 60 days from issuance"
+                        className="w-full px-3 py-1.5 rounded-lg border border-slate-300 text-xs text-slate-700 bg-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-600 mb-1">Terms:</label>
+                      <input
+                        type="text"
+                        value={formData.voucherTerms || ""}
+                        onChange={(e) => updateField("voucherTerms", e.target.value)}
+                        placeholder="Redeemable at Central Finance Depot."
+                        className="w-full px-3 py-1.5 rounded-lg border border-slate-300 text-xs text-slate-700 bg-white"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Numbered Directives */}
+              {variant === "body_numbered_directives" && (
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-[11px] font-black text-slate-700 mb-1">Directives Heading:</label>
+                    <input
+                      type="text"
+                      value={formData.title || ""}
+                      onChange={(e) => updateField("title", e.target.value)}
+                      placeholder="DIRECTIVES & MANDATORY PROTOCOLS"
+                      className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs text-slate-900 bg-white font-black"
+                    />
+                  </div>
+                  <div>
+                    <div className="flex justify-between items-center mb-1">
+                      <label className="text-[11px] font-bold text-slate-700">Directive Items (One per line):</label>
+                      <span className="text-[10px] text-amber-700 italic">Enter each rule on a new line</span>
+                    </div>
+                    <textarea
+                      rows={6}
+                      value={Array.isArray(formData.items) ? formData.items.join("\n") : (formData.itemsText || "")}
+                      onChange={(e) => {
+                        const lines = e.target.value.split("\n");
+                        updateField("items", lines);
+                        updateField("itemsText", e.target.value);
+                      }}
+                      placeholder="Strict compliance with daily cash turnover cut-off time of 5:00 PM.\nUnauthorized transactions are strictly prohibited.\nFailure to adhere shall result in immediate formal inquiry."
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs text-slate-800 bg-white leading-relaxed font-mono"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Warning Notice Callout */}
+              {variant === "body_warning_callout" && (
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-[11px] font-black text-rose-800 mb-1">Callout Header:</label>
+                    <input
+                      type="text"
+                      value={formData.boxTitle || ""}
+                      onChange={(e) => updateField("boxTitle", e.target.value)}
+                      placeholder="CRITICAL COMPLIANCE NOTICE"
+                      className="w-full px-3.5 py-2 rounded-xl border border-rose-300 text-xs text-rose-950 bg-white font-black"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Callout Message:</label>
+                    <textarea
+                      rows={4}
+                      value={formData.boxMessage || ""}
+                      onChange={(e) => updateField("boxMessage", e.target.value)}
+                      placeholder="Any deviation from authorized operational guidelines constitutes gross negligence..."
+                      className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs text-slate-800 bg-white leading-relaxed"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Standard Legal / Directive Body */}
+              {category === "body" && variant !== "body_rewards_voucher" && variant !== "body_numbered_directives" && variant !== "body_warning_callout" && (
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-[11px] font-black text-slate-700 mb-1">Clause Section Title:</label>
+                    <input
+                      type="text"
+                      value={formData.title || ""}
+                      onChange={(e) => updateField("title", e.target.value)}
+                      placeholder="e.g. NOTICE OF TERMINATION OF OPERATIONS"
+                      className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs text-slate-900 bg-white font-black"
+                    />
+                  </div>
+
+                  <div>
+                    <div className="flex justify-between items-center mb-1.5 flex-wrap gap-1">
+                      <label className="text-[11px] font-black text-slate-700">Directive Body Paragraph:</label>
+                      <div className="flex items-center gap-1">
+                        <span className="text-[10px] text-slate-400 font-bold">Quick Tags:</span>
+                        <button
+                          type="button"
+                          onClick={() => insertTag("[COMPANY_NAME]")}
+                          className="px-2 py-0.5 rounded bg-amber-100 hover:bg-amber-200 text-amber-950 font-bold text-[10px] transition cursor-pointer"
+                        >
+                          + [COMPANY_NAME]
+                        </button>
+                      </div>
+                    </div>
+                    <textarea
+                      rows={8}
+                      value={formData.bodyText || ""}
+                      onChange={(e) => updateField("bodyText", e.target.value)}
+                      placeholder="Pursuant to executive directives approved by Management, all personnel are hereby instructed..."
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:border-amber-500 focus:outline-none text-xs text-slate-800 bg-white leading-relaxed font-sans shadow-inner"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Dual Signatory */}
+              {variant === "sig_dual_executive" && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="p-3.5 rounded-xl bg-white border border-slate-200 space-y-2">
+                    <span className="text-[10px] font-black uppercase text-slate-500 block">Left Signatory (Prepared by):</span>
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-600 block mb-0.5">Label:</label>
+                      <input
+                        type="text"
+                        value={formData.leftLabel || ""}
+                        onChange={(e) => updateField("leftLabel", e.target.value)}
+                        placeholder="Prepared & Certified by:"
+                        className="w-full px-3 py-1.5 rounded-lg border border-slate-300 text-xs"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-600 block mb-0.5">Signatory Full Name:</label>
+                      <input
+                        type="text"
+                        value={formData.leftName || ""}
+                        onChange={(e) => updateField("leftName", e.target.value)}
+                        placeholder="JEVINCE JAYE S. JUBAY, CHRP"
+                        className="w-full px-3 py-1.5 rounded-lg border border-slate-300 text-xs font-bold uppercase"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-600 block mb-0.5">Official Designation:</label>
+                      <input
+                        type="text"
+                        value={formData.leftTitle || ""}
+                        onChange={(e) => updateField("leftTitle", e.target.value)}
+                        placeholder="HRMD Manager"
+                        className="w-full px-3 py-1.5 rounded-lg border border-slate-300 text-xs text-slate-600"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="p-3.5 rounded-xl bg-white border border-slate-200 space-y-2">
+                    <span className="text-[10px] font-black uppercase text-slate-500 block">Right Signatory (Approved by):</span>
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-600 block mb-0.5">Label:</label>
+                      <input
+                        type="text"
+                        value={formData.rightLabel || ""}
+                        onChange={(e) => updateField("rightLabel", e.target.value)}
+                        placeholder="Approved & Confirmed by:"
+                        className="w-full px-3 py-1.5 rounded-lg border border-slate-300 text-xs"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-600 block mb-0.5">Signatory Full Name:</label>
+                      <input
+                        type="text"
+                        value={formData.rightName || ""}
+                        onChange={(e) => updateField("rightName", e.target.value)}
+                        placeholder="CHARMIE JEAN M. SIMPAL"
+                        className="w-full px-3 py-1.5 rounded-lg border border-slate-300 text-xs font-bold uppercase"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-600 block mb-0.5">Official Designation:</label>
+                      <input
+                        type="text"
+                        value={formData.rightTitle || ""}
+                        onChange={(e) => updateField("rightTitle", e.target.value)}
+                        placeholder="President & CEO"
+                        className="w-full px-3 py-1.5 rounded-lg border border-slate-300 text-xs text-slate-600"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Single Signatory */}
+              {variant === "sig_single_official" && (
+                <div className="p-3.5 rounded-xl bg-white border border-slate-200 space-y-2">
+                  <span className="text-[10px] font-black uppercase text-slate-500 block">Official Authority Signatory:</span>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-600 block mb-0.5">Label:</label>
+                    <input
+                      type="text"
+                      value={formData.label || ""}
+                      onChange={(e) => updateField("label", e.target.value)}
+                      placeholder="Issued & Certified by:"
+                      className="w-full px-3 py-1.5 rounded-lg border border-slate-300 text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-600 block mb-0.5">Signatory Full Name:</label>
+                    <input
+                      type="text"
+                      value={formData.name || ""}
+                      onChange={(e) => updateField("name", e.target.value)}
+                      placeholder="JEVINCE JAYE S. JUBAY, CHRP"
+                      className="w-full px-3 py-1.5 rounded-lg border border-slate-300 text-xs font-bold uppercase"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-600 block mb-0.5">Official Designation:</label>
+                    <input
+                      type="text"
+                      value={formData.title || ""}
+                      onChange={(e) => updateField("title", e.target.value)}
+                      placeholder="HRMD Manager"
+                      className="w-full px-3 py-1.5 rounded-lg border border-slate-300 text-xs text-slate-600"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Triple Signatory */}
+              {variant === "sig_triple_authority" && (
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                  <div className="p-2.5 rounded-xl bg-white border border-slate-200 space-y-1.5">
+                    <span className="text-[9.5px] font-black uppercase text-slate-500 block">Col 1</span>
+                    <input type="text" value={formData.col1Label || ""} onChange={(e) => updateField("col1Label", e.target.value)} placeholder="Prepared by:" className="w-full px-2 py-1 text-xs rounded border border-slate-300" />
+                    <input type="text" value={formData.col1Name || ""} onChange={(e) => updateField("col1Name", e.target.value)} placeholder="Name" className="w-full px-2 py-1 text-xs rounded border border-slate-300 font-bold" />
+                    <input type="text" value={formData.col1Title || ""} onChange={(e) => updateField("col1Title", e.target.value)} placeholder="Title" className="w-full px-2 py-1 text-xs rounded border border-slate-300 text-slate-500" />
+                  </div>
+                  <div className="p-2.5 rounded-xl bg-white border border-slate-200 space-y-1.5">
+                    <span className="text-[9.5px] font-black uppercase text-slate-500 block">Col 2</span>
+                    <input type="text" value={formData.col2Label || ""} onChange={(e) => updateField("col2Label", e.target.value)} placeholder="Noted by:" className="w-full px-2 py-1 text-xs rounded border border-slate-300" />
+                    <input type="text" value={formData.col2Name || ""} onChange={(e) => updateField("col2Name", e.target.value)} placeholder="Name" className="w-full px-2 py-1 text-xs rounded border border-slate-300 font-bold" />
+                    <input type="text" value={formData.col2Title || ""} onChange={(e) => updateField("col2Title", e.target.value)} placeholder="Title" className="w-full px-2 py-1 text-xs rounded border border-slate-300 text-slate-500" />
+                  </div>
+                  <div className="p-2.5 rounded-xl bg-white border border-slate-200 space-y-1.5">
+                    <span className="text-[9.5px] font-black uppercase text-slate-500 block">Col 3</span>
+                    <input type="text" value={formData.col3Label || ""} onChange={(e) => updateField("col3Label", e.target.value)} placeholder="Approved by:" className="w-full px-2 py-1 text-xs rounded border border-slate-300" />
+                    <input type="text" value={formData.col3Name || ""} onChange={(e) => updateField("col3Name", e.target.value)} placeholder="Name" className="w-full px-2 py-1 text-xs rounded border border-slate-300 font-bold" />
+                    <input type="text" value={formData.col3Title || ""} onChange={(e) => updateField("col3Title", e.target.value)} placeholder="Title" className="w-full px-2 py-1 text-xs rounded border border-slate-300 text-slate-500" />
+                  </div>
+                </div>
+              )}
+
+              {/* Acknowledgment Slip */}
+              {variant === "sig_receiving_acknowledgment" && (
+                <div>
+                  <label className="block text-[11px] font-black text-slate-700 mb-1">Slip Header Banner:</label>
+                  <input
+                    type="text"
+                    value={formData.stubTitle || ""}
+                    onChange={(e) => updateField("stubTitle", e.target.value)}
+                    placeholder="ACKNOWLEDGMENT & RECEIVING SLIP"
+                    className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs text-slate-900 bg-white font-black"
+                  />
+                </div>
+              )}
+            </div>
+          </form>
+
+          {/* RIGHT COLUMN: Live 1:1 Coupon Bond Output Studio (5 Cols) */}
+          <div className="lg:col-span-6 flex flex-col space-y-2.5 bg-slate-100/80 p-4 sm:p-5 rounded-3xl border border-slate-200/90 shadow-inner">
+            <div className="flex items-center justify-between pb-1">
+              <div className="flex items-center gap-2">
+                <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                <span className="text-xs font-black uppercase text-slate-800 tracking-wide">
+                  Live 1:1 Coupon Bond Output
+                </span>
+              </div>
+              <span className="text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded-full bg-white text-slate-700 border border-slate-200 shadow-2xs font-mono">
+                {selectedCompany.code} letterhead
+              </span>
+            </div>
+
+            {/* Simulated Real White Bond Paper Sheet */}
+            <div className="flex-1 bg-white p-6 sm:p-7 rounded-2xl border border-slate-300/80 shadow-xl overflow-y-auto max-h-[500px] select-text">
+              <ElementVisualPreview
+                item={previewItem}
+                selectedCompany={selectedCompany}
+                docRef={docRef}
+                docDate={docDate}
+              />
+            </div>
+
+            <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1">
+              <span className="flex items-center gap-1.5 text-emerald-800 font-bold text-[10.5px]">
+                <Sparkles size={13} className="text-emerald-600" /> Matches printed coupon bond typography
+              </span>
+              <span className="text-slate-400 font-mono text-[10px]">
+                REF: {docRef}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Modal Bottom Footer Actions */}
+        <div className="pt-4 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3 shrink-0">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-xl border border-slate-200 bg-white hover:bg-slate-50 px-4 py-2.5 text-xs font-bold text-slate-700 cursor-pointer transition shadow-2xs"
+          >
+            Cancel
+          </button>
+
+          <div className="flex items-center gap-2.5">
+            <button
+              type="button"
+              onClick={handleSaveAndAddToPaper}
+              className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shadow-sm transition cursor-pointer"
+              title="Save to My Templates and immediately add to current bond paper"
+            >
+              <Plus size={14} className="text-amber-400" />
+              <span>Save &amp; Add to Paper</span>
+            </button>
+
+            <button
+              type="submit"
+              form="custom-template-form"
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs shadow-md transition cursor-pointer"
+            >
+              <Bookmark size={15} />
+              <span>Save to My Templates (Local)</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
 export default function DocumentStudioPanel({
   currentUser = null,
   profiles = [],
@@ -838,6 +1564,19 @@ export default function DocumentStudioPanel({
   const [isDragOverCanvas, setIsDragOverCanvas] = useState(false);
   const [dragOverIndex, setDragOverIndex] = useState(null);
   const [paletteActiveCategory, setPaletteActiveCategory] = useState("header");
+
+  // Custom Reusable Templates (Persisted locally in localStorage)
+  const [customTemplates, setCustomTemplates] = useState(() => {
+    try {
+      const raw = localStorage.getItem("hrhub_doc_custom_templates");
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  // Template Editor Modal State
+  const [templateEditorModal, setTemplateEditorModal] = useState(null);
 
   // Saved Documents Archive Modal State
   const [savedDocs, setSavedDocs] = useState([]);
@@ -893,6 +1632,101 @@ export default function DocumentStudioPanel({
     triggerToast(`Letterhead entity set to ${comp.name}`, "info");
   };
 
+  // Save custom template to local storage
+  const handleSaveCustomTemplate = (templateData) => {
+    const newTemplate = {
+      id: templateData.id || "tpl_" + Date.now() + "_" + Math.random().toString(36).substring(2, 7),
+      category: templateData.category || "body",
+      variant: templateData.variant || "body_standard",
+      name: templateData.name.trim() || "Untitled Custom Template",
+      description: templateData.description.trim() || `Custom ${templateData.category} template`,
+      data: templateData.data || {},
+      createdAt: new Date().toISOString(),
+      isCustom: true
+    };
+
+    setCustomTemplates((prev) => {
+      const existingIdx = prev.findIndex((t) => t.id === newTemplate.id);
+      let updated;
+      if (existingIdx >= 0) {
+        updated = [...prev];
+        updated[existingIdx] = newTemplate;
+      } else {
+        updated = [newTemplate, ...prev];
+      }
+      try {
+        localStorage.setItem("hrhub_doc_custom_templates", JSON.stringify(updated));
+      } catch (e) {
+        console.error("Failed to save custom templates to localStorage:", e);
+      }
+      return updated;
+    });
+
+    triggerToast(`✓ Template "${newTemplate.name}" saved locally!`, "success");
+    setTemplateEditorModal(null);
+  };
+
+  // Delete custom template from local storage
+  const handleDeleteCustomTemplate = (templateId) => {
+    setCustomTemplates((prev) => {
+      const updated = prev.filter((t) => t.id !== templateId);
+      try {
+        localStorage.setItem("hrhub_doc_custom_templates", JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+    triggerToast("Custom template deleted", "info");
+  };
+
+  // Open Template Editor from placed element on the bond paper
+  const handleOpenSaveAsTemplateFromPaper = (elem) => {
+    setTemplateEditorModal({
+      isOpen: true,
+      source: "paper",
+      item: {
+        category: elem.category,
+        variant: elem.variant,
+        name: elem.name,
+        description: `Custom template saved from bond paper`,
+        data: JSON.parse(JSON.stringify(elem.data || {}))
+      }
+    });
+  };
+
+  // Open Template Editor from palette card
+  const handleOpenTemplateEditorFromPalette = (item, cat) => {
+    setTemplateEditorModal({
+      isOpen: true,
+      source: "palette",
+      item: {
+        id: item.isCustom ? item.id : null,
+        category: item.category || cat,
+        variant: item.variant,
+        name: item.name,
+        description: item.description,
+        data: item.data ? JSON.parse(JSON.stringify(item.data)) : (item.defaultData ? JSON.parse(JSON.stringify(item.defaultData)) : {}),
+        isCustom: item.isCustom
+      }
+    });
+  };
+
+  // Create a brand new custom template
+  const handleCreateNewCustomTemplate = (cat) => {
+    const categoryPresets = MODULAR_BLOCK_PRESETS.find((p) => p.category === cat);
+    const defaultPreset = categoryPresets?.items?.[0];
+    setTemplateEditorModal({
+      isOpen: true,
+      source: "palette",
+      item: {
+        category: cat === "custom" ? "body" : cat,
+        variant: defaultPreset?.variant || (cat === "body" ? "body_standard" : cat === "addressing" ? "address_memo_grid" : "header_dual_logo"),
+        name: `New Custom ${(cat === "custom" ? "body" : cat).toUpperCase()} Template`,
+        description: "Custom user-defined template",
+        data: defaultPreset?.defaultData ? JSON.parse(JSON.stringify(defaultPreset.defaultData)) : {}
+      }
+    });
+  };
+
   // Add a block to the coupon bond paper at a specific index
   const addBlockToPaper = (item, insertIndex = null) => {
     const newElement = {
@@ -900,7 +1734,7 @@ export default function DocumentStudioPanel({
       category: item.category,
       variant: item.variant,
       name: item.name,
-      data: item.defaultData ? JSON.parse(JSON.stringify(item.defaultData)) : {}
+      data: item.data ? JSON.parse(JSON.stringify(item.data)) : (item.defaultData ? JSON.parse(JSON.stringify(item.defaultData)) : {})
     };
 
     setPaperElements((prev) => {
@@ -1578,7 +2412,19 @@ export default function DocumentStudioPanel({
                     >
                       {/* Floating Control Toolbar for this placed element */}
                       <div className="no-print absolute -top-3.5 right-2 z-20 hidden group-hover:flex items-center gap-1 bg-slate-900 text-white px-2 py-0.5 rounded-lg shadow-md text-[10px] font-bold">
-                        <span className="text-amber-400 mr-1">{el.name}</span>
+                        <span className="text-amber-400 mr-1 max-w-[150px] truncate">{el.name}</span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleOpenSaveAsTemplateFromPaper(el);
+                          }}
+                          className="px-2 py-0.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-black transition cursor-pointer flex items-center gap-1 text-[10px]"
+                          title="Save this edited element as a reusable Template"
+                        >
+                          <Bookmark size={11} />
+                          <span>Save Template</span>
+                        </button>
                         {index > 0 && (
                           <button
                             type="button"
@@ -2134,7 +2980,7 @@ export default function DocumentStudioPanel({
         </main>
 
         {/* ================= RIGHT SIDE: DRAGGABLE BUILDING BLOCKS PALETTE ================= */}
-        <aside className="no-print w-full lg:w-96 bg-white border-t lg:border-t-0 lg:border-l border-slate-200 flex flex-col shrink-0 shadow-lg z-20">
+        <aside className="no-print w-full lg:w-[560px] xl:w-[620px] bg-white border-t lg:border-t-0 lg:border-l border-slate-200 flex flex-col shrink-0 shadow-2xl z-20">
           {/* Palette Navigation Tabs */}
           <div className="p-3 border-b border-slate-100 flex items-center justify-between gap-1 overflow-x-auto scrollbar-none">
             {[
@@ -2142,7 +2988,8 @@ export default function DocumentStudioPanel({
               { id: "addressing", label: "Addressing", icon: AlignLeft },
               { id: "body", label: "Directives", icon: FileText },
               { id: "signatory", label: "Signatory", icon: UserCheck },
-              { id: "footer", label: "Footer", icon: Scale }
+              { id: "footer", label: "Footer", icon: Scale },
+              { id: "custom", label: `⭐ Templates (${customTemplates.length})`, icon: Bookmark }
             ].map((tab) => {
               const Icon = tab.icon;
               const isActive = paletteActiveCategory === tab.id;
@@ -2165,78 +3012,281 @@ export default function DocumentStudioPanel({
           </div>
 
           {/* Palette Items List */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-3">
+          <div className="flex-1 overflow-y-auto p-4 space-y-3.5">
+            {/* Header / Create button */}
             <div className="flex items-center justify-between text-xs text-slate-500 pb-1">
-              <span className="font-extrabold uppercase tracking-wider text-[10px]">
-                {MODULAR_BLOCK_PRESETS.find((c) => c.category === paletteActiveCategory)?.categoryLabel}
+              <span className="font-black uppercase tracking-wider text-[11px] text-slate-800">
+                {paletteActiveCategory === "custom"
+                  ? `My Saved Templates (${customTemplates.length})`
+                  : MODULAR_BLOCK_PRESETS.find((c) => c.category === paletteActiveCategory)?.categoryLabel}
               </span>
-              <span className="text-[10px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md font-black">
-                Hover to Preview • Drag to Bond
-              </span>
+              <button
+                type="button"
+                onClick={() => handleCreateNewCustomTemplate(paletteActiveCategory)}
+                className="px-2.5 py-1 rounded-xl bg-amber-100 hover:bg-amber-200 text-amber-900 font-extrabold text-[11px] transition cursor-pointer flex items-center gap-1"
+                title="Create a new custom template"
+              >
+                <PlusCircle size={13} />
+                <span>+ New Template</span>
+              </button>
             </div>
 
-            {MODULAR_BLOCK_PRESETS.find((c) => c.category === paletteActiveCategory)?.items.map((item) => (
-              <div
-                key={item.variant}
-                draggable
-                onDragStart={(e) => {
-                  setHoveredPreview(null);
-                  handlePaletteDragStart(e, { ...item, category: paletteActiveCategory });
-                }}
-                onMouseEnter={(e) => {
-                  const rect = e.currentTarget.getBoundingClientRect();
-                  setHoveredPreview({
-                    item: { ...item, category: paletteActiveCategory },
-                    x: e.clientX,
-                    y: e.clientY,
-                    cardTop: rect.top,
-                    cardLeft: rect.left,
-                  });
-                }}
-                onMouseMove={(e) => {
-                  setHoveredPreview((prev) => (prev ? { ...prev, x: e.clientX, y: e.clientY } : null));
-                }}
-                onMouseLeave={() => setHoveredPreview(null)}
-                className="p-3.5 rounded-2xl border border-slate-200 bg-white hover:border-amber-400 hover:shadow-md transition-all cursor-grab active:cursor-grabbing group space-y-2 shadow-2xs relative"
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <div className="p-1.5 rounded-lg bg-amber-100 text-amber-900 group-hover:bg-amber-500 group-hover:text-white transition">
-                      <GripVertical size={14} />
-                    </div>
-                    <h4 className="text-xs font-black text-slate-900">
-                      {item.name}
-                    </h4>
-                  </div>
-
-                  {/* Eye preview badge */}
-                  <span
-                    className="p-1 rounded-md text-slate-400 hover:text-amber-600 transition"
-                    title="Hover to see live preview"
-                  >
-                    <Eye size={13} />
-                  </span>
-                </div>
-
-                <p className="text-[11px] text-slate-500 line-clamp-2 leading-snug">
-                  {item.description}
-                </p>
-
-                <div className="flex items-center justify-between pt-2 border-t border-slate-100">
-                  <span className="text-[10px] text-slate-400 font-bold inline-flex items-center gap-1">
-                    <Move size={10} /> Drag or Click +
-                  </span>
+            {/* Custom Tab View */}
+            {paletteActiveCategory === "custom" ? (
+              customTemplates.length === 0 ? (
+                <div className="p-8 text-center text-slate-400 space-y-3 bg-slate-50/70 rounded-2xl border border-dashed border-slate-300 my-4">
+                  <Bookmark size={36} className="mx-auto text-amber-500/70" />
+                  <h4 className="font-black text-sm text-slate-800">No Custom Templates Yet</h4>
+                  <p className="text-xs text-slate-500 leading-relaxed max-w-xs mx-auto">
+                    You can customize any preset by clicking <strong>&quot;Customize&quot;</strong>, or edit any block on the bond paper and click <strong>&quot;Save as Template&quot;</strong>!
+                  </p>
                   <button
                     type="button"
-                    onClick={() => addBlockToPaper({ ...item, category: paletteActiveCategory })}
-                    className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-amber-400 hover:text-slate-950 text-slate-700 font-bold text-[11px] transition cursor-pointer flex items-center gap-1"
+                    onClick={() => setPaletteActiveCategory("header")}
+                    className="px-4 py-2 rounded-xl bg-amber-500 text-slate-950 font-black text-xs hover:bg-amber-400 transition cursor-pointer"
                   >
-                    <Plus size={12} />
-                    <span>Add to Paper</span>
+                    Browse Built-in Blocks
                   </button>
                 </div>
+              ) : (
+                <div className="space-y-3">
+                  {customTemplates.map((item) => (
+                    <div
+                      key={item.id}
+                      draggable
+                      onDragStart={(e) => {
+                        setHoveredPreview(null);
+                        handlePaletteDragStart(e, item);
+                      }}
+                      onMouseEnter={(e) => {
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        setHoveredPreview({
+                          item,
+                          x: e.clientX,
+                          y: e.clientY,
+                          cardTop: rect.top,
+                          cardLeft: rect.left,
+                        });
+                      }}
+                      onMouseMove={(e) => {
+                        setHoveredPreview((prev) => (prev ? { ...prev, x: e.clientX, y: e.clientY } : null));
+                      }}
+                      onMouseLeave={() => setHoveredPreview(null)}
+                      className="p-3.5 rounded-2xl border-2 border-amber-300 bg-amber-50/30 hover:border-amber-500 hover:shadow-md transition-all cursor-grab active:cursor-grabbing group space-y-2 shadow-2xs relative"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <div className="p-1.5 rounded-lg bg-amber-500 text-white transition">
+                            <Bookmark size={14} />
+                          </div>
+                          <div>
+                            <h4 className="text-xs font-black text-slate-900 leading-tight">
+                              {item.name}
+                            </h4>
+                            <span className="text-[9.5px] font-black uppercase text-amber-800 bg-amber-100 px-1.5 py-0.2 rounded border border-amber-300">
+                              {item.category} • {item.variant}
+                            </span>
+                          </div>
+                        </div>
+
+                        <span className="p-1 rounded-md text-slate-400 hover:text-amber-600 transition" title="Hover to see live preview">
+                          <Eye size={13} />
+                        </span>
+                      </div>
+
+                      <p className="text-[11px] text-slate-600 line-clamp-2 leading-snug">
+                        {item.description || "Custom saved template"}
+                      </p>
+
+                      <div className="flex items-center justify-between pt-2 border-t border-amber-200/60 gap-2">
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => handleOpenTemplateEditorFromPalette(item, item.category)}
+                            className="px-2.5 py-1 rounded-xl bg-white hover:bg-amber-100 text-slate-700 hover:text-amber-950 font-bold text-[11px] transition cursor-pointer flex items-center gap-1 border border-slate-200 shadow-2xs"
+                            title="Edit this template"
+                          >
+                            <Pencil size={11} className="text-amber-600" />
+                            <span>Edit</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteCustomTemplate(item.id)}
+                            className="p-1.5 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer"
+                            title="Delete custom template"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => addBlockToPaper(item)}
+                          className="px-3.5 py-1.5 rounded-xl bg-amber-400 hover:bg-amber-500 text-slate-950 font-black text-xs transition cursor-pointer flex items-center gap-1 shadow-xs"
+                        >
+                          <Plus size={13} />
+                          <span>Add to Paper</span>
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )
+            ) : (
+              /* Regular Category Items (Custom templates for this category first, then built-in presets) */
+              <div className="space-y-3">
+                {/* Custom templates matching this category */}
+                {customTemplates.filter((t) => t.category === paletteActiveCategory).map((item) => (
+                  <div
+                    key={item.id}
+                    draggable
+                    onDragStart={(e) => {
+                      setHoveredPreview(null);
+                      handlePaletteDragStart(e, item);
+                    }}
+                    onMouseEnter={(e) => {
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      setHoveredPreview({
+                        item,
+                        x: e.clientX,
+                        y: e.clientY,
+                        cardTop: rect.top,
+                        cardLeft: rect.left,
+                      });
+                    }}
+                    onMouseMove={(e) => {
+                      setHoveredPreview((prev) => (prev ? { ...prev, x: e.clientX, y: e.clientY } : null));
+                    }}
+                    onMouseLeave={() => setHoveredPreview(null)}
+                    className="p-3.5 rounded-2xl border-2 border-amber-300 bg-amber-50/20 hover:border-amber-500 hover:shadow-md transition-all cursor-grab active:cursor-grabbing group space-y-2 shadow-2xs relative"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <div className="p-1.5 rounded-lg bg-amber-500 text-white transition">
+                          <Bookmark size={14} />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-1.5">
+                            <h4 className="text-xs font-black text-slate-900">
+                              {item.name}
+                            </h4>
+                            <span className="text-[9px] font-black uppercase text-amber-900 bg-amber-200 px-1.5 py-0.2 rounded">
+                              ⭐ My Template
+                            </span>
+                          </div>
+                          <span className="text-[10px] text-slate-400 font-mono">{item.variant}</span>
+                        </div>
+                      </div>
+
+                      <span className="p-1 rounded-md text-slate-400 hover:text-amber-600 transition" title="Hover to see live preview">
+                        <Eye size={13} />
+                      </span>
+                    </div>
+
+                    <p className="text-[11px] text-slate-600 line-clamp-2 leading-snug">
+                      {item.description || "Custom saved template"}
+                    </p>
+
+                    <div className="flex items-center justify-between pt-2 border-t border-amber-200/50 gap-2">
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenTemplateEditorFromPalette(item, paletteActiveCategory)}
+                          className="px-2.5 py-1 rounded-xl bg-white hover:bg-amber-100 text-slate-700 hover:text-amber-950 font-bold text-[11px] transition cursor-pointer flex items-center gap-1 border border-slate-200 shadow-2xs"
+                          title="Edit this template"
+                        >
+                          <Pencil size={11} className="text-amber-600" />
+                          <span>Edit</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteCustomTemplate(item.id)}
+                          className="p-1.5 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer"
+                          title="Delete custom template"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => addBlockToPaper(item)}
+                        className="px-3.5 py-1.5 rounded-xl bg-amber-400 hover:bg-amber-500 text-slate-950 font-black text-xs transition cursor-pointer flex items-center gap-1 shadow-xs"
+                      >
+                        <Plus size={13} />
+                        <span>Add to Paper</span>
+                      </button>
+                    </div>
+                  </div>
+                ))}
+
+                {/* Built-in Presets */}
+                {MODULAR_BLOCK_PRESETS.find((c) => c.category === paletteActiveCategory)?.items.map((item) => (
+                  <div
+                    key={item.variant}
+                    draggable
+                    onDragStart={(e) => {
+                      setHoveredPreview(null);
+                      handlePaletteDragStart(e, { ...item, category: paletteActiveCategory });
+                    }}
+                    onMouseEnter={(e) => {
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      setHoveredPreview({
+                        item: { ...item, category: paletteActiveCategory },
+                        x: e.clientX,
+                        y: e.clientY,
+                        cardTop: rect.top,
+                        cardLeft: rect.left,
+                      });
+                    }}
+                    onMouseMove={(e) => {
+                      setHoveredPreview((prev) => (prev ? { ...prev, x: e.clientX, y: e.clientY } : null));
+                    }}
+                    onMouseLeave={() => setHoveredPreview(null)}
+                    className="p-3.5 rounded-2xl border border-slate-200 bg-white hover:border-amber-400 hover:shadow-md transition-all cursor-grab active:cursor-grabbing group space-y-2 shadow-2xs relative"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <div className="p-1.5 rounded-lg bg-amber-100 text-amber-900 group-hover:bg-amber-500 group-hover:text-white transition">
+                          <GripVertical size={14} />
+                        </div>
+                        <h4 className="text-xs font-black text-slate-900">
+                          {item.name}
+                        </h4>
+                      </div>
+
+                      {/* Eye preview badge */}
+                      <span className="p-1 rounded-md text-slate-400 hover:text-amber-600 transition" title="Hover to see live preview">
+                        <Eye size={13} />
+                      </span>
+                    </div>
+
+                    <p className="text-[11px] text-slate-500 line-clamp-2 leading-snug">
+                      {item.description}
+                    </p>
+
+                    <div className="flex items-center justify-between pt-2 border-t border-slate-100 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleOpenTemplateEditorFromPalette(item, paletteActiveCategory)}
+                        className="px-2.5 py-1 rounded-xl bg-slate-50 hover:bg-amber-100 text-slate-700 hover:text-amber-900 font-bold text-[11px] transition cursor-pointer flex items-center gap-1 border border-slate-200"
+                        title="Customize and save as your template"
+                      >
+                        <Pencil size={11} className="text-amber-600" />
+                        <span>Customize</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => addBlockToPaper({ ...item, category: paletteActiveCategory })}
+                        className="px-3.5 py-1.5 rounded-xl bg-amber-400 hover:bg-amber-500 text-slate-950 font-black text-xs transition cursor-pointer flex items-center gap-1 shadow-xs"
+                      >
+                        <Plus size={13} />
+                        <span>Add to Paper</span>
+                      </button>
+                    </div>
+                  </div>
+                ))}
               </div>
-            ))}
+            )}
           </div>
 
           {/* Quick Preset Tray at bottom of Sidebar */}
@@ -2277,6 +3327,24 @@ export default function DocumentStudioPanel({
           </div>
         </aside>
       </div>
+
+      {/* ================= SAVED DOCUMENTS ARCHIVE MODAL ================= */}
+      {/* ================= CUSTOMIZE & SAVE TEMPLATE MODAL ================= */}
+      {templateEditorModal && (
+        <TemplateEditorModal
+          isOpen={templateEditorModal.isOpen}
+          initialData={templateEditorModal.item}
+          selectedCompany={selectedCompany}
+          docRef={docRef}
+          docDate={docDate}
+          onClose={() => setTemplateEditorModal(null)}
+          onSave={handleSaveCustomTemplate}
+          onSaveAndApply={(tpl) => {
+            handleSaveCustomTemplate(tpl);
+            addBlockToPaper(tpl);
+          }}
+        />
+      )}
 
       {/* ================= SAVED DOCUMENTS ARCHIVE MODAL ================= */}
       {archiveModalOpen && (() => {
