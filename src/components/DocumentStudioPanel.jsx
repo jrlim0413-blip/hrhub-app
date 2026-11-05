@@ -6,7 +6,7 @@ import {
   Download, Eye, Trash2, FileCheck, HelpCircle, Sparkles,
   Layers, Lock, AlertTriangle, Scissors, Stamp, GripVertical,
   Plus, RotateCcw, Layout, Type, AlignLeft, AlignCenter,
-  Shield, QrCode, Receipt, Scale
+  Shield, QrCode, Receipt, Scale, Info
 } from "lucide-react";
 import {
   COMPANIES,
@@ -24,7 +24,7 @@ import {
 } from "../lib/savedDocumentsStorage";
 
 // ================= BOND PAPER SIZES WITH VISIBLE FRONTEND DIMENSIONS =================
-// Long bond is visibly 192px taller than Short bond, giving realistic proportional on-screen scaling!
+// Long bond is visibly 192px taller than Short bond on screen!
 export const PAPER_SIZES = [
   {
     id: "letter",
@@ -63,7 +63,6 @@ export const FONT_FAMILIES = [
 ];
 
 // ================= PALETTE LIBRARY: PURE MODULAR BUILDING BLOCKS =================
-// No textboxes, no form frames — pure, authentic printed document typography!
 export const MODULAR_BLOCK_PRESETS = [
   // 1. HEADERS (Iba't ibang Header Template Designs)
   {
@@ -379,6 +378,254 @@ I have secured a secondary backup communication pocket WiFi to prevent similar d
   }
 ];
 
+// ================= VISUAL MINI-PREVIEW COMPONENT FOR HOVER =================
+// Renders an authentic miniature visual depiction of the design on hover!
+function ElementVisualPreview({ item, selectedCompany, docRef, docDate }) {
+  if (!item) return null;
+
+  // Header Previews
+  if (item.category === "header") {
+    if (item.variant === "header_dual_logo") {
+      return (
+        <div className="border-b-2 border-emerald-600 pb-2 text-[10px] bg-white p-2 rounded shadow-2xs">
+          <div className="flex items-center justify-between gap-2">
+            <img src={selectedCompany.logoUrl} alt="logo" className="w-8 h-8 object-contain shrink-0" />
+            <div className="text-center flex-1">
+              <span className="font-black uppercase block text-[10px] leading-tight text-slate-900">{selectedCompany.name}</span>
+              <span className="text-[8px] text-emerald-800 font-semibold block">{selectedCompany.tagline}</span>
+              <span className="text-[7px] text-slate-500 block truncate">{selectedCompany.address}</span>
+            </div>
+            <img src={selectedCompany.rightLogoUrl || "/logos/group_emblem.jpg"} alt="emblem" className="w-8 h-8 object-contain shrink-0" />
+          </div>
+        </div>
+      );
+    }
+    if (item.variant === "header_minimal_left") {
+      return (
+        <div className="border-b border-slate-300 pb-2 text-[10px] bg-white p-2 rounded flex items-center justify-between gap-2 shadow-2xs">
+          <div className="flex items-center gap-2">
+            <img src={selectedCompany.logoUrl} alt="logo" className="w-7 h-7 object-contain" />
+            <div className="border-l border-amber-600 pl-1.5">
+              <span className="font-black text-[10px] uppercase block text-slate-900 leading-tight">{selectedCompany.name}</span>
+              <span className="text-[8px] text-slate-500 uppercase">{selectedCompany.category}</span>
+            </div>
+          </div>
+          <div className="text-right text-[7px] text-slate-400 font-mono">
+            <span>{selectedCompany.contact}</span>
+          </div>
+        </div>
+      );
+    }
+    if (item.variant === "header_formal_seal") {
+      return (
+        <div className="border-b border-double border-slate-800 pb-2 text-center bg-white p-2 rounded shadow-2xs space-y-0.5">
+          <img src={selectedCompany.logoUrl} alt="seal" className="w-7 h-7 mx-auto object-contain" />
+          <span className="font-black uppercase text-[10px] block text-slate-900">{selectedCompany.name}</span>
+          <span className="text-[7px] text-slate-500 block">{selectedCompany.address}</span>
+        </div>
+      );
+    }
+    if (item.variant === "header_compact_strip") {
+      return (
+        <div className="border-b border-emerald-600 pb-1 flex items-center justify-between bg-white p-1.5 rounded shadow-2xs text-[9px]">
+          <div className="flex items-center gap-1.5">
+            <img src={selectedCompany.logoUrl} alt="logo" className="w-4 h-4 object-contain" />
+            <span className="font-black uppercase">{selectedCompany.name}</span>
+          </div>
+          <span className="text-[7px] text-slate-500 font-mono">{selectedCompany.contact}</span>
+        </div>
+      );
+    }
+    if (item.variant === "header_aac_compliance") {
+      return (
+        <div className="border-b border-slate-900 pb-2 bg-white p-2 rounded shadow-2xs flex justify-between items-center text-[9px]">
+          <div className="flex items-center gap-2">
+            <img src={selectedCompany.logoUrl} alt="logo" className="w-6 h-6 object-contain" />
+            <div>
+              <span className="font-black uppercase block text-[10px]">{selectedCompany.name}</span>
+              <span className="text-[7px] text-emerald-800 font-bold">PCSO Authorized Agent Corporation</span>
+            </div>
+          </div>
+          <span className="text-[7px] font-mono border border-slate-300 px-1 py-0.5 rounded bg-slate-50">AAC-2026</span>
+        </div>
+      );
+    }
+  }
+
+  // Addressing Previews
+  if (item.category === "addressing") {
+    if (item.variant === "address_memo_grid") {
+      return (
+        <div className="border border-slate-300 rounded p-2 bg-slate-50 text-[9px] space-y-1 shadow-2xs">
+          <div className="flex justify-between font-bold text-slate-700 border-b pb-0.5">
+            <span>MEMORANDUM</span>
+            <span className="font-mono text-slate-500">{docRef}</span>
+          </div>
+          <div className="text-[8px] space-y-0.5">
+            <p><strong>TO:</strong> All Branch Supervisors &amp; Field Staff</p>
+            <p><strong>FROM:</strong> Human Resources Department</p>
+            <p><strong>DATE:</strong> {docDate}</p>
+            <p><strong>SUBJECT:</strong> Mandatory Operational Directives</p>
+          </div>
+        </div>
+      );
+    }
+    if (item.variant === "address_formal_letter") {
+      return (
+        <div className="bg-white p-2 rounded border border-slate-200 text-[8px] space-y-1 shadow-2xs">
+          <div className="text-right text-slate-500">{docDate}</div>
+          <p className="font-bold text-slate-900 uppercase">MR. ROBERTO TAN</p>
+          <p className="text-slate-600">Accredited Coordinator • Branch Operations</p>
+          <p className="font-bold text-slate-800 pt-0.5">DEAR MR. TAN:</p>
+        </div>
+      );
+    }
+    if (item.variant === "address_public_notice") {
+      return (
+        <div className="text-center p-2 rounded bg-white border border-slate-200 space-y-1 shadow-2xs">
+          <span className="text-[7px] font-mono font-bold bg-amber-100 px-1.5 py-0.2 rounded border border-amber-300 text-amber-900">{docRef}</span>
+          <p className="font-black text-[10px] uppercase tracking-wider text-slate-900">PUBLIC ADVISORY &amp; FORMAL NOTICE</p>
+          <div className="h-0.5 w-16 bg-amber-600 mx-auto" />
+          <p className="text-[8px] text-slate-600">TO THE GENERAL PATRONIZING PUBLIC AND ALL GAMING OUTLETS</p>
+        </div>
+      );
+    }
+    if (item.variant === "address_certificate_ribbon") {
+      return (
+        <div className="text-center p-2 rounded bg-white border border-slate-200 space-y-1 shadow-2xs">
+          <span className="text-[7px] font-bold tracking-widest text-amber-700 uppercase">THIS CERTIFICATE IS PROUDLY CONFERRED UPON</span>
+          <p className="font-black text-[11px] uppercase text-slate-900">MS. MARIA SANTOS</p>
+          <p className="text-[8px] text-slate-500">Senior Area Coordinator • Operations Division</p>
+        </div>
+      );
+    }
+  }
+
+  // Directives & Body Previews
+  if (item.category === "body") {
+    if (item.variant === "body_rewards_voucher") {
+      return (
+        <div className="space-y-1.5 bg-white p-2 rounded border border-slate-200 shadow-2xs">
+          <p className="text-[8px] text-slate-700 italic leading-snug">In sincere appreciation of outstanding dedication and quota performance...</p>
+          <div className="border border-amber-400 bg-amber-50 p-1.5 rounded flex justify-between items-center text-[8px]">
+            <div>
+              <span className="text-[7px] text-slate-500 block uppercase">Incentive Grant</span>
+              <strong className="text-emerald-800 text-[10px] font-black">₱5,000.00</strong>
+            </div>
+            <span className="font-mono text-[7px] bg-amber-200 px-1 rounded font-bold">VCH-2026-REWARD</span>
+          </div>
+        </div>
+      );
+    }
+    if (item.variant === "body_non_affiliation") {
+      return (
+        <div className="bg-white p-2 rounded border border-rose-200 text-[8px] space-y-1 shadow-2xs">
+          <strong className="text-rose-900 font-black block uppercase text-[9px]">Certificate of Non-Affiliation</strong>
+          <p className="text-slate-700 leading-snug">THIS IS TO CERTIFY that MR. JUAN DELA CRUZ is NOT an employee, agent, or representative of {selectedCompany.name}...</p>
+        </div>
+      );
+    }
+    if (item.variant === "body_termination_operations") {
+      return (
+        <div className="bg-white p-2 rounded border border-amber-200 text-[8px] space-y-1 shadow-2xs">
+          <strong className="text-amber-900 font-black block uppercase text-[9px]">Notice of Termination of Operations</strong>
+          <p className="text-slate-700 leading-snug">Permanent cessation of operations at Branch Outlet #14 effective Nov 15, 2026 with 48hr asset surrender...</p>
+        </div>
+      );
+    }
+    if (item.variant === "body_termination_agency") {
+      return (
+        <div className="bg-white p-2 rounded border border-slate-200 text-[8px] space-y-1 shadow-2xs">
+          <strong className="text-slate-900 font-black block uppercase text-[9px]">Termination of Agency Agreement</strong>
+          <p className="text-slate-700 leading-snug">Resolution to revoke Agency Agreement with 72-hour surrender demand for POS machines, SIMs, and IDs...</p>
+        </div>
+      );
+    }
+    if (item.variant === "body_letter_of_explain") {
+      return (
+        <div className="bg-white p-2 rounded border border-purple-200 text-[8px] space-y-1 shadow-2xs">
+          <strong className="text-purple-900 font-black block uppercase text-[9px]">Letter of Explanation (NTE Answer)</strong>
+          <p className="text-slate-700 leading-snug">Formal written response detailing factual chronology, cellular outage circumstances, and remedial commitment...</p>
+        </div>
+      );
+    }
+    if (item.variant === "body_warning_callout") {
+      return (
+        <div className="border-l-2 border-rose-600 bg-rose-50 p-1.5 rounded text-[8px] text-rose-900 shadow-2xs">
+          <strong>CRITICAL COMPLIANCE NOTICE:</strong> Non-compliance shall be dealt with under company administrative disciplinary sanctions.
+        </div>
+      );
+    }
+    return (
+      <div className="bg-white p-2 rounded border border-slate-200 text-[8px] text-slate-700 leading-snug shadow-2xs">
+        <p>Pursuant to executive directives approved by Management, all personnel are hereby instructed to comply...</p>
+      </div>
+    );
+  }
+
+  // Signatory Previews
+  if (item.category === "signatory") {
+    if (item.variant === "sig_dual_executive") {
+      return (
+        <div className="grid grid-cols-2 gap-3 bg-white p-2 rounded border border-slate-200 text-[8px] shadow-2xs">
+          <div>
+            <span className="text-[7px] text-slate-500 block">Prepared by:</span>
+            <div className="border-b border-slate-800 pt-3 pb-0.5 font-bold text-slate-900">JEVINCE JAYE S. JUBAY</div>
+            <span className="text-[7px] text-slate-600 block">HRMD Manager</span>
+          </div>
+          <div className="text-right">
+            <span className="text-[7px] text-slate-500 block">Approved by:</span>
+            <div className="border-b border-slate-800 pt-3 pb-0.5 font-bold text-slate-900">CHARMIE JEAN M. SIMPAL</div>
+            <span className="text-[7px] text-slate-600 block">President &amp; CEO</span>
+          </div>
+        </div>
+      );
+    }
+    if (item.variant === "sig_single_official") {
+      return (
+        <div className="bg-white p-2 rounded border border-slate-200 text-[8px] shadow-2xs">
+          <span className="text-[7px] text-slate-500 block">Issued by:</span>
+          <div className="border-b border-slate-800 pt-3 pb-0.5 font-bold text-slate-900 max-w-[130px]">JEVINCE JAYE S. JUBAY</div>
+          <span className="text-[7px] text-slate-600 block">HRMD Manager</span>
+        </div>
+      );
+    }
+    if (item.variant === "sig_receiving_acknowledgment") {
+      return (
+        <div className="border border-dashed border-slate-400 bg-slate-50 p-1.5 rounded text-[7px] space-y-1 shadow-2xs">
+          <span className="font-bold block uppercase text-slate-800">Acknowledgment &amp; Receiving Slip</span>
+          <div className="grid grid-cols-3 gap-1 pt-1 border-t border-slate-200">
+            <span className="border-b border-slate-400 pb-0.5 text-slate-400">Name:</span>
+            <span className="border-b border-slate-400 pb-0.5 text-slate-400">Signature:</span>
+            <span className="border-b border-slate-400 pb-0.5 text-slate-400">Date/Time:</span>
+          </div>
+        </div>
+      );
+    }
+  }
+
+  // Footer Previews
+  if (item.category === "footer") {
+    if (item.variant === "footer_notary_jurat") {
+      return (
+        <div className="bg-white p-1.5 rounded border border-slate-200 text-[7px] text-slate-600 space-y-0.5 shadow-2xs">
+          <p className="font-bold">REPUBLIC OF THE PHILIPPINES ) S.S.</p>
+          <p className="leading-snug">SUBSCRIBED AND SWORN to before me this ___ day of ________ 2026...</p>
+          <div className="text-right pt-1 font-bold text-slate-800">NOTARY PUBLIC</div>
+        </div>
+      );
+    }
+    return (
+      <div className="bg-white p-1 rounded border border-slate-200 text-[7px] text-slate-500 flex justify-between items-center shadow-2xs">
+        <span>Official Instrument • HrHub Corporate</span>
+        <span className="font-mono">SEC-VERIFIED</span>
+      </div>
+    );
+  }
+
+  return null;
+}
+
 export default function DocumentStudioPanel({
   currentUser = null,
   profiles = [],
@@ -415,6 +662,9 @@ export default function DocumentStudioPanel({
 
   // Active / Selected element for fine-tuning
   const [activeElementId, setActiveElementId] = useState(null);
+
+  // Hover visual preview state
+  const [hoveredPreviewItem, setHoveredPreviewItem] = useState(null);
 
   // Drag-and-Drop Canvas State
   const [isDragOverCanvas, setIsDragOverCanvas] = useState(false);
@@ -482,7 +732,7 @@ export default function DocumentStudioPanel({
       category: item.category,
       variant: item.variant,
       name: item.name,
-      data: JSON.parse(JSON.stringify(item.defaultData))
+      data: item.defaultData ? JSON.parse(JSON.stringify(item.defaultData)) : {}
     };
 
     setPaperElements((prev) => {
@@ -498,7 +748,7 @@ export default function DocumentStudioPanel({
     triggerToast(`✓ Added "${item.name}" to Coupon Bond`, "success");
   };
 
-  // Update field inside a paper element
+  // Update field inside a paper element safely
   const updateElementData = (elemId, key, value) => {
     setPaperElements((prev) =>
       prev.map((el) => {
@@ -506,7 +756,7 @@ export default function DocumentStudioPanel({
         return {
           ...el,
           data: {
-            ...el.data,
+            ...(el.data || {}),
             [key]: value
           }
         };
@@ -600,7 +850,7 @@ export default function DocumentStudioPanel({
       category: item.category,
       variant: item.variant,
       name: item.name,
-      data: JSON.parse(JSON.stringify(item.defaultData))
+      data: item.defaultData ? JSON.parse(JSON.stringify(item.defaultData)) : {}
     }));
 
     setPaperElements(constructed);
@@ -659,8 +909,8 @@ export default function DocumentStudioPanel({
 
     let docTitle = "Official Document";
     for (const el of paperElements) {
-      if (el.data.title) { docTitle = el.data.title; break; }
-      if (el.data.bannerTitle) { docTitle = el.data.bannerTitle; break; }
+      if (el.data?.title) { docTitle = el.data.title; break; }
+      if (el.data?.bannerTitle) { docTitle = el.data.bannerTitle; break; }
     }
 
     const docRecord = {
@@ -907,6 +1157,40 @@ export default function DocumentStudioPanel({
         </div>
       )}
 
+      {/* ================= FLOATING HOVER VISUAL PREVIEW MODAL ================= */}
+      {/* Appears when hovering over any element in the palette on the right */}
+      {hoveredPreviewItem && (
+        <div className="no-print fixed right-[405px] top-24 z-50 w-96 max-w-[calc(100vw-430px)] bg-white rounded-2xl border-2 border-amber-400 shadow-2xl p-4 animate-in fade-in zoom-in-95 duration-150 pointer-events-none">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-2 mb-2.5">
+            <div className="flex items-center gap-1.5">
+              <Eye size={15} className="text-amber-600" />
+              <span className="text-xs font-black uppercase text-slate-900 tracking-wide">
+                Live Preview: {hoveredPreviewItem.name}
+              </span>
+            </div>
+            <span className="text-[10px] font-extrabold uppercase text-amber-800 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200">
+              {hoveredPreviewItem.category}
+            </span>
+          </div>
+
+          <div className="bg-slate-50/70 p-3 rounded-xl border border-slate-200 pointer-events-none text-xs overflow-hidden">
+            <ElementVisualPreview
+              item={hoveredPreviewItem}
+              selectedCompany={selectedCompany}
+              docRef={docRef}
+              docDate={docDate}
+            />
+          </div>
+
+          <div className="mt-2.5 flex items-center justify-between text-[10px] font-bold text-slate-500">
+            <span className="text-amber-700 flex items-center gap-1">
+              <Sparkles size={11} /> Shown with {selectedCompany.name} letterhead
+            </span>
+            <span className="text-slate-400">Drag onto paper to apply</span>
+          </div>
+        </div>
+      )}
+
       {/* Main Split Layout: Left (Coupon Bond Paper) & Right (Draggable Building Blocks Palette) */}
       <div className="flex-1 flex flex-col lg:flex-row min-h-0 relative">
         {/* ================= LEFT SIDE: BLANK COUPON BOND PAPER CANVAS ================= */}
@@ -1085,7 +1369,7 @@ export default function DocumentStudioPanel({
               </div>
             ) : (
               /* RENDER PLACED MODULAR ELEMENTS SEQUENTIALLY ON THE BOND PAPER */
-              /* ZERO TEXTBOX FRAMES: Pure printed document typography! */
+              /* CRASH-PROOF: strictly scoped by el.category with zero textbox frames */
               <div className="space-y-6 flex-1">
                 {paperElements.map((el, index) => {
                   const isHovered = activeElementId === el.id;
@@ -1131,482 +1415,520 @@ export default function DocumentStudioPanel({
                         </button>
                       </div>
 
-                      {/* ================= PURE ELEMENT RENDERERS (NO TEXTBOX FRAMES) ================= */}
-
-                      {/* --- 1. HEADERS: PURE LETTERHEAD --- */}
-                      {el.variant === "header_dual_logo" && (
-                        <div className="border-b-2 border-emerald-700 pb-4 mb-4 select-text">
-                          <div className="flex items-center justify-between gap-4">
-                            <div className="w-18 h-18 sm:w-20 sm:h-20 flex items-center justify-center shrink-0">
-                              <img src={selectedCompany.logoUrl} alt={selectedCompany.name} className="max-h-full max-w-full object-contain" />
+                      {/* ================= CATEGORY 1: HEADERS ================= */}
+                      {el.category === "header" && (
+                        <div>
+                          {el.variant === "header_dual_logo" && (
+                            <div className="border-b-2 border-emerald-700 pb-4 mb-4 select-text">
+                              <div className="flex items-center justify-between gap-4">
+                                <div className="w-18 h-18 sm:w-20 sm:h-20 flex items-center justify-center shrink-0">
+                                  <img src={selectedCompany.logoUrl} alt={selectedCompany.name} className="max-h-full max-w-full object-contain" />
+                                </div>
+                                <div className="flex-1 text-center px-2">
+                                  <h2 className="text-base sm:text-lg font-black uppercase tracking-wider text-slate-900 leading-tight">
+                                    {selectedCompany.legalName || selectedCompany.name}
+                                  </h2>
+                                  <p className="text-xs font-semibold text-emerald-800 tracking-wide mt-0.5">
+                                    {selectedCompany.tagline}
+                                  </p>
+                                  <p className="text-[11px] text-slate-600 mt-1 leading-snug">
+                                    {selectedCompany.address}
+                                  </p>
+                                  <p className="text-[10px] text-slate-500 font-mono mt-0.5">
+                                    {selectedCompany.contact}
+                                  </p>
+                                </div>
+                                <div className="w-18 h-18 sm:w-20 sm:h-20 flex items-center justify-center shrink-0">
+                                  <img src={selectedCompany.rightLogoUrl || "/logos/group_emblem.jpg"} alt="Corporate Emblem" className="max-h-full max-w-full object-contain" />
+                                </div>
+                              </div>
                             </div>
-                            <div className="flex-1 text-center px-2">
-                              <h2 className="text-base sm:text-lg font-black uppercase tracking-wider text-slate-900 leading-tight">
+                          )}
+
+                          {el.variant === "header_minimal_left" && (
+                            <div className="border-b border-slate-300 pb-4 mb-4 flex items-center justify-between gap-4 select-text">
+                              <div className="flex items-center gap-3">
+                                <img src={selectedCompany.logoUrl} alt={selectedCompany.name} className="w-14 h-14 object-contain" />
+                                <div className="border-l-2 border-amber-600 pl-3">
+                                  <h2 className="text-base font-black uppercase text-slate-950 tracking-tight leading-tight">
+                                    {selectedCompany.name}
+                                  </h2>
+                                  <p className="text-[11px] font-bold text-slate-500 uppercase">{selectedCompany.category}</p>
+                                </div>
+                              </div>
+                              <div className="text-right text-[10px] text-slate-500 font-mono">
+                                <p>{selectedCompany.address}</p>
+                                <p>{selectedCompany.contact}</p>
+                              </div>
+                            </div>
+                          )}
+
+                          {el.variant === "header_formal_seal" && (
+                            <div className="border-b-2 border-double border-slate-800 pb-4 mb-4 text-center space-y-1 select-text">
+                              <img src={selectedCompany.logoUrl} alt={selectedCompany.name} className="w-16 h-16 mx-auto object-contain mb-1" />
+                              <h2 className="text-lg font-black uppercase tracking-widest text-slate-950">
                                 {selectedCompany.legalName || selectedCompany.name}
                               </h2>
-                              <p className="text-xs font-semibold text-emerald-800 tracking-wide mt-0.5">
-                                {selectedCompany.tagline}
-                              </p>
-                              <p className="text-[11px] text-slate-600 mt-1 leading-snug">
-                                {selectedCompany.address}
-                              </p>
-                              <p className="text-[10px] text-slate-500 font-mono mt-0.5">
-                                {selectedCompany.contact}
+                              <p className="text-[11px] font-bold uppercase tracking-wider text-slate-700">
+                                {selectedCompany.address} • {selectedCompany.contact}
                               </p>
                             </div>
-                            <div className="w-18 h-18 sm:w-20 sm:h-20 flex items-center justify-center shrink-0">
-                              <img src={selectedCompany.rightLogoUrl || "/logos/group_emblem.jpg"} alt="Corporate Emblem" className="max-h-full max-w-full object-contain" />
+                          )}
+
+                          {el.variant === "header_compact_strip" && (
+                            <div className="border-b border-emerald-600 pb-2 mb-3 flex items-center justify-between text-xs font-bold text-slate-800 select-text">
+                              <div className="flex items-center gap-2">
+                                <img src={selectedCompany.logoUrl} alt={selectedCompany.code} className="w-7 h-7 object-contain" />
+                                <span className="font-black uppercase tracking-wider">{selectedCompany.name}</span>
+                              </div>
+                              <span className="text-[10px] text-slate-500 font-mono">{selectedCompany.contact}</span>
                             </div>
-                          </div>
+                          )}
+
+                          {el.variant === "header_aac_compliance" && (
+                            <div className="border-b-2 border-slate-900 pb-3 mb-4 flex items-center justify-between gap-3 select-text">
+                              <div className="flex items-center gap-3">
+                                <img src={selectedCompany.logoUrl} alt={selectedCompany.name} className="w-14 h-14 object-contain" />
+                                <div>
+                                  <h2 className="text-sm font-black uppercase text-slate-900">
+                                    {selectedCompany.name}
+                                  </h2>
+                                  <p className="text-[11px] font-extrabold text-emerald-800">
+                                    PCSO Authorized Agent Corporation (AAC) • Central Operations Hub
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="border border-slate-300 p-1.5 rounded text-center text-[10px] font-mono bg-slate-50">
+                                <span className="block font-black text-slate-800">{el.data?.aacNumber || "AAC-CEBU-2026-089"}</span>
+                                <span className="text-slate-500">Accredited Agency</span>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       )}
 
-                      {el.variant === "header_minimal_left" && (
-                        <div className="border-b border-slate-300 pb-4 mb-4 flex items-center justify-between gap-4 select-text">
-                          <div className="flex items-center gap-3">
-                            <img src={selectedCompany.logoUrl} alt={selectedCompany.name} className="w-14 h-14 object-contain" />
-                            <div className="border-l-2 border-amber-600 pl-3">
-                              <h2 className="text-base font-black uppercase text-slate-950 tracking-tight leading-tight">
-                                {selectedCompany.name}
+                      {/* ================= CATEGORY 2: ADDRESSING & METADATA ================= */}
+                      {el.category === "addressing" && (
+                        <div>
+                          {el.variant === "address_memo_grid" && (
+                            <div className="border border-slate-300 rounded-lg p-3.5 bg-slate-50/40 text-xs text-slate-800 space-y-2 mb-4 select-text">
+                              <div className="flex justify-between items-center border-b border-slate-200 pb-2">
+                                <span className="font-black tracking-widest text-slate-900 text-sm">MEMORANDUM</span>
+                                <span className="font-mono text-slate-500 font-bold">REF: {docRef}</span>
+                              </div>
+                              <div className="grid grid-cols-1 gap-1.5 text-xs">
+                                <div className="flex items-baseline">
+                                  <span className="font-black text-slate-500 w-20 shrink-0">FOR / TO:</span>
+                                  <span
+                                    contentEditable
+                                    suppressContentEditableWarning
+                                    onBlur={(e) => updateElementData(el.id, "to", e.currentTarget.innerText)}
+                                    className="font-bold text-slate-900 flex-1 outline-none hover:bg-amber-50/50 rounded px-1 transition"
+                                  >
+                                    {el.data?.to || "ALL CONCERNED"}
+                                  </span>
+                                </div>
+                                <div className="flex items-baseline">
+                                  <span className="font-black text-slate-500 w-20 shrink-0">FROM:</span>
+                                  <span
+                                    contentEditable
+                                    suppressContentEditableWarning
+                                    onBlur={(e) => updateElementData(el.id, "from", e.currentTarget.innerText)}
+                                    className="font-bold text-slate-900 flex-1 outline-none hover:bg-amber-50/50 rounded px-1 transition"
+                                  >
+                                    {el.data?.from || "HUMAN RESOURCES DEPARTMENT"}
+                                  </span>
+                                </div>
+                                <div className="flex items-baseline">
+                                  <span className="font-black text-slate-500 w-20 shrink-0">DATE:</span>
+                                  <span className="font-bold text-slate-800 flex-1 px-1">{docDate}</span>
+                                </div>
+                                <div className="flex items-baseline">
+                                  <span className="font-black text-slate-500 w-20 shrink-0">SUBJECT:</span>
+                                  <span
+                                    contentEditable
+                                    suppressContentEditableWarning
+                                    onBlur={(e) => updateElementData(el.id, "subject", e.currentTarget.innerText)}
+                                    className="font-black text-slate-950 flex-1 uppercase outline-none hover:bg-amber-50/50 rounded px-1 transition"
+                                  >
+                                    {el.data?.subject || "OFFICIAL DIRECTIVE"}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {el.variant === "address_formal_letter" && (
+                            <div className="mb-4 text-xs text-slate-900 space-y-3 select-text">
+                              <div className="text-right text-slate-600 font-bold">
+                                <span>{docDate}</span>
+                                <span className="block font-mono text-[11px] text-slate-500">REF: {docRef}</span>
+                              </div>
+                              <div className="space-y-0.5">
+                                <div
+                                  contentEditable
+                                  suppressContentEditableWarning
+                                  onBlur={(e) => updateElementData(el.id, "recipientName", e.currentTarget.innerText)}
+                                  className="font-black text-sm uppercase text-slate-900 outline-none hover:bg-amber-50/50 rounded px-1 transition"
+                                >
+                                  {el.data?.recipientName || "RECIPIENT NAME"}
+                                </div>
+                                <div
+                                  contentEditable
+                                  suppressContentEditableWarning
+                                  onBlur={(e) => updateElementData(el.id, "recipientTitle", e.currentTarget.innerText)}
+                                  className="font-semibold text-xs text-slate-700 outline-none hover:bg-amber-50/50 rounded px-1 transition"
+                                >
+                                  {el.data?.recipientTitle || "Designation"}
+                                </div>
+                                <div
+                                  contentEditable
+                                  suppressContentEditableWarning
+                                  onBlur={(e) => updateElementData(el.id, "recipientCompany", e.currentTarget.innerText)}
+                                  className="text-xs text-slate-600 outline-none hover:bg-amber-50/50 rounded px-1 transition"
+                                >
+                                  {el.data?.recipientCompany || "Company / Station"}
+                                </div>
+                              </div>
+                              <div
+                                contentEditable
+                                suppressContentEditableWarning
+                                onBlur={(e) => updateElementData(el.id, "salutation", e.currentTarget.innerText)}
+                                className="font-black text-xs text-slate-900 pt-1 outline-none hover:bg-amber-50/50 rounded px-1 transition"
+                              >
+                                {el.data?.salutation || "DEAR SIR/MADAM:"}
+                              </div>
+                            </div>
+                          )}
+
+                          {el.variant === "address_public_notice" && (
+                            <div className="text-center my-4 space-y-2 select-text">
+                              <div className="inline-block font-mono text-[10px] font-black bg-amber-100 text-amber-950 px-2.5 py-0.5 rounded border border-amber-300">
+                                {docRef} • {docDate}
+                              </div>
+                              <h2
+                                contentEditable
+                                suppressContentEditableWarning
+                                onBlur={(e) => updateElementData(el.id, "bannerTitle", e.currentTarget.innerText)}
+                                className="text-lg sm:text-xl font-black uppercase tracking-widest text-slate-950 outline-none hover:bg-amber-50/50 rounded px-2 transition"
+                              >
+                                {el.data?.bannerTitle || "PUBLIC ADVISORY & FORMAL NOTICE"}
                               </h2>
-                              <p className="text-[11px] font-bold text-slate-500 uppercase">{selectedCompany.category}</p>
-                            </div>
-                          </div>
-                          <div className="text-right text-[10px] text-slate-500 font-mono">
-                            <p>{selectedCompany.address}</p>
-                            <p>{selectedCompany.contact}</p>
-                          </div>
-                        </div>
-                      )}
-
-                      {el.variant === "header_formal_seal" && (
-                        <div className="border-b-2 border-double border-slate-800 pb-4 mb-4 text-center space-y-1 select-text">
-                          <img src={selectedCompany.logoUrl} alt={selectedCompany.name} className="w-16 h-16 mx-auto object-contain mb-1" />
-                          <h2 className="text-lg font-black uppercase tracking-widest text-slate-950">
-                            {selectedCompany.legalName || selectedCompany.name}
-                          </h2>
-                          <p className="text-[11px] font-bold uppercase tracking-wider text-slate-700">
-                            {selectedCompany.address} • {selectedCompany.contact}
-                          </p>
-                        </div>
-                      )}
-
-                      {el.variant === "header_compact_strip" && (
-                        <div className="border-b border-emerald-600 pb-2 mb-3 flex items-center justify-between text-xs font-bold text-slate-800 select-text">
-                          <div className="flex items-center gap-2">
-                            <img src={selectedCompany.logoUrl} alt={selectedCompany.code} className="w-7 h-7 object-contain" />
-                            <span className="font-black uppercase tracking-wider">{selectedCompany.name}</span>
-                          </div>
-                          <span className="text-[10px] text-slate-500 font-mono">{selectedCompany.contact}</span>
-                        </div>
-                      )}
-
-                      {el.variant === "header_aac_compliance" && (
-                        <div className="border-b-2 border-slate-900 pb-3 mb-4 flex items-center justify-between gap-3 select-text">
-                          <div className="flex items-center gap-3">
-                            <img src={selectedCompany.logoUrl} alt={selectedCompany.name} className="w-14 h-14 object-contain" />
-                            <div>
-                              <h2 className="text-sm font-black uppercase text-slate-900">
-                                {selectedCompany.name}
-                              </h2>
-                              <p className="text-[11px] font-extrabold text-emerald-800">
-                                PCSO Authorized Agent Corporation (AAC) • Central Operations Hub
-                              </p>
-                            </div>
-                          </div>
-                          <div className="border border-slate-300 p-1.5 rounded text-center text-[10px] font-mono bg-slate-50">
-                            <span className="block font-black text-slate-800">{el.data.aacNumber || "AAC-CEBU-2026-089"}</span>
-                            <span className="text-slate-500">Accredited Agency</span>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* --- 2. ADDRESSING: PURE DOCUMENT LINES (NO TEXTBOXES) --- */}
-                      {el.variant === "address_memo_grid" && (
-                        <div className="border border-slate-300 rounded-lg p-3.5 bg-slate-50/40 text-xs text-slate-800 space-y-2 mb-4 select-text">
-                          <div className="flex justify-between items-center border-b border-slate-200 pb-2">
-                            <span className="font-black tracking-widest text-slate-900 text-sm">MEMORANDUM</span>
-                            <span className="font-mono text-slate-500 font-bold">REF: {docRef}</span>
-                          </div>
-                          <div className="grid grid-cols-1 gap-1.5 text-xs">
-                            <div className="flex items-baseline">
-                              <span className="font-black text-slate-500 w-20 shrink-0">FOR / TO:</span>
-                              <span
+                              <div className="h-0.5 w-28 bg-amber-600 mx-auto" />
+                              <p
                                 contentEditable
                                 suppressContentEditableWarning
                                 onBlur={(e) => updateElementData(el.id, "to", e.currentTarget.innerText)}
-                                className="font-bold text-slate-900 flex-1 outline-none hover:bg-amber-50/50 rounded px-1 transition"
+                                className="text-xs font-bold text-slate-700 mt-2 outline-none hover:bg-amber-50/50 rounded px-1 transition"
                               >
-                                {el.data.to}
-                              </span>
+                                {el.data?.to || "TO THE GENERAL PATRONIZING PUBLIC"}
+                              </p>
                             </div>
-                            <div className="flex items-baseline">
-                              <span className="font-black text-slate-500 w-20 shrink-0">FROM:</span>
-                              <span
-                                contentEditable
-                                suppressContentEditableWarning
-                                onBlur={(e) => updateElementData(el.id, "from", e.currentTarget.innerText)}
-                                className="font-bold text-slate-900 flex-1 outline-none hover:bg-amber-50/50 rounded px-1 transition"
-                              >
-                                {el.data.from}
-                              </span>
-                            </div>
-                            <div className="flex items-baseline">
-                              <span className="font-black text-slate-500 w-20 shrink-0">DATE:</span>
-                              <span className="font-bold text-slate-800 flex-1 px-1">{docDate}</span>
-                            </div>
-                            <div className="flex items-baseline">
-                              <span className="font-black text-slate-500 w-20 shrink-0">SUBJECT:</span>
-                              <span
-                                contentEditable
-                                suppressContentEditableWarning
-                                onBlur={(e) => updateElementData(el.id, "subject", e.currentTarget.innerText)}
-                                className="font-black text-slate-950 flex-1 uppercase outline-none hover:bg-amber-50/50 rounded px-1 transition"
-                              >
-                                {el.data.subject}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-
-                      {el.variant === "address_formal_letter" && (
-                        <div className="mb-4 text-xs text-slate-900 space-y-3 select-text">
-                          <div className="text-right text-slate-600 font-bold">
-                            <span>{docDate}</span>
-                            <span className="block font-mono text-[11px] text-slate-500">REF: {docRef}</span>
-                          </div>
-                          <div className="space-y-0.5">
-                            <div
-                              contentEditable
-                              suppressContentEditableWarning
-                              onBlur={(e) => updateElementData(el.id, "recipientName", e.currentTarget.innerText)}
-                              className="font-black text-sm uppercase text-slate-900 outline-none hover:bg-amber-50/50 rounded px-1 transition"
-                            >
-                              {el.data.recipientName}
-                            </div>
-                            <div
-                              contentEditable
-                              suppressContentEditableWarning
-                              onBlur={(e) => updateElementData(el.id, "recipientTitle", e.currentTarget.innerText)}
-                              className="font-semibold text-xs text-slate-700 outline-none hover:bg-amber-50/50 rounded px-1 transition"
-                            >
-                              {el.data.recipientTitle}
-                            </div>
-                            <div
-                              contentEditable
-                              suppressContentEditableWarning
-                              onBlur={(e) => updateElementData(el.id, "recipientCompany", e.currentTarget.innerText)}
-                              className="text-xs text-slate-600 outline-none hover:bg-amber-50/50 rounded px-1 transition"
-                            >
-                              {el.data.recipientCompany}
-                            </div>
-                          </div>
-                          <div
-                            contentEditable
-                            suppressContentEditableWarning
-                            onBlur={(e) => updateElementData(el.id, "salutation", e.currentTarget.innerText)}
-                            className="font-black text-xs text-slate-900 pt-1 outline-none hover:bg-amber-50/50 rounded px-1 transition"
-                          >
-                            {el.data.salutation}
-                          </div>
-                        </div>
-                      )}
-
-                      {el.variant === "address_public_notice" && (
-                        <div className="text-center my-4 space-y-2 select-text">
-                          <div className="inline-block font-mono text-[10px] font-black bg-amber-100 text-amber-950 px-2.5 py-0.5 rounded border border-amber-300">
-                            {docRef} • {docDate}
-                          </div>
-                          <h2
-                            contentEditable
-                            suppressContentEditableWarning
-                            onBlur={(e) => updateElementData(el.id, "bannerTitle", e.currentTarget.innerText)}
-                            className="text-lg sm:text-xl font-black uppercase tracking-widest text-slate-950 outline-none hover:bg-amber-50/50 rounded px-2 transition"
-                          >
-                            {el.data.bannerTitle}
-                          </h2>
-                          <div className="h-0.5 w-28 bg-amber-600 mx-auto" />
-                          <p
-                            contentEditable
-                            suppressContentEditableWarning
-                            onBlur={(e) => updateElementData(el.id, "to", e.currentTarget.innerText)}
-                            className="text-xs font-bold text-slate-700 mt-2 outline-none hover:bg-amber-50/50 rounded px-1 transition"
-                          >
-                            {el.data.to}
-                          </p>
-                        </div>
-                      )}
-
-                      {el.variant === "address_certificate_ribbon" && (
-                        <div className="text-center my-6 space-y-2.5 select-text">
-                          <p className="text-xs font-black tracking-widest text-amber-700 uppercase">
-                            {el.data.conferralText}
-                          </p>
-                          <h2
-                            contentEditable
-                            suppressContentEditableWarning
-                            onBlur={(e) => updateElementData(el.id, "awardeeName", e.currentTarget.innerText)}
-                            className="text-xl sm:text-2xl font-black uppercase text-slate-950 outline-none hover:bg-amber-50/50 rounded px-2 transition"
-                          >
-                            {el.data.awardeeName}
-                          </h2>
-                          <p
-                            contentEditable
-                            suppressContentEditableWarning
-                            onBlur={(e) => updateElementData(el.id, "awardeeTitle", e.currentTarget.innerText)}
-                            className="text-xs font-bold text-slate-600 outline-none hover:bg-amber-50/50 rounded px-1 transition"
-                          >
-                            {el.data.awardeeTitle}
-                          </p>
-                        </div>
-                      )}
-
-                      {/* --- 3. DIRECTIVES & BODY: PURE DOCUMENT TEXT (NO FORM TEXTAREAS) --- */}
-                      {el.variant === "body_rewards_voucher" ? (
-                        <div className="space-y-4 my-3 select-text">
-                          <div className="text-center">
-                            <h3 className="text-base font-black uppercase tracking-wider text-slate-900">
-                              {el.data.title}
-                            </h3>
-                          </div>
-                          <p
-                            contentEditable
-                            suppressContentEditableWarning
-                            onBlur={(e) => updateElementData(el.id, "citation", e.currentTarget.innerText)}
-                            className="text-justify leading-relaxed text-slate-800 outline-none hover:bg-amber-50/30 rounded p-1 transition"
-                          >
-                            {el.data.citation}
-                          </p>
-
-                          {/* Authentic Incentive Voucher Card */}
-                          <div className="p-4 rounded-xl border-2 border-amber-400 bg-gradient-to-r from-amber-50 via-amber-100/50 to-amber-50 text-slate-900 shadow-2xs">
-                            <div className="flex justify-between items-center border-b border-amber-300 pb-2 mb-2">
-                              <span className="text-[11px] font-black uppercase tracking-widest text-amber-900">
-                                Corporate Incentive Merit Voucher
-                              </span>
-                              <span className="font-mono text-xs font-black bg-amber-200 text-amber-950 px-2 py-0.5 rounded border border-amber-300">
-                                {el.data.voucherCode}
-                              </span>
-                            </div>
-                            <div className="grid grid-cols-2 gap-4 text-xs">
-                              <div>
-                                <span className="text-[10px] uppercase font-bold text-slate-500 block">Monetary Grant</span>
-                                <div
-                                  contentEditable
-                                  suppressContentEditableWarning
-                                  onBlur={(e) => updateElementData(el.id, "voucherAmount", e.currentTarget.innerText)}
-                                  className="font-black text-xl text-emerald-800 outline-none hover:bg-white/50 rounded transition"
-                                >
-                                  {el.data.voucherAmount}
-                                </div>
-                              </div>
-                              <div>
-                                <span className="text-[10px] uppercase font-bold text-slate-500 block">Validity</span>
-                                <div
-                                  contentEditable
-                                  suppressContentEditableWarning
-                                  onBlur={(e) => updateElementData(el.id, "voucherValidity", e.currentTarget.innerText)}
-                                  className="font-bold text-xs text-slate-700 outline-none hover:bg-white/50 rounded transition"
-                                >
-                                  {el.data.voucherValidity}
-                                </div>
-                              </div>
-                            </div>
-                            <p className="text-[10px] text-slate-500 italic mt-2 pt-1 border-t border-amber-200">
-                              {el.data.voucherTerms}
-                            </p>
-                          </div>
-                        </div>
-                      ) : el.variant === "body_numbered_directives" ? (
-                        <div className="space-y-2 my-3 select-text">
-                          <h4 className="text-xs font-black uppercase tracking-wider text-slate-900">
-                            {el.data.title}
-                          </h4>
-                          <ol className="list-decimal list-inside space-y-1.5 text-xs text-justify leading-relaxed">
-                            {el.data.items.map((it, idx) => (
-                              <li key={idx} className="text-slate-800 font-semibold">
-                                <span>{it}</span>
-                              </li>
-                            ))}
-                          </ol>
-                        </div>
-                      ) : el.variant === "body_warning_callout" ? (
-                        <div className="p-3.5 rounded-xl border-l-4 border-rose-600 bg-rose-50/60 my-3 space-y-1 select-text">
-                          <div className="flex items-center gap-1.5 text-rose-800 font-black text-xs uppercase tracking-wider">
-                            <AlertTriangle size={15} />
-                            <span>{el.data.boxTitle}</span>
-                          </div>
-                          <p className="text-xs text-rose-950 font-semibold leading-relaxed text-justify">
-                            {el.data.boxMessage}
-                          </p>
-                        </div>
-                      ) : (
-                        <div className="space-y-2.5 my-3 select-text">
-                          {el.data.title && (
-                            <h3 className="text-sm font-black uppercase tracking-wider text-slate-900">
-                              {el.data.title}
-                            </h3>
                           )}
-                          <div
-                            contentEditable
-                            suppressContentEditableWarning
-                            onBlur={(e) => updateElementData(el.id, "bodyText", e.currentTarget.innerText)}
-                            className="text-justify leading-relaxed text-slate-800 whitespace-pre-line outline-none hover:bg-amber-50/20 rounded p-1 transition"
-                          >
-                            {el.data.bodyText.replace(/\[COMPANY_NAME\]/g, selectedCompany.name)}
-                          </div>
+
+                          {el.variant === "address_certificate_ribbon" && (
+                            <div className="text-center my-6 space-y-2.5 select-text">
+                              <p className="text-xs font-black tracking-widest text-amber-700 uppercase">
+                                {el.data?.conferralText || "THIS CERTIFICATE IS PROUDLY CONFERRED UPON"}
+                              </p>
+                              <h2
+                                contentEditable
+                                suppressContentEditableWarning
+                                onBlur={(e) => updateElementData(el.id, "awardeeName", e.currentTarget.innerText)}
+                                className="text-xl sm:text-2xl font-black uppercase text-slate-950 outline-none hover:bg-amber-50/50 rounded px-2 transition"
+                              >
+                                {el.data?.awardeeName || "AWARDEE NAME"}
+                              </h2>
+                              <p
+                                contentEditable
+                                suppressContentEditableWarning
+                                onBlur={(e) => updateElementData(el.id, "awardeeTitle", e.currentTarget.innerText)}
+                                className="text-xs font-bold text-slate-600 outline-none hover:bg-amber-50/50 rounded px-1 transition"
+                              >
+                                {el.data?.awardeeTitle || "Designation"}
+                              </p>
+                            </div>
+                          )}
                         </div>
                       )}
 
-                      {/* --- 4. SIGNATORIES: AUTHENTIC SIGNATURE LINES (NO INPUT BOXES) --- */}
-                      {el.variant === "sig_dual_executive" && (
-                        <div className="grid grid-cols-2 gap-8 text-xs pt-8 mt-6 border-t border-slate-200 select-text">
-                          <div>
-                            <div className="font-bold text-slate-500 uppercase tracking-wider text-[11px] mb-8">
-                              {el.data.leftLabel}
+                      {/* ================= CATEGORY 3: DIRECTIVES & BODY ================= */}
+                      {el.category === "body" && (
+                        <div>
+                          {el.variant === "body_rewards_voucher" ? (
+                            <div className="space-y-4 my-3 select-text">
+                              <div className="text-center">
+                                <h3 className="text-base font-black uppercase tracking-wider text-slate-900">
+                                  {el.data?.title || "CERTIFICATE OF MERIT & INCENTIVE VOUCHER"}
+                                </h3>
+                              </div>
+                              <p
+                                contentEditable
+                                suppressContentEditableWarning
+                                onBlur={(e) => updateElementData(el.id, "citation", e.currentTarget.innerText)}
+                                className="text-justify leading-relaxed text-slate-800 outline-none hover:bg-amber-50/30 rounded p-1 transition"
+                              >
+                                {el.data?.citation || ""}
+                              </p>
+
+                              {/* Authentic Incentive Voucher Card */}
+                              <div className="p-4 rounded-xl border-2 border-amber-400 bg-gradient-to-r from-amber-50 via-amber-100/50 to-amber-50 text-slate-900 shadow-2xs">
+                                <div className="flex justify-between items-center border-b border-amber-300 pb-2 mb-2">
+                                  <span className="text-[11px] font-black uppercase tracking-widest text-amber-900">
+                                    Corporate Incentive Merit Voucher
+                                  </span>
+                                  <span className="font-mono text-xs font-black bg-amber-200 text-amber-950 px-2 py-0.5 rounded border border-amber-300">
+                                    {el.data?.voucherCode || "VCH-2026-REWARD"}
+                                  </span>
+                                </div>
+                                <div className="grid grid-cols-2 gap-4 text-xs">
+                                  <div>
+                                    <span className="text-[10px] uppercase font-bold text-slate-500 block">Monetary Grant</span>
+                                    <div
+                                      contentEditable
+                                      suppressContentEditableWarning
+                                      onBlur={(e) => updateElementData(el.id, "voucherAmount", e.currentTarget.innerText)}
+                                      className="font-black text-xl text-emerald-800 outline-none hover:bg-white/50 rounded transition"
+                                    >
+                                      {el.data?.voucherAmount || "₱5,000.00"}
+                                    </div>
+                                  </div>
+                                  <div>
+                                    <span className="text-[10px] uppercase font-bold text-slate-500 block">Validity</span>
+                                    <div
+                                      contentEditable
+                                      suppressContentEditableWarning
+                                      onBlur={(e) => updateElementData(el.id, "voucherValidity", e.currentTarget.innerText)}
+                                      className="font-bold text-xs text-slate-700 outline-none hover:bg-white/50 rounded transition"
+                                    >
+                                      {el.data?.voucherValidity || "Valid within 60 days"}
+                                    </div>
+                                  </div>
+                                </div>
+                                <p className="text-[10px] text-slate-500 italic mt-2 pt-1 border-t border-amber-200">
+                                  {el.data?.voucherTerms || "Redeemable at Central Finance Depot."}
+                                </p>
+                              </div>
                             </div>
-                            <div className="w-60 border-b-2 border-slate-900 pb-1">
+                          ) : el.variant === "body_numbered_directives" ? (
+                            <div className="space-y-2 my-3 select-text">
+                              <h4 className="text-xs font-black uppercase tracking-wider text-slate-900">
+                                {el.data?.title || "DIRECTIVES"}
+                              </h4>
+                              <ol className="list-decimal list-inside space-y-1.5 text-xs text-justify leading-relaxed">
+                                {(el.data?.items || []).map((it, idx) => (
+                                  <li key={idx} className="text-slate-800 font-semibold">
+                                    <span>{it}</span>
+                                  </li>
+                                ))}
+                              </ol>
+                            </div>
+                          ) : el.variant === "body_warning_callout" ? (
+                            <div className="p-3.5 rounded-xl border-l-4 border-rose-600 bg-rose-50/60 my-3 space-y-1 select-text">
+                              <div className="flex items-center gap-1.5 text-rose-800 font-black text-xs uppercase tracking-wider">
+                                <AlertTriangle size={15} />
+                                <span>{el.data?.boxTitle || "COMPLIANCE NOTICE"}</span>
+                              </div>
+                              <p className="text-xs text-rose-950 font-semibold leading-relaxed text-justify">
+                                {el.data?.boxMessage || ""}
+                              </p>
+                            </div>
+                          ) : (
+                            <div className="space-y-2.5 my-3 select-text">
+                              {el.data?.title && (
+                                <h3 className="text-sm font-black uppercase tracking-wider text-slate-900">
+                                  {el.data.title}
+                                </h3>
+                              )}
                               <div
                                 contentEditable
                                 suppressContentEditableWarning
-                                onBlur={(e) => updateElementData(el.id, "leftName", e.currentTarget.innerText)}
-                                className="font-black text-slate-950 uppercase text-xs tracking-wide outline-none hover:bg-amber-50/50 rounded"
+                                onBlur={(e) => updateElementData(el.id, "bodyText", e.currentTarget.innerText)}
+                                className="text-justify leading-relaxed text-slate-800 whitespace-pre-line outline-none hover:bg-amber-50/20 rounded p-1 transition"
                               >
-                                {el.data.leftName}
+                                {(el.data?.bodyText || "").replace(/\[COMPANY_NAME\]/g, selectedCompany.name)}
                               </div>
                             </div>
-                            <div
-                              contentEditable
-                              suppressContentEditableWarning
-                              onBlur={(e) => updateElementData(el.id, "leftTitle", e.currentTarget.innerText)}
-                              className="text-slate-600 font-semibold text-[11px] mt-0.5 outline-none hover:bg-amber-50/50 rounded"
-                            >
-                              {el.data.leftTitle}
-                            </div>
-                            <div className="text-slate-500 font-bold uppercase text-[10px]">
-                              {selectedCompany.name}
-                            </div>
-                          </div>
+                          )}
+                        </div>
+                      )}
 
-                          <div className="text-right flex flex-col items-end">
-                            <div className="font-bold text-slate-500 uppercase tracking-wider text-[11px] mb-8">
-                              {el.data.rightLabel}
+                      {/* ================= CATEGORY 4: SIGNATORIES ================= */}
+                      {el.category === "signatory" && (
+                        <div>
+                          {el.variant === "sig_dual_executive" && (
+                            <div className="grid grid-cols-2 gap-8 text-xs pt-8 mt-6 border-t border-slate-200 select-text">
+                              <div>
+                                <div className="font-bold text-slate-500 uppercase tracking-wider text-[11px] mb-8">
+                                  {el.data?.leftLabel || "Prepared & Certified by:"}
+                                </div>
+                                <div className="w-60 border-b-2 border-slate-900 pb-1">
+                                  <div
+                                    contentEditable
+                                    suppressContentEditableWarning
+                                    onBlur={(e) => updateElementData(el.id, "leftName", e.currentTarget.innerText)}
+                                    className="font-black text-slate-950 uppercase text-xs tracking-wide outline-none hover:bg-amber-50/50 rounded"
+                                  >
+                                    {el.data?.leftName || "JEVINCE JAYE S. JUBAY, CHRP"}
+                                  </div>
+                                </div>
+                                <div
+                                  contentEditable
+                                  suppressContentEditableWarning
+                                  onBlur={(e) => updateElementData(el.id, "leftTitle", e.currentTarget.innerText)}
+                                  className="text-slate-600 font-semibold text-[11px] mt-0.5 outline-none hover:bg-amber-50/50 rounded"
+                                >
+                                  {el.data?.leftTitle || "HRMD Manager"}
+                                </div>
+                                <div className="text-slate-500 font-bold uppercase text-[10px]">
+                                  {selectedCompany.name}
+                                </div>
+                              </div>
+
+                              <div className="text-right flex flex-col items-end">
+                                <div className="font-bold text-slate-500 uppercase tracking-wider text-[11px] mb-8">
+                                  {el.data?.rightLabel || "Approved & Confirmed by:"}
+                                </div>
+                                <div className="w-60 border-b-2 border-slate-900 pb-1 text-right">
+                                  <div
+                                    contentEditable
+                                    suppressContentEditableWarning
+                                    onBlur={(e) => updateElementData(el.id, "rightName", e.currentTarget.innerText)}
+                                    className="font-black text-slate-950 uppercase text-xs tracking-wide outline-none hover:bg-amber-50/50 rounded"
+                                  >
+                                    {el.data?.rightName || "CHARMIE JEAN M. SIMPAL"}
+                                  </div>
+                                </div>
+                                <div
+                                  contentEditable
+                                  suppressContentEditableWarning
+                                  onBlur={(e) => updateElementData(el.id, "rightTitle", e.currentTarget.innerText)}
+                                  className="text-slate-600 font-semibold text-[11px] mt-0.5 outline-none hover:bg-amber-50/50 rounded"
+                                >
+                                  {el.data?.rightTitle || "President & CEO"}
+                                </div>
+                                <div className="text-slate-500 font-bold uppercase text-[10px]">
+                                  {selectedCompany.name}
+                                </div>
+                              </div>
                             </div>
-                            <div className="w-60 border-b-2 border-slate-900 pb-1 text-right">
+                          )}
+
+                          {el.variant === "sig_single_official" && (
+                            <div className="pt-8 mt-6 border-t border-slate-200 max-w-xs text-xs select-text">
+                              <div className="font-bold text-slate-500 uppercase tracking-wider text-[11px] mb-8">
+                                {el.data?.label || "Issued & Certified by:"}
+                              </div>
+                              <div className="w-60 border-b-2 border-slate-900 pb-1">
+                                <div
+                                  contentEditable
+                                  suppressContentEditableWarning
+                                  onBlur={(e) => updateElementData(el.id, "name", e.currentTarget.innerText)}
+                                  className="font-black text-slate-950 uppercase text-xs tracking-wide outline-none hover:bg-amber-50/50 rounded"
+                                >
+                                  {el.data?.name || "JEVINCE JAYE S. JUBAY, CHRP"}
+                                </div>
+                              </div>
                               <div
                                 contentEditable
                                 suppressContentEditableWarning
-                                onBlur={(e) => updateElementData(el.id, "rightName", e.currentTarget.innerText)}
-                                className="font-black text-slate-950 uppercase text-xs tracking-wide outline-none hover:bg-amber-50/50 rounded"
+                                onBlur={(e) => updateElementData(el.id, "title", e.currentTarget.innerText)}
+                                className="text-slate-600 font-semibold text-[11px] mt-0.5 outline-none hover:bg-amber-50/50 rounded"
                               >
-                                {el.data.rightName}
+                                {el.data?.title || "HRMD Manager"}
+                              </div>
+                              <div className="text-slate-500 font-bold uppercase text-[10px]">
+                                {selectedCompany.name}
                               </div>
                             </div>
-                            <div
-                              contentEditable
-                              suppressContentEditableWarning
-                              onBlur={(e) => updateElementData(el.id, "rightTitle", e.currentTarget.innerText)}
-                              className="text-slate-600 font-semibold text-[11px] mt-0.5 outline-none hover:bg-amber-50/50 rounded"
-                            >
-                              {el.data.rightTitle}
+                          )}
+
+                          {el.variant === "sig_triple_authority" && (
+                            <div className="grid grid-cols-3 gap-4 text-xs pt-8 mt-6 border-t border-slate-200 select-text">
+                              <div>
+                                <div className="font-bold text-slate-500 uppercase text-[10px] mb-6">{el.data?.col1Label || "Prepared by:"}</div>
+                                <div className="border-b border-slate-800 pb-1 font-black text-slate-900 text-xs">{el.data?.col1Name}</div>
+                                <div className="text-slate-500 text-[10px]">{el.data?.col1Title}</div>
+                              </div>
+                              <div>
+                                <div className="font-bold text-slate-500 uppercase text-[10px] mb-6">{el.data?.col2Label || "Noted by:"}</div>
+                                <div className="border-b border-slate-800 pb-1 font-black text-slate-900 text-xs">{el.data?.col2Name}</div>
+                                <div className="text-slate-500 text-[10px]">{el.data?.col2Title}</div>
+                              </div>
+                              <div>
+                                <div className="font-bold text-slate-500 uppercase text-[10px] mb-6">{el.data?.col3Label || "Approved by:"}</div>
+                                <div className="border-b border-slate-800 pb-1 font-black text-slate-900 text-xs">{el.data?.col3Name}</div>
+                                <div className="text-slate-500 text-[10px]">{el.data?.col3Title}</div>
+                              </div>
                             </div>
-                            <div className="text-slate-500 font-bold uppercase text-[10px]">
-                              {selectedCompany.name}
+                          )}
+
+                          {el.variant === "sig_receiving_acknowledgment" && (
+                            <div className="border border-slate-400 border-dashed rounded-lg p-3.5 my-4 bg-slate-50/80 text-xs select-text">
+                              <div className="flex justify-between items-center border-b border-slate-300 pb-1.5 mb-2.5">
+                                <span className="font-black uppercase tracking-wider text-slate-900">{el.data?.stubTitle || "ACKNOWLEDGMENT SLIP"}</span>
+                                <span className="font-mono text-[10px] text-slate-500 font-bold">Duplicate Copy</span>
+                              </div>
+                              <div className="grid grid-cols-3 gap-4 pt-4 text-[11px]">
+                                <div className="border-b border-slate-900 pb-1">
+                                  <span className="text-slate-400 block text-[9px] uppercase font-bold">Received by (Printed Name):</span>
+                                </div>
+                                <div className="border-b border-slate-900 pb-1">
+                                  <span className="text-slate-400 block text-[9px] uppercase font-bold">Official Signature:</span>
+                                </div>
+                                <div className="border-b border-slate-900 pb-1">
+                                  <span className="text-slate-400 block text-[9px] uppercase font-bold">Date &amp; Time Received:</span>
+                                </div>
+                              </div>
                             </div>
-                          </div>
+                          )}
                         </div>
                       )}
 
-                      {el.variant === "sig_single_official" && (
-                        <div className="pt-8 mt-6 border-t border-slate-200 max-w-xs text-xs select-text">
-                          <div className="font-bold text-slate-500 uppercase tracking-wider text-[11px] mb-8">
-                            {el.data.label}
-                          </div>
-                          <div className="w-60 border-b-2 border-slate-900 pb-1">
-                            <div
-                              contentEditable
-                              suppressContentEditableWarning
-                              onBlur={(e) => updateElementData(el.id, "name", e.currentTarget.innerText)}
-                              className="font-black text-slate-950 uppercase text-xs tracking-wide outline-none hover:bg-amber-50/50 rounded"
-                            >
-                              {el.data.name}
+                      {/* ================= CATEGORY 5: FOOTERS ================= */}
+                      {el.category === "footer" && (
+                        <div>
+                          {el.variant === "footer_notary_jurat" && (
+                            <div className="pt-4 border-t border-slate-300 text-xs text-slate-700 space-y-1.5 mt-6 select-text">
+                              <p className="font-bold">REPUBLIC OF THE PHILIPPINES )</p>
+                              <p className="font-bold">PROVINCE OF CEBU, MANDAUE CITY ) S.S.</p>
+                              <p className="text-justify leading-relaxed">
+                                SUBSCRIBED AND SWORN to before me this _____ day of _______________ {el.data?.docYear || "2026"} at {el.data?.city || "Mandaue City, Cebu"}, affiant exhibiting competent evidence of identity.
+                              </p>
+                              <div className="flex justify-between items-end pt-5">
+                                <div className="text-[10px] text-slate-500 font-mono">
+                                  <p>Doc. No. ____; Page No. ____;</p>
+                                  <p>Book No. ____; Series of {el.data?.docYear || "2026"}.</p>
+                                </div>
+                                <div className="text-center w-56 border-t border-slate-900 pt-1 font-bold text-xs">
+                                  NOTARY PUBLIC
+                                </div>
+                              </div>
                             </div>
-                          </div>
-                          <div
-                            contentEditable
-                            suppressContentEditableWarning
-                            onBlur={(e) => updateElementData(el.id, "title", e.currentTarget.innerText)}
-                            className="text-slate-600 font-semibold text-[11px] mt-0.5 outline-none hover:bg-amber-50/50 rounded"
-                          >
-                            {el.data.title}
-                          </div>
-                          <div className="text-slate-500 font-bold uppercase text-[10px]">
-                            {selectedCompany.name}
-                          </div>
-                        </div>
-                      )}
+                          )}
 
-                      {el.variant === "sig_receiving_acknowledgment" && (
-                        <div className="border border-slate-400 border-dashed rounded-lg p-3.5 my-4 bg-slate-50/80 text-xs select-text">
-                          <div className="flex justify-between items-center border-b border-slate-300 pb-1.5 mb-2.5">
-                            <span className="font-black uppercase tracking-wider text-slate-900">{el.data.stubTitle}</span>
-                            <span className="font-mono text-[10px] text-slate-500 font-bold">Duplicate Copy</span>
-                          </div>
-                          <div className="grid grid-cols-3 gap-4 pt-4 text-[11px]">
-                            <div className="border-b border-slate-900 pb-1">
-                              <span className="text-slate-400 block text-[9px] uppercase font-bold">Received by (Printed Name):</span>
+                          {el.variant === "footer_corporate_security" && (
+                            <div className="border-t border-slate-200 pt-3 mt-6 flex items-center justify-between text-[10px] text-slate-500 font-mono select-text">
+                              <div className="flex items-center gap-1.5">
+                                <Shield size={12} className="text-emerald-700" />
+                                <span>{el.data?.noticeText || "Authentic corporate instrument generated via HrHub."}</span>
+                              </div>
+                              <span className="font-bold text-slate-700">{el.data?.docCode || "SEC-VERIFIED"}</span>
                             </div>
-                            <div className="border-b border-slate-900 pb-1">
-                              <span className="text-slate-400 block text-[9px] uppercase font-bold">Official Signature:</span>
-                            </div>
-                            <div className="border-b border-slate-900 pb-1">
-                              <span className="text-slate-400 block text-[9px] uppercase font-bold">Date &amp; Time Received:</span>
-                            </div>
-                          </div>
-                        </div>
-                      )}
+                          )}
 
-                      {/* --- 5. FOOTERS: PURE LEGAL FOOTERS --- */}
-                      {el.variant === "footer_notary_jurat" && (
-                        <div className="pt-4 border-t border-slate-300 text-xs text-slate-700 space-y-1.5 mt-6 select-text">
-                          <p className="font-bold">REPUBLIC OF THE PHILIPPINES )</p>
-                          <p className="font-bold">PROVINCE OF CEBU, MANDAUE CITY ) S.S.</p>
-                          <p className="text-justify leading-relaxed">
-                            SUBSCRIBED AND SWORN to before me this _____ day of _______________ {el.data.docYear || "2026"} at {el.data.city}, affiant exhibiting competent evidence of identity.
-                          </p>
-                          <div className="flex justify-between items-end pt-5">
-                            <div className="text-[10px] text-slate-500 font-mono">
-                              <p>Doc. No. ____; Page No. ____;</p>
-                              <p>Book No. ____; Series of {el.data.docYear || "2026"}.</p>
+                          {el.variant === "footer_contact_hotline" && (
+                            <div className="border-t border-slate-200 pt-2 mt-4 text-center text-[10px] text-slate-500 font-semibold select-text">
+                              <span>Hotline: {el.data?.hotline || "(+63 32) 231-9042"} • Inquiries: {el.data?.email || "compliance@hrhub-operations.com"}</span>
                             </div>
-                            <div className="text-center w-56 border-t border-slate-900 pt-1 font-bold text-xs">
-                              NOTARY PUBLIC
+                          )}
+
+                          {el.variant === "footer_page_tracker" && (
+                            <div className="border-t border-slate-200 pt-1.5 mt-4 flex justify-between text-[9px] text-slate-400 font-mono select-text">
+                              <span>{el.data?.formCode || "FORM-HRD-2026"}</span>
+                              <span>{el.data?.pageText || "Page 1 of 1"}</span>
                             </div>
-                          </div>
-                        </div>
-                      )}
-
-                      {el.variant === "footer_corporate_security" && (
-                        <div className="border-t border-slate-200 pt-3 mt-6 flex items-center justify-between text-[10px] text-slate-500 font-mono select-text">
-                          <div className="flex items-center gap-1.5">
-                            <Shield size={12} className="text-emerald-700" />
-                            <span>{el.data.noticeText}</span>
-                          </div>
-                          <span className="font-bold text-slate-700">{el.data.docCode}</span>
-                        </div>
-                      )}
-
-                      {el.variant === "footer_contact_hotline" && (
-                        <div className="border-t border-slate-200 pt-2 mt-4 text-center text-[10px] text-slate-500 font-semibold select-text">
-                          <span>Hotline: {el.data.hotline} • Inquiries: {el.data.email}</span>
-                        </div>
-                      )}
-
-                      {el.variant === "footer_page_tracker" && (
-                        <div className="border-t border-slate-200 pt-1.5 mt-4 flex justify-between text-[9px] text-slate-400 font-mono select-text">
-                          <span>{el.data.formCode}</span>
-                          <span>{el.data.pageText}</span>
+                          )}
                         </div>
                       )}
                     </div>
@@ -1655,7 +1977,7 @@ export default function DocumentStudioPanel({
                 {MODULAR_BLOCK_PRESETS.find((c) => c.category === paletteActiveCategory)?.categoryLabel}
               </span>
               <span className="text-[10px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md font-black">
-                Drag to Bond Paper
+                Hover to Preview • Drag to Bond
               </span>
             </div>
 
@@ -1664,7 +1986,9 @@ export default function DocumentStudioPanel({
                 key={item.variant}
                 draggable
                 onDragStart={(e) => handlePaletteDragStart(e, { ...item, category: paletteActiveCategory })}
-                className="p-3.5 rounded-2xl border border-slate-200 bg-white hover:border-amber-400 hover:shadow-md transition-all cursor-grab active:cursor-grabbing group space-y-2 shadow-2xs"
+                onMouseEnter={() => setHoveredPreviewItem({ ...item, category: paletteActiveCategory })}
+                onMouseLeave={() => setHoveredPreviewItem(null)}
+                className="p-3.5 rounded-2xl border border-slate-200 bg-white hover:border-amber-400 hover:shadow-md transition-all cursor-grab active:cursor-grabbing group space-y-2 shadow-2xs relative"
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex items-center gap-2">
@@ -1675,6 +1999,14 @@ export default function DocumentStudioPanel({
                       {item.name}
                     </h4>
                   </div>
+
+                  {/* Eye preview badge */}
+                  <span
+                    className="p-1 rounded-md text-slate-400 hover:text-amber-600 transition"
+                    title="Hover to see live preview"
+                  >
+                    <Eye size={13} />
+                  </span>
                 </div>
 
                 <p className="text-[11px] text-slate-500 line-clamp-2 leading-snug">
