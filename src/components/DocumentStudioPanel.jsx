@@ -23,11 +23,36 @@ import {
   normalizeDocRef
 } from "../lib/savedDocumentsStorage";
 
-// ================= BOND PAPER SIZES =================
+// ================= BOND PAPER SIZES WITH VISIBLE FRONTEND DIMENSIONS =================
+// Long bond is visibly 192px taller than Short bond, giving realistic proportional on-screen scaling!
 export const PAPER_SIZES = [
-  { id: "letter", label: "Short Bond (8.5\" × 11\")", widthMm: 215.9, heightMm: 279.4, desc: "Standard Philippine Short Coupon Bond" },
-  { id: "legal", label: "Long Bond (8.5\" × 13\")", widthMm: 215.9, heightMm: 330.2, desc: "Official Philippine Legal / Long Coupon Bond" },
-  { id: "a4", label: "A4 Standard (8.27\" × 11.69\")", widthMm: 210, heightMm: 297, desc: "International ISO Standard" }
+  {
+    id: "letter",
+    label: "Short Bond (8.5\" × 11\")",
+    widthPx: 816,
+    heightPx: 1056,
+    aspectRatio: "8.5 / 11",
+    desc: "Short Bond • 8.5\" × 11\" (279 mm)",
+    printCss: "8.5in 11in"
+  },
+  {
+    id: "legal",
+    label: "Long Bond (8.5\" × 13\")",
+    widthPx: 816,
+    heightPx: 1248,
+    aspectRatio: "8.5 / 13",
+    desc: "Long Bond • 8.5\" × 13\" (330 mm)",
+    printCss: "8.5in 13in"
+  },
+  {
+    id: "a4",
+    label: "A4 Standard (8.27\" × 11.69\")",
+    widthPx: 794,
+    heightPx: 1123,
+    aspectRatio: "210 / 297",
+    desc: "A4 Standard • 210 × 297 mm",
+    printCss: "A4"
+  }
 ];
 
 export const FONT_FAMILIES = [
@@ -37,8 +62,8 @@ export const FONT_FAMILIES = [
   { id: "georgia", label: "Executive Serif (Georgia)", css: "Georgia, Cambria, serif" }
 ];
 
-// ================= PALETTE LIBRARY: MODULAR DRAGGABLE BLOCKS =================
-// The user can drag any of these blocks onto a completely blank coupon bond paper!
+// ================= PALETTE LIBRARY: PURE MODULAR BUILDING BLOCKS =================
+// No textboxes, no form frames — pure, authentic printed document typography!
 export const MODULAR_BLOCK_PRESETS = [
   // 1. HEADERS (Iba't ibang Header Template Designs)
   {
@@ -51,33 +76,26 @@ export const MODULAR_BLOCK_PRESETS = [
         description: "Official executive header with company logo left, corporate group emblem right, centered address & contact, and colored rule line.",
         defaultData: {
           showEmblem: true,
-          borderStyle: "double",
-          ruleColor: "#059669"
+          borderStyle: "double"
         }
       },
       {
         variant: "header_minimal_left",
         name: "Modern Left-Aligned Header",
         description: "Contemporary layout with prominent left brand logo, vertical accent bar, and right-aligned branch contact directory.",
-        defaultData: {
-          accentColor: "#0284c7"
-        }
+        defaultData: {}
       },
       {
         variant: "header_formal_seal",
         name: "Classic Centered Legal Seal",
         description: "Prestigious arched typography with large top-center crest seal, ideal for official certifications and formal court instruments.",
-        defaultData: {
-          sealText: "OFFICIAL SEAL OF OPERATIONS"
-        }
+        defaultData: {}
       },
       {
         variant: "header_compact_strip",
         name: "Slim Executive Header",
         description: "Compact low-profile letterhead designed to preserve maximum printable space for dense multi-page directives.",
-        defaultData: {
-          showTagline: false
-        }
+        defaultData: {}
       },
       {
         variant: "header_aac_compliance",
@@ -98,18 +116,18 @@ export const MODULAR_BLOCK_PRESETS = [
       {
         variant: "address_memo_grid",
         name: "Formal Memorandum Grid",
-        description: "Structured corporate box containing REF NO, DATE, TO, FROM, and SUBJECT in clear bordered partitions.",
+        description: "Structured corporate box containing REF NO, DATE, TO, FROM, and SUBJECT in clear clean partitions without form input frames.",
         defaultData: {
           title: "OFFICIAL MEMORANDUM",
           to: "ALL BRANCH MANAGERS, AREA COORDINATORS & FIELD STAFF",
           from: "HUMAN RESOURCES DEPARTMENT",
-          subject: "Mandatory Directives and Operational Guidelines"
+          subject: "MANDATORY DIRECTIVES AND OPERATIONAL GUIDELINES"
         }
       },
       {
         variant: "address_formal_letter",
         name: "Executive Formal Letter Heading",
-        description: "Standard business letter format with right-aligned date, formal addressee block, and professional salutation ('Dear Sir/Madam:').",
+        description: "Standard business letter format with right-aligned date, formal addressee block, and professional salutation ('DEAR MR./MS.').",
         defaultData: {
           recipientName: "MR. ROBERTO TAN",
           recipientTitle: "Accredited Coordinator / Branch Supervisor",
@@ -123,8 +141,7 @@ export const MODULAR_BLOCK_PRESETS = [
         description: "Prominent centered headline banner with bold reference badge, ideal for public circulars and community advisories.",
         defaultData: {
           bannerTitle: "PUBLIC ADVISORY & FORMAL NOTICE",
-          to: "TO THE GENERAL PATRONIZING PUBLIC AND ALL GAMING OUTLETS",
-          subject: "Important Notice Concerning Authorized Personnel and Official Operations"
+          to: "TO THE GENERAL PATRONIZING PUBLIC AND ALL GAMING OUTLETS"
         }
       },
       {
@@ -134,7 +151,7 @@ export const MODULAR_BLOCK_PRESETS = [
         defaultData: {
           conferralText: "THIS CERTIFICATE IS PROUDLY CONFERRED UPON",
           awardeeName: "MS. MARIA SANTOS",
-          awardeeTitle: "Senior Area Coordinator • Top Performer"
+          awardeeTitle: "Senior Area Coordinator • Operations Division"
         }
       }
     ]
@@ -151,12 +168,9 @@ export const MODULAR_BLOCK_PRESETS = [
         description: "Complete legal body certifying that an individual has NO connection or authority to represent, collect, or transact for the company.",
         defaultData: {
           title: "CERTIFICATE OF NON-AFFILIATION",
-          personName: "MR. JUAN DELA CRUZ",
-          personDetails: "of legal age, Filipino, residing at Mandaue City, Cebu",
-          formerStatus: "Former Field Agent / Collector",
-          bodyText: `THIS IS TO CERTIFY that the aforementioned individual is NOT an employee, agent, collector, or authorized representative of [COMPANY_NAME] in any capacity whatsoever.
+          bodyText: `THIS IS TO CERTIFY that MR. JUAN DELA CRUZ, of legal age, Filipino, and residing at Mandaue City, Cebu, is NOT an employee, agent, collector, or authorized representative of [COMPANY_NAME] in any capacity whatsoever.
 
-The said individual has NO authority to represent, transact, negotiate, solicit bets, collect funds, issue acknowledgment receipts, or enter into any contracts or undertakings for and on behalf of the Company or its authorized operations.
+The aforementioned individual has NO authority to represent, transact, negotiate, solicit bets, collect funds, issue acknowledgment receipts, or enter into any contracts or undertakings for and on behalf of the Company or its authorized operations.
 
 ANY AND ALL TRANSACTIONS, contracts, agreements, or collection of money or property executed by the said individual are strictly UNAUTHORIZED, ILLEGAL, NULL, AND VOID, and shall not bind or obligate [COMPANY_NAME] nor any of its operating branches.
 
@@ -183,9 +197,8 @@ The general public, gaming outlets, coordinators, field monitoring personnel, an
         defaultData: {
           title: "NOTICE OF TERMINATION OF OPERATIONS",
           branchName: "BRANCH OUTLET #14 (SUBANGDAKU STATION)",
-          branchAddress: "A.S. Fortuna Street, Subangdaku, Mandaue City, Cebu",
           effectiveDate: "November 15, 2026",
-          bodyText: `NOTICE IS HEREBY GIVEN to all concerned employees, agents, coordinators, and the general patronizing public that [COMPANY_NAME] will PERMANENTLY CEASE AND TERMINATE all commercial and gaming operations at the specified station location.
+          bodyText: `NOTICE IS HEREBY GIVEN to all concerned employees, agents, coordinators, and the general patronizing public that [COMPANY_NAME] will PERMANENTLY CEASE AND TERMINATE all commercial and gaming operations at BRANCH OUTLET #14 (SUBANGDAKU STATION), Mandaue City, Cebu, effective November 15, 2026.
 
 MANDATORY DIRECTIVES & TURNOVER PROTOCOLS:
 1. Surrender of Assets: The assigned Station Supervisor and Area Custodian must surrender all POS ticketing machines, thermal paper rolls, official ledgers, and company keys to the Central Operations Depot within forty-eight (48) hours of closure.
@@ -200,17 +213,13 @@ MANDATORY DIRECTIVES & TURNOVER PROTOCOLS:
         defaultData: {
           title: "NOTICE OF TERMINATION OF AGENCY AGREEMENT",
           agencyCode: "SUB-AGENCY #A-204",
-          agreementDate: "March 15, 2024",
           bodyText: `PLEASE BE FORMALLY INFORMED that [COMPANY_NAME], acting as the PCSO Authorized Agent Corporation (AAC), has RESOLVED TO TERMINATE AND REVOKE, effective immediately upon your receipt of this notice, the AGENCY AGREEMENT entered into between yourself and this Corporation.
 
 GROUNDS FOR TERMINATION:
 This decisive contractual termination is executed pursuant to Section 9 (Breach and Default) of the Agency Agreement, stemming from documented infractions including unauthorized collection practices, non-compliance with remittal deadlines, and failure to maintain operational sales quotas.
 
 DEMAND FOR IMMEDIATE SURRENDER OF COMPANY PROPERTY:
-You are hereby commanded and given SEVENTY-TWO (72) HOURS from receipt of this notice to surrender and deliver to the Corporate Executive Office the following:
-a. All issued Handheld POS Terminals, chargers, spare batteries, and SIM cards;
-b. All unused PCSO Official Bet Slips, thermal receipt rolls, and marketing collaterals;
-c. Official Agent Identification Card (ID), accreditation certificates, and station decals.
+You are hereby commanded and given SEVENTY-TWO (72) HOURS from receipt of this notice to surrender and deliver to the Corporate Executive Office all issued Handheld POS Terminals, chargers, spare batteries, SIM cards, official bet slips, ID badges, and station decals.
 
 Effective immediately, your authority to collect bets, process vouchers, or represent yourself as an agent of [COMPANY_NAME] is PERMANENTLY REVOKED AND NULLIFIED.`
         }
@@ -222,7 +231,6 @@ Effective immediately, your authority to collect bets, process vouchers, or repr
         defaultData: {
           title: "WRITTEN EXPLANATION IN RESPONSE TO NOTICE TO EXPLAIN",
           caseRef: "IR-2026-NTE-042",
-          receivedDate: "November 02, 2026",
           bodyText: `I, the undersigned employee under the Operations Division of [COMPANY_NAME], hereby submit this formal Written Explanation in answer to the allegations set forth in the aforementioned Notice to Explain.
 
 1. STATEMENT OF FACTS & CHRONOLOGY:
@@ -390,6 +398,11 @@ export default function DocumentStudioPanel({
   const [fontSize, setFontSize] = useState(13.8); // pt
   const [zoomScale, setZoomScale] = useState(100);
 
+  // Active paper size definition
+  const currentPaperDef = useMemo(() => {
+    return PAPER_SIZES.find((p) => p.id === paperSize) || PAPER_SIZES[0];
+  }, [paperSize]);
+
   // Document Core Identifiers
   const [docRef, setDocRef] = useState(() => generateUniqueDocRef("LBC"));
   const [docDate, setDocDate] = useState(() => {
@@ -397,7 +410,7 @@ export default function DocumentStudioPanel({
   });
 
   // ================= MODULAR BOND PAPER ELEMENTS ARRAY =================
-  // Starts with an empty/blank coupon bond, or loaded from saved records
+  // Starts with a completely blank coupon bond paper!
   const [paperElements, setPaperElements] = useState([]);
 
   // Active / Selected element for fine-tuning
@@ -407,7 +420,6 @@ export default function DocumentStudioPanel({
   const [isDragOverCanvas, setIsDragOverCanvas] = useState(false);
   const [dragOverIndex, setDragOverIndex] = useState(null);
   const [paletteActiveCategory, setPaletteActiveCategory] = useState("header");
-  const [searchQuery, setSearchQuery] = useState("");
 
   // Saved Documents Archive Modal State
   const [savedDocs, setSavedDocs] = useState([]);
@@ -524,14 +536,13 @@ export default function DocumentStudioPanel({
   const handleLoadFullDocumentPreset = (presetKey) => {
     let presetBlocks = [];
 
-    // All presets start with the Corporate Dual Logo Header and appropriate addressing
     const headerItem = MODULAR_BLOCK_PRESETS.find((c) => c.category === "header").items[0];
     const dualSigItem = MODULAR_BLOCK_PRESETS.find((c) => c.category === "signatory").items[0];
 
     if (presetKey === "non_affiliation") {
-      const addr = MODULAR_BLOCK_PRESETS.find((c) => c.category === "addressing").items[2]; // public advisory
-      const body = MODULAR_BLOCK_PRESETS.find((c) => c.category === "body").items[0]; // non-affiliation body
-      const jurat = MODULAR_BLOCK_PRESETS.find((c) => c.category === "footer").items[0]; // notary jurat
+      const addr = MODULAR_BLOCK_PRESETS.find((c) => c.category === "addressing").items[2];
+      const body = MODULAR_BLOCK_PRESETS.find((c) => c.category === "body").items[0];
+      const jurat = MODULAR_BLOCK_PRESETS.find((c) => c.category === "footer").items[0];
       presetBlocks = [
         { ...headerItem, category: "header" },
         { ...addr, category: "addressing" },
@@ -540,9 +551,9 @@ export default function DocumentStudioPanel({
         { ...jurat, category: "footer" }
       ];
     } else if (presetKey === "rewards_voucher") {
-      const ribbon = MODULAR_BLOCK_PRESETS.find((c) => c.category === "addressing").items[3]; // certificate ribbon
-      const rewardsBody = MODULAR_BLOCK_PRESETS.find((c) => c.category === "body").items[1]; // rewards voucher
-      const securityFooter = MODULAR_BLOCK_PRESETS.find((c) => c.category === "footer").items[1]; // security strip
+      const ribbon = MODULAR_BLOCK_PRESETS.find((c) => c.category === "addressing").items[3];
+      const rewardsBody = MODULAR_BLOCK_PRESETS.find((c) => c.category === "body").items[1];
+      const securityFooter = MODULAR_BLOCK_PRESETS.find((c) => c.category === "footer").items[1];
       presetBlocks = [
         { ...headerItem, category: "header" },
         { ...ribbon, category: "addressing" },
@@ -646,7 +657,6 @@ export default function DocumentStudioPanel({
     setIsSaving(true);
     const cleanRef = normalizeDocRef(docRef);
 
-    // Extract title from body or addressing
     let docTitle = "Official Document";
     for (const el of paperElements) {
       if (el.data.title) { docTitle = el.data.title; break; }
@@ -700,11 +710,9 @@ export default function DocumentStudioPanel({
     if (d.fontFamily) setFontFamily(d.fontFamily);
     if (d.fontSize) setFontSize(Number(d.fontSize) || 13.8);
 
-    // Restore paperElements
     if (Array.isArray(d.paperElements) && d.paperElements.length > 0) {
       setPaperElements(d.paperElements);
     } else {
-      // Fallback: reconstruct from flat record if legacy
       handleLoadFullDocumentPreset(d.templateType || "non_affiliation");
     }
 
@@ -725,17 +733,13 @@ export default function DocumentStudioPanel({
     return FONT_FAMILIES.find((f) => f.id === fontFamily)?.css || FONT_FAMILIES[0].css;
   }, [fontFamily]);
 
-  const activePaperSize = useMemo(() => {
-    return PAPER_SIZES.find((p) => p.id === paperSize) || PAPER_SIZES[0];
-  }, [paperSize]);
-
   return (
     <div className="relative min-h-screen bg-slate-100 flex flex-col font-sans select-none antialiased">
       {/* SCOPED PRINT STYLESHEET */}
       <style>{`
         @media print {
           @page {
-            size: ${paperSize === "legal" ? "8.5in 13in" : paperSize === "a4" ? "A4" : "letter"};
+            size: ${currentPaperDef.printCss};
             margin: 0.5in 0.6in;
           }
           html, body {
@@ -783,11 +787,11 @@ export default function DocumentStudioPanel({
                 Coupon Bond Studio
               </h1>
               <span className="text-[10px] font-black uppercase tracking-wider bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full border border-amber-200">
-                Drag &amp; Drop Builder
+                Modular Drag &amp; Drop
               </span>
             </div>
             <p className="text-xs text-slate-500 font-medium">
-              Start with a blank bond paper • Drag headers, addressing, directives body, signatories, &amp; footers
+              Blank coupon bond paper • Drag authentic headers, addressing, directives, signatories, &amp; footers
             </p>
           </div>
         </div>
@@ -912,30 +916,37 @@ export default function DocumentStudioPanel({
           onDragLeave={handleCanvasDragLeave}
           onDrop={handleCanvasDrop}
         >
-          {/* STEP 1: PAPER CONTROLS BAR (Set muna ng size sa una) */}
+          {/* STEP 1: PAPER CONTROLS BAR (REAL VISUAL FRONTEND SIZE SWITCHER) */}
           <div className="no-print w-full max-w-4xl mb-4 flex flex-wrap items-center justify-between gap-3 text-xs bg-white/95 backdrop-blur-xs p-3 rounded-2xl border border-slate-300 shadow-sm">
-            {/* Paper Size selector */}
+            {/* Paper Size selector with visible dimension indicators */}
             <div className="flex items-center gap-2">
-              <span className="font-black text-slate-700 text-xs flex items-center gap-1.5">
+              <span className="font-black text-slate-800 text-xs flex items-center gap-1.5">
                 <Scissors size={14} className="text-amber-600" />
                 Bond Paper Size:
               </span>
-              <div className="inline-flex rounded-xl bg-slate-100 p-0.5 border border-slate-200">
-                {PAPER_SIZES.map((sz) => (
-                  <button
-                    key={sz.id}
-                    type="button"
-                    onClick={() => {
-                      setPaperSize(sz.id);
-                      triggerToast(`Bond paper set to ${sz.label}`, "info");
-                    }}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${
-                      paperSize === sz.id ? "bg-white text-slate-900 shadow-2xs font-black" : "text-slate-500 hover:text-slate-800"
-                    }`}
-                  >
-                    {sz.id === "letter" ? "Short (8.5\" × 11\")" : sz.id === "legal" ? "Long (8.5\" × 13\")" : "A4"}
-                  </button>
-                ))}
+              <div className="inline-flex rounded-xl bg-slate-100 p-1 border border-slate-200 gap-1">
+                {PAPER_SIZES.map((sz) => {
+                  const isSelected = paperSize === sz.id;
+                  return (
+                    <button
+                      key={sz.id}
+                      type="button"
+                      onClick={() => {
+                        setPaperSize(sz.id);
+                        triggerToast(`Bond paper resized to ${sz.label}`, "info");
+                      }}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-black transition cursor-pointer flex items-center gap-1.5 ${
+                        isSelected
+                          ? "bg-amber-500 text-slate-950 shadow-xs scale-102"
+                          : "text-slate-600 hover:text-slate-900 hover:bg-white"
+                      }`}
+                      title={sz.desc}
+                    >
+                      <span>{sz.label}</span>
+                      {isSelected && <span className="w-1.5 h-1.5 rounded-full bg-slate-950 inline-block" />}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
@@ -978,19 +989,31 @@ export default function DocumentStudioPanel({
           </div>
 
           {/* ================= THE BLANK COUPON BOND PAPER SHEET ================= */}
+          {/* Note: maxWidth and minHeight dynamically scale in frontend pixels when clicked! */}
           <div
             id="coupon-bond-printable"
             style={{
               fontFamily: activeFont,
               fontSize: `${fontSize}pt`,
               lineHeight: 1.6,
+              width: "100%",
+              maxWidth: `${currentPaperDef.widthPx}px`,
+              minHeight: `${currentPaperDef.heightPx}px`,
               transform: `scale(${zoomScale / 100})`,
-              transformOrigin: "top center"
+              transformOrigin: "top center",
+              transition: "min-height 0.35s ease, max-width 0.35s ease, transform 0.2s ease"
             }}
-            className={`w-full max-w-[816px] min-h-[1056px] bg-white text-slate-900 border border-slate-300 shadow-2xl rounded-sm p-8 sm:p-12 md:p-14 relative transition-all duration-200 select-text flex flex-col justify-between ${
+            className={`bg-white text-slate-900 border border-slate-300 shadow-2xl rounded-sm p-8 sm:p-12 md:p-14 relative select-text flex flex-col justify-between ${
               isDragOverCanvas ? "ring-4 ring-amber-500/80 border-amber-500 bg-amber-50/15" : ""
             }`}
           >
+            {/* Visual Paper Size Dimension Badge in Top-Right Corner */}
+            <div className="no-print absolute top-3 right-4 z-10 text-[10px] font-extrabold text-slate-400 bg-slate-50/90 border border-slate-200 px-2.5 py-1 rounded-md flex items-center gap-1.5 select-none pointer-events-none shadow-2xs">
+              <span className="w-2 h-2 rounded-full bg-amber-500" />
+              <span className="text-slate-700">{currentPaperDef.label}</span>
+              <span className="text-amber-700 font-mono">({currentPaperDef.heightPx}px height)</span>
+            </div>
+
             {/* Visual Drop Overlay */}
             {isDragOverCanvas && (
               <div className="no-print absolute inset-0 z-30 bg-amber-500/10 border-4 border-dashed border-amber-500 rounded-sm flex items-center justify-center backdrop-blur-2xs pointer-events-none">
@@ -1025,35 +1048,35 @@ export default function DocumentStudioPanel({
                     <button
                       type="button"
                       onClick={() => handleLoadFullDocumentPreset("non_affiliation")}
-                      className="p-2 rounded-xl border border-slate-200 bg-white hover:border-amber-400 hover:bg-amber-50/50 font-bold text-slate-700 transition"
+                      className="p-2 rounded-xl border border-slate-200 bg-white hover:border-amber-400 hover:bg-amber-50/50 font-bold text-slate-700 transition cursor-pointer"
                     >
                       🛡️ Non-Affiliation
                     </button>
                     <button
                       type="button"
                       onClick={() => handleLoadFullDocumentPreset("rewards_voucher")}
-                      className="p-2 rounded-xl border border-slate-200 bg-white hover:border-amber-400 hover:bg-amber-50/50 font-bold text-slate-700 transition"
+                      className="p-2 rounded-xl border border-slate-200 bg-white hover:border-amber-400 hover:bg-amber-50/50 font-bold text-slate-700 transition cursor-pointer"
                     >
                       🏆 Rewards &amp; Voucher
                     </button>
                     <button
                       type="button"
                       onClick={() => handleLoadFullDocumentPreset("termination_operations")}
-                      className="p-2 rounded-xl border border-slate-200 bg-white hover:border-amber-400 hover:bg-amber-50/50 font-bold text-slate-700 transition"
+                      className="p-2 rounded-xl border border-slate-200 bg-white hover:border-amber-400 hover:bg-amber-50/50 font-bold text-slate-700 transition cursor-pointer"
                     >
                       🛑 Termination of Ops
                     </button>
                     <button
                       type="button"
                       onClick={() => handleLoadFullDocumentPreset("termination_agency")}
-                      className="p-2 rounded-xl border border-slate-200 bg-white hover:border-amber-400 hover:bg-amber-50/50 font-bold text-slate-700 transition"
+                      className="p-2 rounded-xl border border-slate-200 bg-white hover:border-amber-400 hover:bg-amber-50/50 font-bold text-slate-700 transition cursor-pointer"
                     >
                       📜 Agency Termination
                     </button>
                     <button
                       type="button"
                       onClick={() => handleLoadFullDocumentPreset("letter_of_explain")}
-                      className="p-2 rounded-xl border border-slate-200 bg-white hover:border-amber-400 hover:bg-amber-50/50 font-bold text-slate-700 transition col-span-2 sm:col-span-1"
+                      className="p-2 rounded-xl border border-slate-200 bg-white hover:border-amber-400 hover:bg-amber-50/50 font-bold text-slate-700 transition cursor-pointer col-span-2 sm:col-span-1"
                     >
                       ✍️ Letter of Explain
                     </button>
@@ -1062,6 +1085,7 @@ export default function DocumentStudioPanel({
               </div>
             ) : (
               /* RENDER PLACED MODULAR ELEMENTS SEQUENTIALLY ON THE BOND PAPER */
+              /* ZERO TEXTBOX FRAMES: Pure printed document typography! */
               <div className="space-y-6 flex-1">
                 {paperElements.map((el, index) => {
                   const isHovered = activeElementId === el.id;
@@ -1070,8 +1094,8 @@ export default function DocumentStudioPanel({
                     <div
                       key={el.id}
                       onClick={() => setActiveElementId(el.id)}
-                      className={`relative group rounded-xl p-2 transition-all ${
-                        isHovered ? "ring-2 ring-amber-400/60 bg-amber-50/10" : "hover:bg-slate-50/40"
+                      className={`relative group rounded-xl p-1.5 transition-all ${
+                        isHovered ? "ring-1 ring-amber-400/50 bg-amber-50/5" : "hover:bg-slate-50/30"
                       }`}
                     >
                       {/* Floating Control Toolbar for this placed element */}
@@ -1107,11 +1131,11 @@ export default function DocumentStudioPanel({
                         </button>
                       </div>
 
-                      {/* ================= ELEMENT RENDERER BY VARIANT ================= */}
+                      {/* ================= PURE ELEMENT RENDERERS (NO TEXTBOX FRAMES) ================= */}
 
-                      {/* --- 1. HEADERS --- */}
+                      {/* --- 1. HEADERS: PURE LETTERHEAD --- */}
                       {el.variant === "header_dual_logo" && (
-                        <div className="border-b-2 border-emerald-700 pb-4 mb-4">
+                        <div className="border-b-2 border-emerald-700 pb-4 mb-4 select-text">
                           <div className="flex items-center justify-between gap-4">
                             <div className="w-18 h-18 sm:w-20 sm:h-20 flex items-center justify-center shrink-0">
                               <img src={selectedCompany.logoUrl} alt={selectedCompany.name} className="max-h-full max-w-full object-contain" />
@@ -1138,7 +1162,7 @@ export default function DocumentStudioPanel({
                       )}
 
                       {el.variant === "header_minimal_left" && (
-                        <div className="border-b border-slate-300 pb-4 mb-4 flex items-center justify-between gap-4">
+                        <div className="border-b border-slate-300 pb-4 mb-4 flex items-center justify-between gap-4 select-text">
                           <div className="flex items-center gap-3">
                             <img src={selectedCompany.logoUrl} alt={selectedCompany.name} className="w-14 h-14 object-contain" />
                             <div className="border-l-2 border-amber-600 pl-3">
@@ -1156,7 +1180,7 @@ export default function DocumentStudioPanel({
                       )}
 
                       {el.variant === "header_formal_seal" && (
-                        <div className="border-b-2 border-double border-slate-800 pb-4 mb-4 text-center space-y-1">
+                        <div className="border-b-2 border-double border-slate-800 pb-4 mb-4 text-center space-y-1 select-text">
                           <img src={selectedCompany.logoUrl} alt={selectedCompany.name} className="w-16 h-16 mx-auto object-contain mb-1" />
                           <h2 className="text-lg font-black uppercase tracking-widest text-slate-950">
                             {selectedCompany.legalName || selectedCompany.name}
@@ -1168,7 +1192,7 @@ export default function DocumentStudioPanel({
                       )}
 
                       {el.variant === "header_compact_strip" && (
-                        <div className="border-b border-emerald-600 pb-2 mb-3 flex items-center justify-between text-xs font-bold text-slate-800">
+                        <div className="border-b border-emerald-600 pb-2 mb-3 flex items-center justify-between text-xs font-bold text-slate-800 select-text">
                           <div className="flex items-center gap-2">
                             <img src={selectedCompany.logoUrl} alt={selectedCompany.code} className="w-7 h-7 object-contain" />
                             <span className="font-black uppercase tracking-wider">{selectedCompany.name}</span>
@@ -1178,7 +1202,7 @@ export default function DocumentStudioPanel({
                       )}
 
                       {el.variant === "header_aac_compliance" && (
-                        <div className="border-b-2 border-slate-900 pb-3 mb-4 flex items-center justify-between gap-3">
+                        <div className="border-b-2 border-slate-900 pb-3 mb-4 flex items-center justify-between gap-3 select-text">
                           <div className="flex items-center gap-3">
                             <img src={selectedCompany.logoUrl} alt={selectedCompany.name} className="w-14 h-14 object-contain" />
                             <div>
@@ -1197,134 +1221,165 @@ export default function DocumentStudioPanel({
                         </div>
                       )}
 
-                      {/* --- 2. ADDRESSING & METADATA --- */}
+                      {/* --- 2. ADDRESSING: PURE DOCUMENT LINES (NO TEXTBOXES) --- */}
                       {el.variant === "address_memo_grid" && (
-                        <div className="border border-slate-300 rounded-lg p-3 bg-slate-50/50 space-y-2 text-xs font-semibold text-slate-700 mb-4">
-                          <div className="flex justify-between border-b border-slate-200 pb-1.5">
-                            <div><span className="font-bold text-slate-500">REF NO:</span> <strong className="font-mono text-slate-900">{docRef}</strong></div>
-                            <div><span className="font-bold text-slate-500">DATE:</span> <strong className="text-slate-900">{docDate}</strong></div>
+                        <div className="border border-slate-300 rounded-lg p-3.5 bg-slate-50/40 text-xs text-slate-800 space-y-2 mb-4 select-text">
+                          <div className="flex justify-between items-center border-b border-slate-200 pb-2">
+                            <span className="font-black tracking-widest text-slate-900 text-sm">MEMORANDUM</span>
+                            <span className="font-mono text-slate-500 font-bold">REF: {docRef}</span>
                           </div>
-                          <div className="grid grid-cols-1 gap-1.5">
-                            <div className="flex items-baseline gap-2">
-                              <span className="font-black text-slate-500 w-12">TO:</span>
-                              <input
-                                type="text"
-                                value={el.data.to}
-                                onChange={(e) => updateElementData(el.id, "to", e.target.value)}
-                                className="flex-1 bg-transparent border-b border-transparent hover:border-slate-300 focus:outline-none font-bold text-slate-900"
-                              />
+                          <div className="grid grid-cols-1 gap-1.5 text-xs">
+                            <div className="flex items-baseline">
+                              <span className="font-black text-slate-500 w-20 shrink-0">FOR / TO:</span>
+                              <span
+                                contentEditable
+                                suppressContentEditableWarning
+                                onBlur={(e) => updateElementData(el.id, "to", e.currentTarget.innerText)}
+                                className="font-bold text-slate-900 flex-1 outline-none hover:bg-amber-50/50 rounded px-1 transition"
+                              >
+                                {el.data.to}
+                              </span>
                             </div>
-                            <div className="flex items-baseline gap-2">
-                              <span className="font-black text-slate-500 w-12">FROM:</span>
-                              <input
-                                type="text"
-                                value={el.data.from}
-                                onChange={(e) => updateElementData(el.id, "from", e.target.value)}
-                                className="flex-1 bg-transparent border-b border-transparent hover:border-slate-300 focus:outline-none font-bold text-slate-900"
-                              />
+                            <div className="flex items-baseline">
+                              <span className="font-black text-slate-500 w-20 shrink-0">FROM:</span>
+                              <span
+                                contentEditable
+                                suppressContentEditableWarning
+                                onBlur={(e) => updateElementData(el.id, "from", e.currentTarget.innerText)}
+                                className="font-bold text-slate-900 flex-1 outline-none hover:bg-amber-50/50 rounded px-1 transition"
+                              >
+                                {el.data.from}
+                              </span>
                             </div>
-                            <div className="flex items-baseline gap-2">
-                              <span className="font-black text-slate-500 w-12">SUBJECT:</span>
-                              <input
-                                type="text"
-                                value={el.data.subject}
-                                onChange={(e) => updateElementData(el.id, "subject", e.target.value)}
-                                className="flex-1 bg-transparent border-b border-transparent hover:border-slate-300 focus:outline-none font-extrabold text-slate-900"
-                              />
+                            <div className="flex items-baseline">
+                              <span className="font-black text-slate-500 w-20 shrink-0">DATE:</span>
+                              <span className="font-bold text-slate-800 flex-1 px-1">{docDate}</span>
+                            </div>
+                            <div className="flex items-baseline">
+                              <span className="font-black text-slate-500 w-20 shrink-0">SUBJECT:</span>
+                              <span
+                                contentEditable
+                                suppressContentEditableWarning
+                                onBlur={(e) => updateElementData(el.id, "subject", e.currentTarget.innerText)}
+                                className="font-black text-slate-950 flex-1 uppercase outline-none hover:bg-amber-50/50 rounded px-1 transition"
+                              >
+                                {el.data.subject}
+                              </span>
                             </div>
                           </div>
                         </div>
                       )}
 
                       {el.variant === "address_formal_letter" && (
-                        <div className="mb-4 space-y-3 text-xs">
+                        <div className="mb-4 text-xs text-slate-900 space-y-3 select-text">
                           <div className="text-right text-slate-600 font-bold">
-                            Date: <strong>{docDate}</strong> | Ref: <strong className="font-mono">{docRef}</strong>
+                            <span>{docDate}</span>
+                            <span className="block font-mono text-[11px] text-slate-500">REF: {docRef}</span>
                           </div>
                           <div className="space-y-0.5">
-                            <input
-                              type="text"
-                              value={el.data.recipientName}
-                              onChange={(e) => updateElementData(el.id, "recipientName", e.target.value)}
-                              className="font-black text-sm text-slate-900 uppercase bg-transparent border-b border-transparent hover:border-slate-300 focus:outline-none w-full"
-                            />
-                            <input
-                              type="text"
-                              value={el.data.recipientTitle}
-                              onChange={(e) => updateElementData(el.id, "recipientTitle", e.target.value)}
-                              className="font-semibold text-slate-600 text-xs bg-transparent border-b border-transparent hover:border-slate-300 focus:outline-none w-full"
-                            />
-                            <input
-                              type="text"
-                              value={el.data.recipientCompany}
-                              onChange={(e) => updateElementData(el.id, "recipientCompany", e.target.value)}
-                              className="text-slate-500 text-xs bg-transparent border-b border-transparent hover:border-slate-300 focus:outline-none w-full"
-                            />
+                            <div
+                              contentEditable
+                              suppressContentEditableWarning
+                              onBlur={(e) => updateElementData(el.id, "recipientName", e.currentTarget.innerText)}
+                              className="font-black text-sm uppercase text-slate-900 outline-none hover:bg-amber-50/50 rounded px-1 transition"
+                            >
+                              {el.data.recipientName}
+                            </div>
+                            <div
+                              contentEditable
+                              suppressContentEditableWarning
+                              onBlur={(e) => updateElementData(el.id, "recipientTitle", e.currentTarget.innerText)}
+                              className="font-semibold text-xs text-slate-700 outline-none hover:bg-amber-50/50 rounded px-1 transition"
+                            >
+                              {el.data.recipientTitle}
+                            </div>
+                            <div
+                              contentEditable
+                              suppressContentEditableWarning
+                              onBlur={(e) => updateElementData(el.id, "recipientCompany", e.currentTarget.innerText)}
+                              className="text-xs text-slate-600 outline-none hover:bg-amber-50/50 rounded px-1 transition"
+                            >
+                              {el.data.recipientCompany}
+                            </div>
                           </div>
-                          <div className="pt-2 font-black text-slate-800">
-                            <input
-                              type="text"
-                              value={el.data.salutation}
-                              onChange={(e) => updateElementData(el.id, "salutation", e.target.value)}
-                              className="bg-transparent border-b border-transparent hover:border-slate-300 focus:outline-none font-black"
-                            />
+                          <div
+                            contentEditable
+                            suppressContentEditableWarning
+                            onBlur={(e) => updateElementData(el.id, "salutation", e.currentTarget.innerText)}
+                            className="font-black text-xs text-slate-900 pt-1 outline-none hover:bg-amber-50/50 rounded px-1 transition"
+                          >
+                            {el.data.salutation}
                           </div>
                         </div>
                       )}
 
                       {el.variant === "address_public_notice" && (
-                        <div className="text-center my-4 space-y-2">
-                          <span className="font-mono text-[10px] font-black bg-amber-100 text-amber-900 px-2.5 py-0.5 rounded border border-amber-300">
+                        <div className="text-center my-4 space-y-2 select-text">
+                          <div className="inline-block font-mono text-[10px] font-black bg-amber-100 text-amber-950 px-2.5 py-0.5 rounded border border-amber-300">
                             {docRef} • {docDate}
-                          </span>
-                          <input
-                            type="text"
-                            value={el.data.bannerTitle}
-                            onChange={(e) => updateElementData(el.id, "bannerTitle", e.target.value.toUpperCase())}
-                            className="w-full text-center text-lg sm:text-xl font-black uppercase tracking-widest text-slate-950 bg-transparent border-b border-transparent hover:border-slate-300 focus:outline-none py-1"
-                          />
+                          </div>
+                          <h2
+                            contentEditable
+                            suppressContentEditableWarning
+                            onBlur={(e) => updateElementData(el.id, "bannerTitle", e.currentTarget.innerText)}
+                            className="text-lg sm:text-xl font-black uppercase tracking-widest text-slate-950 outline-none hover:bg-amber-50/50 rounded px-2 transition"
+                          >
+                            {el.data.bannerTitle}
+                          </h2>
                           <div className="h-0.5 w-28 bg-amber-600 mx-auto" />
-                          <p className="text-xs font-bold text-slate-600 mt-2">
+                          <p
+                            contentEditable
+                            suppressContentEditableWarning
+                            onBlur={(e) => updateElementData(el.id, "to", e.currentTarget.innerText)}
+                            className="text-xs font-bold text-slate-700 mt-2 outline-none hover:bg-amber-50/50 rounded px-1 transition"
+                          >
                             {el.data.to}
                           </p>
                         </div>
                       )}
 
                       {el.variant === "address_certificate_ribbon" && (
-                        <div className="text-center my-6 space-y-3">
+                        <div className="text-center my-6 space-y-2.5 select-text">
                           <p className="text-xs font-black tracking-widest text-amber-700 uppercase">
                             {el.data.conferralText}
                           </p>
-                          <input
-                            type="text"
-                            value={el.data.awardeeName}
-                            onChange={(e) => updateElementData(el.id, "awardeeName", e.target.value.toUpperCase())}
-                            className="w-full text-center text-xl sm:text-2xl font-black uppercase text-slate-900 bg-transparent border-b border-transparent hover:border-slate-300 focus:outline-none py-1"
-                          />
-                          <input
-                            type="text"
-                            value={el.data.awardeeTitle}
-                            onChange={(e) => updateElementData(el.id, "awardeeTitle", e.target.value)}
-                            className="w-full text-center text-xs font-bold text-slate-600 bg-transparent border-b border-transparent hover:border-slate-300 focus:outline-none"
-                          />
+                          <h2
+                            contentEditable
+                            suppressContentEditableWarning
+                            onBlur={(e) => updateElementData(el.id, "awardeeName", e.currentTarget.innerText)}
+                            className="text-xl sm:text-2xl font-black uppercase text-slate-950 outline-none hover:bg-amber-50/50 rounded px-2 transition"
+                          >
+                            {el.data.awardeeName}
+                          </h2>
+                          <p
+                            contentEditable
+                            suppressContentEditableWarning
+                            onBlur={(e) => updateElementData(el.id, "awardeeTitle", e.currentTarget.innerText)}
+                            className="text-xs font-bold text-slate-600 outline-none hover:bg-amber-50/50 rounded px-1 transition"
+                          >
+                            {el.data.awardeeTitle}
+                          </p>
                         </div>
                       )}
 
-                      {/* --- 3. DIRECTIVES & BODY MODULES --- */}
+                      {/* --- 3. DIRECTIVES & BODY: PURE DOCUMENT TEXT (NO FORM TEXTAREAS) --- */}
                       {el.variant === "body_rewards_voucher" ? (
-                        <div className="space-y-4 my-3">
+                        <div className="space-y-4 my-3 select-text">
                           <div className="text-center">
                             <h3 className="text-base font-black uppercase tracking-wider text-slate-900">
                               {el.data.title}
                             </h3>
                           </div>
-                          <textarea
-                            value={el.data.citation}
-                            onChange={(e) => updateElementData(el.id, "citation", e.target.value)}
-                            rows={4}
-                            className="w-full bg-transparent border border-transparent hover:border-slate-200 focus:border-amber-400 rounded p-1 focus:outline-none text-justify leading-relaxed"
-                          />
-                          {/* Voucher Card */}
+                          <p
+                            contentEditable
+                            suppressContentEditableWarning
+                            onBlur={(e) => updateElementData(el.id, "citation", e.currentTarget.innerText)}
+                            className="text-justify leading-relaxed text-slate-800 outline-none hover:bg-amber-50/30 rounded p-1 transition"
+                          >
+                            {el.data.citation}
+                          </p>
+
+                          {/* Authentic Incentive Voucher Card */}
                           <div className="p-4 rounded-xl border-2 border-amber-400 bg-gradient-to-r from-amber-50 via-amber-100/50 to-amber-50 text-slate-900 shadow-2xs">
                             <div className="flex justify-between items-center border-b border-amber-300 pb-2 mb-2">
                               <span className="text-[11px] font-black uppercase tracking-widest text-amber-900">
@@ -1334,43 +1389,50 @@ export default function DocumentStudioPanel({
                                 {el.data.voucherCode}
                               </span>
                             </div>
-                            <div className="grid grid-cols-2 gap-3 text-xs">
+                            <div className="grid grid-cols-2 gap-4 text-xs">
                               <div>
                                 <span className="text-[10px] uppercase font-bold text-slate-500 block">Monetary Grant</span>
-                                <input
-                                  type="text"
-                                  value={el.data.voucherAmount}
-                                  onChange={(e) => updateElementData(el.id, "voucherAmount", e.target.value)}
-                                  className="font-black text-lg text-emerald-800 bg-transparent border-b border-amber-300 focus:outline-none"
-                                />
+                                <div
+                                  contentEditable
+                                  suppressContentEditableWarning
+                                  onBlur={(e) => updateElementData(el.id, "voucherAmount", e.currentTarget.innerText)}
+                                  className="font-black text-xl text-emerald-800 outline-none hover:bg-white/50 rounded transition"
+                                >
+                                  {el.data.voucherAmount}
+                                </div>
                               </div>
                               <div>
                                 <span className="text-[10px] uppercase font-bold text-slate-500 block">Validity</span>
-                                <input
-                                  type="text"
-                                  value={el.data.voucherValidity}
-                                  onChange={(e) => updateElementData(el.id, "voucherValidity", e.target.value)}
-                                  className="font-bold text-xs text-slate-700 bg-transparent border-b border-amber-300 focus:outline-none w-full"
-                                />
+                                <div
+                                  contentEditable
+                                  suppressContentEditableWarning
+                                  onBlur={(e) => updateElementData(el.id, "voucherValidity", e.currentTarget.innerText)}
+                                  className="font-bold text-xs text-slate-700 outline-none hover:bg-white/50 rounded transition"
+                                >
+                                  {el.data.voucherValidity}
+                                </div>
                               </div>
                             </div>
+                            <p className="text-[10px] text-slate-500 italic mt-2 pt-1 border-t border-amber-200">
+                              {el.data.voucherTerms}
+                            </p>
                           </div>
                         </div>
                       ) : el.variant === "body_numbered_directives" ? (
-                        <div className="space-y-2 my-3">
+                        <div className="space-y-2 my-3 select-text">
                           <h4 className="text-xs font-black uppercase tracking-wider text-slate-900">
                             {el.data.title}
                           </h4>
                           <ol className="list-decimal list-inside space-y-1.5 text-xs text-justify leading-relaxed">
                             {el.data.items.map((it, idx) => (
-                              <li key={idx} className="text-slate-800">
-                                <span className="font-semibold">{it}</span>
+                              <li key={idx} className="text-slate-800 font-semibold">
+                                <span>{it}</span>
                               </li>
                             ))}
                           </ol>
                         </div>
                       ) : el.variant === "body_warning_callout" ? (
-                        <div className="p-3.5 rounded-xl border-l-4 border-rose-600 bg-rose-50/60 my-3 space-y-1">
+                        <div className="p-3.5 rounded-xl border-l-4 border-rose-600 bg-rose-50/60 my-3 space-y-1 select-text">
                           <div className="flex items-center gap-1.5 text-rose-800 font-black text-xs uppercase tracking-wider">
                             <AlertTriangle size={15} />
                             <span>{el.data.boxTitle}</span>
@@ -1380,135 +1442,140 @@ export default function DocumentStudioPanel({
                           </p>
                         </div>
                       ) : (
-                        <div className="space-y-2 my-3">
+                        <div className="space-y-2.5 my-3 select-text">
                           {el.data.title && (
                             <h3 className="text-sm font-black uppercase tracking-wider text-slate-900">
                               {el.data.title}
                             </h3>
                           )}
-                          <textarea
-                            value={el.data.bodyText}
-                            onChange={(e) => updateElementData(el.id, "bodyText", e.target.value)}
-                            rows={8}
-                            className="w-full bg-transparent border border-transparent hover:border-slate-200 focus:border-amber-400 rounded-lg p-2 focus:outline-none text-justify leading-relaxed transition"
-                          />
+                          <div
+                            contentEditable
+                            suppressContentEditableWarning
+                            onBlur={(e) => updateElementData(el.id, "bodyText", e.currentTarget.innerText)}
+                            className="text-justify leading-relaxed text-slate-800 whitespace-pre-line outline-none hover:bg-amber-50/20 rounded p-1 transition"
+                          >
+                            {el.data.bodyText.replace(/\[COMPANY_NAME\]/g, selectedCompany.name)}
+                          </div>
                         </div>
                       )}
 
-                      {/* --- 4. SIGNATORIES --- */}
+                      {/* --- 4. SIGNATORIES: AUTHENTIC SIGNATURE LINES (NO INPUT BOXES) --- */}
                       {el.variant === "sig_dual_executive" && (
-                        <div className="grid grid-cols-2 gap-8 text-xs pt-6 mt-4 border-t border-slate-200">
+                        <div className="grid grid-cols-2 gap-8 text-xs pt-8 mt-6 border-t border-slate-200 select-text">
                           <div>
-                            <input
-                              type="text"
-                              value={el.data.leftLabel}
-                              onChange={(e) => updateElementData(el.id, "leftLabel", e.target.value)}
-                              className="font-bold text-slate-500 uppercase tracking-wider text-[11px] bg-transparent border-b border-transparent hover:border-slate-300 focus:outline-none w-full"
-                            />
-                            <div className="pt-8">
-                              <input
-                                type="text"
-                                value={el.data.leftName}
-                                onChange={(e) => updateElementData(el.id, "leftName", e.target.value)}
-                                className="font-black text-slate-900 uppercase tracking-wide text-xs bg-transparent border-b border-slate-400 focus:border-amber-500 focus:outline-none w-full"
-                              />
-                              <input
-                                type="text"
-                                value={el.data.leftTitle}
-                                onChange={(e) => updateElementData(el.id, "leftTitle", e.target.value)}
-                                className="text-slate-600 font-semibold text-[11px] bg-transparent border-b border-transparent hover:border-slate-300 focus:outline-none w-full mt-0.5"
-                              />
-                              <p className="text-[10px] text-slate-500 uppercase tracking-wider font-bold">
-                                {selectedCompany.name}
-                              </p>
+                            <div className="font-bold text-slate-500 uppercase tracking-wider text-[11px] mb-8">
+                              {el.data.leftLabel}
+                            </div>
+                            <div className="w-60 border-b-2 border-slate-900 pb-1">
+                              <div
+                                contentEditable
+                                suppressContentEditableWarning
+                                onBlur={(e) => updateElementData(el.id, "leftName", e.currentTarget.innerText)}
+                                className="font-black text-slate-950 uppercase text-xs tracking-wide outline-none hover:bg-amber-50/50 rounded"
+                              >
+                                {el.data.leftName}
+                              </div>
+                            </div>
+                            <div
+                              contentEditable
+                              suppressContentEditableWarning
+                              onBlur={(e) => updateElementData(el.id, "leftTitle", e.currentTarget.innerText)}
+                              className="text-slate-600 font-semibold text-[11px] mt-0.5 outline-none hover:bg-amber-50/50 rounded"
+                            >
+                              {el.data.leftTitle}
+                            </div>
+                            <div className="text-slate-500 font-bold uppercase text-[10px]">
+                              {selectedCompany.name}
                             </div>
                           </div>
 
-                          <div className="text-right">
-                            <input
-                              type="text"
-                              value={el.data.rightLabel}
-                              onChange={(e) => updateElementData(el.id, "rightLabel", e.target.value)}
-                              className="font-bold text-slate-500 uppercase tracking-wider text-[11px] bg-transparent border-b border-transparent hover:border-slate-300 focus:outline-none w-full text-right"
-                            />
-                            <div className="pt-8">
-                              <input
-                                type="text"
-                                value={el.data.rightName}
-                                onChange={(e) => updateElementData(el.id, "rightName", e.target.value)}
-                                className="font-black text-slate-900 uppercase tracking-wide text-xs bg-transparent border-b border-slate-400 focus:border-amber-500 focus:outline-none w-full text-right"
-                              />
-                              <input
-                                type="text"
-                                value={el.data.rightTitle}
-                                onChange={(e) => updateElementData(el.id, "rightTitle", e.target.value)}
-                                className="text-slate-600 font-semibold text-[11px] bg-transparent border-b border-transparent hover:border-slate-300 focus:outline-none w-full mt-0.5 text-right"
-                              />
-                              <p className="text-[10px] text-slate-500 uppercase tracking-wider font-bold">
-                                {selectedCompany.name}
-                              </p>
+                          <div className="text-right flex flex-col items-end">
+                            <div className="font-bold text-slate-500 uppercase tracking-wider text-[11px] mb-8">
+                              {el.data.rightLabel}
+                            </div>
+                            <div className="w-60 border-b-2 border-slate-900 pb-1 text-right">
+                              <div
+                                contentEditable
+                                suppressContentEditableWarning
+                                onBlur={(e) => updateElementData(el.id, "rightName", e.currentTarget.innerText)}
+                                className="font-black text-slate-950 uppercase text-xs tracking-wide outline-none hover:bg-amber-50/50 rounded"
+                              >
+                                {el.data.rightName}
+                              </div>
+                            </div>
+                            <div
+                              contentEditable
+                              suppressContentEditableWarning
+                              onBlur={(e) => updateElementData(el.id, "rightTitle", e.currentTarget.innerText)}
+                              className="text-slate-600 font-semibold text-[11px] mt-0.5 outline-none hover:bg-amber-50/50 rounded"
+                            >
+                              {el.data.rightTitle}
+                            </div>
+                            <div className="text-slate-500 font-bold uppercase text-[10px]">
+                              {selectedCompany.name}
                             </div>
                           </div>
                         </div>
                       )}
 
                       {el.variant === "sig_single_official" && (
-                        <div className="pt-6 mt-4 border-t border-slate-200 max-w-xs text-xs">
-                          <input
-                            type="text"
-                            value={el.data.label}
-                            onChange={(e) => updateElementData(el.id, "label", e.target.value)}
-                            className="font-bold text-slate-500 uppercase tracking-wider text-[11px] bg-transparent border-b border-transparent hover:border-slate-300 focus:outline-none w-full"
-                          />
-                          <div className="pt-8">
-                            <input
-                              type="text"
-                              value={el.data.name}
-                              onChange={(e) => updateElementData(el.id, "name", e.target.value)}
-                              className="font-black text-slate-900 uppercase tracking-wide text-xs bg-transparent border-b border-slate-400 focus:border-amber-500 focus:outline-none w-full"
-                            />
-                            <input
-                              type="text"
-                              value={el.data.title}
-                              onChange={(e) => updateElementData(el.id, "title", e.target.value)}
-                              className="text-slate-600 font-semibold text-[11px] bg-transparent border-b border-transparent hover:border-slate-300 focus:outline-none w-full mt-0.5"
-                            />
-                            <p className="text-[10px] text-slate-500 uppercase tracking-wider font-bold">
-                              {selectedCompany.name}
-                            </p>
+                        <div className="pt-8 mt-6 border-t border-slate-200 max-w-xs text-xs select-text">
+                          <div className="font-bold text-slate-500 uppercase tracking-wider text-[11px] mb-8">
+                            {el.data.label}
+                          </div>
+                          <div className="w-60 border-b-2 border-slate-900 pb-1">
+                            <div
+                              contentEditable
+                              suppressContentEditableWarning
+                              onBlur={(e) => updateElementData(el.id, "name", e.currentTarget.innerText)}
+                              className="font-black text-slate-950 uppercase text-xs tracking-wide outline-none hover:bg-amber-50/50 rounded"
+                            >
+                              {el.data.name}
+                            </div>
+                          </div>
+                          <div
+                            contentEditable
+                            suppressContentEditableWarning
+                            onBlur={(e) => updateElementData(el.id, "title", e.currentTarget.innerText)}
+                            className="text-slate-600 font-semibold text-[11px] mt-0.5 outline-none hover:bg-amber-50/50 rounded"
+                          >
+                            {el.data.title}
+                          </div>
+                          <div className="text-slate-500 font-bold uppercase text-[10px]">
+                            {selectedCompany.name}
                           </div>
                         </div>
                       )}
 
                       {el.variant === "sig_receiving_acknowledgment" && (
-                        <div className="border border-slate-400 border-dashed rounded-lg p-3 my-4 bg-slate-50 text-xs">
-                          <div className="flex justify-between items-center border-b border-slate-300 pb-1 mb-2">
-                            <span className="font-black uppercase tracking-wider text-slate-800">{el.data.stubTitle}</span>
-                            <span className="font-mono text-[10px] text-slate-500">Duplicate Copy</span>
+                        <div className="border border-slate-400 border-dashed rounded-lg p-3.5 my-4 bg-slate-50/80 text-xs select-text">
+                          <div className="flex justify-between items-center border-b border-slate-300 pb-1.5 mb-2.5">
+                            <span className="font-black uppercase tracking-wider text-slate-900">{el.data.stubTitle}</span>
+                            <span className="font-mono text-[10px] text-slate-500 font-bold">Duplicate Copy</span>
                           </div>
-                          <div className="grid grid-cols-3 gap-3 pt-2 text-[11px]">
-                            <div className="border-b border-slate-400 pb-1">
-                              <span className="text-slate-400 block text-[9px]">RECEIVED BY (PRINTED NAME):</span>
+                          <div className="grid grid-cols-3 gap-4 pt-4 text-[11px]">
+                            <div className="border-b border-slate-900 pb-1">
+                              <span className="text-slate-400 block text-[9px] uppercase font-bold">Received by (Printed Name):</span>
                             </div>
-                            <div className="border-b border-slate-400 pb-1">
-                              <span className="text-slate-400 block text-[9px]">SIGNATURE:</span>
+                            <div className="border-b border-slate-900 pb-1">
+                              <span className="text-slate-400 block text-[9px] uppercase font-bold">Official Signature:</span>
                             </div>
-                            <div className="border-b border-slate-400 pb-1">
-                              <span className="text-slate-400 block text-[9px]">DATE &amp; TIME RECEIVED:</span>
+                            <div className="border-b border-slate-900 pb-1">
+                              <span className="text-slate-400 block text-[9px] uppercase font-bold">Date &amp; Time Received:</span>
                             </div>
                           </div>
                         </div>
                       )}
 
-                      {/* --- 5. FOOTERS & NOTARIAL --- */}
+                      {/* --- 5. FOOTERS: PURE LEGAL FOOTERS --- */}
                       {el.variant === "footer_notary_jurat" && (
-                        <div className="pt-4 border-t border-slate-300 text-xs text-slate-700 space-y-1.5 mt-6">
+                        <div className="pt-4 border-t border-slate-300 text-xs text-slate-700 space-y-1.5 mt-6 select-text">
                           <p className="font-bold">REPUBLIC OF THE PHILIPPINES )</p>
                           <p className="font-bold">PROVINCE OF CEBU, MANDAUE CITY ) S.S.</p>
                           <p className="text-justify leading-relaxed">
                             SUBSCRIBED AND SWORN to before me this _____ day of _______________ {el.data.docYear || "2026"} at {el.data.city}, affiant exhibiting competent evidence of identity.
                           </p>
-                          <div className="flex justify-between items-end pt-4">
+                          <div className="flex justify-between items-end pt-5">
                             <div className="text-[10px] text-slate-500 font-mono">
                               <p>Doc. No. ____; Page No. ____;</p>
                               <p>Book No. ____; Series of {el.data.docYear || "2026"}.</p>
@@ -1521,7 +1588,7 @@ export default function DocumentStudioPanel({
                       )}
 
                       {el.variant === "footer_corporate_security" && (
-                        <div className="border-t border-slate-200 pt-3 mt-6 flex items-center justify-between text-[10px] text-slate-500 font-mono">
+                        <div className="border-t border-slate-200 pt-3 mt-6 flex items-center justify-between text-[10px] text-slate-500 font-mono select-text">
                           <div className="flex items-center gap-1.5">
                             <Shield size={12} className="text-emerald-700" />
                             <span>{el.data.noticeText}</span>
@@ -1531,13 +1598,13 @@ export default function DocumentStudioPanel({
                       )}
 
                       {el.variant === "footer_contact_hotline" && (
-                        <div className="border-t border-slate-200 pt-2 mt-4 text-center text-[10px] text-slate-500 font-semibold">
+                        <div className="border-t border-slate-200 pt-2 mt-4 text-center text-[10px] text-slate-500 font-semibold select-text">
                           <span>Hotline: {el.data.hotline} • Inquiries: {el.data.email}</span>
                         </div>
                       )}
 
                       {el.variant === "footer_page_tracker" && (
-                        <div className="border-t border-slate-200 pt-1.5 mt-4 flex justify-between text-[9px] text-slate-400 font-mono">
+                        <div className="border-t border-slate-200 pt-1.5 mt-4 flex justify-between text-[9px] text-slate-400 font-mono select-text">
                           <span>{el.data.formCode}</span>
                           <span>{el.data.pageText}</span>
                         </div>
@@ -1640,28 +1707,28 @@ export default function DocumentStudioPanel({
               <button
                 type="button"
                 onClick={() => handleLoadFullDocumentPreset("non_affiliation")}
-                className="p-1.5 rounded-lg bg-white border border-slate-200 hover:border-amber-400 font-bold text-slate-700 transition truncate text-left"
+                className="p-1.5 rounded-lg bg-white border border-slate-200 hover:border-amber-400 font-bold text-slate-700 transition truncate text-left cursor-pointer"
               >
                 🛡️ Non-Affiliation
               </button>
               <button
                 type="button"
                 onClick={() => handleLoadFullDocumentPreset("rewards_voucher")}
-                className="p-1.5 rounded-lg bg-white border border-slate-200 hover:border-amber-400 font-bold text-slate-700 transition truncate text-left"
+                className="p-1.5 rounded-lg bg-white border border-slate-200 hover:border-amber-400 font-bold text-slate-700 transition truncate text-left cursor-pointer"
               >
                 🏆 Rewards &amp; Voucher
               </button>
               <button
                 type="button"
                 onClick={() => handleLoadFullDocumentPreset("termination_operations")}
-                className="p-1.5 rounded-lg bg-white border border-slate-200 hover:border-amber-400 font-bold text-slate-700 transition truncate text-left"
+                className="p-1.5 rounded-lg bg-white border border-slate-200 hover:border-amber-400 font-bold text-slate-700 transition truncate text-left cursor-pointer"
               >
                 🛑 Termination of Ops
               </button>
               <button
                 type="button"
                 onClick={() => handleLoadFullDocumentPreset("termination_agency")}
-                className="p-1.5 rounded-lg bg-white border border-slate-200 hover:border-amber-400 font-bold text-slate-700 transition truncate text-left"
+                className="p-1.5 rounded-lg bg-white border border-slate-200 hover:border-amber-400 font-bold text-slate-700 transition truncate text-left cursor-pointer"
               >
                 📜 Agency Term.
               </button>
