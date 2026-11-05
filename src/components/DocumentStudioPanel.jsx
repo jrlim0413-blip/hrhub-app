@@ -378,247 +378,415 @@ I have secured a secondary backup communication pocket WiFi to prevent similar d
   }
 ];
 
-// ================= VISUAL MINI-PREVIEW COMPONENT FOR HOVER =================
-// Renders an authentic miniature visual depiction of the design on hover!
+// ================= VISUAL PREVIEW COMPONENT FOR HOVER =================
+// Renders an authentic, full-scale, crystal-clear 1:1 replica of the element!
 function ElementVisualPreview({ item, selectedCompany, docRef, docDate }) {
   if (!item) return null;
 
-  // Header Previews
+  // Header Previews (1:1 with bond paper output)
   if (item.category === "header") {
     if (item.variant === "header_dual_logo") {
       return (
-        <div className="border-b-2 border-emerald-600 pb-2 text-[10px] bg-white p-2 rounded shadow-2xs">
-          <div className="flex items-center justify-between gap-2">
-            <img src={selectedCompany.logoUrl} alt="logo" className="w-8 h-8 object-contain shrink-0" />
-            <div className="text-center flex-1">
-              <span className="font-black uppercase block text-[10px] leading-tight text-slate-900">{selectedCompany.name}</span>
-              <span className="text-[8px] text-emerald-800 font-semibold block">{selectedCompany.tagline}</span>
-              <span className="text-[7px] text-slate-500 block truncate">{selectedCompany.address}</span>
+        <div className="border-b-2 border-emerald-700 pb-4 select-text">
+          <div className="flex items-center justify-between gap-4">
+            <div className="w-16 h-16 flex items-center justify-center shrink-0">
+              <img src={selectedCompany.logoUrl} alt={selectedCompany.name} className="max-h-full max-w-full object-contain" />
             </div>
-            <img src={selectedCompany.rightLogoUrl || "/logos/group_emblem.jpg"} alt="emblem" className="w-8 h-8 object-contain shrink-0" />
+            <div className="flex-1 text-center px-2">
+              <h2 className="text-base font-black uppercase tracking-wider text-slate-900 leading-tight">
+                {selectedCompany.legalName || selectedCompany.name}
+              </h2>
+              <p className="text-xs font-semibold text-emerald-800 tracking-wide mt-0.5">
+                {selectedCompany.tagline}
+              </p>
+              <p className="text-[11px] text-slate-600 mt-1 leading-snug">
+                {selectedCompany.address}
+              </p>
+              <p className="text-[10px] text-slate-500 font-mono mt-0.5">
+                {selectedCompany.contact}
+              </p>
+            </div>
+            <div className="w-16 h-16 flex items-center justify-center shrink-0">
+              <img src={selectedCompany.rightLogoUrl || "/logos/group_emblem.jpg"} alt="Corporate Emblem" className="max-h-full max-w-full object-contain" />
+            </div>
           </div>
         </div>
       );
     }
     if (item.variant === "header_minimal_left") {
       return (
-        <div className="border-b border-slate-300 pb-2 text-[10px] bg-white p-2 rounded flex items-center justify-between gap-2 shadow-2xs">
-          <div className="flex items-center gap-2">
-            <img src={selectedCompany.logoUrl} alt="logo" className="w-7 h-7 object-contain" />
-            <div className="border-l border-amber-600 pl-1.5">
-              <span className="font-black text-[10px] uppercase block text-slate-900 leading-tight">{selectedCompany.name}</span>
-              <span className="text-[8px] text-slate-500 uppercase">{selectedCompany.category}</span>
+        <div className="border-b border-slate-300 pb-3 flex items-center justify-between gap-4 select-text">
+          <div className="flex items-center gap-3">
+            <img src={selectedCompany.logoUrl} alt={selectedCompany.name} className="w-14 h-14 object-contain" />
+            <div className="border-l-2 border-amber-600 pl-3">
+              <h2 className="text-base font-black uppercase text-slate-950 tracking-tight leading-tight">
+                {selectedCompany.name}
+              </h2>
+              <p className="text-xs font-bold text-slate-500 uppercase">{selectedCompany.category}</p>
             </div>
           </div>
-          <div className="text-right text-[7px] text-slate-400 font-mono">
-            <span>{selectedCompany.contact}</span>
+          <div className="text-right text-[11px] text-slate-500 font-mono">
+            <p>{selectedCompany.address}</p>
+            <p>{selectedCompany.contact}</p>
           </div>
         </div>
       );
     }
     if (item.variant === "header_formal_seal") {
       return (
-        <div className="border-b border-double border-slate-800 pb-2 text-center bg-white p-2 rounded shadow-2xs space-y-0.5">
-          <img src={selectedCompany.logoUrl} alt="seal" className="w-7 h-7 mx-auto object-contain" />
-          <span className="font-black uppercase text-[10px] block text-slate-900">{selectedCompany.name}</span>
-          <span className="text-[7px] text-slate-500 block">{selectedCompany.address}</span>
+        <div className="border-b-2 border-double border-slate-800 pb-4 text-center space-y-1 select-text">
+          <img src={selectedCompany.logoUrl} alt={selectedCompany.name} className="w-16 h-16 mx-auto object-contain mb-1" />
+          <h2 className="text-lg font-black uppercase tracking-widest text-slate-950">
+            {selectedCompany.legalName || selectedCompany.name}
+          </h2>
+          <p className="text-xs font-bold uppercase tracking-wider text-slate-700">
+            {selectedCompany.address} • {selectedCompany.contact}
+          </p>
         </div>
       );
     }
     if (item.variant === "header_compact_strip") {
       return (
-        <div className="border-b border-emerald-600 pb-1 flex items-center justify-between bg-white p-1.5 rounded shadow-2xs text-[9px]">
-          <div className="flex items-center gap-1.5">
-            <img src={selectedCompany.logoUrl} alt="logo" className="w-4 h-4 object-contain" />
-            <span className="font-black uppercase">{selectedCompany.name}</span>
+        <div className="border-b border-emerald-600 pb-2 flex items-center justify-between text-xs font-bold text-slate-800 select-text">
+          <div className="flex items-center gap-2.5">
+            <img src={selectedCompany.logoUrl} alt={selectedCompany.code} className="w-8 h-8 object-contain" />
+            <span className="font-black uppercase tracking-wider text-sm">{selectedCompany.name}</span>
           </div>
-          <span className="text-[7px] text-slate-500 font-mono">{selectedCompany.contact}</span>
+          <span className="text-xs text-slate-500 font-mono">{selectedCompany.contact}</span>
         </div>
       );
     }
     if (item.variant === "header_aac_compliance") {
       return (
-        <div className="border-b border-slate-900 pb-2 bg-white p-2 rounded shadow-2xs flex justify-between items-center text-[9px]">
-          <div className="flex items-center gap-2">
-            <img src={selectedCompany.logoUrl} alt="logo" className="w-6 h-6 object-contain" />
+        <div className="border-b-2 border-slate-900 pb-3 flex items-center justify-between gap-3 select-text">
+          <div className="flex items-center gap-3">
+            <img src={selectedCompany.logoUrl} alt={selectedCompany.name} className="w-14 h-14 object-contain" />
             <div>
-              <span className="font-black uppercase block text-[10px]">{selectedCompany.name}</span>
-              <span className="text-[7px] text-emerald-800 font-bold">PCSO Authorized Agent Corporation</span>
+              <h2 className="text-base font-black uppercase text-slate-900">
+                {selectedCompany.name}
+              </h2>
+              <p className="text-xs font-extrabold text-emerald-800">
+                PCSO Authorized Agent Corporation (AAC) • Central Operations Hub
+              </p>
             </div>
           </div>
-          <span className="text-[7px] font-mono border border-slate-300 px-1 py-0.5 rounded bg-slate-50">AAC-2026</span>
+          <div className="text-right text-xs font-mono">
+            <span className="block font-black text-slate-900 text-sm">{item.data?.aacNumber || "AAC-CEBU-2026-089"}</span>
+            <span className="text-slate-500 text-[11px]">PCSO Accredited Agent</span>
+          </div>
         </div>
       );
     }
   }
 
-  // Addressing Previews
+  // Addressing Previews (1:1 with bond paper output, borderless)
   if (item.category === "addressing") {
     if (item.variant === "address_memo_grid") {
       return (
-        <div className="border border-slate-300 rounded p-2 bg-slate-50 text-[9px] space-y-1 shadow-2xs">
-          <div className="flex justify-between font-bold text-slate-700 border-b pb-0.5">
-            <span>MEMORANDUM</span>
-            <span className="font-mono text-slate-500">{docRef}</span>
+        <div className="my-3 text-xs select-text">
+          <div className="flex justify-between items-baseline border-b-2 border-slate-900 pb-1.5 mb-2.5">
+            <span className="font-black tracking-widest text-slate-950 text-base">MEMORANDUM</span>
+            <span className="font-mono text-slate-500 font-bold text-xs">REF: {docRef}</span>
           </div>
-          <div className="text-[8px] space-y-0.5">
-            <p><strong>TO:</strong> All Branch Supervisors &amp; Field Staff</p>
-            <p><strong>FROM:</strong> Human Resources Department</p>
-            <p><strong>DATE:</strong> {docDate}</p>
-            <p><strong>SUBJECT:</strong> Mandatory Operational Directives</p>
+          <div className="grid grid-cols-1 gap-2 text-xs">
+            <div className="flex items-baseline">
+              <span className="font-black text-slate-600 w-24 shrink-0 tracking-wide">FOR / TO:</span>
+              <span className="font-bold text-slate-900 flex-1">{item.data?.to || "ALL CONCERNED (BRANCH SUPERVISORS & FIELD STAFF)"}</span>
+            </div>
+            <div className="flex items-baseline">
+              <span className="font-black text-slate-600 w-24 shrink-0 tracking-wide">FROM:</span>
+              <span className="font-bold text-slate-900 flex-1">{item.data?.from || "HUMAN RESOURCES DEPARTMENT"}</span>
+            </div>
+            <div className="flex items-baseline">
+              <span className="font-black text-slate-600 w-24 shrink-0 tracking-wide">DATE:</span>
+              <span className="font-bold text-slate-800 flex-1">{docDate}</span>
+            </div>
+            <div className="flex items-baseline border-b border-slate-300 pb-2">
+              <span className="font-black text-slate-600 w-24 shrink-0 tracking-wide">SUBJECT:</span>
+              <span className="font-black text-slate-950 flex-1 uppercase">{item.data?.subject || "MANDATORY OPERATIONAL DIRECTIVES"}</span>
+            </div>
           </div>
         </div>
       );
     }
     if (item.variant === "address_formal_letter") {
       return (
-        <div className="bg-white p-2 rounded border border-slate-200 text-[8px] space-y-1 shadow-2xs">
-          <div className="text-right text-slate-500">{docDate}</div>
-          <p className="font-bold text-slate-900 uppercase">MR. ROBERTO TAN</p>
-          <p className="text-slate-600">Accredited Coordinator • Branch Operations</p>
-          <p className="font-bold text-slate-800 pt-0.5">DEAR MR. TAN:</p>
+        <div className="my-3 text-xs text-slate-900 space-y-3 select-text">
+          <div className="text-right text-slate-600 font-bold">
+            <span>{docDate}</span>
+            <span className="block font-mono text-[11px] text-slate-500">REF: {docRef}</span>
+          </div>
+          <div className="space-y-0.5">
+            <div className="font-black text-sm uppercase text-slate-900">{item.data?.recipientName || "MR. ROBERTO TAN"}</div>
+            <div className="font-semibold text-xs text-slate-700">{item.data?.recipientTitle || "Accredited Coordinator • Branch Operations"}</div>
+            <div className="text-xs text-slate-600">{item.data?.recipientCompany || "Operations Division"}</div>
+          </div>
+          <div className="font-black text-xs text-slate-900 pt-1">
+            {item.data?.salutation || "DEAR MR. TAN:"}
+          </div>
         </div>
       );
     }
     if (item.variant === "address_public_notice") {
       return (
-        <div className="text-center p-2 rounded bg-white border border-slate-200 space-y-1 shadow-2xs">
-          <span className="text-[7px] font-mono font-bold bg-amber-100 px-1.5 py-0.2 rounded border border-amber-300 text-amber-900">{docRef}</span>
-          <p className="font-black text-[10px] uppercase tracking-wider text-slate-900">PUBLIC ADVISORY &amp; FORMAL NOTICE</p>
-          <div className="h-0.5 w-16 bg-amber-600 mx-auto" />
-          <p className="text-[8px] text-slate-600">TO THE GENERAL PATRONIZING PUBLIC AND ALL GAMING OUTLETS</p>
+        <div className="text-center my-4 space-y-2 select-text">
+          <div className="inline-block font-mono text-[11px] font-black bg-amber-100 text-amber-950 px-3 py-0.5 rounded border border-amber-300">
+            {docRef} • {docDate}
+          </div>
+          <h2 className="text-lg font-black uppercase tracking-widest text-slate-950">
+            {item.data?.bannerTitle || "PUBLIC ADVISORY & FORMAL NOTICE"}
+          </h2>
+          <div className="h-0.5 w-32 bg-amber-600 mx-auto" />
+          <p className="text-xs font-bold text-slate-700 mt-2">
+            {item.data?.to || "TO THE GENERAL PATRONIZING PUBLIC AND ALL GAMING OUTLETS"}
+          </p>
         </div>
       );
     }
     if (item.variant === "address_certificate_ribbon") {
       return (
-        <div className="text-center p-2 rounded bg-white border border-slate-200 space-y-1 shadow-2xs">
-          <span className="text-[7px] font-bold tracking-widest text-amber-700 uppercase">THIS CERTIFICATE IS PROUDLY CONFERRED UPON</span>
-          <p className="font-black text-[11px] uppercase text-slate-900">MS. MARIA SANTOS</p>
-          <p className="text-[8px] text-slate-500">Senior Area Coordinator • Operations Division</p>
+        <div className="text-center my-4 space-y-2 select-text">
+          <p className="text-xs font-black tracking-widest text-amber-700 uppercase">
+            {item.data?.conferralText || "THIS CERTIFICATE IS PROUDLY CONFERRED UPON"}
+          </p>
+          <h2 className="text-2xl font-black uppercase text-slate-950">
+            {item.data?.awardeeName || "MS. MARIA SANTOS"}
+          </h2>
+          <p className="text-xs font-bold text-slate-600">
+            {item.data?.awardeeTitle || "Senior Area Coordinator • Operations Division"}
+          </p>
         </div>
       );
     }
   }
 
-  // Directives & Body Previews
+  // Directives & Body Previews (1:1 with bond paper output)
   if (item.category === "body") {
     if (item.variant === "body_rewards_voucher") {
       return (
-        <div className="space-y-1.5 bg-white p-2 rounded border border-slate-200 shadow-2xs">
-          <p className="text-[8px] text-slate-700 italic leading-snug">In sincere appreciation of outstanding dedication and quota performance...</p>
-          <div className="border border-amber-400 bg-amber-50 p-1.5 rounded flex justify-between items-center text-[8px]">
-            <div>
-              <span className="text-[7px] text-slate-500 block uppercase">Incentive Grant</span>
-              <strong className="text-emerald-800 text-[10px] font-black">₱5,000.00</strong>
+        <div className="space-y-3 my-3 select-text">
+          <div className="text-center">
+            <h3 className="text-base font-black uppercase tracking-wider text-slate-900">
+              {item.data?.title || "CERTIFICATE OF MERIT & INCENTIVE VOUCHER"}
+            </h3>
+          </div>
+          <p className="text-justify text-xs leading-relaxed text-slate-800">
+            {item.data?.citation || "In sincere appreciation of outstanding dedication, exemplary teamwork, and consistent quota achievement in regional operations..."}
+          </p>
+          <div className="p-3.5 rounded-xl border-2 border-amber-400 bg-gradient-to-r from-amber-50 via-amber-100/50 to-amber-50 text-slate-900">
+            <div className="flex justify-between items-center border-b border-amber-300 pb-1.5 mb-2">
+              <span className="text-xs font-black uppercase tracking-widest text-amber-900">
+                Corporate Incentive Merit Voucher
+              </span>
+              <span className="font-mono text-xs font-black bg-amber-200 text-amber-950 px-2.5 py-0.5 rounded border border-amber-300">
+                {item.data?.voucherCode || "VCH-2026-REWARD"}
+              </span>
             </div>
-            <span className="font-mono text-[7px] bg-amber-200 px-1 rounded font-bold">VCH-2026-REWARD</span>
+            <div className="grid grid-cols-2 gap-4 text-xs">
+              <div>
+                <span className="text-[10px] uppercase font-bold text-slate-500 block">Monetary Grant</span>
+                <div className="font-black text-xl text-emerald-800">{item.data?.voucherAmount || "₱5,000.00"}</div>
+              </div>
+              <div>
+                <span className="text-[10px] uppercase font-bold text-slate-500 block">Validity</span>
+                <div className="font-bold text-xs text-slate-700">{item.data?.voucherValidity || "Valid within 60 days from issuance"}</div>
+              </div>
+            </div>
           </div>
         </div>
       );
     }
-    if (item.variant === "body_non_affiliation") {
+    if (item.variant === "body_numbered_directives") {
       return (
-        <div className="bg-white p-2 rounded border border-rose-200 text-[8px] space-y-1 shadow-2xs">
-          <strong className="text-rose-900 font-black block uppercase text-[9px]">Certificate of Non-Affiliation</strong>
-          <p className="text-slate-700 leading-snug">THIS IS TO CERTIFY that MR. JUAN DELA CRUZ is NOT an employee, agent, or representative of {selectedCompany.name}...</p>
-        </div>
-      );
-    }
-    if (item.variant === "body_termination_operations") {
-      return (
-        <div className="bg-white p-2 rounded border border-amber-200 text-[8px] space-y-1 shadow-2xs">
-          <strong className="text-amber-900 font-black block uppercase text-[9px]">Notice of Termination of Operations</strong>
-          <p className="text-slate-700 leading-snug">Permanent cessation of operations at Branch Outlet #14 effective Nov 15, 2026 with 48hr asset surrender...</p>
-        </div>
-      );
-    }
-    if (item.variant === "body_termination_agency") {
-      return (
-        <div className="bg-white p-2 rounded border border-slate-200 text-[8px] space-y-1 shadow-2xs">
-          <strong className="text-slate-900 font-black block uppercase text-[9px]">Termination of Agency Agreement</strong>
-          <p className="text-slate-700 leading-snug">Resolution to revoke Agency Agreement with 72-hour surrender demand for POS machines, SIMs, and IDs...</p>
-        </div>
-      );
-    }
-    if (item.variant === "body_letter_of_explain") {
-      return (
-        <div className="bg-white p-2 rounded border border-purple-200 text-[8px] space-y-1 shadow-2xs">
-          <strong className="text-purple-900 font-black block uppercase text-[9px]">Letter of Explanation (NTE Answer)</strong>
-          <p className="text-slate-700 leading-snug">Formal written response detailing factual chronology, cellular outage circumstances, and remedial commitment...</p>
+        <div className="space-y-2 my-3 select-text">
+          <h4 className="text-xs font-black uppercase tracking-wider text-slate-900">
+            {item.data?.title || "DIRECTIVES & MANDATORY PROTOCOLS"}
+          </h4>
+          <ol className="list-decimal list-inside space-y-1 text-xs text-justify leading-relaxed">
+            {(item.data?.items || [
+              "Strict compliance with daily cash turnover cut-off time of 5:00 PM.",
+              "Unauthorized transactions and off-system gaming ticket issuances are strictly prohibited.",
+              "Failure to adhere shall result in immediate formal administrative inquiry and suspension."
+            ]).map((it, idx) => (
+              <li key={idx} className="text-slate-800 font-semibold">{it}</li>
+            ))}
+          </ol>
         </div>
       );
     }
     if (item.variant === "body_warning_callout") {
       return (
-        <div className="border-l-2 border-rose-600 bg-rose-50 p-1.5 rounded text-[8px] text-rose-900 shadow-2xs">
-          <strong>CRITICAL COMPLIANCE NOTICE:</strong> Non-compliance shall be dealt with under company administrative disciplinary sanctions.
+        <div className="p-3 rounded-xl border-l-4 border-rose-600 bg-rose-50/70 my-3 space-y-1 select-text">
+          <div className="flex items-center gap-1.5 text-rose-800 font-black text-xs uppercase tracking-wider">
+            <AlertTriangle size={15} />
+            <span>{item.data?.boxTitle || "CRITICAL COMPLIANCE NOTICE"}</span>
+          </div>
+          <p className="text-xs text-rose-950 font-semibold leading-relaxed text-justify">
+            {item.data?.boxMessage || "Any deviation from authorized operational guidelines constitutes gross negligence under company policies and applicable statutory labor regulations."}
+          </p>
         </div>
       );
     }
     return (
-      <div className="bg-white p-2 rounded border border-slate-200 text-[8px] text-slate-700 leading-snug shadow-2xs">
-        <p>Pursuant to executive directives approved by Management, all personnel are hereby instructed to comply...</p>
+      <div className="space-y-2 my-3 select-text">
+        {item.data?.title && (
+          <h3 className="text-sm font-black uppercase tracking-wider text-slate-900">
+            {item.data.title}
+          </h3>
+        )}
+        <div className="text-justify text-xs leading-relaxed text-slate-800 whitespace-pre-line">
+          {(item.data?.bodyText || "").replace(/[COMPANY_NAME]/g, selectedCompany.name)}
+        </div>
       </div>
     );
   }
 
-  // Signatory Previews
+  // Signatory Previews (1:1 with bond paper output, borderless)
   if (item.category === "signatory") {
     if (item.variant === "sig_dual_executive") {
       return (
-        <div className="grid grid-cols-2 gap-3 bg-white p-2 rounded border border-slate-200 text-[8px] shadow-2xs">
+        <div className="grid grid-cols-2 gap-8 text-xs pt-6 mt-4 border-t border-slate-300 select-text">
           <div>
-            <span className="text-[7px] text-slate-500 block">Prepared by:</span>
-            <div className="border-b border-slate-800 pt-3 pb-0.5 font-bold text-slate-900">JEVINCE JAYE S. JUBAY</div>
-            <span className="text-[7px] text-slate-600 block">HRMD Manager</span>
+            <div className="font-bold text-slate-500 uppercase tracking-wider text-[11px] mb-6">
+              {item.data?.leftLabel || "Prepared & Certified by:"}
+            </div>
+            <div className="w-56 border-b-2 border-slate-900 pb-1">
+              <div className="font-black text-slate-950 uppercase text-xs tracking-wide">
+                {item.data?.leftName || "JEVINCE JAYE S. JUBAY, CHRP"}
+              </div>
+            </div>
+            <div className="text-slate-600 font-semibold text-[11px] mt-0.5">
+              {item.data?.leftTitle || "HRMD Manager"}
+            </div>
+            <div className="text-slate-500 font-bold uppercase text-[10px]">
+              {selectedCompany.name}
+            </div>
           </div>
-          <div className="text-right">
-            <span className="text-[7px] text-slate-500 block">Approved by:</span>
-            <div className="border-b border-slate-800 pt-3 pb-0.5 font-bold text-slate-900">CHARMIE JEAN M. SIMPAL</div>
-            <span className="text-[7px] text-slate-600 block">President &amp; CEO</span>
+          <div className="text-right flex flex-col items-end">
+            <div className="font-bold text-slate-500 uppercase tracking-wider text-[11px] mb-6">
+              {item.data?.rightLabel || "Approved & Confirmed by:"}
+            </div>
+            <div className="w-56 border-b-2 border-slate-900 pb-1 text-right">
+              <div className="font-black text-slate-950 uppercase text-xs tracking-wide">
+                {item.data?.rightName || "CHARMIE JEAN M. SIMPAL"}
+              </div>
+            </div>
+            <div className="text-slate-600 font-semibold text-[11px] mt-0.5">
+              {item.data?.rightTitle || "President & CEO"}
+            </div>
+            <div className="text-slate-500 font-bold uppercase text-[10px]">
+              {selectedCompany.name}
+            </div>
           </div>
         </div>
       );
     }
     if (item.variant === "sig_single_official") {
       return (
-        <div className="bg-white p-2 rounded border border-slate-200 text-[8px] shadow-2xs">
-          <span className="text-[7px] text-slate-500 block">Issued by:</span>
-          <div className="border-b border-slate-800 pt-3 pb-0.5 font-bold text-slate-900 max-w-[130px]">JEVINCE JAYE S. JUBAY</div>
-          <span className="text-[7px] text-slate-600 block">HRMD Manager</span>
+        <div className="pt-6 mt-4 border-t border-slate-300 max-w-xs text-xs select-text">
+          <div className="font-bold text-slate-500 uppercase tracking-wider text-[11px] mb-6">
+            {item.data?.label || "Issued & Certified by:"}
+          </div>
+          <div className="w-56 border-b-2 border-slate-900 pb-1">
+            <div className="font-black text-slate-950 uppercase text-xs tracking-wide">
+              {item.data?.name || "JEVINCE JAYE S. JUBAY, CHRP"}
+            </div>
+          </div>
+          <div className="text-slate-600 font-semibold text-[11px] mt-0.5">
+            {item.data?.title || "HRMD Manager"}
+          </div>
+          <div className="text-slate-500 font-bold uppercase text-[10px]">
+            {selectedCompany.name}
+          </div>
+        </div>
+      );
+    }
+    if (item.variant === "sig_triple_authority") {
+      return (
+        <div className="grid grid-cols-3 gap-4 text-xs pt-6 mt-4 border-t border-slate-300 select-text">
+          <div>
+            <div className="font-bold text-slate-500 uppercase text-[10px] mb-5">{item.data?.col1Label || "Prepared by:"}</div>
+            <div className="border-b border-slate-800 pb-1 font-black text-slate-900 text-xs">{item.data?.col1Name || "JEVINCE JAYE S. JUBAY"}</div>
+            <div className="text-slate-500 text-[10px]">{item.data?.col1Title || "HRMD Manager"}</div>
+          </div>
+          <div>
+            <div className="font-bold text-slate-500 uppercase text-[10px] mb-5">{item.data?.col2Label || "Noted by:"}</div>
+            <div className="border-b border-slate-800 pb-1 font-black text-slate-900 text-xs">{item.data?.col2Name || "ATTY. REGIONAL COUNSEL"}</div>
+            <div className="text-slate-500 text-[10px]">{item.data?.col2Title || "Legal Directorate"}</div>
+          </div>
+          <div>
+            <div className="font-bold text-slate-500 uppercase text-[10px] mb-5">{item.data?.col3Label || "Approved by:"}</div>
+            <div className="border-b border-slate-800 pb-1 font-black text-slate-900 text-xs">{item.data?.col3Name || "CHARMIE JEAN M. SIMPAL"}</div>
+            <div className="text-slate-500 text-[10px]">{item.data?.col3Title || "President & CEO"}</div>
+          </div>
         </div>
       );
     }
     if (item.variant === "sig_receiving_acknowledgment") {
       return (
-        <div className="border border-dashed border-slate-400 bg-slate-50 p-1.5 rounded text-[7px] space-y-1 shadow-2xs">
-          <span className="font-bold block uppercase text-slate-800">Acknowledgment &amp; Receiving Slip</span>
-          <div className="grid grid-cols-3 gap-1 pt-1 border-t border-slate-200">
-            <span className="border-b border-slate-400 pb-0.5 text-slate-400">Name:</span>
-            <span className="border-b border-slate-400 pb-0.5 text-slate-400">Signature:</span>
-            <span className="border-b border-slate-400 pb-0.5 text-slate-400">Date/Time:</span>
+        <div className="border-t-2 border-dashed border-slate-400 pt-3 my-4 text-xs select-text">
+          <div className="flex justify-between items-center pb-1.5 mb-2">
+            <span className="font-black uppercase tracking-wider text-slate-900 text-[11px]">{item.data?.stubTitle || "ACKNOWLEDGMENT & RECEIVING SLIP"}</span>
+            <span className="font-mono text-[10px] text-slate-500 font-bold">Duplicate Copy • Return to HRMD</span>
+          </div>
+          <div className="grid grid-cols-3 gap-4 pt-3 text-[11px]">
+            <div className="border-b border-slate-800 pb-1">
+              <span className="text-slate-400 block text-[9px] uppercase font-bold">Received by (Printed Name):</span>
+            </div>
+            <div className="border-b border-slate-800 pb-1">
+              <span className="text-slate-400 block text-[9px] uppercase font-bold">Official Signature:</span>
+            </div>
+            <div className="border-b border-slate-800 pb-1">
+              <span className="text-slate-400 block text-[9px] uppercase font-bold">Date & Time Received:</span>
+            </div>
           </div>
         </div>
       );
     }
   }
 
-  // Footer Previews
+  // Footer Previews (1:1 with bond paper output)
   if (item.category === "footer") {
     if (item.variant === "footer_notary_jurat") {
       return (
-        <div className="bg-white p-1.5 rounded border border-slate-200 text-[7px] text-slate-600 space-y-0.5 shadow-2xs">
-          <p className="font-bold">REPUBLIC OF THE PHILIPPINES ) S.S.</p>
-          <p className="leading-snug">SUBSCRIBED AND SWORN to before me this ___ day of ________ 2026...</p>
-          <div className="text-right pt-1 font-bold text-slate-800">NOTARY PUBLIC</div>
+        <div className="pt-4 border-t border-slate-300 text-xs text-slate-700 space-y-1.5 mt-4 select-text">
+          <p className="font-bold">REPUBLIC OF THE PHILIPPINES )</p>
+          <p className="font-bold">PROVINCE OF CEBU, MANDAUE CITY ) S.S.</p>
+          <p className="text-justify text-[11px] leading-relaxed">
+            SUBSCRIBED AND SWORN to before me this _____ day of _______________ {item.data?.docYear || "2026"} at {item.data?.city || "Mandaue City, Cebu"}, affiant exhibiting competent evidence of identity.
+          </p>
+          <div className="flex justify-between items-end pt-4">
+            <div className="text-[10px] text-slate-500 font-mono">
+              <p>Doc. No. ____; Page No. ____;</p>
+              <p>Book No. ____; Series of {item.data?.docYear || "2026"}.</p>
+            </div>
+            <div className="text-center w-52 border-t border-slate-900 pt-1 font-bold text-xs">
+              NOTARY PUBLIC
+            </div>
+          </div>
+        </div>
+      );
+    }
+    if (item.variant === "footer_corporate_bar") {
+      return (
+        <div className="border-t border-slate-300 pt-3 mt-4 flex items-center justify-between text-[11px] text-slate-500 font-mono select-text">
+          <div>{selectedCompany.contact} • {selectedCompany.address}</div>
+          <div className="italic text-[10px]">Strictly Confidential • Official Records</div>
+        </div>
+      );
+    }
+    if (item.variant === "footer_doc_control") {
+      return (
+        <div className="border-t border-slate-300 pt-2 mt-4 flex justify-between text-[10px] text-slate-500 font-mono select-text">
+          <span>{docRef} • REV-01</span>
+          <span>Page 1 of 1</span>
+          <span>CONFIDENTIAL DOCUMENT</span>
         </div>
       );
     }
     return (
-      <div className="bg-white p-1 rounded border border-slate-200 text-[7px] text-slate-500 flex justify-between items-center shadow-2xs">
-        <span>Official Instrument • HrHub Corporate</span>
-        <span className="font-mono">SEC-VERIFIED</span>
+      <div className="border-t border-slate-300 pt-2 mt-4 text-center text-xs text-slate-500 font-semibold select-text">
+        {selectedCompany.legalName || selectedCompany.name} • Official Administrative Instrument
       </div>
     );
   }
@@ -664,7 +832,7 @@ export default function DocumentStudioPanel({
   const [activeElementId, setActiveElementId] = useState(null);
 
   // Hover visual preview state
-  const [hoveredPreviewItem, setHoveredPreviewItem] = useState(null);
+  const [hoveredPreview, setHoveredPreview] = useState(null);
 
   // Drag-and-Drop Canvas State
   const [isDragOverCanvas, setIsDragOverCanvas] = useState(false);
@@ -1158,38 +1326,66 @@ export default function DocumentStudioPanel({
       )}
 
       {/* ================= FLOATING HOVER VISUAL PREVIEW MODAL ================= */}
-      {/* Appears when hovering over any element in the palette on the right */}
-      {hoveredPreviewItem && (
-        <div className="no-print fixed right-[405px] top-24 z-50 w-96 max-w-[calc(100vw-430px)] bg-white rounded-2xl border-2 border-amber-400 shadow-2xl p-4 animate-in fade-in zoom-in-95 duration-150 pointer-events-none">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-2 mb-2.5">
-            <div className="flex items-center gap-1.5">
-              <Eye size={15} className="text-amber-600" />
-              <span className="text-xs font-black uppercase text-slate-900 tracking-wide">
-                Live Preview: {hoveredPreviewItem.name}
+      {/* Appears right where the cursor is pointing, extra large for crystal-clear inspection */}
+      {hoveredPreview?.item && (() => {
+        const previewWidth = 580;
+        const targetX = hoveredPreview.x ?? 900;
+        const targetY = hoveredPreview.y ?? 200;
+
+        // Position to the left of the cursor, with 20px gap
+        const leftPos = Math.max(16, targetX - previewWidth - 20);
+        // Vertically aligned with cursor, clamped so it never goes off-screen
+        const topPos = Math.max(16, Math.min(window.innerHeight - 560, targetY - 120));
+
+        return (
+          <div
+            style={{
+              left: `${leftPos}px`,
+              top: `${topPos}px`,
+              width: `${previewWidth}px`,
+            }}
+            className="no-print fixed z-50 bg-white rounded-2xl border-2 border-amber-400 shadow-2xl p-4.5 animate-in fade-in zoom-in-95 duration-100 pointer-events-none max-w-[calc(100vw-450px)]"
+          >
+            <div className="flex items-center justify-between border-b border-slate-200 pb-2.5 mb-3">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 rounded-lg bg-amber-100 text-amber-800">
+                  <Eye size={16} />
+                </div>
+                <div>
+                  <h4 className="text-xs font-black uppercase text-slate-950 tracking-wide">
+                    Live Preview: {hoveredPreview.item.name}
+                  </h4>
+                  <p className="text-[10px] text-slate-500 font-medium">
+                    1:1 exact output replica with {selectedCompany.name} letterhead
+                  </p>
+                </div>
+              </div>
+              <span className="text-[10px] font-black uppercase text-amber-900 bg-amber-100 px-2.5 py-1 rounded-lg border border-amber-300">
+                {hoveredPreview.item.category}
               </span>
             </div>
-            <span className="text-[10px] font-extrabold uppercase text-amber-800 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200">
-              {hoveredPreviewItem.category}
-            </span>
-          </div>
 
-          <div className="bg-slate-50/70 p-3 rounded-xl border border-slate-200 pointer-events-none text-xs overflow-hidden">
-            <ElementVisualPreview
-              item={hoveredPreviewItem}
-              selectedCompany={selectedCompany}
-              docRef={docRef}
-              docDate={docDate}
-            />
-          </div>
+            {/* Crisp white paper canvas simulating authentic coupon bond output */}
+            <div className="bg-white p-5 rounded-xl border border-slate-300 shadow-xs pointer-events-none overflow-hidden select-none">
+              <ElementVisualPreview
+                item={hoveredPreview.item}
+                selectedCompany={selectedCompany}
+                docRef={docRef}
+                docDate={docDate}
+              />
+            </div>
 
-          <div className="mt-2.5 flex items-center justify-between text-[10px] font-bold text-slate-500">
-            <span className="text-amber-700 flex items-center gap-1">
-              <Sparkles size={11} /> Shown with {selectedCompany.name} letterhead
-            </span>
-            <span className="text-slate-400">Drag onto paper to apply</span>
+            <div className="mt-3 flex items-center justify-between text-[11px] font-bold text-slate-600">
+              <span className="text-emerald-700 flex items-center gap-1.5 font-bold">
+                <Sparkles size={13} className="text-emerald-600" /> Exact replica of bond paper output
+              </span>
+              <span className="text-amber-800 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 text-[10px]">
+                Drag onto paper or click &quot;+ Add to Paper&quot;
+              </span>
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Main Split Layout: Left (Coupon Bond Paper) & Right (Draggable Building Blocks Palette) */}
       <div className="flex-1 flex flex-col lg:flex-row min-h-0 relative">
@@ -1378,9 +1574,7 @@ export default function DocumentStudioPanel({
                     <div
                       key={el.id}
                       onClick={() => setActiveElementId(el.id)}
-                      className={`relative group rounded-xl p-1.5 transition-all ${
-                        isHovered ? "ring-1 ring-amber-400/50 bg-amber-50/5" : "hover:bg-slate-50/30"
-                      }`}
+                      className="relative group transition-all"
                     >
                       {/* Floating Control Toolbar for this placed element */}
                       <div className="no-print absolute -top-3.5 right-2 z-20 hidden group-hover:flex items-center gap-1 bg-slate-900 text-white px-2 py-0.5 rounded-lg shadow-md text-[10px] font-bold">
@@ -1511,10 +1705,10 @@ export default function DocumentStudioPanel({
                       {el.category === "addressing" && (
                         <div>
                           {el.variant === "address_memo_grid" && (
-                            <div className="border border-slate-300 rounded-lg p-3.5 bg-slate-50/40 text-xs text-slate-800 space-y-2 mb-4 select-text">
-                              <div className="flex justify-between items-center border-b border-slate-200 pb-2">
-                                <span className="font-black tracking-widest text-slate-900 text-sm">MEMORANDUM</span>
-                                <span className="font-mono text-slate-500 font-bold">REF: {docRef}</span>
+                            <div className="my-3 text-xs text-slate-800 space-y-2 select-text">
+                              <div className="flex justify-between items-baseline border-b-2 border-slate-900 pb-1.5 mb-2.5">
+                                <span className="font-black tracking-widest text-slate-950 text-base">MEMORANDUM</span>
+                                <span className="font-mono text-slate-500 font-bold text-xs">REF: {docRef}</span>
                               </div>
                               <div className="grid grid-cols-1 gap-1.5 text-xs">
                                 <div className="flex items-baseline">
@@ -1864,9 +2058,9 @@ export default function DocumentStudioPanel({
                           )}
 
                           {el.variant === "sig_receiving_acknowledgment" && (
-                            <div className="border border-slate-400 border-dashed rounded-lg p-3.5 my-4 bg-slate-50/80 text-xs select-text">
-                              <div className="flex justify-between items-center border-b border-slate-300 pb-1.5 mb-2.5">
-                                <span className="font-black uppercase tracking-wider text-slate-900">{el.data?.stubTitle || "ACKNOWLEDGMENT SLIP"}</span>
+                            <div className="border-t-2 border-dashed border-slate-400 pt-3 my-4 text-xs select-text">
+                              <div className="flex justify-between items-center pb-1.5 mb-2">
+                                <span className="font-black uppercase tracking-wider text-slate-900 text-[11px]">{el.data?.stubTitle || "ACKNOWLEDGMENT & RECEIVING SLIP"}</span>
                                 <span className="font-mono text-[10px] text-slate-500 font-bold">Duplicate Copy</span>
                               </div>
                               <div className="grid grid-cols-3 gap-4 pt-4 text-[11px]">
@@ -1985,9 +2179,24 @@ export default function DocumentStudioPanel({
               <div
                 key={item.variant}
                 draggable
-                onDragStart={(e) => handlePaletteDragStart(e, { ...item, category: paletteActiveCategory })}
-                onMouseEnter={() => setHoveredPreviewItem({ ...item, category: paletteActiveCategory })}
-                onMouseLeave={() => setHoveredPreviewItem(null)}
+                onDragStart={(e) => {
+                  setHoveredPreview(null);
+                  handlePaletteDragStart(e, { ...item, category: paletteActiveCategory });
+                }}
+                onMouseEnter={(e) => {
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  setHoveredPreview({
+                    item: { ...item, category: paletteActiveCategory },
+                    x: e.clientX,
+                    y: e.clientY,
+                    cardTop: rect.top,
+                    cardLeft: rect.left,
+                  });
+                }}
+                onMouseMove={(e) => {
+                  setHoveredPreview((prev) => (prev ? { ...prev, x: e.clientX, y: e.clientY } : null));
+                }}
+                onMouseLeave={() => setHoveredPreview(null)}
                 className="p-3.5 rounded-2xl border border-slate-200 bg-white hover:border-amber-400 hover:shadow-md transition-all cursor-grab active:cursor-grabbing group space-y-2 shadow-2xs relative"
               >
                 <div className="flex items-start justify-between gap-2">
