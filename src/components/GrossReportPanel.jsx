@@ -618,8 +618,8 @@ export default function GrossReportPanel() {
       setCooldownReason("");
     }
 
-    if (now < RATE_LIMIT_RESET_AT || RATE_LIMIT_REMAINING <= 15) {
-      const waitSeconds = Math.max(1, Math.round((RATE_LIMIT_RESET_AT - now) / 1000));
+    if (nowMs < RATE_LIMIT_RESET_AT || RATE_LIMIT_REMAINING <= 15) {
+      const waitSeconds = Math.max(1, Math.round((RATE_LIMIT_RESET_AT - nowMs) / 1000));
       if (!isBackgroundPoll && nowMs - LAST_RATE_LIMIT_WARN > 15000) {
         LAST_RATE_LIMIT_WARN = nowMs;
         console.warn(`[HrHub Server Guard] 🛡️ Rate limit cooldown active: ${RATE_LIMIT_REMAINING}/300 remaining. Request queue paused for ${waitSeconds}s to maintain safe upstream server throughput.`);
@@ -749,9 +749,9 @@ export default function GrossReportPanel() {
         console.log(`[HrHub Server Status] ✅ Connection to STL API server secure. Quota remaining: ${RATE_LIMIT_REMAINING}/300.`);
       }
     }
-    const now = new Date();
-    setLastRefreshed(now);
-    CACHED_LAST_SYNC = now;
+    const refreshTimestamp = new Date();
+    setLastRefreshed(refreshTimestamp);
+    CACHED_LAST_SYNC = refreshTimestamp;
     isFetchingLiveRef.current = false;
   };
 
