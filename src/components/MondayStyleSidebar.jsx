@@ -287,7 +287,8 @@ export default function MondayStyleSidebar({
           id: "dole_handbook",
           label: "DOLE Legal Guidelines",
           icon: ShieldCheck,
-          tag: "Legal"
+          tag: "Legal",
+          tabId: "dole_handbook"
         },
         {
           id: "offboarding_clearance",

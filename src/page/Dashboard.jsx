@@ -20,6 +20,7 @@ import WeatherWidget from "../components/WeatherWidget";
 import MemoGeneratorPanel from "../components/MemoGeneratorPanel";
 import DocumentStudioPanel from "../components/DocumentStudioPanel";
 import IncidentReportPanel from "../components/IncidentReportPanel";
+import DoleLegalGuidelinesPanel from "../components/DoleLegalGuidelinesPanel";
 import SupervisorsAttendancePanel from "../components/SupervisorsAttendancePanel";
 import RolePermissionMatrixPanel from "../components/RolePermissionMatrixPanel";
 import ApiHealthConfigurationPanel from "../components/ApiHealthConfigurationPanel";
@@ -281,6 +282,14 @@ const WORKSPACE_TAB_DEFS = {
     activeClass: "bg-slate-900 text-amber-400 ring-2 ring-amber-400",
     activeIconClass: "text-amber-400",
     inactiveIconClass: "text-amber-600"
+  },
+  dole_handbook: {
+    id: "dole_handbook",
+    label: "DOLE Legal Guidelines",
+    icon: ShieldCheck,
+    activeClass: "bg-blue-600 text-white ring-2 ring-blue-300",
+    activeIconClass: "text-white",
+    inactiveIconClass: "text-blue-600"
   }
 };
 
@@ -2226,6 +2235,20 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
           {/* TAB 7: SYSTEM HEALTH & API CONFIGURATION */}
           {workspaceTab === "api_health" && (
             <ApiHealthConfigurationPanel />
+          )}
+
+          {/* TAB 8: DOLE LEGAL GUIDELINES & STATUTORY SUITE */}
+          {workspaceTab === "dole_handbook" && (
+            <DoleLegalGuidelinesPanel
+              currentUser={currentUser}
+              profiles={supabaseProfiles}
+              onClose={() => handleCloseWorkspaceTab(null, "dole_handbook")}
+              onSwitchToDocStudio={() => handleOpenWorkspaceTab("doc_studio")}
+              onSwitchToMemo={() => handleOpenWorkspaceTab("memo")}
+              onSwitchToNte={() => handleOpenWorkspaceTab("incident_reports")}
+              onSwitchToApiConfig={() => handleOpenWorkspaceTab("api_health")}
+              onOpenAiBuddy={() => setAiDrawerOpen(true)}
+            />
           )}
         </div>
       </div>

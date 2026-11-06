@@ -1183,6 +1183,18 @@ Sent via HRHub Enterprise Portal`;
 
               <button
                 type="button"
+                onClick={() => setWorkspaceTab("dole_handbook")}
+                className="w-full flex items-center justify-between p-2.5 rounded-xl border border-blue-200 bg-blue-50/40 hover:bg-blue-100/60 text-xs font-bold text-blue-900 transition cursor-pointer"
+              >
+                <div className="flex items-center gap-2">
+                  <ShieldCheck size={15} className="text-blue-600" />
+                  <span>DOLE Legal Guidelines &amp; Pay Calculator</span>
+                </div>
+                <ArrowRight size={14} className="text-blue-500" />
+              </button>
+
+              <button
+                type="button"
                 onClick={() => setWorkspaceTab("gross")}
                 className="w-full flex items-center justify-between p-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-xs font-semibold text-slate-700 transition cursor-pointer"
               >

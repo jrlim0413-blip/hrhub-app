@@ -553,12 +553,16 @@ export default function GrossReportPanel() {
   // Live second-by-second cooldown countdown heartbeat
   useEffect(() => {
     const timer = setInterval(() => {
-      const now = Date.now();
-      if (now < RATE_LIMIT_RESET_AT) {
-        const remaining = Math.max(0, Math.ceil((RATE_LIMIT_RESET_AT - now) / 1000));
+      const nowMs = Date.now();
+      if (nowMs < RATE_LIMIT_RESET_AT) {
+        const remaining = Math.max(0, Math.ceil((RATE_LIMIT_RESET_AT - nowMs) / 1000));
         setCooldownSeconds(remaining);
       } else {
-        setCooldownSeconds((prev) => (prev > 0 ? 0 : 0));
+        if (RATE_LIMIT_RESET_AT > 0 || RATE_LIMIT_REMAINING <= 25) {
+          RATE_LIMIT_REMAINING = 300;
+          RATE_LIMIT_RESET_AT = 0;
+        }
+        setCooldownSeconds(0);
       }
     }, 1000);
     return () => clearInterval(timer);
@@ -603,12 +607,22 @@ export default function GrossReportPanel() {
 
   const fetchLiveBets = async (tellersToFetch, targetDate, isBackgroundPoll = false) => {
     if (!tellersToFetch || tellersToFetch.length === 0) return;
-    if (isFetchingLiveRef.current && isBackgroundPoll) return;
-    if (Date.now() < RATE_LIMIT_RESET_AT || RATE_LIMIT_REMAINING <= 25) {
-      const waitSeconds = Math.max(1, Math.round((RATE_LIMIT_RESET_AT - Date.now()) / 1000));
-      if (!isBackgroundPoll && Date.now() - LAST_RATE_LIMIT_WARN > 20000) {
-        LAST_RATE_LIMIT_WARN = Date.now();
-        console.warn(`[HrHub Server Guard] 🛡️ Rate limit quota active: ${RATE_LIMIT_REMAINING}/300 remaining. Request queue paused for ${waitSeconds}s to maintain safe upstream server throughput.`);
+    if (isFetchingLiveRef.current) return;
+
+    const nowMs = Date.now();
+    // Auto-restore quota once cooldown has elapsed
+    if (nowMs >= RATE_LIMIT_RESET_AT && RATE_LIMIT_REMAINING <= 25) {
+      RATE_LIMIT_REMAINING = 300;
+      RATE_LIMIT_RESET_AT = 0;
+      setCooldownSeconds(0);
+      setCooldownReason("");
+    }
+
+    if (now < RATE_LIMIT_RESET_AT || RATE_LIMIT_REMAINING <= 15) {
+      const waitSeconds = Math.max(1, Math.round((RATE_LIMIT_RESET_AT - now) / 1000));
+      if (!isBackgroundPoll && nowMs - LAST_RATE_LIMIT_WARN > 15000) {
+        LAST_RATE_LIMIT_WARN = nowMs;
+        console.warn(`[HrHub Server Guard] 🛡️ Rate limit cooldown active: ${RATE_LIMIT_REMAINING}/300 remaining. Request queue paused for ${waitSeconds}s to maintain safe upstream server throughput.`);
       }
       return;
     }
@@ -633,86 +647,80 @@ export default function GrossReportPanel() {
       return bHas - aHas;
     });
 
-    // Gentle concurrency: 2 requests at a time with 250ms pause to stay safely under 300 req/min
-    const batchSize = 2;
+    // Sequential single-request fetching with 650ms delay to stay well within remote API limits (max 60 req/min)
     let rateLimitHit = false;
 
-    for (let i = 0; i < sortedTellers.length; i += batchSize) {
-      if (rateLimitHit || Date.now() < RATE_LIMIT_RESET_AT || RATE_LIMIT_REMAINING <= 25) break;
+    for (let i = 0; i < sortedTellers.length; i++) {
+      if (rateLimitHit || Date.now() < RATE_LIMIT_RESET_AT || RATE_LIMIT_REMAINING <= 15) break;
 
-      const batch = sortedTellers.slice(i, i + batchSize);
+      const teller = sortedTellers[i];
       const batchResults = {};
 
-      await Promise.all(
-        batch.map(async (teller) => {
-          if (Date.now() < RATE_LIMIT_RESET_AT || RATE_LIMIT_REMAINING <= 25) return;
+      try {
+        const url = new URL(baseUrl);
+        url.searchParams.set("tellerId", teller.id);
+        url.searchParams.set("from", fromDate);
+        url.searchParams.set("to", toDate);
 
-          try {
-            const url = new URL(baseUrl);
-            url.searchParams.set("tellerId", teller.id);
-            url.searchParams.set("from", fromDate);
-            url.searchParams.set("to", toDate);
+        const res = await fetch(url.toString(), { headers });
 
-            const res = await fetch(url.toString(), { headers });
-
-            const rem = res.headers.get("x-ratelimit-remaining");
-            if (rem !== null) {
-              const remNum = Number(rem);
-              if (!isNaN(remNum)) {
-                RATE_LIMIT_REMAINING = remNum;
-                if (remNum <= 25) {
-                  RATE_LIMIT_RESET_AT = Date.now() + 45000;
-                  setCooldownSeconds(45);
-                  setCooldownReason("Server Safe Quota Guard");
-                }
-              }
-            }
-
-            if (res.status === 429) {
-              rateLimitHit = true;
-              const retryAfter = Number(res.headers.get("retry-after")) || 60;
-              RATE_LIMIT_REMAINING = 0;
+        const rem = res.headers.get("x-ratelimit-remaining");
+        if (rem !== null) {
+          const remNum = Number(rem);
+          if (!isNaN(remNum)) {
+            RATE_LIMIT_REMAINING = remNum;
+            if (remNum <= 10) {
+              const retryAfter = Number(res.headers.get("retry-after")) || 30;
               RATE_LIMIT_RESET_AT = Date.now() + (retryAfter * 1000);
               setCooldownSeconds(retryAfter);
-              setCooldownReason("Server Rate Limit (HTTP 429)");
-              console.warn(`[HrHub Server Alert] ⚠️ Upstream rate limit reached (HTTP 429). Cooldown: ${retryAfter}s active to preserve server stability.`);
-              return;
+              setCooldownReason("Server Rate Limit Guard (Proactive)");
+              break;
             }
-
-            if (!res.ok) {
-              console.warn(`[HrHub Server Alert] ⚠️ Remote service exception for collector ${teller.id}: HTTP ${res.status}`);
-              return;
-            }
-
-            const payload = await res.json();
-            const rawBets = Array.isArray(payload?.data) ? payload.data : [];
-            const validBets = rawBets.filter((b) => {
-              if (Number(b.isVoid) === 1) return false;
-              const bDate = b.created_at ? b.created_at.slice(0, 10) : (b.date || b.drawDate || "");
-              if (bDate && bDate !== targetDate) return false;
-              return true;
-            });
-            const totalAmount = validBets.reduce((sum, b) => sum + (Number(b.totalBetAmount) || 0), 0);
-
-            const draws = {};
-            validBets.forEach((b) => {
-              const dt = String(b.drawTime || "10:30");
-              draws[dt] = (draws[dt] || 0) + (Number(b.totalBetAmount) || 0);
-            });
-
-            batchResults[teller.id] = {
-              count: validBets.length,
-              total: totalAmount,
-              bets: validBets,
-              draws
-            };
-          } catch {
-            // Keep previous data on network glitch
           }
-        })
-      );
+        }
 
-      // Merge into state after every batch so entries stream in continuously without waiting
+        if (res.status === 429) {
+          rateLimitHit = true;
+          const retryAfter = Math.max(30, Number(res.headers.get("retry-after")) || 60);
+          RATE_LIMIT_REMAINING = 0;
+          RATE_LIMIT_RESET_AT = Date.now() + (retryAfter * 1000);
+          setCooldownSeconds(retryAfter);
+          setCooldownReason("Server Rate Limit (HTTP 429)");
+          console.warn(`[HrHub Server Alert] ⚠️ Upstream rate limit reached (HTTP 429). Cooldown: ${retryAfter}s active to preserve server stability.`);
+          break;
+        }
+
+        if (!res.ok) {
+          console.warn(`[HrHub Server Alert] ⚠️ Remote service exception for collector ${teller.id}: HTTP ${res.status}`);
+        } else {
+          const payload = await res.json();
+          const rawBets = Array.isArray(payload?.data) ? payload.data : [];
+          const validBets = rawBets.filter((b) => {
+            if (Number(b.isVoid) === 1) return false;
+            const bDate = b.created_at ? b.created_at.slice(0, 10) : (b.date || b.drawDate || "");
+            if (bDate && bDate !== targetDate) return false;
+            return true;
+          });
+          const totalAmount = validBets.reduce((sum, b) => sum + (Number(b.totalBetAmount) || 0), 0);
+
+          const draws = {};
+          validBets.forEach((b) => {
+            const dt = String(b.drawTime || "10:30");
+            draws[dt] = (draws[dt] || 0) + (Number(b.totalBetAmount) || 0);
+          });
+
+          batchResults[teller.id] = {
+            count: validBets.length,
+            total: totalAmount,
+            bets: validBets,
+            draws
+          };
+        }
+      } catch {
+        // Keep previous data on network glitch
+      }
+
+      // Merge into state after every teller so entries stream in continuously
       if (Object.keys(batchResults).length > 0) {
         setLiveBetsMap((prev) => {
           const updated = { ...prev, ...batchResults };
@@ -726,13 +734,12 @@ export default function GrossReportPanel() {
       }
 
       if (!isBackgroundPoll) {
-        const currentCount = Math.min(i + batchSize, sortedTellers.length);
-        setSyncProgress({ current: currentCount, total: sortedTellers.length, loading: currentCount < sortedTellers.length });
+        setSyncProgress({ current: i + 1, total: sortedTellers.length, loading: i + 1 < sortedTellers.length });
       }
 
-      // Small delay between batches to respect rate limits
-      if (i + batchSize < sortedTellers.length && !rateLimitHit) {
-        await sleep(250);
+      // Safe pause between teller requests
+      if (i + 1 < sortedTellers.length && !rateLimitHit) {
+        await sleep(650);
       }
     }
 
@@ -869,7 +876,7 @@ export default function GrossReportPanel() {
           const aHas = (liveBetsMap[a.id]?.count || 0) > 0 ? 1 : 0;
           const bHas = (liveBetsMap[b.id]?.count || 0) > 0 ? 1 : 0;
           return bHas - aHas;
-        }).slice(0, 20);
+        }).slice(0, 8);
         fetchLiveBets(priorityTellers, realtimeDate);
       }
 
@@ -1002,15 +1009,15 @@ export default function GrossReportPanel() {
             const info = currentMap[t.id];
             return info && (info.count > 0 || info.total > 0);
           });
-          const topActive = tellersWithBets.slice(0, 4);
+          const topActive = tellersWithBets.slice(0, 2);
 
-          // Rotating slice of other tellers (poll 4 rotating)
+          // Rotating slice of other tellers (poll 2 rotating)
           const otherTellers = onDutyTellers.filter((t) => {
             const info = currentMap[t.id];
             return !info || (info.count === 0 && info.total === 0);
           });
 
-          const sliceSize = 4;
+          const sliceSize = 2;
           const start = rotatingIndexRef.current % Math.max(1, otherTellers.length);
           const rotatingSlice = otherTellers.slice(start, start + sliceSize);
           rotatingIndexRef.current = (start + sliceSize) % Math.max(1, otherTellers.length);
@@ -1294,7 +1301,7 @@ export default function GrossReportPanel() {
 
         if (isToday) {
           // Returning to Today: fetch live bets stream for top priority on-duty tellers
-          const priorityTellers = onDutyTellersRef.current.slice(0, 40);
+          const priorityTellers = onDutyTellersRef.current.slice(0, 8);
           fetchLiveBets(priorityTellers, realtimeDate);
         } else {
           // Viewing Yesterday or a past date:
@@ -2855,7 +2862,7 @@ export default function GrossReportPanel() {
                       sessionStorage.removeItem("hrhub_live_bets_cache");
                       sessionStorage.removeItem("hrhub_live_bets_date");
                     } catch {}
-                    const priorityTellers = onDutyTellers.slice(0, 40);
+                    const priorityTellers = onDutyTellers.slice(0, 10);
                     fetchLiveBets(priorityTellers, realtimeDate);
                   } else {
                     fetchHistoricalGrossForDate(realtimeDate);
