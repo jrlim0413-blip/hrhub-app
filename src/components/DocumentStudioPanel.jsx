@@ -153,6 +153,34 @@ export const MODULAR_BLOCK_PRESETS = [
           awardeeName: "MS. MARIA SANTOS",
           awardeeTitle: "Senior Area Coordinator • Operations Division"
         }
+      },
+      {
+        variant: "address_letter_with_cc",
+        name: "Executive Request Letter Addressing (with CC)",
+        description: "Official inter-office request header with Date, TO executive recipient, multiple CC carbon copies (HRMD, CFO, etc.), bold SUBJECT title, and salutation.",
+        defaultData: {
+          date: "OCTOBER 24, 2026",
+          toName: "CHARMIE JEAN M. SIMPAL, RRT",
+          toTitle: "Assistant General Manager",
+          toCompany: "SGC Corporation",
+          toAddress: "Purok Daisy, New Isabela, Tacurong City, Sultan Kudarat",
+          ccRecipients: [
+            {
+              name: "JEVINCE JAYE S. JUBAY, CHRP",
+              title: "HRMD Manager",
+              company: "SGC Corporation",
+              address: "Purok Daisy, New Isabela, Tacurong City, Sultan Kudarat"
+            },
+            {
+              name: "FATIMA MARIE B. OBILLOS",
+              title: "CFO Head",
+              company: "SGC Corporation",
+              address: "Purok Daisy, New Isabela, Tacurong City, Sultan Kudarat"
+            }
+          ],
+          subject: "REQUEST FOR CORPORATE SOCIAL RESPONSIBILITY (CSR) DONATION FOR THE LABOGON FIRE VICTIMS",
+          salutation: "Dear AGM Simpal,"
+        }
       }
     ]
   },
@@ -274,6 +302,25 @@ I have secured a secondary backup communication pocket WiFi to prevent similar d
           boxTitle: "CRITICAL COMPLIANCE NOTICE",
           boxMessage: "Failure to comply with the instructions specified in this document shall constitute gross insubordination and shall be dealt with under company administrative disciplinary sanctions and applicable penal laws."
         }
+      },
+      {
+        variant: "body_request_proposal_table",
+        name: "CSR / Budget Request Proposal with Cost Table",
+        description: "Official request proposal letter format with itemized cost computation table, community impact statement (malasakit), and formal approval prayer.",
+        defaultData: {
+          introText: "We are writing to respectfully request Management's approval for a Corporate Social Responsibility (CSR) initiative in observance of the National Day of Charity, through a donation to the fire victims in Labogon, Mandaue City, where 106 Household were affected by the fire incident on October 20, 2026.",
+          proposalText: "As part of this initiative, [COMPANY_NAME] proposes to do 106 pieces of 10 Liter bottled water and 106 pieces of 5 kilos of rice to provide basic necessities and extend assistance to the affected families. The proposed cost computation for the aforementioned donations is detailed below for Management's reference and consideration.",
+          tableHeaders: ["DESCRIPTION", "QUANTITY", "MARKET PRICE", "TOTAL"],
+          tableRows: [
+            { desc: "10 LITER OF BOTTLED WATER", qty: "106 PIECES", price: "PHP 88.50", total: "PHP 9,381.00" },
+            { desc: "5 KILOS OF RICE", qty: "106 PIECES", price: "PHP 250.50", total: "PHP 26,553.00" }
+          ],
+          tableTotal: "PHP 35,934.00",
+          justificationText1: "This initiative aims to extend assistance within the company's available resources and demonstrate [COMPANY_NAME]'s genuine compassion and concern for the affected community.",
+          justificationText2: "Furthermore, this serves as an opportunity to show the people of Mandaue City that [COMPANY_NAME] is not only present to conduct STL operations but is also committed to giving back to the community and extending a helping hand to its constituents in times of need. Through this gesture, we hope to foster goodwill and reflect the company's values of compassion, social responsibility, and malasakit.",
+          closingRequest: "In this regard, we respectfully request Management's approval for a donation in an amount or form deemed appropriate and feasible by Management.",
+          thankYouText: "Thank you for your kind consideration and continued support of initiatives that make a meaningful difference in our community."
+        }
       }
     ]
   },
@@ -329,6 +376,17 @@ I have secured a secondary backup communication pocket WiFi to prevent similar d
         defaultData: {
           stubTitle: "FORMAL ACKNOWLEDGMENT & COPY-RECEIVED SLIP",
           instructions: "The recipient must sign, date, and return this duplicate copy to the Human Resources Department within 24 hours."
+        }
+      },
+      {
+        variant: "sig_staff_requestor",
+        name: "Proponent / Staff Requestor Signatory",
+        description: "Official staff proponent closing block ('Sincerely yours,') with employee name, HR designation, and company affiliation.",
+        defaultData: {
+          closeLabel: "Sincerely yours,",
+          name: "QUENNIE R. CAPUYAN",
+          title: "Human Resource Staff",
+          company: "Lucky Betplay Corporation"
         }
       }
     ]
@@ -559,6 +617,30 @@ function ElementVisualPreview({ item, selectedCompany, docRef, docDate }) {
         </div>
       );
     }
+    if (item.variant === "address_letter_with_cc") {
+      return (
+        <div className="my-3 text-xs text-slate-900 space-y-2.5 select-text">
+          <div className="font-bold text-slate-900 uppercase">{item.data?.date || "OCTOBER 24, 2026"}</div>
+          <div className="flex gap-3">
+            <span className="font-black text-slate-900 w-8">TO:</span>
+            <div>
+              <div className="font-black text-xs uppercase text-slate-950">{item.data?.toName || "CHARMIE JEAN M. SIMPAL, RRT"}</div>
+              <div className="text-[11px] text-slate-700">{item.data?.toTitle || "Assistant General Manager"} • {item.data?.toCompany || "SGC Corporation"}</div>
+            </div>
+          </div>
+          <div className="flex gap-3">
+            <span className="font-black text-slate-900 w-8">CC:</span>
+            <div className="text-[11px] text-slate-600">
+              {(item.data?.ccRecipients || []).map((c) => c.name).join(", ") || "JEVINCE JAYE S. JUBAY, FATIMA MARIE B. OBILLOS"}
+            </div>
+          </div>
+          <div className="font-black text-xs uppercase text-slate-950 border-t border-slate-200 pt-1">
+            {item.data?.subject?.startsWith("SUBJECT:") ? item.data.subject : `SUBJECT: ${item.data?.subject || "REQUEST FOR CSR DONATION"}`}
+          </div>
+          <div className="font-bold text-xs text-slate-800">{item.data?.salutation || "Dear AGM Simpal,"}</div>
+        </div>
+      );
+    }
   }
 
   // Directives & Body Previews (1:1 with bond paper output)
@@ -624,6 +706,49 @@ function ElementVisualPreview({ item, selectedCompany, docRef, docDate }) {
           </div>
           <p className="text-xs text-rose-950 font-semibold leading-relaxed text-justify">
             {item.data?.boxMessage || "Any deviation from authorized operational guidelines constitutes gross negligence under company policies and applicable statutory labor regulations."}
+          </p>
+        </div>
+      );
+    }
+    if (item.variant === "body_request_proposal_table") {
+      return (
+        <div className="space-y-2 my-2 text-xs leading-relaxed text-slate-900 select-text">
+          <p className="line-clamp-2 text-justify">
+            {(item.data?.introText || "").replace(/\[COMPANY_NAME\]/g, selectedCompany.name)}
+          </p>
+          <div className="my-2 border border-slate-900 rounded overflow-hidden">
+            <table className="w-full text-[10px] text-slate-900 border-collapse">
+              <thead className="bg-slate-100 font-bold border-b border-slate-900">
+                <tr>
+                  <th className="p-1 text-left">DESCRIPTION</th>
+                  <th className="p-1 text-center">QTY</th>
+                  <th className="p-1 text-right">PRICE</th>
+                  <th className="p-1 text-right">TOTAL</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(item.data?.tableRows || [
+                  { desc: "10 LITER OF BOTTLED WATER", qty: "106 PIECES", price: "PHP 88.50", total: "PHP 9,381.00" },
+                  { desc: "5 KILOS OF RICE", qty: "106 PIECES", price: "PHP 250.50", total: "PHP 26,553.00" }
+                ]).map((r, i) => (
+                  <tr key={i} className="border-b border-slate-200">
+                    <td className="p-1 font-semibold">{r.desc}</td>
+                    <td className="p-1 text-center">{r.qty}</td>
+                    <td className="p-1 text-right font-mono">{r.price}</td>
+                    <td className="p-1 text-right font-mono font-bold">{r.total}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="bg-slate-50 font-black border-t border-slate-900">
+                  <td colSpan={3} className="p-1 text-center font-bold">TOTAL</td>
+                  <td className="p-1 text-right font-mono font-black">{item.data?.tableTotal || "PHP 35,934.00"}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+          <p className="line-clamp-2 text-justify text-slate-700">
+            {(item.data?.justificationText2 || "").replace(/\[COMPANY_NAME\]/g, selectedCompany.name)}
           </p>
         </div>
       );
@@ -740,6 +865,18 @@ function ElementVisualPreview({ item, selectedCompany, docRef, docDate }) {
             <div className="border-b border-slate-800 pb-1">
               <span className="text-slate-400 block text-[9px] uppercase font-bold">Date & Time Received:</span>
             </div>
+          </div>
+        </div>
+      );
+    }
+    if (item.variant === "sig_staff_requestor") {
+      return (
+        <div className="pt-4 my-2 max-w-xs text-xs select-text space-y-4">
+          <div className="text-slate-800 text-xs font-semibold">{item.data?.closeLabel || "Sincerely yours,"}</div>
+          <div className="space-y-0.5">
+            <div className="font-black text-xs uppercase text-slate-950 border-b border-slate-800 pb-0.5 w-48">{item.data?.name || "QUENNIE R. CAPUYAN"}</div>
+            <div className="text-slate-600 text-[11px]">{item.data?.title || "Human Resource Staff"}</div>
+            <div className="text-slate-500 font-bold uppercase text-[9px]">{item.data?.company || selectedCompany.name}</div>
           </div>
         </div>
       );
@@ -1130,6 +1267,77 @@ function TemplateEditorModal({
                 </div>
               )}
 
+              {/* Executive Request Letter Addressing with CC */}
+              {variant === "address_letter_with_cc" && (
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Letter Date:</label>
+                    <input
+                      type="text"
+                      value={formData.date || ""}
+                      onChange={(e) => updateField("date", e.target.value)}
+                      placeholder="e.g. OCTOBER 24, 2026"
+                      className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs text-slate-900 bg-white font-bold"
+                    />
+                  </div>
+                  <div className="p-3 bg-white rounded-xl border border-slate-200 space-y-2">
+                    <span className="text-[10px] font-black uppercase text-slate-500 block">TO (Target Executive):</span>
+                    <div className="grid grid-cols-2 gap-2">
+                      <input
+                        type="text"
+                        value={formData.toName || ""}
+                        onChange={(e) => updateField("toName", e.target.value)}
+                        placeholder="CHARMIE JEAN M. SIMPAL, RRT"
+                        className="px-3 py-1.5 rounded-lg border border-slate-300 text-xs font-black text-slate-900"
+                      />
+                      <input
+                        type="text"
+                        value={formData.toTitle || ""}
+                        onChange={(e) => updateField("toTitle", e.target.value)}
+                        placeholder="Assistant General Manager"
+                        className="px-3 py-1.5 rounded-lg border border-slate-300 text-xs text-slate-800"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <input
+                        type="text"
+                        value={formData.toCompany || ""}
+                        onChange={(e) => updateField("toCompany", e.target.value)}
+                        placeholder="SGC Corporation"
+                        className="px-3 py-1.5 rounded-lg border border-slate-300 text-xs text-slate-800"
+                      />
+                      <input
+                        type="text"
+                        value={formData.toAddress || ""}
+                        onChange={(e) => updateField("toAddress", e.target.value)}
+                        placeholder="Purok Daisy, New Isabela, Tacurong City, Sultan Kudarat"
+                        className="px-3 py-1.5 rounded-lg border border-slate-300 text-xs text-slate-600"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-black text-slate-700 mb-1">SUBJECT Line:</label>
+                    <input
+                      type="text"
+                      value={formData.subject || ""}
+                      onChange={(e) => updateField("subject", e.target.value)}
+                      placeholder="REQUEST FOR CORPORATE SOCIAL RESPONSIBILITY (CSR) DONATION..."
+                      className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs text-slate-900 bg-white font-black uppercase"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-black text-slate-700 mb-1">Salutation:</label>
+                    <input
+                      type="text"
+                      value={formData.salutation || ""}
+                      onChange={(e) => updateField("salutation", e.target.value)}
+                      placeholder="Dear AGM Simpal,"
+                      className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs text-slate-900 bg-white font-bold"
+                    />
+                  </div>
+                </div>
+              )}
+
               {/* Rewards Voucher */}
               {variant === "body_rewards_voucher" && (
                 <div className="space-y-3">
@@ -1259,8 +1467,64 @@ function TemplateEditorModal({
                 </div>
               )}
 
+              {/* CSR / Budget Request Proposal with Cost Table */}
+              {variant === "body_request_proposal_table" && (
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-[11px] font-black text-slate-700 mb-1">1. Purpose / Introduction Paragraph:</label>
+                    <textarea
+                      rows={3}
+                      value={formData.introText || ""}
+                      onChange={(e) => updateField("introText", e.target.value)}
+                      placeholder="We are writing to respectfully request Management's approval..."
+                      className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs text-slate-800 bg-white leading-relaxed"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-black text-slate-700 mb-1">2. Proposal Details Paragraph:</label>
+                    <textarea
+                      rows={3}
+                      value={formData.proposalText || ""}
+                      onChange={(e) => updateField("proposalText", e.target.value)}
+                      placeholder="As part of this initiative, [COMPANY_NAME] proposes to do..."
+                      className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs text-slate-800 bg-white leading-relaxed"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-black text-slate-700 mb-1">3. Total Budget Amount:</label>
+                    <input
+                      type="text"
+                      value={formData.tableTotal || ""}
+                      onChange={(e) => updateField("tableTotal", e.target.value)}
+                      placeholder="PHP 35,934.00"
+                      className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs font-mono font-black text-slate-900 bg-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-black text-slate-700 mb-1">4. Community Impact & Malasakit Statement:</label>
+                    <textarea
+                      rows={3}
+                      value={formData.justificationText2 || ""}
+                      onChange={(e) => updateField("justificationText2", e.target.value)}
+                      placeholder="Furthermore, this serves as an opportunity to show the people of Mandaue City..."
+                      className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs text-slate-800 bg-white leading-relaxed"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-black text-slate-700 mb-1">5. Formal Approval Request Prayer:</label>
+                    <textarea
+                      rows={2}
+                      value={formData.closingRequest || ""}
+                      onChange={(e) => updateField("closingRequest", e.target.value)}
+                      placeholder="In this regard, we respectfully request Management's approval..."
+                      className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs text-slate-800 bg-white leading-relaxed"
+                    />
+                  </div>
+                </div>
+              )}
+
               {/* Standard Legal / Directive Body */}
-              {category === "body" && variant !== "body_rewards_voucher" && variant !== "body_numbered_directives" && variant !== "body_warning_callout" && (
+              {category === "body" && variant !== "body_rewards_voucher" && variant !== "body_numbered_directives" && variant !== "body_warning_callout" && variant !== "body_request_proposal_table" && (
                 <div className="space-y-3">
                   <div>
                     <label className="block text-[11px] font-black text-slate-700 mb-1">Clause Section Title:</label>
@@ -1408,6 +1672,55 @@ function TemplateEditorModal({
                 </div>
               )}
 
+              {/* Proponent / Staff Requestor Signatory */}
+              {variant === "sig_staff_requestor" && (
+                <div className="p-3.5 rounded-xl bg-white border border-slate-200 space-y-2.5">
+                  <span className="text-[10px] font-black uppercase text-slate-500 block">Staff Proponent / Requestor Signatory:</span>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-600 mb-0.5">Complimentary Close:</label>
+                    <input
+                      type="text"
+                      value={formData.closeLabel || ""}
+                      onChange={(e) => updateField("closeLabel", e.target.value)}
+                      placeholder="Sincerely yours,"
+                      className="w-full px-3 py-1.5 rounded-lg border border-slate-300 text-xs font-semibold text-slate-800"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-600 mb-0.5">Signatory Full Name:</label>
+                    <input
+                      type="text"
+                      value={formData.name || ""}
+                      onChange={(e) => updateField("name", e.target.value)}
+                      placeholder="QUENNIE R. CAPUYAN"
+                      className="w-full px-3 py-1.5 rounded-lg border border-slate-300 text-xs font-black text-slate-950 uppercase"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-600 mb-0.5">Designation / Title:</label>
+                      <input
+                        type="text"
+                        value={formData.title || ""}
+                        onChange={(e) => updateField("title", e.target.value)}
+                        placeholder="Human Resource Staff"
+                        className="w-full px-3 py-1.5 rounded-lg border border-slate-300 text-xs text-slate-700"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-600 mb-0.5">Company / Entity:</label>
+                      <input
+                        type="text"
+                        value={formData.company || ""}
+                        onChange={(e) => updateField("company", e.target.value)}
+                        placeholder="Lucky Betplay Corporation"
+                        className="w-full px-3 py-1.5 rounded-lg border border-slate-300 text-xs text-slate-700"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Triple Signatory */}
               {variant === "sig_triple_authority" && (
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
@@ -1523,9 +1836,9 @@ function TemplateEditorModal({
 export default function DocumentStudioPanel({
   currentUser = null,
   profiles = [],
-  onClose = () => {},
-  onOpenAiBuddy = () => {},
-  onSwitchToMemo = () => {}
+  onClose = () => { },
+  onOpenAiBuddy = () => { },
+  onSwitchToMemo = () => { }
 }) {
   // Selected Company Entity (Default: Lucky Betplay Corporation)
   const [selectedCompanyId, setSelectedCompanyId] = useState("lucky_betplay");
@@ -1672,7 +1985,7 @@ export default function DocumentStudioPanel({
       const updated = prev.filter((t) => t.id !== templateId);
       try {
         localStorage.setItem("hrhub_doc_custom_templates", JSON.stringify(updated));
-      } catch {}
+      } catch { }
       return updated;
     });
     triggerToast("Custom template deleted", "info");
@@ -1844,6 +2157,18 @@ export default function DocumentStudioPanel({
         { ...letterAddr, category: "addressing" },
         { ...explainBody, category: "body" },
         { ...singleSig, category: "signatory" }
+      ];
+    } else if (presetKey === "request_letter_csr") {
+      const ccAddr = MODULAR_BLOCK_PRESETS.find((c) => c.category === "addressing").items.find((i) => i.variant === "address_letter_with_cc");
+      const proposalBody = MODULAR_BLOCK_PRESETS.find((c) => c.category === "body").items.find((i) => i.variant === "body_request_proposal_table");
+      const staffSig = MODULAR_BLOCK_PRESETS.find((c) => c.category === "signatory").items.find((i) => i.variant === "sig_staff_requestor");
+      const securityFooter = MODULAR_BLOCK_PRESETS.find((c) => c.category === "footer").items[1];
+      presetBlocks = [
+        { ...headerItem, category: "header" },
+        { ...ccAddr, category: "addressing" },
+        { ...proposalBody, category: "body" },
+        { ...staffSig, category: "signatory" },
+        { ...securityFooter, category: "footer" }
       ];
     }
 
@@ -2036,7 +2361,7 @@ export default function DocumentStudioPanel({
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-base font-black text-slate-900 tracking-tight">
-                Coupon Bond Studio
+                Document Studio
               </h1>
               <span className="text-[10px] font-black uppercase tracking-wider bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full border border-amber-200">
                 Modular Drag &amp; Drop
@@ -2058,11 +2383,10 @@ export default function DocumentStudioPanel({
                 key={comp.id}
                 type="button"
                 onClick={() => handleSelectCompany(comp)}
-                className={`px-2.5 py-1.5 rounded-xl text-xs font-black transition cursor-pointer flex items-center gap-1.5 border ${
-                  isSelected
-                    ? "bg-slate-900 text-white border-slate-900 shadow-2xs scale-102"
-                    : "bg-slate-50 hover:bg-slate-100 text-slate-600 border-slate-200"
-                }`}
+                className={`px-2.5 py-1.5 rounded-xl text-xs font-black transition cursor-pointer flex items-center gap-1.5 border ${isSelected
+                  ? "bg-slate-900 text-white border-slate-900 shadow-2xs scale-102"
+                  : "bg-slate-50 hover:bg-slate-100 text-slate-600 border-slate-200"
+                  }`}
                 title={`Switch letterhead entity to ${comp.name}`}
               >
                 <img
@@ -2145,13 +2469,12 @@ export default function DocumentStudioPanel({
       {toastMessage && (
         <div className="no-print fixed top-16 right-6 z-50 animate-in fade-in slide-in-from-top-3 duration-200">
           <div
-            className={`px-4 py-2.5 rounded-2xl shadow-xl border text-xs font-bold flex items-center gap-2 ${
-              toastMessage.type === "success"
-                ? "bg-emerald-950 text-emerald-200 border-emerald-700"
-                : toastMessage.type === "info"
+            className={`px-4 py-2.5 rounded-2xl shadow-xl border text-xs font-bold flex items-center gap-2 ${toastMessage.type === "success"
+              ? "bg-emerald-950 text-emerald-200 border-emerald-700"
+              : toastMessage.type === "info"
                 ? "bg-slate-900 text-slate-100 border-slate-700"
                 : "bg-rose-950 text-rose-200 border-rose-700"
-            }`}
+              }`}
           >
             <CheckCircle2 size={16} className="text-emerald-400" />
             <span>{toastMessage.text}</span>
@@ -2249,11 +2572,10 @@ export default function DocumentStudioPanel({
                         setPaperSize(sz.id);
                         triggerToast(`Bond paper resized to ${sz.label}`, "info");
                       }}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-black transition cursor-pointer flex items-center gap-1.5 ${
-                        isSelected
-                          ? "bg-amber-500 text-slate-950 shadow-xs scale-102"
-                          : "text-slate-600 hover:text-slate-900 hover:bg-white"
-                      }`}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-black transition cursor-pointer flex items-center gap-1.5 ${isSelected
+                        ? "bg-amber-500 text-slate-950 shadow-xs scale-102"
+                        : "text-slate-600 hover:text-slate-900 hover:bg-white"
+                        }`}
                       title={sz.desc}
                     >
                       <span>{sz.label}</span>
@@ -2317,9 +2639,8 @@ export default function DocumentStudioPanel({
               transformOrigin: "top center",
               transition: "min-height 0.35s ease, max-width 0.35s ease, transform 0.2s ease"
             }}
-            className={`bg-white text-slate-900 border border-slate-300 shadow-2xl rounded-sm p-8 sm:p-12 md:p-14 relative select-text flex flex-col justify-between ${
-              isDragOverCanvas ? "ring-4 ring-amber-500/80 border-amber-500 bg-amber-50/15" : ""
-            }`}
+            className={`bg-white text-slate-900 border border-slate-300 shadow-2xl rounded-sm p-8 sm:p-12 md:p-14 relative select-text flex flex-col justify-between ${isDragOverCanvas ? "ring-4 ring-amber-500/80 border-amber-500 bg-amber-50/15" : ""
+              }`}
           >
             {/* Visual Paper Size Dimension Badge in Top-Right Corner */}
             <div className="no-print absolute top-3 right-4 z-10 text-[10px] font-extrabold text-slate-400 bg-slate-50/90 border border-slate-200 px-2.5 py-1 rounded-md flex items-center gap-1.5 select-none pointer-events-none shadow-2xs">
@@ -2390,9 +2711,16 @@ export default function DocumentStudioPanel({
                     <button
                       type="button"
                       onClick={() => handleLoadFullDocumentPreset("letter_of_explain")}
-                      className="p-2 rounded-xl border border-slate-200 bg-white hover:border-amber-400 hover:bg-amber-50/50 font-bold text-slate-700 transition cursor-pointer col-span-2 sm:col-span-1"
+                      className="p-2 rounded-xl border border-slate-200 bg-white hover:border-amber-400 hover:bg-amber-50/50 font-bold text-slate-700 transition cursor-pointer"
                     >
                       ✍️ Letter of Explain
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleLoadFullDocumentPreset("request_letter_csr")}
+                      className="p-2 rounded-xl border border-amber-300 bg-amber-50/70 hover:border-amber-500 hover:bg-amber-100/70 font-black text-amber-950 transition cursor-pointer"
+                    >
+                      📬 Request Letter (CSR)
                     </button>
                   </div>
                 </div>
@@ -2689,13 +3017,232 @@ export default function DocumentStudioPanel({
                               </p>
                             </div>
                           )}
+
+                          {el.variant === "address_letter_with_cc" && (
+                            <div className="mb-4 text-xs text-slate-900 space-y-3.5 select-text">
+                              <div
+                                contentEditable
+                                suppressContentEditableWarning
+                                onBlur={(e) => updateElementData(el.id, "date", e.currentTarget.innerText)}
+                                className="font-bold text-xs text-slate-900 outline-none hover:bg-amber-50/50 rounded px-1 transition inline-block uppercase tracking-wide"
+                              >
+                                {el.data?.date || docDate || "OCTOBER 24, 2026"}
+                              </div>
+
+                              {/* TO Section */}
+                              <div className="flex items-start text-xs leading-snug">
+                                <span className="font-black text-slate-950 w-12 shrink-0">TO:</span>
+                                <div className="space-y-0.5 flex-1">
+                                  <div
+                                    contentEditable
+                                    suppressContentEditableWarning
+                                    onBlur={(e) => updateElementData(el.id, "toName", e.currentTarget.innerText)}
+                                    className="font-black text-xs uppercase text-slate-950 outline-none hover:bg-amber-50/50 rounded px-1 transition"
+                                  >
+                                    {el.data?.toName || "CHARMIE JEAN M. SIMPAL, RRT"}
+                                  </div>
+                                  <div
+                                    contentEditable
+                                    suppressContentEditableWarning
+                                    onBlur={(e) => updateElementData(el.id, "toTitle", e.currentTarget.innerText)}
+                                    className="font-semibold text-[11px] text-slate-800 outline-none hover:bg-amber-50/50 rounded px-1 transition"
+                                  >
+                                    {el.data?.toTitle || "Assistant General Manager"}
+                                  </div>
+                                  <div
+                                    contentEditable
+                                    suppressContentEditableWarning
+                                    onBlur={(e) => updateElementData(el.id, "toCompany", e.currentTarget.innerText)}
+                                    className="text-[11px] text-slate-700 outline-none hover:bg-amber-50/50 rounded px-1 transition"
+                                  >
+                                    {el.data?.toCompany || "SGC Corporation"}
+                                  </div>
+                                  <div
+                                    contentEditable
+                                    suppressContentEditableWarning
+                                    onBlur={(e) => updateElementData(el.id, "toAddress", e.currentTarget.innerText)}
+                                    className="text-[11px] text-slate-600 outline-none hover:bg-amber-50/50 rounded px-1 transition"
+                                  >
+                                    {el.data?.toAddress || "Purok Daisy, New Isabela, Tacurong City, Sultan Kudarat"}
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* CC Section */}
+                              <div className="flex items-start text-xs leading-snug">
+                                <span className="font-black text-slate-950 w-12 shrink-0">CC:</span>
+                                <div className="space-y-3 flex-1">
+                                  {(el.data?.ccRecipients || [
+                                    {
+                                      name: "JEVINCE JAYE S. JUBAY, CHRP",
+                                      title: "HRMD Manager",
+                                      company: "SGC Corporation",
+                                      address: "Purok Daisy, New Isabela, Tacurong City, Sultan Kudarat"
+                                    },
+                                    {
+                                      name: "FATIMA MARIE B. OBILLOS",
+                                      title: "CFO Head",
+                                      company: "SGC Corporation",
+                                      address: "Purok Daisy, New Isabela, Tacurong City, Sultan Kudarat"
+                                    }
+                                  ]).map((cc, ccIdx) => (
+                                    <div key={ccIdx} className="space-y-0.5">
+                                      <div className="font-black text-xs uppercase text-slate-950 px-1">
+                                        {cc.name}
+                                      </div>
+                                      <div className="font-semibold text-[11px] text-slate-800 px-1">
+                                        {cc.title}
+                                      </div>
+                                      <div className="text-[11px] text-slate-700 px-1">
+                                        {cc.company}
+                                      </div>
+                                      {cc.address && (
+                                        <div className="text-[11px] text-slate-600 px-1">
+                                          {cc.address}
+                                        </div>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+
+                              {/* SUBJECT Line */}
+                              <div className="pt-2">
+                                <div className="font-black text-xs text-slate-950 uppercase leading-snug">
+                                  <span>SUBJECT: </span>
+                                  <span
+                                    contentEditable
+                                    suppressContentEditableWarning
+                                    onBlur={(e) => updateElementData(el.id, "subject", e.currentTarget.innerText)}
+                                    className="outline-none hover:bg-amber-50/50 rounded px-1 transition"
+                                  >
+                                    {el.data?.subject || "REQUEST FOR CORPORATE SOCIAL RESPONSIBILITY (CSR) DONATION FOR THE LABOGON FIRE VICTIMS"}
+                                  </span>
+                                </div>
+                              </div>
+
+                              {/* Salutation */}
+                              <div
+                                contentEditable
+                                suppressContentEditableWarning
+                                onBlur={(e) => updateElementData(el.id, "salutation", e.currentTarget.innerText)}
+                                className="font-black text-xs text-slate-900 pt-1 outline-none hover:bg-amber-50/50 rounded px-1 transition"
+                              >
+                                {el.data?.salutation || "Dear AGM Simpal,"}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       )}
 
                       {/* ================= CATEGORY 3: DIRECTIVES & BODY ================= */}
                       {el.category === "body" && (
                         <div>
-                          {el.variant === "body_rewards_voucher" ? (
+                          {el.variant === "body_request_proposal_table" ? (
+                            <div className="space-y-3.5 my-3 text-xs leading-relaxed text-slate-900 select-text">
+                              <p
+                                contentEditable
+                                suppressContentEditableWarning
+                                onBlur={(e) => updateElementData(el.id, "introText", e.currentTarget.innerText)}
+                                className="text-justify outline-none hover:bg-amber-50/20 rounded p-1 transition"
+                              >
+                                {(el.data?.introText || "").replace(/\[COMPANY_NAME\]/g, selectedCompany.name)}
+                              </p>
+
+                              <p
+                                contentEditable
+                                suppressContentEditableWarning
+                                onBlur={(e) => updateElementData(el.id, "proposalText", e.currentTarget.innerText)}
+                                className="text-justify outline-none hover:bg-amber-50/20 rounded p-1 transition"
+                              >
+                                {(el.data?.proposalText || "").replace(/\[COMPANY_NAME\]/g, selectedCompany.name)}
+                              </p>
+
+                              {/* Itemized Cost Breakdown Table */}
+                              <div className="my-3 border border-slate-900 rounded overflow-hidden">
+                                <table className="w-full text-xs text-slate-900 border-collapse">
+                                  <thead className="bg-slate-100 font-bold border-b border-slate-900">
+                                    <tr>
+                                      <th className="p-1.5 text-left font-black">DESCRIPTION</th>
+                                      <th className="p-1.5 text-center font-black">QUANTITY</th>
+                                      <th className="p-1.5 text-right font-black">MARKET PRICE</th>
+                                      <th className="p-1.5 text-right font-black">TOTAL</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {(el.data?.tableRows || [
+                                      { desc: "10 LITER OF BOTTLED WATER", qty: "106 PIECES", price: "PHP 88.50", total: "PHP 9,381.00" },
+                                      { desc: "5 KILOS OF RICE", qty: "106 PIECES", price: "PHP 250.50", total: "PHP 26,553.00" }
+                                    ]).map((row, rIdx) => (
+                                      <tr key={rIdx} className="border-b border-slate-300">
+                                        <td className="p-1.5 font-bold uppercase">{row.desc}</td>
+                                        <td className="p-1.5 text-center font-semibold">{row.qty}</td>
+                                        <td className="p-1.5 text-right font-mono">{row.price}</td>
+                                        <td className="p-1.5 text-right font-mono font-bold">{row.total}</td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                  <tfoot>
+                                    <tr className="bg-slate-50 font-black border-t border-slate-900">
+                                      <td colSpan={3} className="p-1.5 text-center font-black tracking-wider">TOTAL</td>
+                                      <td
+                                        contentEditable
+                                        suppressContentEditableWarning
+                                        onBlur={(e) => updateElementData(el.id, "tableTotal", e.currentTarget.innerText)}
+                                        className="p-1.5 text-right font-mono font-black outline-none hover:bg-amber-50/50 rounded"
+                                      >
+                                        {el.data?.tableTotal || "PHP 35,934.00"}
+                                      </td>
+                                    </tr>
+                                  </tfoot>
+                                </table>
+                              </div>
+
+                              {el.data?.justificationText1 && (
+                                <p
+                                  contentEditable
+                                  suppressContentEditableWarning
+                                  onBlur={(e) => updateElementData(el.id, "justificationText1", e.currentTarget.innerText)}
+                                  className="text-justify outline-none hover:bg-amber-50/20 rounded p-1 transition"
+                                >
+                                  {el.data.justificationText1.replace(/\[COMPANY_NAME\]/g, selectedCompany.name)}
+                                </p>
+                              )}
+
+                              {el.data?.justificationText2 && (
+                                <p
+                                  contentEditable
+                                  suppressContentEditableWarning
+                                  onBlur={(e) => updateElementData(el.id, "justificationText2", e.currentTarget.innerText)}
+                                  className="text-justify outline-none hover:bg-amber-50/20 rounded p-1 transition"
+                                >
+                                  {el.data.justificationText2.replace(/\[COMPANY_NAME\]/g, selectedCompany.name)}
+                                </p>
+                              )}
+
+                              {el.data?.closingRequest && (
+                                <p
+                                  contentEditable
+                                  suppressContentEditableWarning
+                                  onBlur={(e) => updateElementData(el.id, "closingRequest", e.currentTarget.innerText)}
+                                  className="text-justify outline-none hover:bg-amber-50/20 rounded p-1 transition"
+                                >
+                                  {el.data.closingRequest.replace(/\[COMPANY_NAME\]/g, selectedCompany.name)}
+                                </p>
+                              )}
+
+                              {el.data?.thankYouText && (
+                                <p
+                                  contentEditable
+                                  suppressContentEditableWarning
+                                  onBlur={(e) => updateElementData(el.id, "thankYouText", e.currentTarget.innerText)}
+                                  className="text-justify outline-none hover:bg-amber-50/20 rounded p-1 transition font-medium"
+                                >
+                                  {el.data.thankYouText.replace(/\[COMPANY_NAME\]/g, selectedCompany.name)}
+                                </p>
+                              )}
+                            </div>
+                          ) : el.variant === "body_rewards_voucher" ? (
                             <div className="space-y-4 my-3 select-text">
                               <div className="text-center">
                                 <h3 className="text-base font-black uppercase tracking-wider text-slate-900">
@@ -2922,6 +3469,47 @@ export default function DocumentStudioPanel({
                               </div>
                             </div>
                           )}
+
+                          {el.variant === "sig_staff_requestor" && (
+                            <div className="pt-6 my-4 max-w-xs text-xs select-text space-y-7">
+                              <div
+                                contentEditable
+                                suppressContentEditableWarning
+                                onBlur={(e) => updateElementData(el.id, "closeLabel", e.currentTarget.innerText)}
+                                className="text-slate-800 text-xs font-semibold outline-none hover:bg-amber-50/50 rounded px-1 transition"
+                              >
+                                {el.data?.closeLabel || "Sincerely yours,"}
+                              </div>
+                              <div className="space-y-0.5">
+                                <div className="w-56 border-b-2 border-slate-900 pb-1">
+                                  <div
+                                    contentEditable
+                                    suppressContentEditableWarning
+                                    onBlur={(e) => updateElementData(el.id, "name", e.currentTarget.innerText)}
+                                    className="font-black text-slate-950 uppercase text-xs tracking-wide outline-none hover:bg-amber-50/50 rounded"
+                                  >
+                                    {el.data?.name || "QUENNIE R. CAPUYAN"}
+                                  </div>
+                                </div>
+                                <div
+                                  contentEditable
+                                  suppressContentEditableWarning
+                                  onBlur={(e) => updateElementData(el.id, "title", e.currentTarget.innerText)}
+                                  className="text-slate-700 font-semibold text-[11px] mt-0.5 outline-none hover:bg-amber-50/50 rounded"
+                                >
+                                  {el.data?.title || "Human Resource Staff"}
+                                </div>
+                                <div
+                                  contentEditable
+                                  suppressContentEditableWarning
+                                  onBlur={(e) => updateElementData(el.id, "company", e.currentTarget.innerText)}
+                                  className="text-slate-500 font-bold uppercase text-[10px] outline-none hover:bg-amber-50/50 rounded"
+                                >
+                                  {el.data?.company || selectedCompany.name}
+                                </div>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       )}
 
@@ -2998,11 +3586,10 @@ export default function DocumentStudioPanel({
                   key={tab.id}
                   type="button"
                   onClick={() => setPaletteActiveCategory(tab.id)}
-                  className={`px-2.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
-                    isActive
-                      ? "bg-amber-500 text-slate-950 font-black shadow-xs"
-                      : "bg-slate-50 hover:bg-slate-100 text-slate-600"
-                  }`}
+                  className={`px-2.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${isActive
+                    ? "bg-amber-500 text-slate-950 font-black shadow-xs"
+                    : "bg-slate-50 hover:bg-slate-100 text-slate-600"
+                    }`}
                 >
                   <Icon size={13} />
                   <span>{tab.label}</span>
@@ -3323,6 +3910,20 @@ export default function DocumentStudioPanel({
               >
                 📜 Agency Term.
               </button>
+              <button
+                type="button"
+                onClick={() => handleLoadFullDocumentPreset("letter_of_explain")}
+                className="p-1.5 rounded-lg bg-white border border-slate-200 hover:border-amber-400 font-bold text-slate-700 transition truncate text-left cursor-pointer"
+              >
+                ✍️ Letter of Explain
+              </button>
+              <button
+                type="button"
+                onClick={() => handleLoadFullDocumentPreset("request_letter_csr")}
+                className="p-1.5 rounded-lg bg-amber-50 border border-amber-300 hover:border-amber-500 font-black text-amber-950 transition truncate text-left cursor-pointer col-span-2"
+              >
+                📬 Request Letter (CSR)
+              </button>
             </div>
           </div>
         </aside>
@@ -3421,11 +4022,10 @@ export default function DocumentStudioPanel({
                       key={item.code}
                       type="button"
                       onClick={() => setArchiveCompanyFilter(item.code)}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer whitespace-nowrap inline-flex items-center gap-1.5 border ${
-                        archiveCompanyFilter === item.code
-                          ? "bg-slate-900 text-white border-slate-900 shadow-xs"
-                          : "bg-slate-50 hover:bg-slate-100 text-slate-600 border-slate-200"
-                      }`}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer whitespace-nowrap inline-flex items-center gap-1.5 border ${archiveCompanyFilter === item.code
+                        ? "bg-slate-900 text-white border-slate-900 shadow-xs"
+                        : "bg-slate-50 hover:bg-slate-100 text-slate-600 border-slate-200"
+                        }`}
                     >
                       <span>{item.label}</span>
                       <span className="text-[10px] px-1.5 py-0.2 rounded-full font-black bg-slate-200 text-slate-700">
