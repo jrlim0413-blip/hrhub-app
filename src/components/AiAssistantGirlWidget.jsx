@@ -128,6 +128,19 @@ export default function AiAssistantGirlWidget({
   const [mouthState, setMouthState] = useState("resting"); // "resting", "open", "shut"
   const [voiceEnabled, setVoiceEnabled] = useState(true); // Natural female voice
 
+  // Strict GeoTagging suppression listener
+  const [geoTaggingActive, setGeoTaggingActive] = useState(() => {
+    return typeof window !== "undefined" && (window.__hrhub_geotagging_active === true || localStorage.getItem("hrhub_geotagging_active") === "true");
+  });
+
+  useEffect(() => {
+    const handleGeoTagging = (e) => {
+      setGeoTaggingActive(!!e.detail);
+    };
+    window.addEventListener("hrhub_geotagging_visibility", handleGeoTagging);
+    return () => window.removeEventListener("hrhub_geotagging_visibility", handleGeoTagging);
+  }, []);
+
   // Synchronized Word-by-Word Typing & Lip-Flap State
   const [msgIndex, setMsgIndex] = useState(0);
   const [displayedWords, setDisplayedWords] = useState([]);
@@ -141,9 +154,9 @@ export default function AiAssistantGirlWidget({
     activeTimersRef.current = [];
   };
 
-  // Stop audio and timers when hidden or chat is open
+  // Stop audio and timers when hidden, chat is open, or GeoTagging is active
   useEffect(() => {
-    if (hidden || isChatOpen) {
+    if (hidden || isChatOpen || geoTaggingActive) {
       clearAllTimers();
       if (audioPlayerRef.current) {
         try {
@@ -154,11 +167,11 @@ export default function AiAssistantGirlWidget({
         window.speechSynthesis.cancel();
       }
     }
-  }, [hidden, isChatOpen]);
+  }, [hidden, isChatOpen, geoTaggingActive]);
 
   // 1. Natural Anime Blinking Engine (Eyes are wide OPEN by default, blinks naturally)
   useEffect(() => {
-    if (hidden || isChatOpen || isMinimized) return;
+    if (hidden || isChatOpen || geoTaggingActive || isMinimized) return;
     let t1, t2, t3;
     const blinkInterval = setInterval(() => {
       setIsBlinking(true);
@@ -276,8 +289,8 @@ export default function AiAssistantGirlWidget({
     }
   };
 
-  // If hidden (active page has its own AI button) or chat modal is open, completely hide floating widget
-  if (hidden || isChatOpen) return null;
+  // If hidden (active page has its own AI button), chat modal is open, or GeoTagging is active, completely hide floating widget
+  if (hidden || isChatOpen || geoTaggingActive) return null;
 
   if (isMinimized) {
     return (

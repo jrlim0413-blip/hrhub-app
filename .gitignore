@@ -29,6 +29,4 @@ dist-ssr
 
 # Supabase SQL schema & backup files
 supabase/
-
-# Supabase SQL schema & backup files
-supabase/
+*.sql

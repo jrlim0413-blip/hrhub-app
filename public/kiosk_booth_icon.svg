@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 130" width="50" height="65">
+  <defs>
+    <filter id="boothShadow" x="-10%" y="-10%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="4" stdDeviation="3" flood-color="#000" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+
+  <g filter="url(#boothShadow)">
+    <!-- 1. Roof Canopy (Rounded Top) -->
+    <rect x="5" y="6" width="90" height="26" rx="13" fill="#f5a623" stroke="#18181b" stroke-width="5.5" stroke-linejoin="round" />
+    <path d="M 16 19 L 84 19" stroke="#18181b" stroke-width="3.5" stroke-linecap="round" opacity="0.9" />
+
+    <!-- 2. Service Window Backing & Pillars -->
+    <rect x="14" y="30" width="72" height="40" fill="#f5a623" stroke="#18181b" stroke-width="5" stroke-linejoin="round" />
+
+    <!-- 3. Teller Attendant Person Inside Kiosk -->
+    <circle cx="50" cy="45" r="9" fill="#f5a623" stroke="#18181b" stroke-width="4.5" />
+    <path d="M 34 69 C 34 55, 66 55, 66 69 Z" fill="#f5a623" stroke="#18181b" stroke-width="4.5" stroke-linejoin="round" />
+
+    <!-- 4. Front Service Counter Desk -->
+    <rect x="3" y="66" width="94" height="16" rx="8" fill="#f5a623" stroke="#18181b" stroke-width="5.5" stroke-linejoin="round" />
+
+    <!-- 5. Lower Kiosk Cabinet Base -->
+    <rect x="9" y="80" width="82" height="42" rx="10" fill="#f5a623" stroke="#18181b" stroke-width="5.5" stroke-linejoin="round" />
+    <!-- Cabinet Front Inset Panel -->
+    <rect x="19" y="90" width="62" height="22" rx="6" fill="#f5a623" stroke="#18181b" stroke-width="4.5" stroke-linejoin="round" />
+  </g>
+</svg>

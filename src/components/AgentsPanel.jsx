@@ -1,7 +1,8 @@
-import { useState } from "react";
-import { AlertCircle, Bot, Download, LoaderCircle, RefreshCw, Search, Users } from "lucide-react";
+import { useState, useEffect } from "react";
+import { AlertCircle, Bot, Download, LoaderCircle, RefreshCw, Search, Users, MapPin, Store } from "lucide-react";
 import AgentProfile from "./AgentProfile";
 import { API_CONFIG } from "../config/apiConfig";
+import SOURCE_AGENTS_CACHE from "../data/sourceApiAgentsCache.json";
 
 function getAgentList(payload) {
   if (Array.isArray(payload)) return payload;
@@ -73,16 +74,15 @@ function getAgentStatus(agent) {
 }
 
 export default function AgentsPanel({ onClose }) {
-  const [agents, setAgents] = useState([]);
+  const [agents, setAgents] = useState(() => SOURCE_AGENTS_CACHE?.agents || []);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [loaded, setLoaded] = useState(false);
+  const [loaded, setLoaded] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
-  // Default is 'active', no 'all' status
-  const [statusFilter, setStatusFilter] = useState("active");
+  const [statusFilter, setStatusFilter] = useState("all"); // 'all' | 'active' | 'inactive'
   const [selectedAgent, setSelectedAgent] = useState(null);
-  const [supervisors, setSupervisors] = useState([]);
-  const [barangays, setBarangays] = useState([]);
+  const [supervisors, setSupervisors] = useState(() => SOURCE_AGENTS_CACHE?.supervisors || []);
+  const [barangays, setBarangays] = useState(() => SOURCE_AGENTS_CACHE?.barangays || []);
 
   const loadAgents = async () => {
     setLoading(true);
@@ -116,14 +116,18 @@ export default function AgentsPanel({ onClose }) {
       setAgents(getAgentList(payload));
       setLoaded(true);
     } catch (requestError) {
-      setError(requestError.message || "Unable to load agents.");
-      setAgents([]);
-      setSupervisors([]);
-      setBarangays([]);
+      console.warn("Could not fetch live agents from API, using cached data:", requestError);
+      if (!agents || agents.length === 0) {
+        setError(requestError.message || "Unable to load agents.");
+      }
     } finally {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    loadAgents();
+  }, []);
 
   const activeCount = agents.filter((a) => isAgentActive(a)).length;
   const inactiveCount = agents.length - activeCount;
@@ -133,11 +137,9 @@ export default function AgentsPanel({ onClose }) {
     const matchesSearch = searchableText.includes(searchTerm.toLowerCase());
     const isActive = isAgentActive(agent);
 
-    // Active at Inactive lamang, walang 'all'
     if (statusFilter === "inactive") {
       if (isActive) return false;
-    } else {
-      // Default: active lamang, hindi ipinapakita ang inactive
+    } else if (statusFilter === "active") {
       if (!isActive) return false;
     }
 
@@ -232,12 +234,26 @@ export default function AgentsPanel({ onClose }) {
               <input value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Search agents..." className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-9 pr-3 text-xs outline-none focus:border-emerald-500" />
             </label>
 
-            {/* Active & Inactive Filter Tabs Only (No "All statuses") */}
+            {/* All, Active & Inactive Filter Tabs */}
             <div className="inline-flex items-center rounded-xl border border-slate-200 bg-slate-100/90 p-1 shrink-0">
               <button
                 type="button"
+                onClick={() => setStatusFilter("all")}
+                className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition cursor-pointer ${statusFilter === "all"
+                  ? "bg-slate-900 text-white shadow-xs"
+                  : "text-slate-600 hover:bg-white/60 hover:text-slate-900"
+                  }`}
+              >
+                <span>All</span>
+                <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-black ${statusFilter === "all" ? "bg-white/20 text-white" : "bg-slate-200 text-slate-700"}`}>
+                  {agents.length}
+                </span>
+              </button>
+
+              <button
+                type="button"
                 onClick={() => setStatusFilter("active")}
-                className={`inline-flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-xs font-bold transition cursor-pointer ${statusFilter === "active"
+                className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition cursor-pointer ${statusFilter === "active"
                   ? "bg-emerald-500 text-slate-950 shadow-xs"
                   : "text-slate-600 hover:bg-white/60 hover:text-slate-900"
                   }`}
@@ -252,7 +268,7 @@ export default function AgentsPanel({ onClose }) {
               <button
                 type="button"
                 onClick={() => setStatusFilter("inactive")}
-                className={`inline-flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-xs font-bold transition cursor-pointer ${statusFilter === "inactive"
+                className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition cursor-pointer ${statusFilter === "inactive"
                   ? "bg-slate-900 text-white shadow-xs"
                   : "text-slate-600 hover:bg-white/60 hover:text-slate-900"
                   }`}
@@ -286,15 +302,16 @@ export default function AgentsPanel({ onClose }) {
                   </div>
                   <div className="min-w-0">
                     <h4 className="truncate text-xs font-bold text-slate-900">{getAgentName(agent, index)}</h4>
-                    <p className="truncate text-[10px] text-slate-500">{getAgentDetails(agent)}</p>
+                    <p className="truncate text-[10px] text-slate-500 font-mono">@{agent.username || `agent_${agent.id}`}</p>
                   </div>
                   <span className={`ml-auto rounded-full px-2 py-1 text-[9px] font-bold ${getAgentStatus(agent) === "active" ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-600"}`}>
                     {getAgentStatus(agent) === "active" ? "Active" : "Inactive"}
                   </span>
                 </div>
-                {agent.email && <p className="mt-3 truncate text-[10px] text-slate-500">{agent.email}</p>}
-                {agent.supervisor !== undefined && <p className="mt-2 truncate text-[10px] text-slate-500">Supervisor: <span className="font-semibold text-slate-700">{getSupervisorName(agent.supervisor)}</span></p>}
-                <p className="mt-2 text-[10px] font-bold text-emerald-700">View profile</p>
+                {agent.outlet && <p className="mt-2.5 truncate text-[11px] font-semibold text-emerald-800 flex items-center gap-1"><Store size={12} className="shrink-0 text-emerald-600" /> {agent.outlet}</p>}
+                {agent.brgyId && <p className="mt-1 truncate text-[10px] text-slate-600 flex items-center gap-1"><MapPin size={12} className="shrink-0 text-rose-500" /> Brgy: <span className="font-semibold text-slate-800">{getBarangayName(agent.brgyId)}</span></p>}
+                {agent.supervisor !== undefined && <p className="mt-1 truncate text-[10px] text-slate-500">Supervisor: <span className="font-semibold text-slate-700">{getSupervisorName(agent.supervisor)}</span></p>}
+                <p className="mt-2 text-[10px] font-bold text-emerald-700">View profile →</p>
               </button>
             ))}
           </div>

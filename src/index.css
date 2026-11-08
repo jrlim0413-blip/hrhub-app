@@ -400,4 +400,15 @@ summary {
   list-style: inherit !important;
   margin-bottom: 3px !important;
   line-height: inherit !important;
-}
+}
+
+/* Leaflet Custom Map Pins - Zero border/background reset */
+.user-booth-pin,
+.agent-outlet-pin,
+.custom-point-pin,
+.edge-barangay-pin,
+.interior-barangay-pin {
+  background: transparent !important;
+  border: none !important;
+}
+

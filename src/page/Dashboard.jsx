@@ -6,7 +6,7 @@ import {
   BriefcaseBusiness, FileText, Sparkles, BarChart3,
   Database, RefreshCw, CheckCircle2, AlertCircle, Clock,
   Bot, Layers, Home, X, CheckCheck, Menu, UserCheck, ShieldAlert,
-  Lock, Wrench
+  Lock, Wrench, MapPin, CloudSun
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import ProfileModal from "../components/ProfileModal";
@@ -21,6 +21,7 @@ import MemoGeneratorPanel from "../components/MemoGeneratorPanel";
 import DocumentStudioPanel from "../components/DocumentStudioPanel";
 import IncidentReportPanel from "../components/IncidentReportPanel";
 import DoleLegalGuidelinesPanel from "../components/DoleLegalGuidelinesPanel";
+import OperationsGeoTaggingPanel from "../components/OperationsGeoTaggingPanel";
 import SupervisorsAttendancePanel from "../components/SupervisorsAttendancePanel";
 import RolePermissionMatrixPanel from "../components/RolePermissionMatrixPanel";
 import ApiHealthConfigurationPanel from "../components/ApiHealthConfigurationPanel";
@@ -283,6 +284,14 @@ const WORKSPACE_TAB_DEFS = {
     activeIconClass: "text-amber-400",
     inactiveIconClass: "text-amber-600"
   },
+  geotagging: {
+    id: "geotagging",
+    label: "Territory GeoTagging & Map",
+    icon: MapPin,
+    activeClass: "bg-slate-950 text-emerald-400 ring-2 ring-emerald-400",
+    activeIconClass: "text-emerald-400",
+    inactiveIconClass: "text-emerald-600"
+  },
   dole_handbook: {
     id: "dole_handbook",
     label: "DOLE Legal Guidelines",
@@ -328,6 +337,17 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
     }
   });
   const [viewSwitcherOpen, setViewSwitcherOpen] = useState(false);
+  const [operationsSubTab, setOperationsSubTab] = useState("geotagging"); // 'geotagging' | 'sops' | 'weather'
+  const [isGeoTaggingMounted, setIsGeoTaggingMounted] = useState(false);
+
+  // Broadcast listener to strictly remove floating AI Buddy whenever GeoTagging panel is active
+  useEffect(() => {
+    const handleGeoTaggingVisibility = (e) => {
+      setIsGeoTaggingMounted(!!e.detail);
+    };
+    window.addEventListener("hrhub_geotagging_visibility", handleGeoTaggingVisibility);
+    return () => window.removeEventListener("hrhub_geotagging_visibility", handleGeoTaggingVisibility);
+  }, []);
   const [activeTheme, setActiveTheme] = useState("sky");
   const [accountModal, setAccountModal] = useState(null);
   const [profileName, setProfileName] = useState(() => {
@@ -2180,43 +2200,114 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
           {/* TAB 3: GROSS REPORT */}
           {workspaceTab === "gross" && <GrossReportPanel />}
 
-          {/* TAB 4: OPERATIONS BOARD (WEATHER & SOPS) */}
+          {/* TAB 4: OPERATIONS BOARD (WEATHER, GEOTAGGING & SOPS) */}
           {workspaceTab === "sops" && (
-            <>
-              <WeatherWidget />
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                {SOP_COLUMNS.map((column) => (
-                  <div key={column.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-3 shadow-sm">
-                    <div className={`mb-3 flex items-center justify-between rounded-xl border px-2.5 py-2 text-[11px] font-bold ${column.accent}`}>
-                      <span>{column.title}</span>
-                      <span className="rounded-full bg-white/60 px-1.5 py-0.5">{column.count}</span>
-                    </div>
+            <div className="space-y-4">
+              {/* Operations Sub-Navigation Bar */}
+              <div className="flex items-center justify-between border-b border-slate-200 pb-3 flex-wrap gap-2">
+                <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-2xl border border-slate-200/80">
+                  <button
+                    type="button"
+                    onClick={() => setOperationsSubTab("geotagging")}
+                    className={`px-4 py-2 rounded-xl text-xs font-black transition cursor-pointer flex items-center gap-2 ${
+                      operationsSubTab === "geotagging"
+                        ? "bg-slate-900 text-emerald-400 shadow-sm"
+                        : "text-slate-600 hover:text-slate-900"
+                    }`}
+                  >
+                    <MapPin size={14} className={operationsSubTab === "geotagging" ? "text-emerald-400" : "text-slate-500"} />
+                    <span>Territory GeoTagging &amp; Road Map</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setOperationsSubTab("sops")}
+                    className={`px-4 py-2 rounded-xl text-xs font-black transition cursor-pointer flex items-center gap-2 ${
+                      operationsSubTab === "sops"
+                        ? "bg-slate-900 text-white shadow-sm"
+                        : "text-slate-600 hover:text-slate-900"
+                    }`}
+                  >
+                    <Layers size={14} className={operationsSubTab === "sops" ? "text-white" : "text-slate-500"} />
+                    <span>SOP &amp; Task Board</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setOperationsSubTab("weather")}
+                    className={`px-4 py-2 rounded-xl text-xs font-black transition cursor-pointer flex items-center gap-2 ${
+                      operationsSubTab === "weather"
+                        ? "bg-slate-900 text-blue-400 shadow-sm"
+                        : "text-slate-600 hover:text-slate-900"
+                    }`}
+                  >
+                    <CloudSun size={14} className={operationsSubTab === "weather" ? "text-blue-400" : "text-slate-500"} />
+                    <span>Field Weather Radar</span>
+                  </button>
+                </div>
 
-                    <div className="space-y-3">
-                      {column.tasks.map((task, index) => (
-                        <div key={`${column.id}-${index}`} className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
-                          <div className="flex items-start justify-between gap-2">
-                            <h3 className="text-sm font-bold text-slate-800">{task.title}</h3>
-                            <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ${
-                              task.priority === "High"
-                                ? "bg-rose-100 text-rose-700"
-                                : task.priority === "Medium"
-                                  ? "bg-amber-100 text-amber-700"
-                                  : task.priority === "Low"
-                                    ? "bg-slate-200 text-slate-700"
-                                    : "bg-emerald-100 text-emerald-700"
-                            }`}>
-                              {task.priority}
-                            </span>
-                          </div>
-                          <p className="mt-2 text-[10px] text-slate-500">{task.subtitle}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ))}
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-bold text-slate-500">
+                    Active Franchise Area:
+                  </span>
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-emerald-100 text-emerald-800 border border-emerald-200">
+                    Mandaue City (Lucky Betplay)
+                  </span>
+                </div>
               </div>
-            </>
+
+              {operationsSubTab === "geotagging" && (
+                <div className="h-[720px] md:h-[780px] rounded-3xl overflow-hidden border border-slate-800 shadow-2xl flex flex-col relative">
+                  <OperationsGeoTaggingPanel onClose={() => setOperationsSubTab("sops")} />
+                </div>
+              )}
+
+              {operationsSubTab === "sops" && (
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 animate-in fade-in">
+                  {SOP_COLUMNS.map((column) => (
+                    <div key={column.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-3 shadow-sm">
+                      <div className={`mb-3 flex items-center justify-between rounded-xl border px-2.5 py-2 text-[11px] font-bold ${column.accent}`}>
+                        <span>{column.title}</span>
+                        <span className="rounded-full bg-white/60 px-1.5 py-0.5">{column.count}</span>
+                      </div>
+
+                      <div className="space-y-3">
+                        {column.tasks.map((task, index) => (
+                          <div key={`${column.id}-${index}`} className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+                            <div className="flex items-start justify-between gap-2">
+                              <h3 className="text-sm font-bold text-slate-800">{task.title}</h3>
+                              <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ${
+                                task.priority === "High"
+                                  ? "bg-rose-100 text-rose-700"
+                                  : task.priority === "Medium"
+                                    ? "bg-amber-100 text-amber-700"
+                                    : task.priority === "Low"
+                                      ? "bg-slate-200 text-slate-700"
+                                      : "bg-emerald-100 text-emerald-700"
+                              }`}>
+                                {task.priority}
+                              </span>
+                            </div>
+                            <p className="mt-2 text-[10px] text-slate-500">{task.subtitle}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {operationsSubTab === "weather" && (
+                <div className="animate-in fade-in">
+                  <WeatherWidget />
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* DEDICATED GEOTAGGING WORKSPACE TAB */}
+          {workspaceTab === "geotagging" && (
+            <div className="h-[720px] md:h-[780px] rounded-3xl overflow-hidden border border-slate-800 shadow-2xl flex flex-col relative">
+              <OperationsGeoTaggingPanel onClose={() => handleCloseWorkspaceTab(null, "geotagging")} />
+            </div>
           )}
 
           {/* TAB 5: SUPERVISORS ATTENDANCE */}
@@ -2258,7 +2349,12 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
       <AiAssistantGirlWidget
         isChatOpen={aiDrawerOpen}
         onOpenChat={() => setAiDrawerOpen(true)}
-        hidden={activeView === "sop" && (workspaceTab === "home" || workspaceTab === "memo")}
+        hidden={
+          isGeoTaggingMounted ||
+          workspaceTab === "geotagging" ||
+          (workspaceTab === "sops" && operationsSubTab === "geotagging") ||
+          (activeView === "sop" && (workspaceTab === "home" || workspaceTab === "memo"))
+        }
       />
 
       {/* Floating AI Assistant Drawer/Modal */}

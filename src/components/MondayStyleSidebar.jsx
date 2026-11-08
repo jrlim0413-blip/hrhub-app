@@ -5,7 +5,7 @@ import {
   Building2, Calculator, Clock, HardHat, Dices, Award, Zap, TrendingUp,
   Receipt, FileCheck, Sliders, Activity, MailCheck, Wrench, Home,
   Compass, PhoneCall, Mail, DollarSign, CircleDollarSign, Workflow, LayoutDashboard,
-  UserCheck, Users
+  UserCheck, Users, MapPin
 } from "lucide-react";
 
 export const FUNCTIONAL_WORKSPACE_TABS = [
@@ -16,6 +16,14 @@ export const FUNCTIONAL_WORKSPACE_TABS = [
     tag: "Executive",
     category: "home",
     color: "text-[#008559]"
+  },
+  {
+    id: "geotagging",
+    label: "Territory GeoTagging & Map",
+    icon: MapPin,
+    tag: "Boundary Map",
+    category: "operations",
+    color: "text-emerald-500"
   },
   {
     id: "sops",
