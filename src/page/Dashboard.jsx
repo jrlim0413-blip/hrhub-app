@@ -6,13 +6,14 @@ import {
   BriefcaseBusiness, FileText, Sparkles, BarChart3,
   Database, RefreshCw, CheckCircle2, AlertCircle, Clock,
   Bot, Layers, Home, X, CheckCheck, Menu, UserCheck, ShieldAlert,
-  Lock, Wrench, MapPin, CloudSun
+  Lock, Wrench, MapPin, CloudSun, Scale, TrendingUp, Flame
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import ProfileModal from "../components/ProfileModal";
 import WorkspaceSwitcher from "../components/WorkspaceSwitcher";
 import AgentsPanel from "../components/AgentsPanel";
 import GrossReportPanel from "../components/GrossReportPanel";
+import MultiAreaBettingRatioView from "../components/MultiAreaBettingRatioView";
 import EmployeeDirectoryPanel from "../components/EmployeeDirectoryPanel";
 import ShiftAttendanceOverviewPanel from "../components/ShiftAttendanceOverviewPanel";
 import PoliciesHandbooksPanel from "../components/PoliciesHandbooksPanel";
@@ -203,6 +204,69 @@ const THEME_OPTIONS = [
   { id: "blush", label: "Blush", color: "bg-pink-200", page: "bg-pink-50" }
 ];
 
+const FREQUENT_USAGE_STORAGE_KEY = "hrhub_frequent_tabs_usage_v2";
+const TEN_DAYS_MS = 10 * 24 * 60 * 60 * 1000; // 10 days in milliseconds
+
+const DEFAULT_POPULAR_TAB_IDS = [
+  "home",
+  "gross",
+  "revenue_trends",
+  "supervisors_attendance",
+  "sops",
+  "geotagging"
+];
+
+function loadFrequentTabsState() {
+  const now = Date.now();
+  let data = null;
+  try {
+    const raw = localStorage.getItem(FREQUENT_USAGE_STORAGE_KEY);
+    if (raw) data = JSON.parse(raw);
+  } catch {}
+
+  // Auto-reset cycle after 10 days
+  if (!data || !data.cycleStartedAt || (now - Number(data.cycleStartedAt)) >= TEN_DAYS_MS) {
+    data = {
+      cycleStartedAt: now,
+      counts: {}
+    };
+    try {
+      localStorage.setItem(FREQUENT_USAGE_STORAGE_KEY, JSON.stringify(data));
+    } catch {}
+  }
+
+  const msElapsed = now - Number(data.cycleStartedAt);
+  const msRemaining = Math.max(0, TEN_DAYS_MS - msElapsed);
+  const daysRemaining = Math.max(1, Math.ceil(msRemaining / (24 * 60 * 60 * 1000)));
+
+  return {
+    cycleStartedAt: Number(data.cycleStartedAt),
+    counts: data.counts || {},
+    daysRemaining
+  };
+}
+
+function saveFrequentTabClick(tabId) {
+  if (!tabId) return loadFrequentTabsState();
+  const canonicalId = tabId === "betting_ratio" ? "revenue_trends" : tabId;
+  const current = loadFrequentTabsState();
+  const updatedCounts = {
+    ...current.counts,
+    [canonicalId]: (current.counts[canonicalId] || 0) + 1
+  };
+  const updated = {
+    cycleStartedAt: current.cycleStartedAt,
+    counts: updatedCounts
+  };
+  try {
+    localStorage.setItem(FREQUENT_USAGE_STORAGE_KEY, JSON.stringify(updated));
+  } catch {}
+  return {
+    ...updated,
+    daysRemaining: current.daysRemaining
+  };
+}
+
 const WORKSPACE_TAB_DEFS = {
   home: {
     id: "home",
@@ -248,6 +312,14 @@ const WORKSPACE_TAB_DEFS = {
     id: "gross",
     label: "Gross Report",
     icon: BarChart3,
+    activeClass: "bg-slate-900 text-emerald-400 ring-2 ring-emerald-400",
+    activeIconClass: "text-emerald-400",
+    inactiveIconClass: "text-slate-600"
+  },
+  revenue_trends: {
+    id: "revenue_trends",
+    label: "Multi-Entity Revenue Trends",
+    icon: TrendingUp,
     activeClass: "bg-slate-900 text-emerald-400 ring-2 ring-emerald-400",
     activeIconClass: "text-emerald-400",
     inactiveIconClass: "text-slate-600"
@@ -449,16 +521,24 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
     }
   }, [workspaceTab]);
 
-  // When a tab is clicked in the sidebar:
+  // 10-Day Frequent Tab Usage Tracker State
+  const [frequentStats, setFrequentStats] = useState(() => loadFrequentTabsState());
+
+  // When a tab is clicked in the sidebar or workspace:
   // Appends to the end so it appears on the right side of the container,
   // shifting any earlier tabs to the left.
   const handleOpenWorkspaceTab = (tabId) => {
-    if (!tabId || !WORKSPACE_TAB_DEFS[tabId]) return;
+    const targetId = tabId === "betting_ratio" ? "revenue_trends" : tabId;
+    if (!targetId || !WORKSPACE_TAB_DEFS[targetId]) return;
     setOpenTabs((prev) => {
-      const withoutTab = prev.filter((id) => id !== tabId);
-      return [...withoutTab, tabId];
+      const withoutTab = prev.filter((id) => id !== targetId);
+      return [...withoutTab, targetId];
     });
-    setWorkspaceTab(tabId);
+    setWorkspaceTab(targetId);
+
+    // Track usage count in 10-day cycle
+    const nextStats = saveFrequentTabClick(targetId);
+    setFrequentStats(nextStats);
   };
 
   const handleCloseWorkspaceTab = (e, tabId) => {
@@ -494,7 +574,13 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
         setMatrixData(e.detail);
       }
     };
+    const handleSwitchWorkspaceTab = (e) => {
+      if (e.detail?.tabId) {
+        handleOpenWorkspaceTab(e.detail.tabId);
+      }
+    };
     window.addEventListener("hrhub_rbac_updated", handleRbacUpdate);
+    window.addEventListener("hrhub_switch_workspace_tab", handleSwitchWorkspaceTab);
 
     // 3. Listen to Supabase Realtime for instant multi-device matrix synchronization
     let channel = null;
@@ -516,6 +602,7 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
 
     return () => {
       window.removeEventListener("hrhub_rbac_updated", handleRbacUpdate);
+      window.removeEventListener("hrhub_switch_workspace_tab", handleSwitchWorkspaceTab);
       if (channel && supabase) {
         supabase.removeChannel(channel);
       }
@@ -1387,6 +1474,34 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
     </div>
   );
 
+  // Compute frequently used tabs sorted by 10-day usage count
+  const frequentTabs = useMemo(() => {
+    const counts = frequentStats?.counts || {};
+    const allTabs = Object.values(WORKSPACE_TAB_DEFS);
+
+    // Filter tabs with at least 1 click in this 10-day cycle, sorted descending
+    const openedTabs = allTabs
+      .filter((tab) => (counts[tab.id] || 0) > 0)
+      .sort((a, b) => (counts[b.id] || 0) - (counts[a.id] || 0));
+
+    // If fewer than 4 tabs have been opened yet in this 10-day cycle,
+    // supplement with default popular core tabs
+    if (openedTabs.length < 4) {
+      const existingIds = new Set(openedTabs.map((t) => t.id));
+      for (const defId of DEFAULT_POPULAR_TAB_IDS) {
+        if (!existingIds.has(defId) && WORKSPACE_TAB_DEFS[defId]) {
+          openedTabs.push(WORKSPACE_TAB_DEFS[defId]);
+          existingIds.add(defId);
+          if (openedTabs.length >= 6) break;
+        }
+      }
+    }
+
+    return openedTabs.slice(0, 6);
+  }, [frequentStats]);
+
+  const displayedWorkspaceTabs = frequentTabs;
+
   return (
     <div className={`min-h-screen ${pageTheme} text-slate-800 font-sans selection:bg-emerald-500 selection:text-white transition-colors duration-300`}>
       <header className="bg-[#0d1b2a] text-white sticky top-0 z-40 shadow-md border-b border-slate-800 px-3 sm:px-4 py-2">
@@ -2112,29 +2227,48 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
               <h3 className="text-xl font-extrabold text-slate-900 mb-1">
                 Workspace Ready
               </h3>
-              <p className="text-xs text-slate-500 max-w-md mx-auto mb-6 leading-relaxed">
-                Choose any functional module from the sidebar, or click below to launch it directly into your workspace tabs container:
+              <p className="text-xs text-slate-500 max-w-md mx-auto mb-4 leading-relaxed">
+                Choose any functional module from the sidebar, or launch your frequently used modules below:
               </p>
 
+              {/* 10-Day Frequent Usage Tracker Header */}
+              <div className="mb-6 flex flex-wrap items-center justify-center gap-2.5">
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-bold text-amber-800 shadow-2xs">
+                  <Flame size={13} className="text-amber-500" />
+                  <span>Frequently Used Modules</span>
+                </span>
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600">
+                  <Clock size={12} className="text-slate-400" />
+                  <span>Resets in {frequentStats.daysRemaining} {frequentStats.daysRemaining === 1 ? "day" : "days"} (10-Day Cycle)</span>
+                </span>
+              </div>
+
+              {/* Grid of Frequent (or All) Module Cards */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 max-w-3xl mx-auto text-left">
-                {Object.values(WORKSPACE_TAB_DEFS).map((tab) => {
+                {displayedWorkspaceTabs.map((tab) => {
                   const Icon = tab.icon;
+                  const useCount = frequentStats.counts?.[tab.id] || 0;
                   return (
                     <button
                       key={tab.id}
                       type="button"
                       onClick={() => handleOpenWorkspaceTab(tab.id)}
-                      className="p-3.5 rounded-xl border border-slate-200 bg-white hover:border-emerald-400 hover:bg-emerald-50/30 hover:shadow-xs transition text-left cursor-pointer group flex items-start gap-3"
+                      className="p-3.5 rounded-xl border border-slate-200 bg-white hover:border-emerald-400 hover:bg-emerald-50/30 hover:shadow-xs transition text-left cursor-pointer group flex items-start gap-3 relative"
                     >
-                      <div className="p-2 rounded-lg bg-slate-50 border border-slate-200 group-hover:border-emerald-200 group-hover:bg-white text-slate-700 group-hover:text-emerald-700 transition">
+                      <div className="p-2 rounded-lg bg-slate-50 border border-slate-200 group-hover:border-emerald-200 group-hover:bg-white text-slate-700 group-hover:text-emerald-700 transition shrink-0">
                         <Icon size={18} />
                       </div>
-                      <div className="min-w-0">
-                        <div className="font-bold text-xs text-slate-800 group-hover:text-emerald-800 transition truncate">
-                          {tab.label}
+                      <div className="min-w-0 flex-1">
+                        <div className="font-bold text-xs text-slate-800 group-hover:text-emerald-800 transition truncate flex items-center justify-between gap-1">
+                          <span className="truncate">{tab.label}</span>
+                          {useCount > 0 && (
+                            <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200 shrink-0">
+                              {useCount}x
+                            </span>
+                          )}
                         </div>
                         <div className="text-[10px] text-slate-400 mt-0.5">
-                          Click to open tab
+                          {useCount > 0 ? "Frequently opened" : "Click to open tab"}
                         </div>
                       </div>
                     </button>
@@ -2199,6 +2333,20 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
 
           {/* TAB 3: GROSS REPORT */}
           {workspaceTab === "gross" && <GrossReportPanel />}
+
+          {/* TAB: MULTI-ENTITY REVENUE TRENDS & BETTING RATIO */}
+          {(workspaceTab === "revenue_trends" || workspaceTab === "betting_ratio") && (
+            <div className="space-y-4">
+              <MultiAreaBettingRatioView
+                onSelectAreaForLive={() => {
+                  handleOpenWorkspaceTab("gross");
+                }}
+                onNavigateToTools={() => {
+                  handleOpenWorkspaceTab("api_health");
+                }}
+              />
+            </div>
+          )}
 
           {/* TAB 4: OPERATIONS BOARD (WEATHER, GEOTAGGING & SOPS) */}
           {workspaceTab === "sops" && (

@@ -14,7 +14,7 @@ export const SELECTED_AREA_STORAGE_KEY = "hrhub_selected_gross_area_id";
 export const AREA_CONFIGS_TABLE = "user_settings";
 export const AREA_CONFIGS_USER_ID = "hrhub_area_api_configs";
 
-// Pre-seeded default Area: Lucky Betplay Corporation (Mandaue City)
+// Pre-seeded default Areas: Lucky Betplay Corporation (Mandaue City) & 5A Royal Gaming OPC (Maguindanao)
 export const DEFAULT_AREAS = [
   {
     id: "lucky_betplay_mandaue",
@@ -35,6 +35,27 @@ export const DEFAULT_AREAS = [
     isActive: true,
     description: "Official Authorized Agent Corporation (AAC Mandaue City, Cebu)",
     createdAt: "2026-10-01T00:00:00.000Z",
+    updatedAt: "2026-10-27T00:00:00.000Z"
+  },
+  {
+    id: "royal_gaming_maguindanao",
+    areaName: "Maguindanao del Norte",
+    companyName: "5A Royal Gaming OPC",
+    accountantId: "1",
+    grossReportUrl: "https://stl-mandaue-api.com/api/accountant/TellerGrossPerDateRange?id=1",
+    grossReportToken: API_CONFIG.GROSS_REPORT_TOKEN || "7204|DaR5VNpU7MT3ZR3w1LWXpUh10vCZnA9pEvgJLW6V",
+    activeTellersUrl: "https://stl-mandaue-api.com/api/accountant/ActiveTellers?id=1",
+    activeTellersToken: API_CONFIG.GROSS_REPORT_TOKEN || "7204|DaR5VNpU7MT3ZR3w1LWXpUh10vCZnA9pEvgJLW6V",
+    supervisorUrl: "https://stl-mandaue-api.com/api/accountant/supervisor?id=1",
+    supervisorToken: API_CONFIG.GROSS_REPORT_TOKEN || "7204|DaR5VNpU7MT3ZR3w1LWXpUh10vCZnA9pEvgJLW6V",
+    backupTellersUrl: "https://stl-mandaue-api.com/api/accountant/teller?id=1",
+    backupTellersToken: API_CONFIG.AGENTS_TOKEN || "7192|gnpqBM4WSclB34C1IUcuV7KQFK4uxPUO2B9fdwoI",
+    tellerBetUrl: "https://stl-mandaue-api.com/api/teller/bet",
+    tellerBetToken: API_CONFIG.TELLER_BET_TOKEN || "7770|buTtUAGup02YXYefPfDwwh44wp0AOnRQuxsPHZ2f",
+    isDefault: false,
+    isActive: true,
+    description: "Official Authorized Agent Corporation (AAC Maguindanao del Norte Branch)",
+    createdAt: "2026-10-15T00:00:00.000Z",
     updatedAt: "2026-10-27T00:00:00.000Z"
   }
 ];

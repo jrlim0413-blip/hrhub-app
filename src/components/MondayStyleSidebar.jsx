@@ -5,7 +5,7 @@ import {
   Building2, Calculator, Clock, HardHat, Dices, Award, Zap, TrendingUp,
   Receipt, FileCheck, Sliders, Activity, MailCheck, Wrench, Home,
   Compass, PhoneCall, Mail, DollarSign, CircleDollarSign, Workflow, LayoutDashboard,
-  UserCheck, Users, MapPin
+  UserCheck, Users, MapPin, Scale
 } from "lucide-react";
 
 export const FUNCTIONAL_WORKSPACE_TABS = [
@@ -63,6 +63,14 @@ export const FUNCTIONAL_WORKSPACE_TABS = [
     icon: BarChart3,
     tag: "Analytics",
     category: "analytics",
+    color: "text-emerald-500"
+  },
+  {
+    id: "revenue_trends",
+    label: "Multi-Entity Revenue Trends",
+    icon: TrendingUp,
+    tag: "Betting Ratio",
+    category: "finance",
     color: "text-emerald-500"
   },
   {
@@ -234,6 +242,13 @@ export default function MondayStyleSidebar({
           tabId: "gross"
         },
         {
+          id: "revenue_trends",
+          label: "Multi-Entity Revenue Trends",
+          icon: TrendingUp,
+          tag: "Betting Ratio",
+          tabId: "revenue_trends"
+        },
+        {
           id: "payroll_calc",
           label: "13th Month Payroll Calculator",
           icon: Calculator,
@@ -332,8 +347,8 @@ export default function MondayStyleSidebar({
           id: "revenue_trends",
           label: "Multi-Entity Revenue Trends",
           icon: TrendingUp,
-          tag: "Executive",
-          tabId: "gross"
+          tag: "Betting Ratio",
+          tabId: "revenue_trends"
         },
         {
           id: "compliance_scorecard",

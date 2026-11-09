@@ -421,7 +421,7 @@ function SupervisorPicker({ value, onChange, summaries, metrics, showFigures = t
   );
 }
 
-export default function GrossReportPanel() {
+export default function GrossReportPanel({ initialTab = "realtime" } = {}) {
   const [range, setRange] = useState(getInitialRange);
   const [rawGrossList, setRawGrossList] = useState(() => CACHED_GROSS || []);
   const [recordsState, setRecordsState] = useState(() => CACHED_RECORDS || []);
@@ -429,8 +429,14 @@ export default function GrossReportPanel() {
   const [loading, setLoading] = useState(false);
   const [loaded, setLoaded] = useState(() => Boolean(CACHED_TELLERS && CACHED_TELLERS.length > 0));
   const [error, setError] = useState("");
-  const [reportTab, setReportTab] = useState("realtime");
+  const [reportTab, setReportTab] = useState(initialTab || "realtime");
   const [previewOpen, setPreviewOpen] = useState(false);
+
+  useEffect(() => {
+    if (initialTab) {
+      setReportTab(initialTab);
+    }
+  }, [initialTab]);
 
   // Multi-Area & Entity API Configuration Integration
   const [areaConfigs, setAreaConfigs] = useState(() => getAreaConfigs());
