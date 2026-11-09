@@ -503,8 +503,30 @@ export default function GrossReportPanel({ initialTab = "realtime" } = {}) {
   const [realtimeFilter, setRealtimeFilter] = useState("all"); // "all" | "with_gross" | "without_gross"
   const [realtimeSupervisor, setRealtimeSupervisor] = useState("all");
   const [selectedDrawTime, setSelectedDrawTime] = useState("all");
+  const [todayDrawsStatus, setTodayDrawsStatus] = useState(() => []);
 
-  // Live Bets API states (Taya per agent)
+  // Fetch official draw results & status (status 2 = finished/posted result)
+  const fetchDrawStatuses = async (targetDate) => {
+    try {
+      const activeArea = currentAreaRef.current;
+      const token = String(activeArea?.grossReportToken || DEFAULT_TOKEN).trim();
+      const url = `https://stl-mandaue-api.com/api/admin/draw?from=${targetDate}&to=${targetDate}`;
+      const res = await fetch(url, {
+        headers: { Accept: "application/json", Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const payload = await res.json();
+        const draws = Array.isArray(payload?.data) ? payload.data : [];
+        setTodayDrawsStatus(draws);
+        return draws;
+      }
+    } catch (err) {
+      console.warn("[Draws Sync] Error:", err);
+    }
+    return [];
+  };
+
+  // Live Bets API states (bets per agent)
   const [liveBetsMap, setLiveBetsMap] = useState(() => CACHED_LIVE_BETS || {});
   const [syncProgress, setSyncProgress] = useState({ current: 0, total: 0, loading: false });
   const [selectedAgentDetails, setSelectedAgentDetails] = useState(null);
@@ -512,7 +534,7 @@ export default function GrossReportPanel({ initialTab = "realtime" } = {}) {
   const [modalDrawFilter, setModalDrawFilter] = useState("all");
   const [modalSearch, setModalSearch] = useState("");
 
-  // Realtime view modes: "entries" (Live Entries Stream per Game & Oras) or "collector" (On-Duty Accounts Summary)
+  // Realtime view modes: "entries" (Live Entries Stream per Game & Draw Schedule) or "collector" (On-Duty Accounts Summary)
   const [realtimeViewMode, setRealtimeViewMode] = useState("entries");
   const [selectedGameFilter, setSelectedGameFilter] = useState("all");
   const [entriesSearch, setEntriesSearch] = useState("");
@@ -530,6 +552,46 @@ export default function GrossReportPanel({ initialTab = "realtime" } = {}) {
   const [currentDay, setCurrentDay] = useState(() => formatDate(new Date()));
   const todayStr = currentDay;
   const yesterdayStr = useMemo(() => shiftDate(currentDay, -1), [currentDay]);
+
+  // Keep draw statuses synced whenever realtimeDate changes
+  useEffect(() => {
+    fetchDrawStatuses(realtimeDate);
+  }, [realtimeDate]);
+
+  const postedDrawsMap = useMemo(() => {
+    const map = new Map();
+    todayDrawsStatus.forEach((d) => {
+      const dt = String(d.drawTime || "").trim();
+      const isPosted = d.status === 2 || Boolean(d.s3_result || d.l2_result || d.s2_result || d.l3_result || d.s4_result || d.p3_result);
+      if (isPosted) {
+        map.set(dt, d);
+        if (dt.includes(":")) {
+          map.set(dt.split(":")[0], d);
+        } else {
+          map.set(`${dt}:00`, d);
+        }
+      }
+    });
+    return map;
+  }, [todayDrawsStatus]);
+
+  const isDrawFinished = (rawDrawTime) => {
+    if (realtimeDate !== todayStr) return true;
+    const clean = String(rawDrawTime || "").trim();
+    if (postedDrawsMap.size > 0) {
+      return postedDrawsMap.has(clean) || (clean.includes(":") ? postedDrawsMap.has(clean.split(":")[0]) : postedDrawsMap.has(`${clean}:00`));
+    }
+    // Fallback: Default finished morning/afternoon draws
+    const now = new Date();
+    const currentMins = now.getHours() * 60 + now.getMinutes();
+    if (clean === "10:30" || clean === "10") return currentMins >= 660; // 11:00 AM
+    if (clean === "14" || clean === "14:00" || clean === "2") return currentMins >= 870; // 2:30 PM
+    if (clean === "15" || clean === "15:00" || clean === "3") return currentMins >= 930; // 3:30 PM
+    if (clean === "17" || clean === "17:00" || clean === "5") return currentMins >= 1050; // 5:30 PM
+    if (clean === "19" || clean === "19:00" || clean === "7") return currentMins >= 1170; // 7:30 PM
+    if (clean === "21" || clean === "21:00" || clean === "9") return currentMins >= 1290; // 9:30 PM
+    return false;
+  };
 
   // Midnight / New Day transition detector: automatically resets live stream gross when a new day arrives
   useEffect(() => {
@@ -1226,18 +1288,27 @@ export default function GrossReportPanel({ initialTab = "realtime" } = {}) {
       // When viewing Today: live bets stream is primary
       // When viewing Yesterday/Past Dates: dateGrossRecords from Accountant API is primary (100% reliable & complete in 1 single request)
       if (!isHistorical && liveBetInfo && liveBetInfo.count !== undefined) {
-        betsList = liveBetInfo.bets || [];
-        betsCount = liveBetInfo.count || 0;
+        const allBets = liveBetInfo.bets || [];
+        // Only include bets from finished/posted draws for Today
+        const finishedBets = allBets.filter((b) => isDrawFinished(b.drawTime));
+        betsList = finishedBets;
+        betsCount = finishedBets.length;
+
         if (selectedDrawTime !== "all") {
           grossSum = Number(liveBetInfo.draws?.[selectedDrawTime] || 0);
           draws = grossSum > 0 ? [{ time: selectedDrawTime, gross: grossSum, hits: 0 }] : [];
         } else {
-          grossSum = Number(liveBetInfo.total || 0);
-          draws = Object.entries(liveBetInfo.draws || {}).map(([time, gross]) => ({
-            time,
-            gross,
-            hits: 0
-          }));
+          // Sum ONLY the finished/posted draws for today!
+          let finishedTotal = 0;
+          const finishedDraws = [];
+          Object.entries(liveBetInfo.draws || {}).forEach(([time, gross]) => {
+            if (isDrawFinished(time)) {
+              finishedTotal += Number(gross || 0);
+              finishedDraws.push({ time, gross, hits: 0 });
+            }
+          });
+          grossSum = finishedTotal;
+          draws = finishedDraws;
         }
       } else {
         const matchingRows = dateGrossRecords.filter((r) => {
@@ -1297,7 +1368,7 @@ export default function GrossReportPanel({ initialTab = "realtime" } = {}) {
         hasLiveSync: liveBetInfo !== undefined
       };
     });
-  }, [onDutyTellers, liveBetsMap, dateGrossRecords, selectedDrawTime, supervisorMap, realtimeDate, todayStr]);
+  }, [onDutyTellers, liveBetsMap, dateGrossRecords, selectedDrawTime, supervisorMap, realtimeDate, todayStr, postedDrawsMap]);
 
   useEffect(() => {
     if (loaded && onDutyTellersRef.current.length > 0) {
@@ -1431,14 +1502,21 @@ export default function GrossReportPanel({ initialTab = "realtime" } = {}) {
   const formatGameLabel = (drawTime) => {
     const dt = String(drawTime || "").trim();
     if (!dt) return "General Draw";
-    if (dt === "10:30" || dt === "10") return "10:30 AM Draw";
-    if (dt === "14" || dt === "14:00" || dt === "2" || dt === "2:00") return "02:00 PM Draw";
-    if (dt === "15" || dt === "15:00" || dt === "3" || dt === "3:00") return "03:00 PM Draw";
-    if (dt === "17" || dt === "17:00" || dt === "5" || dt === "5:00") return "05:00 PM Draw";
-    if (dt === "19" || dt === "19:00" || dt === "7" || dt === "7:00") return "07:00 PM Draw";
-    if (dt === "20" || dt === "20:00" || dt === "8" || dt === "8:00") return "08:00 PM Draw";
-    if (dt === "21" || dt === "21:00" || dt === "9" || dt === "9:00") return "09:00 PM Draw";
-    return `${dt} Draw`;
+    let base = `${dt} Draw`;
+    if (dt === "10:30" || dt === "10") base = "10:30 AM Draw";
+    else if (dt === "14" || dt === "14:00" || dt === "2" || dt === "2:00") base = "02:00 PM Draw";
+    else if (dt === "15" || dt === "15:00" || dt === "3" || dt === "3:00") base = "03:00 PM Draw";
+    else if (dt === "17" || dt === "17:00" || dt === "5" || dt === "5:00") base = "05:00 PM Draw";
+    else if (dt === "19" || dt === "19:00" || dt === "7" || dt === "7:00") base = "07:00 PM Draw";
+    else if (dt === "20" || dt === "20:00" || dt === "8" || dt === "8:00") base = "08:00 PM Draw";
+    else if (dt === "21" || dt === "21:00" || dt === "9" || dt === "9:00") base = "09:00 PM Draw";
+
+    const postedObj = postedDrawsMap.get(dt);
+    if (postedObj) {
+      const res = postedObj.s3_result || postedObj.l2_result || postedObj.s2_result || postedObj.l3_result || "Posted";
+      return `${base} [Result: ${res}]`;
+    }
+    return base;
   };
 
   const allLiveEntries = useMemo(() => {
@@ -1460,6 +1538,12 @@ export default function GrossReportPanel({ initialTab = "realtime" } = {}) {
           const betDate = bet.created_at ? bet.created_at.slice(0, 10) : (bet.date || bet.drawDate || "");
           if (betDate && betDate !== realtimeDate) return;
 
+          const isFinished = isDrawFinished(bet.drawTime);
+          // If viewing Today with "all" games selected, only include entries for finished/posted draws
+          if (realtimeDate === todayStr && selectedGameFilter === "all" && !isFinished) {
+            return;
+          }
+
           list.push({
             ...bet,
             tellerId: teller.id,
@@ -1471,19 +1555,20 @@ export default function GrossReportPanel({ initialTab = "realtime" } = {}) {
             rawDrawTime: String(bet.drawTime || ""),
             gameLabel: formatGameLabel(bet.drawTime),
             amount: Number(bet.totalBetAmount) || 0,
-            isVoidBool: Number(bet.isVoid) === 1
+            isVoidBool: Number(bet.isVoid) === 1,
+            isFinishedDraw: isFinished
           });
         });
       }
     });
 
-    // Sort descending by created_at (oras ng pagpasok sa system - pinakabago muna)
+    // Sort descending by created_at (latest first)
     return list.sort((a, b) => {
       const timeA = a.created_at ? new Date(a.created_at.replace(" ", "T")).getTime() : 0;
       const timeB = b.created_at ? new Date(b.created_at.replace(" ", "T")).getTime() : 0;
       return timeB - timeA;
     });
-  }, [onDutyTellers, liveBetsMap, supervisorMap, realtimeDate]);
+  }, [onDutyTellers, liveBetsMap, supervisorMap, realtimeDate, todayStr, selectedGameFilter, postedDrawsMap]);
 
   const gameStats = useMemo(() => {
     const stats = {};
@@ -2799,7 +2884,7 @@ export default function GrossReportPanel({ initialTab = "realtime" } = {}) {
                   className={`rounded-md px-2 py-1 text-xs font-bold transition ${
                     realtimeDate === todayStr ? "bg-emerald-500 text-slate-950 shadow-xs" : "text-slate-300 hover:text-white"
                   }`}
-                  title="Today"
+                  title="Today (Finished Draws Only)"
                 >
                   Today
                 </button>
@@ -3078,14 +3163,14 @@ export default function GrossReportPanel({ initialTab = "realtime" } = {}) {
                   </span>
                 </div>
                 <p className="mt-0.5 text-[11px] text-amber-800">
-                  Nasa cooldown period pa ang upstream server upang manatiling ligtas ang koneksyon. Awtomatikong papasok ang live gross sa loob ng countdown timer.
+                  The upstream server rate limit cooldown is active to maintain connection stability. Live gross records will automatically resume within the countdown timer.
                 </p>
               </div>
             </div>
 
             <div className="flex items-center gap-2.5 self-end sm:self-auto shrink-0 bg-white/95 border border-amber-300 rounded-xl px-3 py-1.5 shadow-xs">
               <span className="text-[10px] font-extrabold uppercase tracking-wider text-amber-800">
-                Papasok ang gross sa:
+                Next sync in:
               </span>
               <span className="font-mono text-base font-black text-amber-950">
                 {cooldownSeconds}s
@@ -3115,6 +3200,7 @@ export default function GrossReportPanel({ initialTab = "realtime" } = {}) {
           </div>
         </div>
       )}
+
 
       {error && (
         <div className="m-4 flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700">
@@ -3353,7 +3439,7 @@ export default function GrossReportPanel({ initialTab = "realtime" } = {}) {
                                       <BadgeCheck size={28} className="mx-auto text-emerald-600 mb-2" />
                                       <p className="font-bold text-slate-800 text-sm">Official Finalized Ledger for {displayDate(realtimeDate)}</p>
                                       <p className="mt-1 text-slate-500 text-xs leading-relaxed">
-                                        Ang opisyal na gross ng lahat ng field agents para sa petsang ito ay 100% kumpleto at naka-record sa Field Agents Ledger mula sa Accountant API.
+                                        The official gross for all field agents for this date is 100% audited and recorded in the Field Agents Ledger from the Accountant API.
                                       </p>
                                       <button
                                         type="button"
@@ -3361,7 +3447,7 @@ export default function GrossReportPanel({ initialTab = "realtime" } = {}) {
                                         className="mt-3 inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-emerald-500 transition"
                                       >
                                         <Users size={14} />
-                                        Tingnan ang Field Agents Ledger ({realtimeMetrics.totalOnDuty} Agents)
+                                        View Field Agents Ledger ({realtimeMetrics.totalOnDuty} Agents)
                                       </button>
                                     </div>
                                   ) : allLiveEntries.length === 0 ? (
@@ -4356,7 +4442,7 @@ export default function GrossReportPanel({ initialTab = "realtime" } = {}) {
         </div>
       </div>}
 
-      {/* MODAL: Detalye ng Taya / Live Bet Tickets per Agent */}
+      {/* MODAL: Live Bet Tickets per Agent */}
       {selectedAgentDetails && (
         <div
           className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/70 p-3 sm:p-6 backdrop-blur-xs"

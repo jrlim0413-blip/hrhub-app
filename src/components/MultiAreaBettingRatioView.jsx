@@ -182,22 +182,27 @@ export default function MultiAreaBettingRatioView({
   onNavigateToTools = null
 }) {
   const todayStr = useMemo(() => formatDate(new Date()), []);
-  const mtdFromStr = useMemo(() => {
-    const d = new Date();
-    return formatDate(new Date(d.getFullYear(), d.getMonth(), 1));
-  }, []);
   const yesterdayStr = useMemo(() => {
     const d = new Date();
     d.setDate(d.getDate() - 1);
     return formatDate(d);
   }, []);
+  const last7DaysFromStr = useMemo(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 7);
+    return formatDate(d);
+  }, []);
+  const mtdFromStr = useMemo(() => {
+    const d = new Date();
+    return formatDate(new Date(d.getFullYear(), d.getMonth(), 1));
+  }, []);
 
-  // Date range filter
+  // Date range filter - defaults to yesterday's finalized ledger
   const [dateRange, setDateRange] = useState(() => {
     if (parentRange?.from && parentRange?.to) {
       return { from: parentRange.from, to: parentRange.to };
     }
-    return { from: mtdFromStr, to: todayStr };
+    return { from: yesterdayStr, to: yesterdayStr };
   });
 
   // Keep in sync if parentRange changes
@@ -215,6 +220,27 @@ export default function MultiAreaBettingRatioView({
   const [selectedSort, setSelectedSort] = useState("gross"); // 'gross' | 'share' | 'productivity' | 'tellers'
   const [selectedCompanyFilter, setSelectedCompanyFilter] = useState("all");
   const [lastRefreshedAt, setLastRefreshedAt] = useState(null);
+  const [todayFinishedDraws, setTodayFinishedDraws] = useState([]);
+
+  // Fetch official finished draws and winning results for today
+  useEffect(() => {
+    const fetchTodayDraws = async () => {
+      try {
+        const res = await fetch(`https://stl-mandaue-api.com/api/admin/draw?from=${todayStr}&to=${todayStr}`, {
+          headers: { Authorization: `Bearer ${API_CONFIG.GROSS_REPORT_TOKEN || DEFAULT_TOKEN}`, Accept: "application/json" }
+        });
+        if (res.ok) {
+          const payload = await res.json();
+          const draws = Array.isArray(payload?.data) ? payload.data : [];
+          const finished = draws.filter((d) => d.status === 2 || Boolean(d.s3_result || d.l2_result || d.s2_result || d.l3_result));
+          setTodayFinishedDraws(finished);
+        }
+      } catch (err) {
+        console.warn("[Betting Ratio] Error fetching draws:", err);
+      }
+    };
+    fetchTodayDraws();
+  }, [todayStr]);
 
   // Listen to external area config updates
   useEffect(() => {
@@ -339,6 +365,30 @@ export default function MultiAreaBettingRatioView({
           const agId = firstValue(r, ["id", "userId", "collectorId", "agentId"], null);
           if (agId) uniqueAgentIds.add(String(agId));
         });
+
+        // If viewing Today and accountant ledger has not posted records yet, check live bets cache for finished draws
+        if (allRecords.length === 0 && validFrom === todayStr && validTo === todayStr) {
+          try {
+            const liveCacheStr = sessionStorage.getItem("hrhub_live_bets_cache");
+            if (liveCacheStr) {
+              const liveCache = JSON.parse(liveCacheStr);
+              // Only count draws that are finished/posted
+              const finishedDrawTimes = new Set(["10:30", "10", "14", "14:00", "2", "15", "15:00", "3"]);
+              Object.values(liveCache).forEach((tellerInfo) => {
+                if (tellerInfo?.draws) {
+                  Object.entries(tellerInfo.draws).forEach(([dt, amt]) => {
+                    const cleanDt = String(dt || "").trim();
+                    if (finishedDrawTimes.has(cleanDt)) {
+                      const num = Number(amt) || 0;
+                      grossSum += num;
+                      drawDistribution[cleanDt] = (drawDistribution[cleanDt] || 0) + num;
+                    }
+                  });
+                }
+              });
+            }
+          } catch {}
+        }
 
         const kabigSum = grossSum - hitsSum;
         const kabigPercent = grossSum > 0 ? (kabigSum / grossSum) * 100 : 0;
@@ -535,8 +585,8 @@ export default function MultiAreaBettingRatioView({
       ["Exported At", new Date().toLocaleString()],
       ["Combined Gross Turnover", currency.format(aggregatedStats.totalNetworkGross)],
       ["Total Payout Hits", currency.format(aggregatedStats.totalNetworkHits)],
-      ["Total Kabig (Net Retained)", currency.format(aggregatedStats.totalNetworkKabig)],
-      ["Network Kabig Ratio", `${aggregatedStats.networkKabigPercent.toFixed(1)}%`],
+      ["Total Net Retained Gross", currency.format(aggregatedStats.totalNetworkKabig)],
+      ["Network Net Retention Ratio", `${aggregatedStats.networkKabigPercent.toFixed(1)}%`],
       ["Total Active Tellers", aggregatedStats.totalNetworkTellers],
       ["Network Average Gross / Teller", currency.format(aggregatedStats.avgProductivity)],
       [],
@@ -548,8 +598,8 @@ export default function MultiAreaBettingRatioView({
         "Gross Turnover (PHP)",
         "Payout Hits (PHP)",
         "Hits Ratio (%)",
-        "Kabig Net (PHP)",
-        "Kabig Ratio (%)",
+        "Net Retained (PHP)",
+        "Net Retention Ratio (%)",
         "Betting Share (%)",
         "Benchmark Ratio (vs Leader)",
         "Active Tellers",
@@ -676,6 +726,7 @@ export default function MultiAreaBettingRatioView({
                   ? "bg-emerald-500 text-slate-950 shadow-sm"
                   : "text-slate-400 hover:text-white"
               }`}
+              title="Today (Finished & Posted Draws)"
             >
               Today
             </button>
@@ -689,6 +740,17 @@ export default function MultiAreaBettingRatioView({
               }`}
             >
               Yesterday
+            </button>
+            <button
+              type="button"
+              onClick={() => setDateRange({ from: last7DaysFromStr, to: yesterdayStr })}
+              className={`rounded-lg px-2.5 py-1 text-xs font-bold transition ${
+                dateRange.from === last7DaysFromStr && dateRange.to === yesterdayStr
+                  ? "bg-emerald-500 text-slate-950 shadow-sm"
+                  : "text-slate-400 hover:text-white"
+              }`}
+            >
+              Last 7 Days
             </button>
             <button
               type="button"
@@ -758,6 +820,7 @@ export default function MultiAreaBettingRatioView({
         </div>
       </div>
 
+
       {/* Syncing Progress Banner (When active) */}
       {loading && (
         <div className="flex items-center justify-between rounded-2xl border border-emerald-500/30 bg-emerald-950/40 px-4 py-3 text-xs text-emerald-300 animate-pulse">
@@ -795,11 +858,11 @@ export default function MultiAreaBettingRatioView({
           </div>
         </div>
 
-        {/* Total Kabig (Net Retained Collection) */}
+        {/* Total Net Retained Gross */}
         <div className="relative overflow-hidden rounded-2xl border border-emerald-500/30 bg-gradient-to-br from-emerald-950/30 to-slate-950 p-4 flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between">
-              <p className="text-[11px] font-bold uppercase tracking-wider text-emerald-400">Total Kabig (Net)</p>
+              <p className="text-[11px] font-bold uppercase tracking-wider text-emerald-400">Total Net Retained Gross</p>
               <span className="rounded-lg bg-emerald-500/20 p-2 text-emerald-300">
                 <Wallet size={15} />
               </span>
@@ -809,7 +872,7 @@ export default function MultiAreaBettingRatioView({
             </p>
           </div>
           <div className="mt-3 flex items-center justify-between text-[10px] border-t border-emerald-500/20 pt-2">
-            <span className="text-slate-400">Gross Retained</span>
+            <span className="text-slate-400">Net Retention</span>
             <span className="font-extrabold text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
               {aggregatedStats.networkKabigPercent.toFixed(1)}%
             </span>
@@ -985,7 +1048,7 @@ export default function MultiAreaBettingRatioView({
               className="rounded-xl border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs text-white outline-none focus:border-emerald-500"
             >
               <option value="gross">Sort: Gross Sales</option>
-              <option value="kabig">Sort: Kabig (Net Retained)</option>
+              <option value="kabig">Sort: Net Retained Gross</option>
               <option value="hits">Sort: Payout Hits</option>
               <option value="share">Sort: Market Share %</option>
               <option value="productivity">Sort: Teller Productivity</option>
@@ -1050,13 +1113,13 @@ export default function MultiAreaBettingRatioView({
                     </p>
                   </div>
 
-                  {/* Dual Kabig (Net Retained) & Hits (Payout) Breakdown Cards */}
+                  {/* Dual Net Retained & Hits (Payout) Breakdown Cards */}
                   <div className="mt-3 grid grid-cols-2 gap-2">
                     <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-2.5">
                       <div className="flex items-center justify-between text-[10px] text-emerald-400 font-bold uppercase tracking-wider">
                         <span className="flex items-center gap-1">
                           <Wallet size={11} />
-                          <span>Kabig (Net)</span>
+                          <span>Net Retained</span>
                         </span>
                         <span className="font-extrabold">{item.kabigPercent.toFixed(1)}%</span>
                       </div>
@@ -1175,7 +1238,7 @@ export default function MultiAreaBettingRatioView({
                 <th className="py-3 px-4">AAC Operating Company</th>
                 <th className="py-3 px-4 text-right">Total Gross Bets</th>
                 <th className="py-3 px-4 text-right">Payout Hits</th>
-                <th className="py-3 px-4 text-right">Kabig (Net)</th>
+                <th className="py-3 px-4 text-right">Net Retained</th>
                 <th className="py-3 px-4 text-right">Market Share</th>
                 <th className="py-3 px-4 text-center">Ratio vs Leader</th>
                 <th className="py-3 px-4 text-center">Active Tellers</th>
