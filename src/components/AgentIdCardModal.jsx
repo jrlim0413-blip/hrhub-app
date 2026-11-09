@@ -10,7 +10,7 @@ import { processSignatureToTransparentPng } from "../lib/signatureImageProcessor
 import { processPhotoToWhiteBackground } from "../lib/photoBackgroundProcessor";
 
 const DEFAULT_CENTER_LOGO = "/id-assets/lucky_betplay_sunburst.png";
-const DEFAULT_PCSO_LOGO = "/id-assets/pcso_logo.svg";
+const DEFAULT_PCSO_LOGO = "/id-assets/pcso_logo.png";
 const DEFAULT_STL_LOGO = "/id-assets/stl_logo_perfect.png";
 const DEFAULT_MANAGER_SIGNATURE = "/id-assets/signature_charmie_transparent.png";
 

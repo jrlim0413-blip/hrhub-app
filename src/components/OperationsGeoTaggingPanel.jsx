@@ -8,7 +8,7 @@ import {
   LocateFixed, Play, Pause, RotateCcw, FastForward, ArrowRight,
   MoveRight, Navigation2, Crosshair, ListFilter, ArrowLeft,
   Bus, Factory, Warehouse, Users, Clock, Sparkles, Copy,
-  Store, Phone, Wifi, Smartphone, Cloud
+  Store, Phone, Wifi, Smartphone, Cloud, Ruler, Scale, CircleDollarSign, TrendingUp
 } from "lucide-react";
 
 // Centralized Multi-User Cloud Database & Realtime Sync Service for Booths
@@ -95,6 +95,36 @@ function distToSegmentSquared(p, v, w) {
   let t = ((p[0] - v[0]) * (w[0] - v[0]) + (p[1] - v[1]) * (w[1] - v[1])) / l2;
   t = Math.max(0, Math.min(1, t));
   return (p[0] - (v[0] + t * (w[0] - v[0]))) ** 2 + (p[1] - (v[1] + t * (w[1] - v[1]))) ** 2;
+}
+
+// Great-circle / Haversine distance in meters between two GPS coordinates
+export function calculateDistanceMeters(lat1, lon1, lat2, lon2) {
+  const R = 6371e3; // Earth mean radius in meters
+  const p1 = (lat1 * Math.PI) / 180;
+  const p2 = (lat2 * Math.PI) / 180;
+  const dp = ((lat2 - lat1) * Math.PI) / 180;
+  const dl = ((lon2 - lon1) * Math.PI) / 180;
+
+  const a =
+    Math.sin(dp / 2) * Math.sin(dp / 2) +
+    Math.cos(p1) * Math.cos(p2) * Math.sin(dl / 2) * Math.sin(dl / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+  return R * c;
+}
+
+// Helper to get yesterday's ISO date string (YYYY-MM-DD) and formatted display label
+export function getYesterdayDates() {
+  const d = new Date();
+  d.setDate(d.getDate() - 1);
+  const pad = (n) => String(n).padStart(2, "0");
+  const isoDate = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const displayLabel = new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric"
+  }).format(d);
+  return { isoDate, displayLabel };
 }
 
 // ================= OFFICIAL ILLUSTRATED KIOSK BOOTH SVG ICON =================
@@ -452,9 +482,31 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
   const layersGroupRef = useRef(null);
   const carMarkerRef = useRef(null);
   const clickedMarkerRef = useRef(null);
+  const measureLineGroupRef = useRef(null);
 
   const [leafletLoaded, setLeafletLoaded] = useState(false);
   const [selectedEdgeBarangay, setSelectedEdgeBarangay] = useState(EDGE_BARANGAYS_CIRCUIT[0]);
+
+  // Kiosk Distance Measuring & Agent Gross Performance States
+  const [measuringSourceKiosk, setMeasuringSourceKiosk] = useState(null);
+  const measuringSourceKioskRef = useRef(null);
+  const [measuredPair, setMeasuredPair] = useState(null); // { source, target, distanceMeters }
+  const [isDistanceModalOpen, setIsDistanceModalOpen] = useState(false);
+
+  // Sync ref for immediate Leaflet marker click handling
+  useEffect(() => {
+    measuringSourceKioskRef.current = measuringSourceKiosk;
+  }, [measuringSourceKiosk]);
+
+  // Gross remittance records cache (specifically for yesterday's draw sales)
+  const [grossRecords, setGrossRecords] = useState(() => {
+    try {
+      const { isoDate } = getYesterdayDates();
+      const cached = sessionStorage.getItem(`hrhub_yesterday_gross_${isoDate}`);
+      if (cached) return JSON.parse(cached);
+    } catch {}
+    return [];
+  });
 
   // Dual-mode routing: 'city' (full 16 edge barangays) vs 'barangay' (dedicated perimeter of a single barangay)
   const [viewMode, setViewMode] = useState("city"); // 'city' | 'barangay'
@@ -1040,6 +1092,287 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
     }
   };
 
+  // Background fetch of STL Gross Records specifically for yesterday's sales
+  useEffect(() => {
+    let isMounted = true;
+    const fetchGross = async () => {
+      try {
+        const { isoDate: yesterdayStr } = getYesterdayDates();
+
+        const url = new URL(API_CONFIG.GROSS_REPORT_URL);
+        const effectiveId = url.searchParams.get("id") || import.meta.env.VITE_GROSS_ACCOUNTANT_ID || "2";
+        url.searchParams.set("id", effectiveId);
+        url.searchParams.set("from", yesterdayStr);
+        url.searchParams.set("to", yesterdayStr);
+
+        const res = await fetch(url.toString(), {
+          headers: {
+            Accept: "application/json",
+            Authorization: `Bearer ${API_CONFIG.GROSS_REPORT_TOKEN}`
+          }
+        });
+        if (res.ok && isMounted) {
+          const payload = await res.json();
+          let list = [];
+          if (Array.isArray(payload)) {
+            list = payload;
+          } else {
+            for (const key of ["data", "results", "records", "items", "collectors", "tellers"]) {
+              if (Array.isArray(payload?.[key])) {
+                list = payload[key];
+                break;
+              }
+            }
+            if (list.length === 0 && payload?.data && typeof payload.data === "object") {
+              list = Array.isArray(payload.data) ? payload.data : [payload.data];
+            }
+          }
+          if (Array.isArray(list) && list.length > 0) {
+            setGrossRecords(list);
+            try { sessionStorage.setItem(`hrhub_yesterday_gross_${yesterdayStr}`, JSON.stringify(list)); } catch {}
+          }
+        }
+      } catch (err) {
+        // Silently continue if offline or network restricted
+      }
+    };
+    fetchGross();
+    return () => { isMounted = false; };
+  }, []);
+
+  // Compute assigned agent details and yesterday's gross sales for any booth
+  const getBoothAgentGross = (booth) => {
+    const { isoDate: yesterdayStr, displayLabel: yesterdayLabel } = getYesterdayDates();
+
+    if (!booth) {
+      return {
+        gross: 0,
+        formatted: "₱0.00",
+        hasRecord: false,
+        agentName: "Unassigned",
+        agentUsername: "",
+        agentStatus: "Unassigned",
+        contactNumber: "N/A",
+        supervisor: "N/A",
+        outlet: "Kiosk Outlet",
+        yesterdayDate: yesterdayLabel,
+        yesterdayIso: yesterdayStr
+      };
+    }
+
+    const agentId = String(booth.agentId || "");
+    const tellerName = String(booth.tellerName || "").toLowerCase().trim();
+
+    // Match agent from API agents directory
+    const matchedAgent = apiAgents.find((a) =>
+      (agentId && String(a.id) === agentId) ||
+      (tellerName && (a.fullName?.toLowerCase().includes(tellerName) || a.username?.toLowerCase() === tellerName))
+    );
+
+    const effectiveAgentName = matchedAgent?.fullName || booth.tellerName || "Unassigned";
+    const effectiveUsername = matchedAgent?.username || "";
+
+    let totalGross = 0;
+    let foundRecord = false;
+
+    // Helper to extract ISO date from a record if present
+    const getRecDate = (r) => {
+      const year = Number(r.drawYear || r.year || 0);
+      const month = Number(r.drawMonth || r.month || 0);
+      const day = Number(r.drawDay || r.day || 0);
+      if (year && month && day) {
+        const pad = (n) => String(n).padStart(2, "0");
+        return `${year}-${pad(month)}-${pad(day)}`;
+      }
+      const str = r.date || r.drawDate || r.draw_date || r.created_at || r.transDate || r.recordDate || "";
+      if (typeof str === "string" && str.length >= 10) {
+        return str.slice(0, 10);
+      }
+      return "";
+    };
+
+    if (grossRecords && grossRecords.length > 0) {
+      grossRecords.forEach((r) => {
+        const rDate = getRecDate(r);
+        // Only include if date matches yesterday (or if record has no date timestamp because endpoint is already filtered)
+        if (rDate && rDate !== yesterdayStr) {
+          return;
+        }
+
+        const rId = String(r.userId || r.id || r.collectorId || "");
+        const rName = String(r.fullName || r.full_name || r.collectorName || r.name || "").toLowerCase();
+        const rUser = String(r.username || "").toLowerCase();
+
+        const isMatch =
+          (agentId && rId === agentId) ||
+          (matchedAgent && String(matchedAgent.id) === rId) ||
+          (effectiveUsername && rUser === effectiveUsername.toLowerCase()) ||
+          (tellerName && (rName.includes(tellerName) || tellerName.includes(rName))) ||
+          (effectiveAgentName && (rName.includes(effectiveAgentName.toLowerCase()) || effectiveAgentName.toLowerCase().includes(rName)));
+
+        if (isMatch) {
+          foundRecord = true;
+          let amt = 0;
+          if (r.daily && typeof r.daily === "object" && r.daily[yesterdayStr] !== undefined) {
+            amt = Number(r.daily[yesterdayStr] || 0);
+          } else {
+            amt = Number(r.TotalOverAllGross || r.gross || r.totalGross || r.amount || r.grossAmount || 0);
+          }
+
+          if (!isNaN(amt) && amt > 0) {
+            totalGross += amt;
+          }
+        }
+      });
+    }
+
+    // Fallback if booth had a specific yesterdayGross property
+    if (!foundRecord && booth.yesterdayGross) {
+      totalGross = Number(booth.yesterdayGross) || 0;
+      foundRecord = totalGross > 0;
+    }
+
+    const currencyFormatter = new Intl.NumberFormat("en-PH", {
+      style: "currency",
+      currency: "PHP",
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    });
+
+    return {
+      gross: totalGross,
+      formatted: currencyFormatter.format(totalGross),
+      hasRecord: foundRecord,
+      agentName: effectiveAgentName,
+      agentUsername: effectiveUsername,
+      agentStatus: matchedAgent?.isActive ? "Active Teller" : (matchedAgent ? "Registered Agent" : "Manual Tag"),
+      contactNumber: matchedAgent?.contactNumber || booth.contactNumber || "No contact number",
+      supervisor: booth.supervisor || (matchedAgent?.supervisor ? `Supervisor #${matchedAgent.supervisor}` : "No supervisor assigned"),
+      outlet: matchedAgent?.outlet || booth.name || "Kiosk Outlet",
+      yesterdayDate: yesterdayLabel,
+      yesterdayIso: yesterdayStr
+    };
+  };
+
+  // Start distance measuring from a chosen kiosk
+  const startMeasuringFromKiosk = (booth) => {
+    if (!booth) return;
+    if (userTaggedBooths.length < 2) {
+      setCopiedText("At least 2 tagged kiosks are required on the map to measure!");
+      setTimeout(() => setCopiedText(null), 3000);
+      return;
+    }
+    if (leafletMapRef.current) {
+      leafletMapRef.current.closePopup();
+    }
+    setMeasuringSourceKiosk(booth);
+    setCopiedText(`Measuring from Booth ${booth.name}`);
+    setTimeout(() => setCopiedText(null), 2500);
+  };
+
+  // Complete distance measurement when 2nd kiosk is clicked
+  const handleCompleteMeasurement = (source, target) => {
+    if (!source || !target || !source.coords || !target.coords) return;
+    if (String(source.id) === String(target.id)) {
+      setCopiedText("Please select a different kiosk as destination!");
+      setTimeout(() => setCopiedText(null), 2500);
+      return;
+    }
+
+    const distMeters = calculateDistanceMeters(
+      source.coords[0], source.coords[1],
+      target.coords[0], target.coords[1]
+    );
+
+    const pair = { source, target, distanceMeters: distMeters };
+    setMeasuredPair(pair);
+    setMeasuringSourceKiosk(null);
+    setIsDistanceModalOpen(true);
+
+    // Draw connecting line & midpoint distance badge on Leaflet map
+    if (leafletMapRef.current && measureLineGroupRef.current && window.L) {
+      const map = leafletMapRef.current;
+      const measureGroup = measureLineGroupRef.current;
+      measureGroup.clearLayers();
+
+      // Glowing dashed line
+      window.L.polyline([source.coords, target.coords], {
+        color: "#0d9488",
+        weight: 4.5,
+        dashArray: "8, 8",
+        opacity: 0.95
+      }).addTo(measureGroup);
+
+      // Midpoint distance badge
+      const midLat = (source.coords[0] + target.coords[0]) / 2;
+      const midLng = (source.coords[1] + target.coords[1]) / 2;
+      const distLabel = distMeters >= 1000 
+        ? `${(distMeters / 1000).toFixed(2)} km` 
+        : `${Math.round(distMeters)} m`;
+
+      const badgeIcon = window.L.divIcon({
+        className: "measure-distance-badge",
+        html: `
+          <div style="
+            background: #042f2e;
+            color: #2dd4bf;
+            border: 2px solid #14b8a6;
+            padding: 4px 10px;
+            border-radius: 9999px;
+            font-family: system-ui, sans-serif;
+            font-size: 11px;
+            font-weight: 900;
+            white-space: nowrap;
+            box-shadow: 0 4px 14px rgba(0,0,0,0.6);
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            cursor: pointer;
+            transform: translate(-50%, -50%);
+          ">
+            <span>📏</span>
+            <span>${distLabel}</span>
+          </div>
+        `,
+        iconSize: [110, 26],
+        iconAnchor: [55, 13]
+      });
+
+      const midMarker = window.L.marker([midLat, midLng], { icon: badgeIcon }).addTo(measureGroup);
+      midMarker.on("click", () => {
+        setIsDistanceModalOpen(true);
+      });
+
+      try {
+        const bounds = window.L.latLngBounds([source.coords, target.coords]);
+        map.fitBounds(bounds, { padding: [90, 90], maxZoom: 17 });
+      } catch {}
+    }
+  };
+
+  // Clear current measurement line and reset
+  const handleClearMeasurement = () => {
+    setMeasuredPair(null);
+    setMeasuringSourceKiosk(null);
+    setIsDistanceModalOpen(false);
+    if (measureLineGroupRef.current) {
+      measureLineGroupRef.current.clearLayers();
+    }
+  };
+
+  // Global trigger for Leaflet HTML popups
+  useEffect(() => {
+    window.startMeasuringKiosk = (boothId) => {
+      const b = userTaggedBooths.find(booth => String(booth.id) === String(boothId));
+      if (b) {
+        startMeasuringFromKiosk(b);
+      }
+    };
+    return () => {
+      delete window.startMeasuringKiosk;
+    };
+  }, [userTaggedBooths]);
+
   // Load Leaflet CSS & JS
   useEffect(() => {
     if (!document.getElementById("leaflet-custom-pins-style")) {
@@ -1099,10 +1432,16 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
 
     const group = window.L.layerGroup().addTo(map);
     layersGroupRef.current = group;
+
+    const measureGroup = window.L.layerGroup().addTo(map);
+    measureLineGroupRef.current = measureGroup;
+
     leafletMapRef.current = map;
 
     // Click handler anywhere on the map to drop coordinates pin & open Google Maps button
     map.on("click", (e) => {
+      // Do not drop pin if currently in kiosk-to-kiosk measuring mode
+      if (measuringSourceKioskRef.current) return;
       const lat = e.latlng.lat;
       const lng = e.latlng.lng;
       setClickedPoint({ lat, lng });
@@ -1132,6 +1471,8 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
       if (resizeObserver) resizeObserver.disconnect();
       map.remove();
       leafletMapRef.current = null;
+      layersGroupRef.current = null;
+      measureLineGroupRef.current = null;
     };
   }, [leafletLoaded]);
 
@@ -1711,6 +2052,9 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
       const isBelongingToActive = activeBarangayCircuit && booth.barangayId === activeBarangayCircuit.id;
       const displayName = name || "001";
 
+      const isMeasuringSource = measuringSourceKiosk && String(measuringSourceKiosk.id) === String(booth.id);
+      const isMeasuringTargetCandidate = measuringSourceKiosk && String(measuringSourceKiosk.id) !== String(booth.id);
+
       const outletIcon = window.L.divIcon({
         className: "yellow-booth-pin",
         html: `
@@ -1719,20 +2063,38 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
             flex-direction: column;
             align-items: center;
             justify-content: flex-end;
-            width: 140px;
+            width: 160px;
             height: 102px;
             cursor: pointer;
             user-select: none;
             filter: drop-shadow(0 6px 12px rgba(0,0,0,0.5));
+            position: relative;
           ">
-            <!-- 1. BADGE ON TOP OF THE KIOSK (Matches Image 1: Green Pill with Cyan Border & White 001) -->
+            ${isMeasuringSource ? `
+              <!-- Pulsing Beacon Halo for Source Kiosk A -->
+              <div style="
+                position: absolute;
+                width: 72px;
+                height: 72px;
+                border-radius: 50%;
+                border: 3px solid #14b8a6;
+                background: rgba(20, 184, 166, 0.25);
+                top: 36px;
+                left: 50%;
+                transform: translateX(-50%);
+                animation: ping 1.5s cubic-bezier(0, 0, 0.2, 1) infinite;
+                pointer-events: none;
+              "></div>
+            ` : ''}
+
+            <!-- 1. BADGE ON TOP OF THE KIOSK -->
             <div style="
               display: inline-flex;
               align-items: center;
               gap: 5px;
-              background: #047857;
+              background: ${isMeasuringSource ? "#0f766e" : (isMeasuringTargetCandidate ? "#0284c7" : "#047857")};
               color: #ffffff;
-              border: 2.5px solid #38bdf8;
+              border: 2.5px solid ${isMeasuringSource ? "#2dd4bf" : (isMeasuringTargetCandidate ? "#38bdf8" : "#38bdf8")};
               border-radius: 9999px;
               padding: 2.5px 10px;
               font-family: system-ui, -apple-system, sans-serif;
@@ -1740,14 +2102,16 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
               font-weight: 900;
               letter-spacing: 0.5px;
               white-space: nowrap;
-              box-shadow: 0 4px 12px rgba(0, 0, 0, 0.7), 0 0 10px rgba(56, 189, 248, 0.5);
+              box-shadow: 0 4px 12px rgba(0, 0, 0, 0.7), 0 0 10px ${isMeasuringSource ? "rgba(45, 212, 191, 0.6)" : "rgba(56, 189, 248, 0.5)"};
               margin-bottom: 2px;
-              max-width: 140px;
+              max-width: 160px;
               overflow: hidden;
               text-overflow: ellipsis;
             ">
-              <span style="font-size: 11px;">🏪</span>
-              <span style="overflow: hidden; text-overflow: ellipsis;">${displayName}</span>
+              <span style="font-size: 11px;">${isMeasuringSource ? "📏" : (isMeasuringTargetCandidate ? "🎯" : "🏪")}</span>
+              <span style="overflow: hidden; text-overflow: ellipsis;">
+                ${isMeasuringSource ? `POINT A: ${displayName}` : (isMeasuringTargetCandidate ? `🎯 Measure: ${displayName}` : displayName)}
+              </span>
             </div>
 
             <!-- 2. ACTUAL ILLUSTRATED KIOSK ICON (Where coordinates are) -->
@@ -1780,20 +2144,33 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
                 width: 10px;
                 height: 10px;
                 border-radius: 50%;
-                background: #f59e0b;
+                background: ${isMeasuringSource ? "#14b8a6" : (isMeasuringTargetCandidate ? "#38bdf8" : "#f59e0b")};
                 border: 2px solid #ffffff;
-                box-shadow: 0 0 10px #f59e0b, 0 2px 5px rgba(0,0,0,0.7);
+                box-shadow: 0 0 10px ${isMeasuringSource ? "#14b8a6" : "#f59e0b"}, 0 2px 5px rgba(0,0,0,0.7);
                 margin-top: -1px;
               "></div>
             </div>
           </div>
         `,
-        iconSize: [140, 102],
-        iconAnchor: [70, 102],
+        iconSize: [160, 102],
+        iconAnchor: [80, 102],
         popupAnchor: [0, -102]
       });
 
       const marker = window.L.marker(coords, { icon: outletIcon }).addTo(group);
+
+      // Intercept marker click if in active distance measuring mode
+      marker.on("click", (e) => {
+        if (measuringSourceKioskRef.current) {
+          window.L.DomEvent.stopPropagation(e);
+          if (String(measuringSourceKioskRef.current.id) === String(booth.id)) {
+            return; // Clicked the same kiosk as source
+          }
+          handleCompleteMeasurement(measuringSourceKioskRef.current, booth);
+          return;
+        }
+      });
+
       marker.bindPopup(`
         <div style="font-family: system-ui, sans-serif; min-width: 260px; padding: 2px;">
           <div style="display: flex; align-items: center; justify-content: space-between; gap: 4px; margin-bottom: 6px;">
@@ -1827,33 +2204,60 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
             <div style="font-family: monospace; font-size: 10px; color: #64748b; margin-top: 3px;"><strong>GPS:</strong> ${formatGPS(coords)}</div>
           </div>
 
-          <a
-            href="https://www.google.com/maps?q=${coords[0]},${coords[1]}"
-            target="_blank"
-            rel="noopener noreferrer"
-            style="
-              display: flex;
-              align-items: center;
-              justify-content: center;
-              gap: 5px;
-              background: #0284c7;
-              color: #ffffff;
-              font-weight: 800;
-              font-size: 11px;
-              padding: 7px 10px;
-              border-radius: 8px;
-              text-decoration: none;
-              box-shadow: 0 2px 6px rgba(2, 132, 199, 0.35);
-            "
-          >
-            <span>Proceed to Google Maps</span>
-            <span>↗</span>
-          </a>
+          <div style="display: flex; flex-direction: column; gap: 5px;">
+            <a
+              href="https://www.google.com/maps?q=${coords[0]},${coords[1]}"
+              target="_blank"
+              rel="noopener noreferrer"
+              style="
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                gap: 5px;
+                background: #0284c7;
+                color: #ffffff;
+                font-weight: 800;
+                font-size: 11px;
+                padding: 7px 10px;
+                border-radius: 8px;
+                text-decoration: none;
+                box-shadow: 0 2px 6px rgba(2, 132, 199, 0.35);
+              "
+            >
+              <span>Proceed to Google Maps</span>
+              <span>↗</span>
+            </a>
+
+            <!-- Measure Distance Button -->
+            <button
+              type="button"
+              onclick="window.startMeasuringKiosk('${booth.id}')"
+              style="
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                gap: 6px;
+                width: 100%;
+                background: #0d9488;
+                color: #ffffff;
+                font-weight: 800;
+                font-size: 11px;
+                padding: 7.5px 10px;
+                border-radius: 8px;
+                border: none;
+                cursor: pointer;
+                box-shadow: 0 2px 6px rgba(13, 148, 136, 0.35);
+              "
+            >
+              <span>📏</span>
+              <span>Measure Distance to Another Kiosk</span>
+            </button>
+          </div>
         </div>
       `);
     });
 
-  }, [leafletLoaded, viewMode, activeBarangayCircuit, selectedEdgeBarangay, cityRouteIndex, brgyRouteIndex, showTerminals, showFactories, brgyInspectorTab, activeBarangayAgents, taggedAgentCoords, userTaggedBooths]);
+  }, [leafletLoaded, viewMode, activeBarangayCircuit, selectedEdgeBarangay, cityRouteIndex, brgyRouteIndex, showTerminals, showFactories, brgyInspectorTab, activeBarangayAgents, taggedAgentCoords, userTaggedBooths, measuringSourceKiosk]);
 
   // City-Level Driving Animation
   useEffect(() => {
@@ -1986,6 +2390,76 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
         <div className="absolute top-20 left-1/2 -translate-x-1/2 z-50 bg-emerald-600 text-white font-mono text-xs font-bold px-3 py-1.5 rounded-xl shadow-xl flex items-center gap-1.5 animate-in fade-in duration-150">
           <Check size={14} />
           <span>Copied {copiedText}</span>
+        </div>
+      )}
+
+      {/* ================= ACTIVE MEASURING MODE HUD BANNER ================= */}
+      {measuringSourceKiosk && (
+        <div className="absolute top-24 left-1/2 -translate-x-1/2 z-50 bg-slate-900/95 backdrop-blur-xl border-2 border-teal-400 rounded-2xl shadow-2xl p-3 px-5 flex items-center gap-4 animate-in fade-in slide-in-from-top-2 duration-200 max-w-[94vw] border-teal-400 shadow-teal-950/60">
+          <div className="w-10 h-10 rounded-2xl bg-teal-500/20 text-teal-400 border border-teal-400/40 flex items-center justify-center shrink-0 animate-pulse">
+            <Ruler size={22} />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-teal-500/20 text-teal-300 border border-teal-500/40">
+                Distance Measurement
+              </span>
+              <span className="text-[11px] font-mono font-bold text-teal-300">
+                Point A: Booth {measuringSourceKiosk.name}
+              </span>
+            </div>
+            <div className="text-xs text-white font-bold mt-0.5">
+              Click a <strong>second kiosk</strong> on the map to measure distance and view yesterday's gross sales.
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setMeasuringSourceKiosk(null);
+              setCopiedText("Measurement cancelled");
+              setTimeout(() => setCopiedText(null), 2000);
+            }}
+            className="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-bold text-xs transition cursor-pointer border border-slate-700 shrink-0 ml-1"
+          >
+            Cancel
+          </button>
+        </div>
+      )}
+
+      {/* ================= FLOATING MEASURED DISTANCE BAR (When measurement line is on map) ================= */}
+      {measuredPair && !isDistanceModalOpen && (
+        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-40 bg-slate-900/95 backdrop-blur-xl border border-teal-500/80 rounded-2xl shadow-2xl p-2.5 px-4 flex items-center gap-3 animate-in fade-in slide-in-from-bottom-2 duration-150 max-w-[94vw]">
+          <div className="w-8 h-8 rounded-xl bg-teal-600 flex items-center justify-center text-white shadow-md shrink-0">
+            <Ruler size={16} />
+          </div>
+          <div>
+            <div className="text-[10px] font-black uppercase text-teal-400">
+              Measured Distance: {measuredPair.distanceMeters >= 1000 ? `${(measuredPair.distanceMeters / 1000).toFixed(2)} km` : `${Math.round(measuredPair.distanceMeters)} m`}
+            </div>
+            <div className="text-xs font-bold text-white flex items-center gap-1.5">
+              <span>Booth {measuredPair.source?.name}</span>
+              <span className="text-teal-400">➔</span>
+              <span>Booth {measuredPair.target?.name}</span>
+            </div>
+          </div>
+          <div className="flex items-center gap-1.5 ml-2">
+            <button
+              type="button"
+              onClick={() => setIsDistanceModalOpen(true)}
+              className="px-3 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-black text-xs transition cursor-pointer shadow-md flex items-center gap-1"
+            >
+              <CircleDollarSign size={13} />
+              <span>View Yesterday's Gross</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleClearMeasurement}
+              className="p-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition cursor-pointer border border-slate-700"
+              title="Clear Line on Map"
+            >
+              <X size={15} />
+            </button>
+          </div>
         </div>
       )}
 
@@ -2642,6 +3116,26 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
                           </button>
                           <button
                             type="button"
+                            onClick={() => {
+                              if (measuringSourceKiosk && String(measuringSourceKiosk.id) !== String(booth.id)) {
+                                handleCompleteMeasurement(measuringSourceKiosk, booth);
+                              } else {
+                                startMeasuringFromKiosk(booth);
+                                handleFocusPOI(booth.coords);
+                              }
+                            }}
+                            className={`px-1.5 py-0.5 rounded-lg text-[10px] font-bold transition cursor-pointer flex items-center gap-1 ${
+                              measuringSourceKiosk?.id === booth.id
+                                ? "bg-teal-500 text-white shadow-md animate-pulse"
+                                : "bg-teal-600/30 hover:bg-teal-500 text-teal-200 hover:text-white"
+                            }`}
+                            title="Measure distance from this kiosk"
+                          >
+                            <Ruler size={10} />
+                            <span>{measuringSourceKiosk?.id === booth.id ? "Point A" : "Measure"}</span>
+                          </button>
+                          <button
+                            type="button"
                             onClick={() => handleEditUserBooth(booth)}
                             className="p-1 rounded-md bg-cyan-950/60 hover:bg-cyan-600 text-cyan-300 hover:text-white transition cursor-pointer"
                             title="Edit Booth"
@@ -3233,6 +3727,26 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
                           </button>
                           <button
                             type="button"
+                            onClick={() => {
+                              if (measuringSourceKiosk && String(measuringSourceKiosk.id) !== String(booth.id)) {
+                                handleCompleteMeasurement(measuringSourceKiosk, booth);
+                              } else {
+                                startMeasuringFromKiosk(booth);
+                                handleFocusPOI(booth.coords);
+                              }
+                            }}
+                            className={`px-1.5 py-0.5 rounded-lg text-[10px] font-bold transition cursor-pointer flex items-center gap-1 ${
+                              measuringSourceKiosk?.id === booth.id
+                                ? "bg-teal-500 text-white shadow-md animate-pulse"
+                                : "bg-teal-600/30 hover:bg-teal-500 text-teal-200 hover:text-white"
+                            }`}
+                            title="Measure distance from this kiosk"
+                          >
+                            <Ruler size={10} />
+                            <span>{measuringSourceKiosk?.id === booth.id ? "Point A" : "Measure"}</span>
+                          </button>
+                          <button
+                            type="button"
                             onClick={() => handleEditUserBooth(booth)}
                             className="p-1 rounded-md bg-cyan-950/60 hover:bg-cyan-600 text-cyan-300 hover:text-white transition cursor-pointer"
                             title="Edit Booth Details"
@@ -3821,6 +4335,350 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ================= KIOSK DISTANCE & AGENT GROSS MODAL ================= */}
+      {isDistanceModalOpen && measuredPair && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="bg-slate-900 border border-teal-500/50 rounded-3xl w-full max-w-3xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+            {/* Modal Header */}
+            <div className="p-4 sm:p-5 border-b border-slate-800 bg-slate-950/60 flex items-center justify-between gap-3 shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 rounded-2xl bg-teal-500/20 text-teal-400 border border-teal-500/40 flex items-center justify-center shadow-lg shrink-0">
+                  <Ruler size={24} />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-teal-500/20 text-teal-300 border border-teal-500/30">
+                      Yesterday's Gross Performance ({getYesterdayDates().displayLabel})
+                    </span>
+                    <span className="text-[10px] text-slate-400 font-mono">
+                      Territory Proximity Analyzer
+                    </span>
+                  </div>
+                  <h3 className="text-lg font-black text-white leading-tight">
+                    Kiosk Distance &amp; Yesterday's Gross Sales
+                  </h3>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsDistanceModalOpen(false)}
+                  className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition cursor-pointer"
+                  title="Close Modal (Keeps measurement line on map)"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-4 sm:p-6 overflow-y-auto space-y-5">
+              {/* 1. HERO DISTANCE BANNER */}
+              <div className="relative overflow-hidden p-5 rounded-2xl bg-gradient-to-br from-teal-950/60 via-slate-900 to-slate-950 border border-teal-500/40 shadow-xl">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div>
+                    <span className="text-[11px] font-black uppercase tracking-wider text-teal-400">
+                      Direct Geodesic Distance
+                    </span>
+                    <div className="flex items-baseline gap-2 mt-1">
+                      <span className="text-3xl sm:text-4xl font-black text-white font-mono tracking-tight">
+                        {measuredPair.distanceMeters >= 1000
+                          ? `${(measuredPair.distanceMeters / 1000).toFixed(2)} km`
+                          : `${Math.round(measuredPair.distanceMeters)} meters`}
+                      </span>
+                      <span className="text-sm font-mono text-teal-300/80 font-bold">
+                        ({Math.round(measuredPair.distanceMeters).toLocaleString()} m)
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-300 mt-1">
+                      From <strong>Booth {measuredPair.source?.name}</strong> (Brgy. {measuredPair.source?.barangayName}) to <strong>Booth {measuredPair.target?.name}</strong> (Brgy. {measuredPair.target?.barangayName})
+                    </p>
+                  </div>
+
+                  {/* Estimated Travel Times */}
+                  <div className="flex items-center gap-2 self-start sm:self-center shrink-0 flex-wrap">
+                    <div className="px-3 py-2 rounded-xl bg-slate-950/80 border border-slate-800 text-center min-w-[70px]">
+                      <div className="text-[10px] text-slate-400 font-bold">🚶 Walking</div>
+                      <div className="text-xs font-mono font-black text-white mt-0.5">
+                        ~{Math.max(1, Math.round(measuredPair.distanceMeters / 80))} min
+                      </div>
+                    </div>
+                    <div className="px-3 py-2 rounded-xl bg-slate-950/80 border border-slate-800 text-center min-w-[70px]">
+                      <div className="text-[10px] text-slate-400 font-bold">🛵 Motorcycle</div>
+                      <div className="text-xs font-mono font-black text-teal-300 mt-0.5">
+                        ~{Math.max(1, Math.round(measuredPair.distanceMeters / 400))} min
+                      </div>
+                    </div>
+                    <div className="px-3 py-2 rounded-xl bg-slate-950/80 border border-slate-800 text-center min-w-[70px]">
+                      <div className="text-[10px] text-slate-400 font-bold">🚗 Driving</div>
+                      <div className="text-xs font-mono font-black text-cyan-300 mt-0.5">
+                        ~{Math.max(1, Math.round(measuredPair.distanceMeters / 300))} min
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Spacing Assessment */}
+                <div className="mt-4 pt-3 border-t border-teal-900/40 flex items-center gap-2 text-xs">
+                  {measuredPair.distanceMeters < 250 ? (
+                    <div className="flex items-center gap-2 text-amber-300">
+                      <AlertTriangle size={15} className="shrink-0" />
+                      <span><strong>Spacing Alert:</strong> Less than 250m apart. Potential territory cannibalization of foot traffic between the two kiosks.</span>
+                    </div>
+                  ) : measuredPair.distanceMeters <= 1500 ? (
+                    <div className="flex items-center gap-2 text-emerald-300">
+                      <CheckCircle2 size={15} className="shrink-0" />
+                      <span><strong>Ideal Territory Spacing:</strong> 250m to 1.5km separation — optimal strategic coverage for this sector.</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 text-sky-300">
+                      <Info size={15} className="shrink-0" />
+                      <span><strong>Wide Spacing:</strong> Greater than 1.5km separation — sufficient room between kiosks for potential additional placement if bettor volume is high.</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* 2. SIDE-BY-SIDE KIOSK & ASSIGNED AGENT GROSS COMPARISON */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* KIOSK 1: SOURCE */}
+                {(() => {
+                  const s = measuredPair.source;
+                  const g = getBoothAgentGross(s);
+                  return (
+                    <div className="p-4 sm:p-5 rounded-2xl bg-slate-950 border-2 border-emerald-500/40 flex flex-col justify-between gap-3 shadow-md">
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1.5">
+                            <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+                            <span>Source Kiosk (Point A)</span>
+                          </span>
+                          <span className="text-[10px] font-mono text-slate-400">
+                            ID: {s.id}
+                          </span>
+                        </div>
+
+                        {/* Booth Identity */}
+                        <div className="flex items-start gap-3">
+                          <div className="w-10 h-12 shrink-0">
+                            <KioskIconSvg width={40} height={48} />
+                          </div>
+                          <div>
+                            <h4 className="text-base font-black text-white leading-tight">
+                              Booth {s.name}
+                            </h4>
+                            <div className="text-xs text-emerald-400 font-bold mt-0.5">
+                              Brgy. {s.barangayName || "Mandaue City"}
+                            </div>
+                            <div className="text-[11px] text-slate-400 line-clamp-1 mt-0.5">
+                              📍 {s.address || `Brgy. ${s.barangayName}`}
+                            </div>
+                            <div className="text-[10px] font-mono text-slate-500 mt-0.5">
+                              {formatGPS(s.coords)}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Agent Information Card */}
+                        <div className="p-3 rounded-xl bg-slate-900 border border-slate-800 space-y-1.5">
+                          <div className="text-[10px] font-black uppercase tracking-wider text-slate-400 flex items-center justify-between">
+                            <span>Assigned Agent / Teller</span>
+                            <span className="px-1.5 py-0.2 rounded text-[9px] bg-slate-800 text-emerald-300">
+                              {g.agentStatus}
+                            </span>
+                          </div>
+                          <div className="text-sm font-black text-white">
+                            {g.agentName}
+                          </div>
+                          {g.agentUsername && (
+                            <div className="text-xs text-cyan-400 font-mono">
+                              @{g.agentUsername}
+                            </div>
+                          )}
+                          <div className="text-xs text-slate-300 flex items-center justify-between pt-1 border-t border-slate-800/80">
+                            <span className="text-slate-400">Supervisor:</span>
+                            <span className="font-bold text-white">{g.supervisor}</span>
+                          </div>
+                          <div className="text-xs text-slate-300 flex items-center justify-between">
+                            <span className="text-slate-400">Contact:</span>
+                            <span className="font-mono text-slate-200">{g.contactNumber}</span>
+                          </div>
+                        </div>
+
+                        {/* HIGHLIGHTED YESTERDAY'S GROSS SALES */}
+                        <div className="p-4 rounded-xl bg-gradient-to-br from-emerald-950/80 to-slate-900 border border-emerald-500/50 shadow-inner">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-[10px] font-black uppercase tracking-wider text-emerald-300 flex items-center gap-1">
+                              <CircleDollarSign size={13} />
+                              <span>Yesterday's Gross Sales</span>
+                            </span>
+                            <span className="text-[10px] font-bold text-emerald-400">
+                              {g.hasRecord ? "✓ Verified Draw" : (g.gross > 0 ? "Synced" : "₱0.00 / No Sales")}
+                            </span>
+                          </div>
+                          <div className="text-2xl font-black text-emerald-400 font-mono tracking-tight mt-1">
+                            {g.formatted}
+                          </div>
+                          <div className="text-[10px] text-slate-400 mt-0.5">
+                            Verified gross sales recorded for yesterday ({g.yesterdayDate})
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* KIOSK 2: TARGET */}
+                {(() => {
+                  const t = measuredPair.target;
+                  const g = getBoothAgentGross(t);
+                  return (
+                    <div className="p-4 sm:p-5 rounded-2xl bg-slate-950 border-2 border-cyan-500/40 flex flex-col justify-between gap-3 shadow-md">
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 flex items-center gap-1.5">
+                            <span className="w-2 h-2 rounded-full bg-cyan-400"></span>
+                            <span>Destination Kiosk (Point B)</span>
+                          </span>
+                          <span className="text-[10px] font-mono text-slate-400">
+                            ID: {t.id}
+                          </span>
+                        </div>
+
+                        {/* Booth Identity */}
+                        <div className="flex items-start gap-3">
+                          <div className="w-10 h-12 shrink-0">
+                            <KioskIconSvg width={40} height={48} />
+                          </div>
+                          <div>
+                            <h4 className="text-base font-black text-white leading-tight">
+                              Booth {t.name}
+                            </h4>
+                            <div className="text-xs text-cyan-400 font-bold mt-0.5">
+                              Brgy. {t.barangayName || "Mandaue City"}
+                            </div>
+                            <div className="text-[11px] text-slate-400 line-clamp-1 mt-0.5">
+                              📍 {t.address || `Brgy. ${t.barangayName}`}
+                            </div>
+                            <div className="text-[10px] font-mono text-slate-500 mt-0.5">
+                              {formatGPS(t.coords)}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Agent Information Card */}
+                        <div className="p-3 rounded-xl bg-slate-900 border border-slate-800 space-y-1.5">
+                          <div className="text-[10px] font-black uppercase tracking-wider text-slate-400 flex items-center justify-between">
+                            <span>Assigned Agent / Teller</span>
+                            <span className="px-1.5 py-0.2 rounded text-[9px] bg-slate-800 text-cyan-300">
+                              {g.agentStatus}
+                            </span>
+                          </div>
+                          <div className="text-sm font-black text-white">
+                            {g.agentName}
+                          </div>
+                          {g.agentUsername && (
+                            <div className="text-xs text-cyan-400 font-mono">
+                              @{g.agentUsername}
+                            </div>
+                          )}
+                          <div className="text-xs text-slate-300 flex items-center justify-between pt-1 border-t border-slate-800/80">
+                            <span className="text-slate-400">Supervisor:</span>
+                            <span className="font-bold text-white">{g.supervisor}</span>
+                          </div>
+                          <div className="text-xs text-slate-300 flex items-center justify-between">
+                            <span className="text-slate-400">Contact:</span>
+                            <span className="font-mono text-slate-200">{g.contactNumber}</span>
+                          </div>
+                        </div>
+
+                        {/* HIGHLIGHTED YESTERDAY'S GROSS SALES */}
+                        <div className="p-4 rounded-xl bg-gradient-to-br from-cyan-950/80 to-slate-900 border border-cyan-500/50 shadow-inner">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-[10px] font-black uppercase tracking-wider text-cyan-300 flex items-center gap-1">
+                              <CircleDollarSign size={13} />
+                              <span>Yesterday's Gross Sales</span>
+                            </span>
+                            <span className="text-[10px] font-bold text-cyan-400">
+                              {g.hasRecord ? "✓ Verified Draw" : (g.gross > 0 ? "Synced" : "₱0.00 / No Sales")}
+                            </span>
+                          </div>
+                          <div className="text-2xl font-black text-cyan-400 font-mono tracking-tight mt-1">
+                            {g.formatted}
+                          </div>
+                          <div className="text-[10px] text-slate-400 mt-0.5">
+                            Verified gross sales recorded for yesterday ({g.yesterdayDate})
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+
+              {/* 3. COMBINED TOTALS & FINANCIAL SUMMARY */}
+              {(() => {
+                const sGross = getBoothAgentGross(measuredPair.source).gross;
+                const tGross = getBoothAgentGross(measuredPair.target).gross;
+                const combinedGross = sGross + tGross;
+                const grossDiff = Math.abs(sGross - tGross);
+                const formatCur = (n) => new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP" }).format(n);
+
+                return (
+                  <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 grid grid-cols-1 sm:grid-cols-3 gap-3 text-center">
+                    <div className="p-3 rounded-xl bg-slate-900/60">
+                      <div className="text-[10px] font-black uppercase text-slate-400">Combined Yesterday's Gross</div>
+                      <div className="text-lg font-black text-emerald-400 font-mono mt-1">{formatCur(combinedGross)}</div>
+                    </div>
+                    <div className="p-3 rounded-xl bg-slate-900/60">
+                      <div className="text-[10px] font-black uppercase text-slate-400">Yesterday's Sales Variance</div>
+                      <div className="text-lg font-black text-amber-300 font-mono mt-1">{formatCur(grossDiff)}</div>
+                    </div>
+                    <div className="p-3 rounded-xl bg-slate-900/60">
+                      <div className="text-[10px] font-black uppercase text-slate-400">Average Yesterday's Gross</div>
+                      <div className="text-lg font-black text-cyan-300 font-mono mt-1">{formatCur(combinedGross / 2)}</div>
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+
+            {/* Modal Footer Controls */}
+            <div className="p-4 sm:p-5 border-t border-slate-800 bg-slate-950 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 shrink-0">
+              <a
+                href={`https://www.google.com/maps/dir/?api=1&origin=${measuredPair.source?.coords?.[0]},${measuredPair.source?.coords?.[1]}&destination=${measuredPair.target?.coords?.[0]},${measuredPair.target?.coords?.[1]}&travelmode=driving`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-cyan-300 hover:text-white font-bold text-xs transition cursor-pointer flex items-center justify-center gap-1.5 border border-slate-700"
+              >
+                <span>Google Maps Route</span>
+                <span>↗</span>
+              </a>
+
+              <div className="flex items-center gap-2 justify-end">
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleClearMeasurement();
+                  }}
+                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-rose-900/40 text-slate-300 hover:text-rose-300 font-bold text-xs transition cursor-pointer border border-slate-700"
+                >
+                  Clear Line
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsDistanceModalOpen(false)}
+                  className="px-5 py-2 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-black text-xs transition cursor-pointer flex items-center justify-center gap-1.5 shadow-lg shadow-teal-950/40"
+                >
+                  <span>View on Map</span>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

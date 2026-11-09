@@ -8260,12 +8260,9 @@ export default function IncidentReportPanel({
                       {/* Left Logo: PCSO Swirl Logo */}
                       <div className="flex items-center gap-2">
                         <img
-                          src="/id-assets/pcso_logo.svg"
+                          src="/id-assets/pcso_logo.png"
                           alt="PCSO Logo"
                           className="h-16 w-auto object-contain"
-                          onError={(e) => {
-                            e.target.src = "/id-assets/pcso_logo.png";
-                          }}
                         />
                       </div>
 
@@ -8942,12 +8939,9 @@ export default function IncidentReportPanel({
                       {/* Left Logo: PCSO Swirl Logo */}
                       <div className="flex items-center gap-2">
                         <img
-                          src="/id-assets/pcso_logo.svg"
+                          src="/id-assets/pcso_logo.png"
                           alt="PCSO Logo"
                           className="h-16 w-auto object-contain"
-                          onError={(e) => {
-                            e.target.src = "/id-assets/pcso_logo.png";
-                          }}
                         />
                       </div>
 

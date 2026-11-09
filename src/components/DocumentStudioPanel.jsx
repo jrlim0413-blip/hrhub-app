@@ -25,34 +25,55 @@ import {
 } from "../lib/savedDocumentsStorage";
 
 // ================= BOND PAPER SIZES WITH VISIBLE FRONTEND DIMENSIONS =================
-// Long bond is visibly 192px taller than Short bond on screen!
+// Physical paper dimensions tuned to match viewer 1:1 and eliminate 2nd page spillover!
 export const PAPER_SIZES = [
   {
     id: "letter",
     label: "Short Bond (8.5\" × 11\")",
     widthPx: 816,
     heightPx: 1056,
+    widthIn: "8.5in",
+    heightIn: "11in",
     aspectRatio: "8.5 / 11",
     desc: "Short Bond • 8.5\" × 11\" (279 mm)",
-    printCss: "8.5in 11in"
+    printCss: "8.5in 11in",
+    pageMargin: "0.5in 0.65in"
   },
   {
     id: "legal",
     label: "Long Bond (8.5\" × 13\")",
     widthPx: 816,
     heightPx: 1248,
+    widthIn: "8.5in",
+    heightIn: "13in",
     aspectRatio: "8.5 / 13",
-    desc: "Long Bond • 8.5\" × 13\" (330 mm)",
-    printCss: "8.5in 13in"
+    desc: "Long Bond • 8.5\" × 13\" (330 mm / Folio)",
+    printCss: "8.5in 13in",
+    pageMargin: "0.45in 0.65in"
+  },
+  {
+    id: "legal14",
+    label: "Legal (8.5\" × 14\")",
+    widthPx: 816,
+    heightPx: 1344,
+    widthIn: "8.5in",
+    heightIn: "14in",
+    aspectRatio: "8.5 / 14",
+    desc: "Legal Standard • 8.5\" × 14\" (356 mm)",
+    printCss: "8.5in 14in",
+    pageMargin: "0.45in 0.65in"
   },
   {
     id: "a4",
     label: "A4 Standard (8.27\" × 11.69\")",
     widthPx: 794,
     heightPx: 1123,
+    widthIn: "210mm",
+    heightIn: "297mm",
     aspectRatio: "210 / 297",
     desc: "A4 Standard • 210 × 297 mm",
-    printCss: "A4"
+    printCss: "A4 portrait",
+    pageMargin: "12mm 15mm"
   }
 ];
 
@@ -104,6 +125,24 @@ export const MODULAR_BLOCK_PRESETS = [
         defaultData: {
           aacNumber: "AAC-CEBU-2026-089"
         }
+      },
+      {
+        variant: "header_blank_letterhead",
+        name: "Stationery Top Margin (Pre-Printed)",
+        description: "Reserved 1.25-inch top spacing for feeding directly into pre-printed corporate letterhead paper without overlapping printed logos.",
+        defaultData: {
+          height: "48px"
+        }
+      },
+      {
+        variant: "header_triple_logo",
+        name: "Triple Agency Header (SGC • Brand • PCSO)",
+        description: "Official 3-logo letterhead showing corporate emblem left, operating company emblem center, and PCSO authority seal right.",
+        defaultData: {
+          leftLogo: "/id-assets/group_emblem.jpg",
+          centerLogo: "",
+          rightLogo: "/id-assets/pcso_logo.png"
+        }
       }
     ]
   },
@@ -113,6 +152,31 @@ export const MODULAR_BLOCK_PRESETS = [
     category: "addressing",
     categoryLabel: "2. Addressing & Metadata",
     items: [
+      {
+        variant: "address_termination_agency",
+        name: "Agency Agreement Termination Addressing",
+        description: "Official termination notice address block with Date line, Addressee Name, Field Station / Office, RE: Subject, and Salutation.",
+        defaultData: {
+          dateLine: "Date: _____________________",
+          recipientName: "MR. DANIEL PADILLA",
+          recipientOffice: "STL-ILIGAN OFFICE, LANAO DEL NORTE",
+          subject: "RE: TERMINATION OF AGENCY AGREEMENT",
+          salutation: "Dear Mr. Padilla,"
+        }
+      },
+      {
+        variant: "address_letter_to_explain",
+        name: "Letter of Explanation / NTE Addressing",
+        description: "Official Letter of Explanation heading with left-aligned Date, Recipient Name, Designation, Station / Area, RE: Subject, and Salutation.",
+        defaultData: {
+          date: "SEPTEMBER 28, 2026",
+          recipientName: "MOSHER BEBOT",
+          recipientTitle: "SALES SUPERVISOR",
+          recipientStation: "MAGUINDANAO DEL NORTE",
+          subject: "RE: LETTER OF EXPLANATION",
+          salutation: "Dear Gomez,"
+        }
+      },
       {
         variant: "address_memo_grid",
         name: "Formal Memorandum Grid",
@@ -237,38 +301,38 @@ MANDATORY DIRECTIVES & TURNOVER PROTOCOLS:
       {
         variant: "body_termination_agency",
         name: "Termination of Agency Agreement Notice",
-        description: "Contractual cancellation of dealership/agency agreement, revocation of authority, and 72-hour surrender demand for POS machines.",
+        description: "Official termination of salesforce agency contract based on incident report, notarized agreement violation, and General Provisions 5.6, 5.8, 5.9.",
         defaultData: {
-          title: "NOTICE OF TERMINATION OF AGENCY AGREEMENT",
-          agencyCode: "SUB-AGENCY #A-204",
-          bodyText: `PLEASE BE FORMALLY INFORMED that [COMPANY_NAME], acting as the PCSO Authorized Agent Corporation (AAC), has RESOLVED TO TERMINATE AND REVOKE, effective immediately upon your receipt of this notice, the AGENCY AGREEMENT entered into between yourself and this Corporation.
-
-GROUNDS FOR TERMINATION:
-This decisive contractual termination is executed pursuant to Section 9 (Breach and Default) of the Agency Agreement, stemming from documented infractions including unauthorized collection practices, non-compliance with remittal deadlines, and failure to maintain operational sales quotas.
-
-DEMAND FOR IMMEDIATE SURRENDER OF COMPANY PROPERTY:
-You are hereby commanded and given SEVENTY-TWO (72) HOURS from receipt of this notice to surrender and deliver to the Corporate Executive Office all issued Handheld POS Terminals, chargers, spare batteries, SIM cards, official bet slips, ID badges, and station decals.
-
-Effective immediately, your authority to collect bets, process vouchers, or represent yourself as an agent of [COMPANY_NAME] is PERMANENTLY REVOKED AND NULLIFIED.`
+          incidentParagraph: "Based on the Incident Report last March 7, 2025, it was determined that you have been involved in a quarrel within the premises of the Company. This action constitutes, based on the Agency Agreement signed and notarized on _____________________, which is attached as Annex A of this letter, which, is a terminable case.",
+          provisionsIntro: "As stated in the General Provisions of the Agency Agreement – TERMINATION “The Company may immediately terminate this Contract of the concerned member of the SALESFORCE on account of any of the following:",
+          terminationClauses: [
+            "5.6. If the concerned member violates, in any way, any provision of this Contract.",
+            "5.8. In case of loss of trust and confidence in the concerned member.",
+            "5.9. In case of violation of any provision of the 2020 STL RIRR, rules, regulations, and ethical conduct now in force and those which may from time to time be promulgated by the Company."
+          ],
+          companyWarning: "Moreover, this action will not be tolerated by 5A Royal Gaming OPC, as these are grounds for cancellation of your Agency Agreement.",
+          conclusionParagraph: "In conclusion, your Agency Agreement is hereby terminated effective _____________________."
         }
       },
       {
         variant: "body_letter_of_explain",
-        name: "Letter of Explain (Written Response)",
-        description: "Formal employee written explanation / Salaysay ng Paliwanag responding to an Incident Report or NTE with facts and mitigating plea.",
+        name: "Letter of Explanation (Notice to Explain / NTE)",
+        description: "Official company demand to explain with HR Admin report citation, itemized allegation bullets, 3-day deadline, General Provisions 9.11-9.15 termination grounds, and waiver warning.",
         defaultData: {
-          title: "WRITTEN EXPLANATION IN RESPONSE TO NOTICE TO EXPLAIN",
-          caseRef: "IR-2026-NTE-042",
-          bodyText: `I, the undersigned employee under the Operations Division of [COMPANY_NAME], hereby submit this formal Written Explanation in answer to the allegations set forth in the aforementioned Notice to Explain.
-
-1. STATEMENT OF FACTS & CHRONOLOGY:
-On the date and time specified in the report, during the scheduled afternoon drawing monitoring in Sector 4, I was unable to submit the electronic attendance log at exactly 2:00 PM due to an unexpected cellular data network outage in the rural station area, coupled with assisting an on-site retail teller handling a disputed winning ticket claim.
-
-2. EXPLANATION & MITIGATING CIRCUMSTANCES:
-I respectfully submit that there was absolutely no deliberate intent on my part to abandon my monitoring post or evade company timekeeping regulations. The physical logbook kept at the kiosk station clearly bears my handwritten signature and time-in, as attested by the resident teller.
-
-3. REMEDIAL ACTION & COMMITMENT:
-I have secured a secondary backup communication pocket WiFi to prevent similar data interruptions in the future. I am fully committed to upholding the highest standards of diligence required by company policies.`
+          reportCitation: "We received a report from Ms. Quennie R. Capuyan, HR Admin, of the following allegations:",
+          allegations: [
+            "It was reported that you insisted on obtaining your fuel allowance in advance despite the prescribed release schedule and borrowed PHP 1,000.00 from company cash, contrary to Company policy prohibiting such borrowing."
+          ],
+          explanationNotice: "In view thereof, you are hereby requested to explain in writing (in a language you are most comfortable with) within three (3) days from receipt hereof why your Agency Agreement with the company shall not be terminated for the said offense/s.",
+          contractClauseIntro: "As stated in the General Provisions of the Agency Agreement – TERMINATION “The Company may immediately terminate this Contract of the concerned member of the SALESFORCE on account of any of the following:",
+          contractClauses: [
+            { num: "9.11", text: "Acts of theft, dishonesty, fraud, misrepresentation, or breach of trust." },
+            { num: "9.12", text: "Violation of any terms in the Agency Agreement." },
+            { num: "9.14", text: "Loss of trust and confidence in the Cabo or Cobrador." },
+            { num: "9.15", text: "Violation of any provision of the 2020 STL RIRR, existing rules, regulations, or ethical standards, as well as future directives from the STL-AAC." }
+          ],
+          waiverWarning: "Failure to submit a response letter shall mean waiving your right to be heard and this case shall be dealt with given the available information.",
+          closingDirective: "Please be guided accordingly."
         }
       },
       {
@@ -388,6 +452,28 @@ I have secured a secondary backup communication pocket WiFi to prevent similar d
           title: "Human Resource Staff",
           company: "Lucky Betplay Corporation"
         }
+      },
+      {
+        variant: "sig_nte_with_acknowledgment",
+        name: "NTE Issuer & Employee Acknowledgment Signatory",
+        description: "Official two-tier block with HR Specialist issuer line, followed by employee 'Received & acknowledged by:' with signature line and date.",
+        defaultData: {
+          issuerName: "JULIE E. ALMANO",
+          issuerTitle: "HR Salesforce Specialist",
+          ackHeading: "Received & acknowledged by:",
+          recipientName: "JOEVERT SUDSUD",
+          recipientTitle: "Signature Over Printed Name",
+          dateLine: "Date: ____________________"
+        }
+      },
+      {
+        variant: "sig_operations_manager",
+        name: "Operations Manager Sign-Off",
+        description: "Official executive sign-off with 'Sincerely,' closing and OPERATIONS MANAGER signatory designation.",
+        defaultData: {
+          closeLabel: "Sincerely,",
+          title: "OPERATIONS MANAGER"
+        }
       }
     ]
   },
@@ -431,6 +517,14 @@ I have secured a secondary backup communication pocket WiFi to prevent similar d
         defaultData: {
           formCode: "FORM-HRD-2026-REV03",
           pageText: "Page 1 of 1"
+        }
+      },
+      {
+        variant: "footer_division_center",
+        name: "Corporate Division Centered Footer",
+        description: "Official centered division title ('HUMAN RESOURCE MANAGEMENT DIVISION') matching corporate letterheads.",
+        defaultData: {
+          divisionText: "HUMAN RESOURCE MANAGEMENT DIVISION"
         }
       }
     ]
@@ -536,10 +630,66 @@ function ElementVisualPreview({ item, selectedCompany, docRef, docDate }) {
         </div>
       );
     }
+    if (item.variant === "header_blank_letterhead") {
+      return (
+        <div className="py-6 border-b border-dashed border-slate-300 text-center text-xs text-slate-400 font-bold select-text">
+          <span>[ Reserved Top Letterhead Space for Pre-Printed Stationery ]</span>
+        </div>
+      );
+    }
+    if (item.variant === "header_triple_logo") {
+      const centerLogoSrc = item.data?.centerLogo || selectedCompany.logoUrl;
+      return (
+        <div className="pb-3 border-b border-slate-200 select-text">
+          <div className="flex items-center justify-between gap-4 px-2">
+            <div className="w-14 h-14 flex items-center justify-center shrink-0">
+              <img src={item.data?.leftLogo || selectedCompany.rightLogoUrl || "/id-assets/group_emblem.jpg"} alt="Corporate Emblem" className="max-h-full max-w-full object-contain" />
+            </div>
+            <div className="w-20 h-14 flex items-center justify-center shrink-0">
+              <img src={centerLogoSrc} alt={selectedCompany.name} className="max-h-full max-w-full object-contain" />
+            </div>
+            <div className="w-14 h-14 flex items-center justify-center shrink-0">
+              <img src={item.data?.rightLogo || "/id-assets/pcso_logo.png"} alt="PCSO" className="max-h-full max-w-full object-contain" />
+            </div>
+          </div>
+        </div>
+      );
+    }
   }
 
   // Addressing Previews (1:1 with bond paper output, borderless)
   if (item.category === "addressing") {
+    if (item.variant === "address_termination_agency") {
+      return (
+        <div className="my-3 text-xs text-slate-900 space-y-2 select-text">
+          <div className="font-bold text-slate-900">{item.data?.dateLine || "Date: _____________________"}</div>
+          <div className="space-y-0.5">
+            <div className="font-black text-xs uppercase text-slate-950">{item.data?.recipientName || "MR. DANIEL PADILLA"}</div>
+            <div className="font-bold text-[11px] uppercase text-slate-800">{item.data?.recipientOffice || "STL-ILIGAN OFFICE, LANAO DEL NORTE"}</div>
+          </div>
+          <div className="font-black text-xs uppercase text-slate-950 pt-1">
+            {item.data?.subject || "RE: TERMINATION OF AGENCY AGREEMENT"}
+          </div>
+          <div className="font-bold text-xs text-slate-900 pt-0.5">{item.data?.salutation || "Dear Mr. Padilla,"}</div>
+        </div>
+      );
+    }
+    if (item.variant === "address_letter_to_explain") {
+      return (
+        <div className="my-3 text-xs text-slate-900 space-y-2 select-text">
+          <div className="font-bold uppercase text-slate-900">{item.data?.date || "SEPTEMBER 28, 2026"}</div>
+          <div className="space-y-0.5">
+            <div className="font-black text-xs uppercase text-slate-950">{item.data?.recipientName || "MOSHER BEBOT"}</div>
+            <div className="font-bold text-[11px] uppercase text-slate-800">{item.data?.recipientTitle || "SALES SUPERVISOR"}</div>
+            <div className="font-semibold text-[11px] uppercase text-slate-700">{item.data?.recipientStation || "MAGUINDANAO DEL NORTE"}</div>
+          </div>
+          <div className="font-black italic text-xs uppercase text-slate-950 pt-1">
+            {item.data?.subject || "RE: LETTER OF EXPLANATION"}
+          </div>
+          <div className="font-bold text-xs text-slate-900 pt-0.5">{item.data?.salutation || "Dear Gomez,"}</div>
+        </div>
+      );
+    }
     if (item.variant === "address_memo_grid") {
       return (
         <div className="my-3 text-xs select-text">
@@ -753,6 +903,63 @@ function ElementVisualPreview({ item, selectedCompany, docRef, docDate }) {
         </div>
       );
     }
+    if (item.variant === "body_letter_of_explain") {
+      return (
+        <div className="space-y-2 my-2.5 text-xs text-slate-900 select-text leading-relaxed">
+          <p className="text-justify font-normal">
+            {item.data?.reportCitation || "We received a report from Ms. Quennie R. Capuyan, HR Admin, of the following allegations:"}
+          </p>
+          <div className="pl-4 space-y-1">
+            {(item.data?.allegations || [
+              "It was reported that you insisted on obtaining your fuel allowance in advance despite the prescribed release schedule and borrowed PHP 1,000.00 from company cash, contrary to Company policy prohibiting such borrowing."
+            ]).map((al, idx) => (
+              <div key={idx} className="flex items-start gap-1.5 text-justify">
+                <span>•</span>
+                <span className="flex-1">{al}</span>
+              </div>
+            ))}
+          </div>
+          <p className="text-justify font-normal">
+            {item.data?.explanationNotice || "In view thereof, you are hereby requested to explain in writing within three (3) days from receipt hereof why your Agency Agreement with the company shall not be terminated for the said offense/s."}
+          </p>
+          <div className="pl-6 space-y-1 font-bold italic text-slate-950 text-[11px]">
+            <div>9.11 Acts of theft, dishonesty, fraud, misrepresentation, or breach of trust.</div>
+            <div>9.12 Violation of any terms in the Agency Agreement.</div>
+            <div>9.14 Loss of trust and confidence in the Cabo or Cobrador.</div>
+            <div>9.15 Violation of any provision of the 2020 STL RIRR, existing rules...</div>
+          </div>
+          <p className="text-justify font-normal">
+            {item.data?.waiverWarning || "Failure to submit a response letter shall mean waiving your right to be heard and this case shall be dealt with given the available information."}
+          </p>
+          <p className="font-medium">
+            {item.data?.closingDirective || "Please be guided accordingly."}
+          </p>
+        </div>
+      );
+    }
+    if (item.variant === "body_termination_agency") {
+      return (
+        <div className="space-y-2 my-2.5 text-xs text-slate-900 select-text leading-relaxed">
+          <p className="text-justify font-normal indent-4">
+            {item.data?.incidentParagraph || "Based on the Incident Report last March 7, 2025, it was determined that you have been involved in a quarrel within the premises of the Company. This action constitutes, based on the Agency Agreement signed and notarized on _____________________, which is attached as Annex A of this letter, which, is a terminable case."}
+          </p>
+          <p className="text-justify font-normal">
+            {item.data?.provisionsIntro || "As stated in the General Provisions of the Agency Agreement – TERMINATION “The Company may immediately terminate this Contract of the concerned member of the SALESFORCE on account of any of the following:"}
+          </p>
+          <div className="pl-4 space-y-1 font-semibold text-slate-950 text-[11px]">
+            <div>• 5.6. If the concerned member violates, in any way, any provision of this Contract.</div>
+            <div>• 5.8. In case of loss of trust and confidence in the concerned member.</div>
+            <div>• 5.9. In case of violation of any provision of the 2020 STL RIRR, rules, regulations, and ethical conduct now in force...</div>
+          </div>
+          <p className="text-justify font-normal">
+            {item.data?.companyWarning || "Moreover, this action will not be tolerated by 5A Royal Gaming OPC, as these are grounds for cancellation of your Agency Agreement."}
+          </p>
+          <p className="font-medium">
+            {item.data?.conclusionParagraph || "In conclusion, your Agency Agreement is hereby terminated effective _____________________."}
+          </p>
+        </div>
+      );
+    }
     return (
       <div className="space-y-2 my-3 select-text">
         {item.data?.title && (
@@ -881,10 +1088,49 @@ function ElementVisualPreview({ item, selectedCompany, docRef, docDate }) {
         </div>
       );
     }
+    if (item.variant === "sig_nte_with_acknowledgment") {
+      return (
+        <div className="pt-4 my-2 text-xs select-text space-y-5">
+          <div className="space-y-0.5">
+            <div className="font-black text-xs uppercase underline text-slate-950">
+              {item.data?.issuerName || "JULIE E. ALMANO"}
+            </div>
+            <div className="text-slate-700 text-[11px]">
+              {item.data?.issuerTitle || "HR Salesforce Specialist"}
+            </div>
+          </div>
+          <div className="space-y-2 pt-2">
+            <div className="text-slate-700 text-xs font-semibold">{item.data?.ackHeading || "Received & acknowledged by:"}</div>
+            <div className="space-y-0.5">
+              <div className="font-black text-xs uppercase text-slate-950">{item.data?.recipientName || "JOEVERT SUDSUD"}</div>
+              <div className="text-slate-600 text-[11px]">{item.data?.recipientTitle || "Signature Over Printed Name"}</div>
+              <div className="text-slate-600 font-mono text-[10px]">{item.data?.dateLine || "Date: ____________________"}</div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    if (item.variant === "sig_operations_manager") {
+      return (
+        <div className="pt-4 my-2 text-xs select-text space-y-6">
+          <div className="text-slate-800 text-xs font-semibold">{item.data?.closeLabel || "Sincerely,"}</div>
+          <div className="font-black text-xs uppercase text-slate-950 tracking-wider">
+            {item.data?.title || "OPERATIONS MANAGER"}
+          </div>
+        </div>
+      );
+    }
   }
 
   // Footer Previews (1:1 with bond paper output)
   if (item.category === "footer") {
+    if (item.variant === "footer_division_center") {
+      return (
+        <div className="border-t border-slate-300 pt-3 mt-4 text-center text-xs text-slate-600 font-black tracking-widest uppercase select-text">
+          {item.data?.divisionText || "HUMAN RESOURCE MANAGEMENT DIVISION"}
+        </div>
+      );
+    }
     if (item.variant === "footer_notary_jurat") {
       return (
         <div className="pt-4 border-t border-slate-300 text-xs text-slate-700 space-y-1.5 mt-4 select-text">
@@ -1121,6 +1367,42 @@ function TemplateEditorModal({
                 </span>
               </div>
 
+              {/* Triple Logo Agency Header */}
+              {variant === "header_triple_logo" && (
+                <div className="space-y-3">
+                  <div className="p-3 bg-white rounded-xl border border-slate-200 space-y-2">
+                    <span className="text-[10px] font-black uppercase text-slate-500 block">3-Logo Agency Letterhead Configuration:</span>
+                    <div className="grid grid-cols-3 gap-2 text-center text-xs">
+                      <div className="p-2 border rounded-lg bg-slate-50 flex flex-col items-center justify-between">
+                        <span className="text-[9.5px] font-bold text-slate-500 block mb-1">Left Logo</span>
+                        <img src={formData.leftLogo || "/id-assets/group_emblem.jpg"} alt="Left Logo" className="h-10 object-contain" />
+                        <span className="text-[9px] text-slate-400 block mt-1">SGC Group Emblem</span>
+                      </div>
+                      <div className="p-2 border rounded-lg bg-slate-50 flex flex-col items-center justify-between">
+                        <span className="text-[9.5px] font-bold text-slate-500 block mb-1">Center Brand</span>
+                        <img src={formData.centerLogo || selectedCompany.logoUrl} alt="Center Logo" className="h-10 object-contain" />
+                        <select
+                          value={formData.centerLogo || selectedCompany.logoUrl}
+                          onChange={(e) => updateField("centerLogo", e.target.value)}
+                          className="w-full mt-1 text-[10px] border border-slate-300 rounded px-1 py-0.5 bg-white font-medium"
+                        >
+                          {COMPANIES.map((c) => (
+                            <option key={c.id} value={c.logoUrl}>
+                              {c.name} ({c.code})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="p-2 border rounded-lg bg-slate-50 flex flex-col items-center justify-between">
+                        <span className="text-[9.5px] font-bold text-slate-500 block mb-1">Right Logo</span>
+                        <img src={formData.rightLogo || "/id-assets/pcso_logo.png"} alt="Right Logo" className="h-10 object-contain" />
+                        <span className="text-[9px] text-slate-400 block mt-1">PCSO Official Seal</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Addressing Grid */}
               {variant === "address_memo_grid" && (
                 <div className="space-y-3">
@@ -1338,6 +1620,136 @@ function TemplateEditorModal({
                 </div>
               )}
 
+              {/* Letter of Explanation / NTE Addressing */}
+              {variant === "address_letter_to_explain" && (
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Letter Date:</label>
+                    <input
+                      type="text"
+                      value={formData.date || ""}
+                      onChange={(e) => updateField("date", e.target.value)}
+                      placeholder="e.g. SEPTEMBER 28, 2026"
+                      className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs text-slate-900 bg-white font-bold"
+                    />
+                  </div>
+                  <div className="p-3 bg-white rounded-xl border border-slate-200 space-y-2">
+                    <span className="text-[10px] font-black uppercase text-slate-500 block">Recipient Addressee:</span>
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-600 block mb-0.5">Full Name:</label>
+                      <input
+                        type="text"
+                        value={formData.recipientName || ""}
+                        onChange={(e) => updateField("recipientName", e.target.value)}
+                        placeholder="MOSHER BEBOT"
+                        className="w-full px-3 py-1.5 rounded-lg border border-slate-300 text-xs font-black uppercase text-slate-900"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-600 block mb-0.5">Designation / Title:</label>
+                        <input
+                          type="text"
+                          value={formData.recipientTitle || ""}
+                          onChange={(e) => updateField("recipientTitle", e.target.value)}
+                          placeholder="SALES SUPERVISOR"
+                          className="w-full px-3 py-1.5 rounded-lg border border-slate-300 text-xs font-bold text-slate-800"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-600 block mb-0.5">Area / Division:</label>
+                        <input
+                          type="text"
+                          value={formData.recipientStation || ""}
+                          onChange={(e) => updateField("recipientStation", e.target.value)}
+                          placeholder="MAGUINDANAO DEL NORTE"
+                          className="w-full px-3 py-1.5 rounded-lg border border-slate-300 text-xs font-semibold text-slate-700"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-black text-slate-700 mb-1">Subject (RE:) Line:</label>
+                    <input
+                      type="text"
+                      value={formData.subject || ""}
+                      onChange={(e) => updateField("subject", e.target.value)}
+                      placeholder="RE: LETTER OF EXPLANATION"
+                      className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs text-slate-900 bg-white font-black italic"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Salutation:</label>
+                    <input
+                      type="text"
+                      value={formData.salutation || ""}
+                      onChange={(e) => updateField("salutation", e.target.value)}
+                      placeholder="Dear Gomez,"
+                      className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs text-slate-900 bg-white font-bold"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Agency Agreement Termination Addressing */}
+              {variant === "address_termination_agency" && (
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Notice Date Line:</label>
+                    <input
+                      type="text"
+                      value={formData.dateLine || ""}
+                      onChange={(e) => updateField("dateLine", e.target.value)}
+                      placeholder="Date: _____________________"
+                      className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs text-slate-900 bg-white font-bold"
+                    />
+                  </div>
+                  <div className="p-3 bg-white rounded-xl border border-slate-200 space-y-2">
+                    <span className="text-[10px] font-black uppercase text-slate-500 block">Recipient Addressee:</span>
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-600 block mb-0.5">Full Name:</label>
+                      <input
+                        type="text"
+                        value={formData.recipientName || ""}
+                        onChange={(e) => updateField("recipientName", e.target.value)}
+                        placeholder="MR. DANIEL PADILLA"
+                        className="w-full px-3 py-1.5 rounded-lg border border-slate-300 text-xs font-black uppercase text-slate-900"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-600 block mb-0.5">Branch / Office Station:</label>
+                      <input
+                        type="text"
+                        value={formData.recipientOffice || ""}
+                        onChange={(e) => updateField("recipientOffice", e.target.value)}
+                        placeholder="STL-ILIGAN OFFICE, LANAO DEL NORTE"
+                        className="w-full px-3 py-1.5 rounded-lg border border-slate-300 text-xs font-bold uppercase text-slate-800"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-black text-slate-700 mb-1">Subject Line:</label>
+                    <input
+                      type="text"
+                      value={formData.subject || ""}
+                      onChange={(e) => updateField("subject", e.target.value)}
+                      placeholder="RE: TERMINATION OF AGENCY AGREEMENT"
+                      className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs text-slate-900 bg-white font-black"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Salutation:</label>
+                    <input
+                      type="text"
+                      value={formData.salutation || ""}
+                      onChange={(e) => updateField("salutation", e.target.value)}
+                      placeholder="Dear Mr. Padilla,"
+                      className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs text-slate-900 bg-white font-bold"
+                    />
+                  </div>
+                </div>
+              )}
+
               {/* Rewards Voucher */}
               {variant === "body_rewards_voucher" && (
                 <div className="space-y-3">
@@ -1523,8 +1935,137 @@ function TemplateEditorModal({
                 </div>
               )}
 
+              {/* Notice to Explain (Letter of Explanation) Body */}
+              {variant === "body_letter_of_explain" && (
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-[11px] font-black text-slate-700 mb-1">1. Report Citation Intro:</label>
+                    <textarea
+                      rows={2}
+                      value={formData.reportCitation || ""}
+                      onChange={(e) => updateField("reportCitation", e.target.value)}
+                      placeholder="We received a report from Ms. Quennie R. Capuyan, HR Admin, of the following allegations:"
+                      className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs text-slate-800 bg-white leading-relaxed"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-black text-slate-700 mb-1">2. Specific Allegation (Bulleted):</label>
+                    <textarea
+                      rows={3}
+                      value={(formData.allegations || []).join("\n")}
+                      onChange={(e) => updateField("allegations", e.target.value.split("\n").filter(Boolean))}
+                      placeholder="Enter allegation details (one per line)..."
+                      className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs text-slate-800 bg-white leading-relaxed"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-black text-slate-700 mb-1">3. Explanation Demand Notice (with 3-day deadline):</label>
+                    <textarea
+                      rows={3}
+                      value={formData.explanationNotice || ""}
+                      onChange={(e) => updateField("explanationNotice", e.target.value)}
+                      placeholder="In view thereof, you are hereby requested to explain in writing within three (3) days..."
+                      className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs text-slate-800 bg-white leading-relaxed"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-black text-slate-700 mb-1">4. Contract Termination Provision Citation:</label>
+                    <textarea
+                      rows={2}
+                      value={formData.contractClauseIntro || ""}
+                      onChange={(e) => updateField("contractClauseIntro", e.target.value)}
+                      placeholder="As stated in the General Provisions of the Agency Agreement – TERMINATION..."
+                      className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs text-slate-800 bg-white leading-relaxed"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-black text-slate-700 mb-1">5. Due Process & Waiver Warning:</label>
+                    <textarea
+                      rows={2}
+                      value={formData.waiverWarning || ""}
+                      onChange={(e) => updateField("waiverWarning", e.target.value)}
+                      placeholder="Failure to submit a response letter shall mean waiving your right to be heard..."
+                      className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs text-slate-800 bg-white leading-relaxed"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">6. Closing Directive:</label>
+                    <input
+                      type="text"
+                      value={formData.closingDirective || ""}
+                      onChange={(e) => updateField("closingDirective", e.target.value)}
+                      placeholder="Please be guided accordingly."
+                      className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs text-slate-900 bg-white font-medium"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Termination of Agency Agreement Body */}
+              {variant === "body_termination_agency" && (
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-[11px] font-black text-slate-700 mb-1">1. Incident Report Paragraph:</label>
+                    <textarea
+                      rows={4}
+                      value={formData.incidentParagraph || ""}
+                      onChange={(e) => updateField("incidentParagraph", e.target.value)}
+                      placeholder="Based on the Incident Report last March 7, 2025, it was determined that you have been involved in a quarrel within the premises of the Company..."
+                      className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs text-slate-800 bg-white leading-relaxed"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-black text-slate-700 mb-1">2. General Provisions Intro:</label>
+                    <textarea
+                      rows={3}
+                      value={formData.provisionsIntro || ""}
+                      onChange={(e) => updateField("provisionsIntro", e.target.value)}
+                      placeholder="As stated in the General Provisions of the Agency Agreement – TERMINATION “The Company may immediately terminate this Contract..."
+                      className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs text-slate-800 bg-white leading-relaxed"
+                    />
+                  </div>
+                  <div>
+                    <div className="flex justify-between items-center mb-1">
+                      <label className="text-[11px] font-black text-slate-700">3. Termination Grounds Clauses (One per line):</label>
+                      <span className="text-[10px] text-amber-700 italic">Enter each bulleted clause on a new line</span>
+                    </div>
+                    <textarea
+                      rows={4}
+                      value={Array.isArray(formData.terminationClauses) ? formData.terminationClauses.join("\n") : (formData.terminationClausesText || "")}
+                      onChange={(e) => {
+                        const lines = e.target.value.split("\n").filter(Boolean);
+                        updateField("terminationClauses", lines);
+                        updateField("terminationClausesText", e.target.value);
+                      }}
+                      placeholder="5.6. If the concerned member violates, in any way, any provision of this Contract.\n5.8. In case of loss of trust and confidence in the concerned member.\n5.9. In case of violation of any provision of the 2020 STL RIRR..."
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs text-slate-800 bg-white leading-relaxed font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-black text-slate-700 mb-1">4. Company Zero-Tolerance / Cancellation Warning:</label>
+                    <textarea
+                      rows={2}
+                      value={formData.companyWarning || ""}
+                      onChange={(e) => updateField("companyWarning", e.target.value)}
+                      placeholder="Moreover, this action will not be tolerated by 5A Royal Gaming OPC, as these are grounds for cancellation of your Agency Agreement."
+                      className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs text-slate-800 bg-white leading-relaxed"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-black text-slate-700 mb-1">5. Effective Termination Conclusion:</label>
+                    <textarea
+                      rows={2}
+                      value={formData.conclusionParagraph || ""}
+                      onChange={(e) => updateField("conclusionParagraph", e.target.value)}
+                      placeholder="In conclusion, your Agency Agreement is hereby terminated effective _____________________."
+                      className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs text-slate-800 bg-white leading-relaxed"
+                    />
+                  </div>
+                </div>
+              )}
+
               {/* Standard Legal / Directive Body */}
-              {category === "body" && variant !== "body_rewards_voucher" && variant !== "body_numbered_directives" && variant !== "body_warning_callout" && variant !== "body_request_proposal_table" && (
+              {category === "body" && variant !== "body_rewards_voucher" && variant !== "body_numbered_directives" && variant !== "body_warning_callout" && variant !== "body_request_proposal_table" && variant !== "body_letter_of_explain" && variant !== "body_termination_agency" && (
                 <div className="space-y-3">
                   <div>
                     <label className="block text-[11px] font-black text-slate-700 mb-1">Clause Section Title:</label>
@@ -1758,6 +2299,110 @@ function TemplateEditorModal({
                   />
                 </div>
               )}
+
+              {/* NTE Issuer & Acknowledgment Signatory */}
+              {variant === "sig_nte_with_acknowledgment" && (
+                <div className="space-y-3">
+                  <div className="p-3 bg-white rounded-xl border border-slate-200 space-y-2">
+                    <span className="text-[10px] font-black uppercase text-slate-500 block">HR Issuer:</span>
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-600 block mb-0.5">Issuer Full Name:</label>
+                      <input
+                        type="text"
+                        value={formData.issuerName || ""}
+                        onChange={(e) => updateField("issuerName", e.target.value)}
+                        placeholder="JULIE E. ALMANO"
+                        className="w-full px-3 py-1.5 rounded-lg border border-slate-300 text-xs font-black uppercase"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-600 block mb-0.5">Official Title / Role:</label>
+                      <input
+                        type="text"
+                        value={formData.issuerTitle || ""}
+                        onChange={(e) => updateField("issuerTitle", e.target.value)}
+                        placeholder="HR Salesforce Specialist"
+                        className="w-full px-3 py-1.5 rounded-lg border border-slate-300 text-xs text-slate-700"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="p-3 bg-white rounded-xl border border-slate-200 space-y-2">
+                    <span className="text-[10px] font-black uppercase text-slate-500 block">Employee Acknowledgment:</span>
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-600 block mb-0.5">Heading:</label>
+                      <input
+                        type="text"
+                        value={formData.ackHeading || ""}
+                        onChange={(e) => updateField("ackHeading", e.target.value)}
+                        placeholder="Received & acknowledged by:"
+                        className="w-full px-3 py-1.5 rounded-lg border border-slate-300 text-xs font-semibold"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-600 block mb-0.5">Recipient Full Name:</label>
+                      <input
+                        type="text"
+                        value={formData.recipientName || ""}
+                        onChange={(e) => updateField("recipientName", e.target.value)}
+                        placeholder="JOEVERT SUDSUD"
+                        className="w-full px-3 py-1.5 rounded-lg border border-slate-300 text-xs font-black uppercase"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-600 block mb-0.5">Signature Line Subtext:</label>
+                      <input
+                        type="text"
+                        value={formData.recipientTitle || ""}
+                        onChange={(e) => updateField("recipientTitle", e.target.value)}
+                        placeholder="Signature Over Printed Name"
+                        className="w-full px-3 py-1.5 rounded-lg border border-slate-300 text-xs text-slate-600"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Operations Manager Signatory */}
+              {variant === "sig_operations_manager" && (
+                <div className="p-3.5 rounded-xl bg-white border border-slate-200 space-y-2.5">
+                  <span className="text-[10px] font-black uppercase text-slate-500 block">Operations Manager Signatory:</span>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-600 mb-0.5">Complimentary Close:</label>
+                    <input
+                      type="text"
+                      value={formData.closeLabel || ""}
+                      onChange={(e) => updateField("closeLabel", e.target.value)}
+                      placeholder="Sincerely,"
+                      className="w-full px-3 py-1.5 rounded-lg border border-slate-300 text-xs font-semibold text-slate-800"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-600 mb-0.5">Signatory Designation / Title:</label>
+                    <input
+                      type="text"
+                      value={formData.title || ""}
+                      onChange={(e) => updateField("title", e.target.value)}
+                      placeholder="OPERATIONS MANAGER"
+                      className="w-full px-3 py-1.5 rounded-lg border border-slate-300 text-xs font-black text-slate-950 uppercase"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Corporate Division Centered Footer */}
+              {variant === "footer_division_center" && (
+                <div className="space-y-2">
+                  <label className="block text-[11px] font-black text-slate-700 mb-1">Division Title:</label>
+                  <input
+                    type="text"
+                    value={formData.divisionText || ""}
+                    onChange={(e) => updateField("divisionText", e.target.value)}
+                    placeholder="HUMAN RESOURCE MANAGEMENT DIVISION"
+                    className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs text-slate-900 bg-white font-black tracking-widest uppercase text-center"
+                  />
+                </div>
+              )}
             </div>
           </form>
 
@@ -1942,6 +2587,43 @@ export default function DocumentStudioPanel({
       `-${comp.code}-`
     );
     setDocRef(newRef);
+
+    // Synchronize placed header elements and company-bound fields with the new entity
+    setPaperElements((prev) =>
+      prev.map((el) => {
+        if (el.category === "header") {
+          return {
+            ...el,
+            data: {
+              ...el.data,
+              centerLogo: comp.logoUrl,
+              leftLogo: el.data?.leftLogo || comp.rightLogoUrl || "/id-assets/group_emblem.jpg",
+              rightLogo: el.data?.rightLogo || "/id-assets/pcso_logo.png"
+            }
+          };
+        }
+        if (el.variant === "body_termination_agency") {
+          return {
+            ...el,
+            data: {
+              ...el.data,
+              companyWarning: `Moreover, this action will not be tolerated by ${comp.legalName || comp.name}, as these are grounds for cancellation of your Agency Agreement.`
+            }
+          };
+        }
+        if (el.variant === "sig_staff_requestor") {
+          return {
+            ...el,
+            data: {
+              ...el.data,
+              company: comp.name
+            }
+          };
+        }
+        return el;
+      })
+    );
+
     triggerToast(`Letterhead entity set to ${comp.name}`, "info");
   };
 
@@ -2138,25 +2820,43 @@ export default function DocumentStudioPanel({
         { ...ackStub, category: "signatory" }
       ];
     } else if (presetKey === "termination_agency") {
-      const letterAddr = MODULAR_BLOCK_PRESETS.find((c) => c.category === "addressing").items[1];
-      const agencyBody = MODULAR_BLOCK_PRESETS.find((c) => c.category === "body").items[3];
-      const ackStub = MODULAR_BLOCK_PRESETS.find((c) => c.category === "signatory").items[3];
+      const tripleHeader = MODULAR_BLOCK_PRESETS.find((c) => c.category === "header").items.find((i) => i.variant === "header_triple_logo") || headerItem;
+      const termAddr = MODULAR_BLOCK_PRESETS.find((c) => c.category === "addressing").items.find((i) => i.variant === "address_termination_agency");
+      const agencyBody = MODULAR_BLOCK_PRESETS.find((c) => c.category === "body").items.find((i) => i.variant === "body_termination_agency");
+      const opsSig = MODULAR_BLOCK_PRESETS.find((c) => c.category === "signatory").items.find((i) => i.variant === "sig_operations_manager");
       presetBlocks = [
-        { ...headerItem, category: "header" },
-        { ...letterAddr, category: "addressing" },
-        { ...agencyBody, category: "body" },
-        { ...dualSigItem, category: "signatory" },
-        { ...ackStub, category: "signatory" }
+        {
+          ...tripleHeader,
+          category: "header",
+          data: {
+            ...tripleHeader.defaultData,
+            centerLogo: selectedCompany.logoUrl,
+            leftLogo: selectedCompany.rightLogoUrl || "/id-assets/group_emblem.jpg",
+            rightLogo: "/id-assets/pcso_logo.png"
+          }
+        },
+        { ...termAddr, category: "addressing" },
+        {
+          ...agencyBody,
+          category: "body",
+          data: {
+            ...agencyBody.defaultData,
+            companyWarning: `Moreover, this action will not be tolerated by ${selectedCompany.legalName || selectedCompany.name}, as these are grounds for cancellation of your Agency Agreement.`
+          }
+        },
+        { ...opsSig, category: "signatory" }
       ];
     } else if (presetKey === "letter_of_explain") {
-      const letterAddr = MODULAR_BLOCK_PRESETS.find((c) => c.category === "addressing").items[1];
-      const explainBody = MODULAR_BLOCK_PRESETS.find((c) => c.category === "body").items[4];
-      const singleSig = MODULAR_BLOCK_PRESETS.find((c) => c.category === "signatory").items[1];
+      const letterAddr = MODULAR_BLOCK_PRESETS.find((c) => c.category === "addressing").items.find((i) => i.variant === "address_letter_to_explain");
+      const explainBody = MODULAR_BLOCK_PRESETS.find((c) => c.category === "body").items.find((i) => i.variant === "body_letter_of_explain");
+      const nteSig = MODULAR_BLOCK_PRESETS.find((c) => c.category === "signatory").items.find((i) => i.variant === "sig_nte_with_acknowledgment");
+      const divFooter = MODULAR_BLOCK_PRESETS.find((c) => c.category === "footer").items.find((i) => i.variant === "footer_division_center");
       presetBlocks = [
         { ...headerItem, category: "header" },
         { ...letterAddr, category: "addressing" },
         { ...explainBody, category: "body" },
-        { ...singleSig, category: "signatory" }
+        { ...nteSig, category: "signatory" },
+        { ...divFooter, category: "footer" }
       ];
     } else if (presetKey === "request_letter_csr") {
       const ccAddr = MODULAR_BLOCK_PRESETS.find((c) => c.category === "addressing").items.find((i) => i.variant === "address_letter_with_cc");
@@ -2310,22 +3010,180 @@ export default function DocumentStudioPanel({
     return FONT_FAMILIES.find((f) => f.id === fontFamily)?.css || FONT_FAMILIES[0].css;
   }, [fontFamily]);
 
+  // High-fidelity printing engine that matches viewer 1:1, auto-adapts paper size to the printer, and eliminates 2nd page spillover!
+  const handlePrintDocument = () => {
+    const printableElement = document.getElementById("coupon-bond-printable");
+    if (!printableElement) {
+      window.print();
+      return;
+    }
+
+    // 1. Clone the element to safely sanitize for printing
+    const clone = printableElement.cloneNode(true);
+
+    // 2. Remove all interactive / editing / no-print artifacts
+    clone.querySelectorAll(".no-print, .block-hover-controls, [role='tooltip']").forEach((el) => el.remove());
+    clone.querySelectorAll("[contenteditable]").forEach((el) => {
+      el.removeAttribute("contenteditable");
+      el.removeAttribute("suppresscontenteditablewarning");
+    });
+
+    const fontCss = FONT_FAMILIES.find((f) => f.id === fontFamily)?.css || "'Inter', sans-serif";
+    const currentPaper = currentPaperDef;
+
+    // 3. Build isolated, self-contained printable document matching exact viewer specifications
+    const printHtml = `<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>${docRef || "DOCUMENT"} - ${selectedCompany.name} (${currentPaper.label})</title>
+  <style>
+    @page {
+      size: ${currentPaper.printCss};
+      margin: 0;
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-font-smoothing: antialiased;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+    html, body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      background: #ffffff;
+      overflow: hidden;
+      font-family: ${fontCss};
+      font-size: ${fontSize}pt;
+      line-height: 1.6;
+      color: #0f172a;
+    }
+    .print-sheet {
+      width: 100%;
+      max-width: ${currentPaper.widthIn || '8.5in'};
+      height: 100%;
+      max-height: ${currentPaper.heightIn || '11in'};
+      box-sizing: border-box;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: ${currentPaper.pageMargin || '0.5in 0.65in'};
+      margin: 0 auto;
+      background: #ffffff;
+      page-break-before: avoid !important;
+      break-before: avoid !important;
+      page-break-after: avoid !important;
+      break-after: avoid !important;
+      page-break-inside: avoid !important;
+      break-inside: avoid !important;
+    }
+    .print-sheet > div {
+      position: relative;
+    }
+    .print-sheet .space-y-6 > * + * {
+      margin-top: 1.15rem;
+    }
+    .print-sheet p {
+      color: #0f172a;
+      text-align: justify;
+    }
+    .print-sheet table {
+      border-collapse: collapse;
+      width: 100%;
+    }
+    .print-sheet table th, .print-sheet table td {
+      border: 1px solid #0f172a;
+      padding: 4px 6px;
+    }
+    img {
+      max-width: 100%;
+      object-fit: contain;
+    }
+    .no-print {
+      display: none !important;
+    }
+  </style>
+</head>
+<body>
+  <div class="print-sheet">
+    ${clone.innerHTML}
+  </div>
+  <script>
+    window.onload = function() {
+      setTimeout(function() {
+        window.focus();
+        window.print();
+        setTimeout(function() { window.close(); }, 500);
+      }, 250);
+    };
+  </script>
+</body>
+</html>`;
+
+    let printWindow = null;
+    try {
+      printWindow = window.open("", "_blank", "width=920,height=1100");
+    } catch {
+      printWindow = null;
+    }
+
+    if (printWindow && printWindow.document) {
+      printWindow.document.open();
+      printWindow.document.write(printHtml);
+      printWindow.document.close();
+    } else {
+      // Invisible iframe fallback if browser popup blocker prevented window.open
+      let printFrame = document.getElementById("doc-studio-print-frame");
+      if (!printFrame) {
+        printFrame = document.createElement("iframe");
+        printFrame.id = "doc-studio-print-frame";
+        printFrame.style.position = "fixed";
+        printFrame.style.right = "0";
+        printFrame.style.bottom = "0";
+        printFrame.style.width = "0";
+        printFrame.style.height = "0";
+        printFrame.style.border = "none";
+        document.body.appendChild(printFrame);
+      }
+      const frameDoc = printFrame.contentWindow.document;
+      frameDoc.open();
+      frameDoc.write(printHtml);
+      frameDoc.close();
+      setTimeout(() => {
+        try {
+          printFrame.contentWindow.focus();
+          printFrame.contentWindow.print();
+        } catch {
+          window.print();
+        }
+      }, 350);
+    }
+  };
+
   return (
     <div className="relative min-h-screen bg-slate-100 flex flex-col font-sans select-none antialiased">
-      {/* SCOPED PRINT STYLESHEET */}
+      {/* SCOPED PRINT STYLESHEET (For native Ctrl+P and direct printing) */}
       <style>{`
         @media print {
           @page {
-            size: ${currentPaperDef.printCss};
-            margin: 0.5in 0.6in;
+            size: ${currentPaperDef.printCss} !important;
+            margin: 0 !important;
           }
           html, body {
             background: #ffffff !important;
             margin: 0 !important;
             padding: 0 !important;
             width: 100% !important;
-            height: auto !important;
-            overflow: visible !important;
+            height: 100% !important;
+            overflow: hidden !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
           }
           body * {
             visibility: hidden !important;
@@ -2334,18 +3192,35 @@ export default function DocumentStudioPanel({
             visibility: visible !important;
           }
           #coupon-bond-printable {
-            position: absolute !important;
+            position: fixed !important;
             left: 0 !important;
             top: 0 !important;
-            width: 100% !important;
-            max-width: 100% !important;
-            margin: 0 !important;
-            padding: 0 !important;
+            width: ${currentPaperDef.widthIn || '8.5in'} !important;
+            max-width: ${currentPaperDef.widthIn || '8.5in'} !important;
+            height: ${currentPaperDef.heightIn || '11in'} !important;
+            max-height: ${currentPaperDef.heightIn || '11in'} !important;
+            min-height: 0 !important;
+            transform: none !important;
+            margin: 0 auto !important;
+            padding: ${currentPaperDef.pageMargin || '0.5in 0.65in'} !important;
             box-shadow: none !important;
             border: none !important;
-            background: transparent !important;
+            background: #ffffff !important;
+            overflow: hidden !important;
+            display: flex !important;
+            flex-direction: column !important;
+            justify-content: space-between !important;
+            page-break-before: avoid !important;
+            break-before: avoid !important;
+            page-break-after: avoid !important;
+            break-after: avoid !important;
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
           }
-          .no-print, .block-hover-controls {
+          #coupon-bond-printable .space-y-6 > * + * {
+            margin-top: 1.15rem !important;
+          }
+          .no-print, .block-hover-controls, header, aside, [role="tooltip"] {
             display: none !important;
           }
         }
@@ -2443,7 +3318,7 @@ export default function DocumentStudioPanel({
           {/* Print / Export PDF */}
           <button
             type="button"
-            onClick={() => window.print()}
+            onClick={handlePrintDocument}
             className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-black text-slate-800 bg-amber-400 hover:bg-amber-300 active:scale-95 shadow-xs transition cursor-pointer"
             title="Print or Save as PDF"
           >
@@ -2659,9 +3534,20 @@ export default function DocumentStudioPanel({
               </div>
             )}
 
+            {/* Elegant Background Corporate Watermark (Faint corporate logo as in official documents) */}
+            {selectedCompany?.logoUrl && (
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none z-0 overflow-hidden">
+                <img
+                  src={selectedCompany.logoUrl}
+                  alt=""
+                  className="w-96 h-96 object-contain opacity-[0.038] grayscale contrast-125 filter transition-opacity"
+                />
+              </div>
+            )}
+
             {/* IF CANVAS IS COMPLETELY BLANK: SHOW FRIENDLY DROPZONE */}
             {paperElements.length === 0 ? (
-              <div className="no-print my-auto py-24 text-center border-2 border-dashed border-slate-300 rounded-2xl p-8 bg-slate-50/60 space-y-4">
+              <div className="no-print my-auto py-24 text-center border-2 border-dashed border-slate-300 rounded-2xl p-8 bg-slate-50/60 space-y-4 relative z-10">
                 <div className="w-16 h-16 mx-auto rounded-3xl bg-amber-100 text-amber-800 flex items-center justify-center shadow-xs">
                   <Layout size={32} />
                 </div>
@@ -2728,7 +3614,7 @@ export default function DocumentStudioPanel({
             ) : (
               /* RENDER PLACED MODULAR ELEMENTS SEQUENTIALLY ON THE BOND PAPER */
               /* CRASH-PROOF: strictly scoped by el.category with zero textbox frames */
-              <div className="space-y-6 flex-1">
+              <div className="space-y-6 flex-1 relative z-10">
                 {paperElements.map((el, index) => {
                   const isHovered = activeElementId === el.id;
 
@@ -2872,12 +3758,157 @@ export default function DocumentStudioPanel({
                               </div>
                             </div>
                           )}
+
+                          {el.variant === "header_blank_letterhead" && (
+                            <div className="h-12 border-b border-dashed border-slate-200/50 mb-3 select-none flex items-center justify-center text-[10px] text-slate-300 font-mono no-print">
+                              [ Pre-printed Letterhead Top Margin ]
+                            </div>
+                          )}
+
+                          {el.variant === "header_triple_logo" && (
+                            <div className="pb-3 mb-4 border-b border-slate-200 select-text">
+                              <div className="flex items-center justify-between gap-4 px-2">
+                                <div className="w-16 h-16 sm:w-20 sm:h-20 flex items-center justify-center shrink-0">
+                                  <img
+                                    src={el.data?.leftLogo || selectedCompany.rightLogoUrl || "/id-assets/group_emblem.jpg"}
+                                    alt="Corporate Group Emblem"
+                                    className="max-h-full max-w-full object-contain"
+                                  />
+                                </div>
+                                <div className="w-24 h-16 sm:w-28 sm:h-20 flex items-center justify-center shrink-0">
+                                  <img
+                                    src={el.data?.centerLogo || selectedCompany.logoUrl}
+                                    alt={selectedCompany.name}
+                                    className="max-h-full max-w-full object-contain"
+                                  />
+                                </div>
+                                <div className="w-16 h-16 sm:w-20 sm:h-20 flex items-center justify-center shrink-0">
+                                  <img
+                                    src={el.data?.rightLogo || "/id-assets/pcso_logo.png"}
+                                    alt="PCSO Authority Seal"
+                                    className="max-h-full max-w-full object-contain"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       )}
 
                       {/* ================= CATEGORY 2: ADDRESSING & METADATA ================= */}
                       {el.category === "addressing" && (
                         <div>
+                          {el.variant === "address_termination_agency" && (
+                            <div className="mb-5 text-xs text-slate-900 space-y-3.5 select-text">
+                              <div
+                                contentEditable
+                                suppressContentEditableWarning
+                                onBlur={(e) => updateElementData(el.id, "dateLine", e.currentTarget.innerText)}
+                                className="font-bold text-xs text-slate-900 outline-none hover:bg-amber-50/50 rounded px-1 transition inline-block"
+                              >
+                                {el.data?.dateLine || "Date: _____________________"}
+                              </div>
+
+                              <div className="space-y-0.5">
+                                <div
+                                  contentEditable
+                                  suppressContentEditableWarning
+                                  onBlur={(e) => updateElementData(el.id, "recipientName", e.currentTarget.innerText)}
+                                  className="font-black text-sm uppercase text-slate-950 outline-none hover:bg-amber-50/50 rounded px-1 transition"
+                                >
+                                  {el.data?.recipientName || "MR. DANIEL PADILLA"}
+                                </div>
+                                <div
+                                  contentEditable
+                                  suppressContentEditableWarning
+                                  onBlur={(e) => updateElementData(el.id, "recipientOffice", e.currentTarget.innerText)}
+                                  className="font-bold text-xs uppercase text-slate-800 outline-none hover:bg-amber-50/50 rounded px-1 transition"
+                                >
+                                  {el.data?.recipientOffice || "STL-ILIGAN OFFICE, LANAO DEL NORTE"}
+                                </div>
+                              </div>
+
+                              <div className="pt-1">
+                                <span
+                                  contentEditable
+                                  suppressContentEditableWarning
+                                  onBlur={(e) => updateElementData(el.id, "subject", e.currentTarget.innerText)}
+                                  className="font-black text-xs uppercase text-slate-950 outline-none hover:bg-amber-50/50 rounded px-1 transition inline-block"
+                                >
+                                  {el.data?.subject || "RE: TERMINATION OF AGENCY AGREEMENT"}
+                                </span>
+                              </div>
+
+                              <div
+                                contentEditable
+                                suppressContentEditableWarning
+                                onBlur={(e) => updateElementData(el.id, "salutation", e.currentTarget.innerText)}
+                                className="font-bold text-xs text-slate-900 pt-0.5 outline-none hover:bg-amber-50/50 rounded px-1 transition"
+                              >
+                                {el.data?.salutation || "Dear Mr. Padilla,"}
+                              </div>
+                            </div>
+                          )}
+                          {el.variant === "address_letter_to_explain" && (
+                            <div className="mb-5 text-xs text-slate-900 space-y-3.5 select-text">
+                              <div
+                                contentEditable
+                                suppressContentEditableWarning
+                                onBlur={(e) => updateElementData(el.id, "date", e.currentTarget.innerText)}
+                                className="font-bold text-xs text-slate-900 outline-none hover:bg-amber-50/50 rounded px-1 transition uppercase tracking-wide inline-block"
+                              >
+                                {el.data?.date || docDate || "SEPTEMBER 28, 2026"}
+                              </div>
+
+                              <div className="space-y-0.5">
+                                <div
+                                  contentEditable
+                                  suppressContentEditableWarning
+                                  onBlur={(e) => updateElementData(el.id, "recipientName", e.currentTarget.innerText)}
+                                  className="font-black text-sm uppercase text-slate-950 outline-none hover:bg-amber-50/50 rounded px-1 transition"
+                                >
+                                  {el.data?.recipientName || "MOSHER BEBOT"}
+                                </div>
+                                <div
+                                  contentEditable
+                                  suppressContentEditableWarning
+                                  onBlur={(e) => updateElementData(el.id, "recipientTitle", e.currentTarget.innerText)}
+                                  className="font-bold text-xs uppercase text-slate-800 outline-none hover:bg-amber-50/50 rounded px-1 transition"
+                                >
+                                  {el.data?.recipientTitle || "SALES SUPERVISOR"}
+                                </div>
+                                <div
+                                  contentEditable
+                                  suppressContentEditableWarning
+                                  onBlur={(e) => updateElementData(el.id, "recipientStation", e.currentTarget.innerText)}
+                                  className="font-semibold text-xs uppercase text-slate-700 outline-none hover:bg-amber-50/50 rounded px-1 transition"
+                                >
+                                  {el.data?.recipientStation || "MAGUINDANAO DEL NORTE"}
+                                </div>
+                              </div>
+
+                              <div className="pt-2">
+                                <span
+                                  contentEditable
+                                  suppressContentEditableWarning
+                                  onBlur={(e) => updateElementData(el.id, "subject", e.currentTarget.innerText)}
+                                  className="font-black italic text-xs uppercase text-slate-950 outline-none hover:bg-amber-50/50 rounded px-1 transition"
+                                >
+                                  {el.data?.subject || "RE: LETTER OF EXPLANATION"}
+                                </span>
+                              </div>
+
+                              <div
+                                contentEditable
+                                suppressContentEditableWarning
+                                onBlur={(e) => updateElementData(el.id, "salutation", e.currentTarget.innerText)}
+                                className="font-bold text-xs text-slate-900 pt-1 outline-none hover:bg-amber-50/50 rounded px-1 transition"
+                              >
+                                {el.data?.salutation || "Dear Gomez,"}
+                              </div>
+                            </div>
+                          )}
+
                           {el.variant === "address_memo_grid" && (
                             <div className="my-3 text-xs text-slate-800 space-y-2 select-text">
                               <div className="flex justify-between items-baseline border-b-2 border-slate-900 pb-1.5 mb-2.5">
@@ -3138,7 +4169,155 @@ export default function DocumentStudioPanel({
                       {/* ================= CATEGORY 3: DIRECTIVES & BODY ================= */}
                       {el.category === "body" && (
                         <div>
-                          {el.variant === "body_request_proposal_table" ? (
+                          {el.variant === "body_termination_agency" ? (
+                            <div className="space-y-4 my-3 text-xs leading-relaxed text-slate-900 select-text">
+                              <p
+                                contentEditable
+                                suppressContentEditableWarning
+                                onBlur={(e) => updateElementData(el.id, "incidentParagraph", e.currentTarget.innerText)}
+                                className="text-justify indent-6 outline-none hover:bg-amber-50/20 rounded p-1 transition"
+                              >
+                                {el.data?.incidentParagraph || "Based on the Incident Report last March 7, 2025, it was determined that you have been involved in a quarrel within the premises of the Company. This action constitutes, based on the Agency Agreement signed and notarized on _____________________, which is attached as Annex A of this letter, which, is a terminable case."}
+                              </p>
+
+                              <p
+                                contentEditable
+                                suppressContentEditableWarning
+                                onBlur={(e) => updateElementData(el.id, "provisionsIntro", e.currentTarget.innerText)}
+                                className="text-justify outline-none hover:bg-amber-50/20 rounded p-1 transition"
+                              >
+                                {el.data?.provisionsIntro || "As stated in the General Provisions of the Agency Agreement – TERMINATION “The Company may immediately terminate this Contract of the concerned member of the SALESFORCE on account of any of the following:"}
+                              </p>
+
+                              {/* Indented Bullets */}
+                              <div className="pl-6 space-y-2">
+                                {(el.data?.terminationClauses || [
+                                  "5.6. If the concerned member violates, in any way, any provision of this Contract.",
+                                  "5.8. In case of loss of trust and confidence in the concerned member.",
+                                  "5.9. In case of violation of any provision of the 2020 STL RIRR, rules, regulations, and ethical conduct now in force and those which may from time to time be promulgated by the Company."
+                                ]).map((clause, cIdx) => (
+                                  <div key={cIdx} className="flex items-start gap-2 text-justify">
+                                    <span className="font-black text-slate-900">•</span>
+                                    <span
+                                      contentEditable
+                                      suppressContentEditableWarning
+                                      onBlur={(e) => {
+                                        const newClauses = [...(el.data?.terminationClauses || [])];
+                                        newClauses[cIdx] = e.currentTarget.innerText;
+                                        updateElementData(el.id, "terminationClauses", newClauses);
+                                      }}
+                                      className="flex-1 outline-none hover:bg-amber-50/20 rounded px-1 transition"
+                                    >
+                                      {clause}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+
+                              <p
+                                contentEditable
+                                suppressContentEditableWarning
+                                onBlur={(e) => updateElementData(el.id, "companyWarning", e.currentTarget.innerText)}
+                                className="text-justify outline-none hover:bg-amber-50/20 rounded p-1 transition"
+                              >
+                                {el.data?.companyWarning || "Moreover, this action will not be tolerated by 5A Royal Gaming OPC, as these are grounds for cancellation of your Agency Agreement."}
+                              </p>
+
+                              <p
+                                contentEditable
+                                suppressContentEditableWarning
+                                onBlur={(e) => updateElementData(el.id, "conclusionParagraph", e.currentTarget.innerText)}
+                                className="text-justify outline-none hover:bg-amber-50/20 rounded p-1 transition"
+                              >
+                                {el.data?.conclusionParagraph || "In conclusion, your Agency Agreement is hereby terminated effective _____________________."}
+                              </p>
+                            </div>
+                          ) : el.variant === "body_letter_of_explain" ? (
+                            <div className="space-y-4 my-3 text-xs leading-relaxed text-slate-900 select-text">
+                              <p
+                                contentEditable
+                                suppressContentEditableWarning
+                                onBlur={(e) => updateElementData(el.id, "reportCitation", e.currentTarget.innerText)}
+                                className="text-justify outline-none hover:bg-amber-50/20 rounded p-1 transition"
+                              >
+                                {el.data?.reportCitation || "We received a report from Ms. Quennie R. Capuyan, HR Admin, of the following allegations:"}
+                              </p>
+
+                              {/* Allegations Bullets */}
+                              <div className="pl-6 space-y-2">
+                                {(el.data?.allegations || [
+                                  "It was reported that you insisted on obtaining your fuel allowance in advance despite the prescribed release schedule and borrowed PHP 1,000.00 from company cash, contrary to Company policy prohibiting such borrowing."
+                                ]).map((allegation, aIdx) => (
+                                  <div key={aIdx} className="flex items-start gap-2 text-justify">
+                                    <span className="font-black text-slate-900">•</span>
+                                    <span
+                                      contentEditable
+                                      suppressContentEditableWarning
+                                      onBlur={(e) => {
+                                        const newAllegations = [...(el.data?.allegations || [])];
+                                        newAllegations[aIdx] = e.currentTarget.innerText;
+                                        updateElementData(el.id, "allegations", newAllegations);
+                                      }}
+                                      className="flex-1 outline-none hover:bg-amber-50/20 rounded px-1 transition"
+                                    >
+                                      {allegation}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+
+                              <p
+                                contentEditable
+                                suppressContentEditableWarning
+                                onBlur={(e) => updateElementData(el.id, "explanationNotice", e.currentTarget.innerText)}
+                                className="text-justify outline-none hover:bg-amber-50/20 rounded p-1 transition"
+                              >
+                                {el.data?.explanationNotice || "In view thereof, you are hereby requested to explain in writing (in a language you are most comfortable with) within three (3) days from receipt hereof why your Agency Agreement with the company shall not be terminated for the said offense/s."}
+                              </p>
+
+                              <p
+                                contentEditable
+                                suppressContentEditableWarning
+                                onBlur={(e) => updateElementData(el.id, "contractClauseIntro", e.currentTarget.innerText)}
+                                className="text-justify outline-none hover:bg-amber-50/20 rounded p-1 transition"
+                              >
+                                {el.data?.contractClauseIntro || "As stated in the General Provisions of the Agency Agreement – TERMINATION “The Company may immediately terminate this Contract of the concerned member of the SALESFORCE on account of any of the following:"}
+                              </p>
+
+                              {/* Indented Contract Clauses */}
+                              <div className="pl-10 space-y-1.5 font-bold italic text-slate-950">
+                                {(el.data?.contractClauses || [
+                                  { num: "9.11", text: "Acts of theft, dishonesty, fraud, misrepresentation, or breach of trust." },
+                                  { num: "9.12", text: "Violation of any terms in the Agency Agreement." },
+                                  { num: "9.14", text: "Loss of trust and confidence in the Cabo or Cobrador." },
+                                  { num: "9.15", text: "Violation of any provision of the 2020 STL RIRR, existing rules, regulations, or ethical standards, as well as future directives from the STL-AAC." }
+                                ]).map((clause, cIdx) => (
+                                  <div key={cIdx} className="flex items-baseline gap-4">
+                                    <span className="w-10 shrink-0 font-black font-mono">{clause.num}</span>
+                                    <span className="flex-1">{clause.text}</span>
+                                  </div>
+                                ))}
+                              </div>
+
+                              <p
+                                contentEditable
+                                suppressContentEditableWarning
+                                onBlur={(e) => updateElementData(el.id, "waiverWarning", e.currentTarget.innerText)}
+                                className="text-justify outline-none hover:bg-amber-50/20 rounded p-1 transition"
+                              >
+                                {el.data?.waiverWarning || "Failure to submit a response letter shall mean waiving your right to be heard and this case shall be dealt with given the available information."}
+                              </p>
+
+                              <p
+                                contentEditable
+                                suppressContentEditableWarning
+                                onBlur={(e) => updateElementData(el.id, "closingDirective", e.currentTarget.innerText)}
+                                className="outline-none hover:bg-amber-50/20 rounded p-1 transition font-medium"
+                              >
+                                {el.data?.closingDirective || "Please be guided accordingly."}
+                              </p>
+                            </div>
+                          ) : el.variant === "body_request_proposal_table" ? (
                             <div className="space-y-3.5 my-3 text-xs leading-relaxed text-slate-900 select-text">
                               <p
                                 contentEditable
@@ -3510,6 +4689,92 @@ export default function DocumentStudioPanel({
                               </div>
                             </div>
                           )}
+
+                          {el.variant === "sig_operations_manager" && (
+                            <div className="pt-6 my-4 text-xs select-text space-y-7">
+                              <div
+                                contentEditable
+                                suppressContentEditableWarning
+                                onBlur={(e) => updateElementData(el.id, "closeLabel", e.currentTarget.innerText)}
+                                className="text-slate-800 text-xs font-semibold outline-none hover:bg-amber-50/50 rounded px-1 transition"
+                              >
+                                {el.data?.closeLabel || "Sincerely,"}
+                              </div>
+                              <div className="space-y-0.5">
+                                <div
+                                  contentEditable
+                                  suppressContentEditableWarning
+                                  onBlur={(e) => updateElementData(el.id, "title", e.currentTarget.innerText)}
+                                  className="font-black text-xs uppercase text-slate-950 tracking-wider outline-none hover:bg-amber-50/50 rounded px-1 transition inline-block"
+                                >
+                                  {el.data?.title || "OPERATIONS MANAGER"}
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {el.variant === "sig_nte_with_acknowledgment" && (
+                            <div className="pt-6 my-4 text-xs select-text space-y-8">
+                              {/* Issuer Line */}
+                              <div className="space-y-0.5">
+                                <div
+                                  contentEditable
+                                  suppressContentEditableWarning
+                                  onBlur={(e) => updateElementData(el.id, "issuerName", e.currentTarget.innerText)}
+                                  className="font-black text-xs uppercase text-slate-950 underline decoration-slate-950 decoration-1 underline-offset-2 outline-none hover:bg-amber-50/50 rounded inline-block"
+                                >
+                                  {el.data?.issuerName || "JULIE E. ALMANO"}
+                                </div>
+                                <div
+                                  contentEditable
+                                  suppressContentEditableWarning
+                                  onBlur={(e) => updateElementData(el.id, "issuerTitle", e.currentTarget.innerText)}
+                                  className="text-slate-700 font-semibold text-[11px] outline-none hover:bg-amber-50/50 rounded"
+                                >
+                                  {el.data?.issuerTitle || "HR Salesforce Specialist"}
+                                </div>
+                              </div>
+
+                              {/* Acknowledgment & Receipt Section */}
+                              <div className="space-y-6 pt-2">
+                                <div
+                                  contentEditable
+                                  suppressContentEditableWarning
+                                  onBlur={(e) => updateElementData(el.id, "ackHeading", e.currentTarget.innerText)}
+                                  className="text-slate-800 text-xs font-semibold outline-none hover:bg-amber-50/50 rounded"
+                                >
+                                  {el.data?.ackHeading || "Received & acknowledged by:"}
+                                </div>
+
+                                <div className="space-y-1">
+                                  <div
+                                    contentEditable
+                                    suppressContentEditableWarning
+                                    onBlur={(e) => updateElementData(el.id, "recipientName", e.currentTarget.innerText)}
+                                    className="font-black text-xs uppercase text-slate-950 outline-none hover:bg-amber-50/50 rounded inline-block"
+                                  >
+                                    {el.data?.recipientName || "JOEVERT SUDSUD"}
+                                  </div>
+                                  <div
+                                    contentEditable
+                                    suppressContentEditableWarning
+                                    onBlur={(e) => updateElementData(el.id, "recipientTitle", e.currentTarget.innerText)}
+                                    className="text-slate-600 text-[11px] outline-none hover:bg-amber-50/50 rounded"
+                                  >
+                                    {el.data?.recipientTitle || "Signature Over Printed Name"}
+                                  </div>
+                                  <div
+                                    contentEditable
+                                    suppressContentEditableWarning
+                                    onBlur={(e) => updateElementData(el.id, "dateLine", e.currentTarget.innerText)}
+                                    className="text-slate-700 font-mono text-[11px] outline-none hover:bg-amber-50/50 rounded"
+                                  >
+                                    {el.data?.dateLine || "Date: ____________________"}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       )}
 
@@ -3555,6 +4820,19 @@ export default function DocumentStudioPanel({
                             <div className="border-t border-slate-200 pt-1.5 mt-4 flex justify-between text-[9px] text-slate-400 font-mono select-text">
                               <span>{el.data?.formCode || "FORM-HRD-2026"}</span>
                               <span>{el.data?.pageText || "Page 1 of 1"}</span>
+                            </div>
+                          )}
+
+                          {el.variant === "footer_division_center" && (
+                            <div className="pt-6 mt-6 border-t border-slate-200 text-center text-xs text-slate-500 font-black tracking-widest uppercase select-text">
+                              <span
+                                contentEditable
+                                suppressContentEditableWarning
+                                onBlur={(e) => updateElementData(el.id, "divisionText", e.currentTarget.innerText)}
+                                className="outline-none hover:bg-amber-50/50 rounded px-2 transition inline-block"
+                              >
+                                {el.data?.divisionText || "HUMAN RESOURCE MANAGEMENT DIVISION"}
+                              </span>
                             </div>
                           )}
                         </div>
