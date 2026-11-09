@@ -127,6 +127,33 @@ export function getYesterdayDates() {
   return { isoDate, displayLabel };
 }
 
+// Helper to determine if an agent record is Active or Inactive
+export function checkAgentIsActive(agent) {
+  if (!agent) return false;
+  if (agent.deleted_at) return false;
+
+  // Primary API property (0 or 1, or boolean)
+  if (agent.isActive !== undefined && agent.isActive !== null) {
+    if ([0, "0", false, "false", "inactive", "disabled"].includes(agent.isActive)) return false;
+    if ([1, "1", true, "true", "active", "enabled"].includes(agent.isActive)) return true;
+  }
+
+  // Secondary property names
+  if (agent.is_active !== undefined && agent.is_active !== null) {
+    if ([0, "0", false, "false", "inactive", "disabled"].includes(agent.is_active)) return false;
+    if ([1, "1", true, "true", "active", "enabled"].includes(agent.is_active)) return true;
+  }
+
+  const status = agent.status ?? agent.account_status ?? agent.accountStatus ?? agent.active;
+  if (status !== undefined && status !== null && status !== "") {
+    const normalized = String(status).toLowerCase().trim();
+    if (["active", "enabled", "1", "true", "live", "approved"].includes(normalized)) return true;
+    if (["inactive", "disabled", "0", "false", "suspended", "banned"].includes(normalized)) return false;
+  }
+
+  return false;
+}
+
 // ================= OFFICIAL ILLUSTRATED KIOSK BOOTH SVG ICON =================
 // Authentic illustrated kiosk directly matching uploaded design (canopy, service window, teller & counter)
 export function KioskIconSvg({ width = 48, height = 62, className = "" }) {
@@ -504,7 +531,7 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
       const { isoDate } = getYesterdayDates();
       const cached = sessionStorage.getItem(`hrhub_yesterday_gross_${isoDate}`);
       if (cached) return JSON.parse(cached);
-    } catch {}
+    } catch { }
     return [];
   });
 
@@ -729,6 +756,100 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
     notes: ""
   });
 
+  // Smart Agent Search & Combobox Dropdown State for Tag Booth Modal
+  const [agentSearchQuery, setAgentSearchQuery] = useState("");
+  const [isAgentDropdownOpen, setIsAgentDropdownOpen] = useState(false);
+  const [agentStatusFilter, setAgentStatusFilter] = useState("all"); // 'all' | 'active' | 'inactive'
+
+  // Set of agent IDs that are already assigned to other booths (1:1 booth-to-agent mapping)
+  const assignedAgentIds = useMemo(() => {
+    const ids = new Set();
+    (userTaggedBooths || []).forEach((b) => {
+      // If editing a booth, do NOT consider that booth's own agent as "taken by another booth"
+      if (editingBoothId && String(b.id) === String(editingBoothId)) {
+        return;
+      }
+      if (b.agentId) {
+        ids.add(String(b.agentId));
+      }
+    });
+    return ids;
+  }, [userTaggedBooths, editingBoothId]);
+
+  // Set of agent full names or usernames already assigned to other booths
+  const assignedAgentNames = useMemo(() => {
+    const names = new Set();
+    (userTaggedBooths || []).forEach((b) => {
+      if (editingBoothId && String(b.id) === String(editingBoothId)) {
+        return;
+      }
+      if (b.tellerName) {
+        names.add(b.tellerName.trim().toLowerCase());
+      }
+    });
+    return names;
+  }, [userTaggedBooths, editingBoothId]);
+
+  // Available unassigned agents for 1:1 assignment
+  const availableAgents = useMemo(() => {
+    return (apiAgents || []).filter((ag) => {
+      if (assignedAgentIds.has(String(ag.id))) return false;
+      const fName = String(ag.fullName || "").trim().toLowerCase();
+      const uName = String(ag.username || "").trim().toLowerCase();
+      if (fName && assignedAgentNames.has(fName)) return false;
+      if (uName && assignedAgentNames.has(uName)) return false;
+      return true;
+    });
+  }, [apiAgents, assignedAgentIds, assignedAgentNames]);
+
+  // Count active and inactive available agents
+  const activeAgentsCount = useMemo(() => {
+    return availableAgents.filter((a) => checkAgentIsActive(a)).length;
+  }, [availableAgents]);
+
+  const inactiveAgentsCount = useMemo(() => {
+    return availableAgents.length - activeAgentsCount;
+  }, [availableAgents, activeAgentsCount]);
+
+  // Smart multi-token filtering on available agents (fuzzy token match by name, username, outlet, supervisor, contact, status)
+  const filteredAvailableAgents = useMemo(() => {
+    let list = availableAgents;
+
+    // Filter by Active / Inactive status tab
+    if (agentStatusFilter === "active") {
+      list = list.filter((ag) => checkAgentIsActive(ag));
+    } else if (agentStatusFilter === "inactive") {
+      list = list.filter((ag) => !checkAgentIsActive(ag));
+    }
+
+    const q = agentSearchQuery.trim().toLowerCase();
+    if (!q) return list;
+
+    const tokens = q.split(/\s+/).filter(Boolean);
+
+    return list.filter((ag) => {
+      const isActive = checkAgentIsActive(ag);
+      const statusText = isActive ? "active online" : "inactive offline disabled";
+      const name = String(ag.fullName || "").toLowerCase();
+      const username = String(ag.username || "").toLowerCase();
+      const outlet = String(ag.outlet || "").toLowerCase();
+      const supervisor = String(getSupervisorName(ag.supervisor) || "").toLowerCase();
+      const contact = String(ag.contactNumber || "").replace(/[^0-9]/g, "");
+      const brgy = String(ag.brgyId || "");
+      const id = String(ag.id || "");
+      const address = String(ag.address || "").toLowerCase();
+
+      const composite = `${name} ${username} ${outlet} ${supervisor} ${contact} ${brgy} ${id} ${address} ${statusText}`;
+      return tokens.every((token) => composite.includes(token));
+    });
+  }, [availableAgents, agentSearchQuery, agentStatusFilter]);
+
+  // Currently selected agent object in the form
+  const selectedAgentObj = useMemo(() => {
+    if (!boothFormData.selectedAgentId) return null;
+    return (apiAgents || []).find((a) => String(a.id) === String(boothFormData.selectedAgentId)) || null;
+  }, [apiAgents, boothFormData.selectedAgentId]);
+
   // Inspector Card tab state for City View ('waypoint' | 'tagged_agents')
   const [cityInspectorTab, setCityInspectorTab] = useState("waypoint");
 
@@ -795,6 +916,9 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
     }
 
     setEditingBoothId(null);
+    setAgentSearchQuery("");
+    setIsAgentDropdownOpen(false);
+    setAgentStatusFilter("all");
     const initialDetected = (lat && lng) ? detectBarangayFromCoords(lat, lng) : null;
     setDetectedBarangayResult(initialDetected);
 
@@ -817,6 +941,9 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
   // Open Edit Booth Modal for existing booth
   const handleEditUserBooth = (booth) => {
     setEditingBoothId(booth.id);
+    setAgentSearchQuery("");
+    setIsAgentDropdownOpen(false);
+    setAgentStatusFilter("all");
     const lat = booth.coords[0].toFixed(6);
     const lng = booth.coords[1].toFixed(6);
     const detected = detectBarangayFromCoords(lat, lng);
@@ -929,6 +1056,18 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
         setSyncStatus("offline");
       });
 
+    // If editing a booth and its assigned agent was changed or cleared, clean up the previous agent's tag
+    if (editingBoothId) {
+      const prevBooth = userTaggedBooths.find((b) => b.id === editingBoothId);
+      if (prevBooth?.agentId && String(prevBooth.agentId) !== String(boothFormData.selectedAgentId)) {
+        setTaggedAgentCoords((prev) => {
+          const next = { ...prev };
+          delete next[prevBooth.agentId];
+          return next;
+        });
+      }
+    }
+
     if (boothFormData.selectedAgentId) {
       setTaggedAgentCoords((prev) => ({
         ...prev,
@@ -949,6 +1088,8 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
 
     setIsBoothModalOpen(false);
     setEditingBoothId(null);
+    setAgentSearchQuery("");
+    setIsAgentDropdownOpen(false);
 
     setCopiedText(`Booth "${newBooth.name}" saved at ${newBooth.address} in Brgy. ${detected.name}!`);
     setTimeout(() => setCopiedText(null), 3500);
@@ -960,6 +1101,14 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
 
   const handleDeleteUserBooth = (boothId) => {
     if (window.confirm("Are you sure you want to remove this tagged booth?")) {
+      const targetBooth = userTaggedBooths.find((b) => b.id === boothId);
+      if (targetBooth?.agentId) {
+        setTaggedAgentCoords((prev) => {
+          const next = { ...prev };
+          delete next[targetBooth.agentId];
+          return next;
+        });
+      }
       setUserTaggedBooths((prev) => prev.filter((b) => b.id !== boothId));
       deleteCentralBooth(boothId)
         .then(() => setSyncStatus("synced"))
@@ -1129,7 +1278,7 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
           }
           if (Array.isArray(list) && list.length > 0) {
             setGrossRecords(list);
-            try { sessionStorage.setItem(`hrhub_yesterday_gross_${yesterdayStr}`, JSON.stringify(list)); } catch {}
+            try { sessionStorage.setItem(`hrhub_yesterday_gross_${yesterdayStr}`, JSON.stringify(list)); } catch { }
           }
         }
       } catch (err) {
@@ -1306,8 +1455,8 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
       // Midpoint distance badge
       const midLat = (source.coords[0] + target.coords[0]) / 2;
       const midLng = (source.coords[1] + target.coords[1]) / 2;
-      const distLabel = distMeters >= 1000 
-        ? `${(distMeters / 1000).toFixed(2)} km` 
+      const distLabel = distMeters >= 1000
+        ? `${(distMeters / 1000).toFixed(2)} km`
         : `${Math.round(distMeters)} m`;
 
       const badgeIcon = window.L.divIcon({
@@ -1346,7 +1495,7 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
       try {
         const bounds = window.L.latLngBounds([source.coords, target.coords]);
         map.fitBounds(bounds, { padding: [90, 90], maxZoom: 17 });
-      } catch {}
+      } catch { }
     }
   };
 
@@ -2568,8 +2717,8 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
                 type="button"
                 onClick={() => setShowTerminals(v => !v)}
                 className={`px-2.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 border cursor-pointer ${showTerminals
-                    ? "bg-amber-500/20 border-amber-400 text-amber-300 shadow-md"
-                    : "bg-slate-800 border-slate-700 text-slate-400"
+                  ? "bg-amber-500/20 border-amber-400 text-amber-300 shadow-md"
+                  : "bg-slate-800 border-slate-700 text-slate-400"
                   }`}
                 title="Toggle Transit Terminals & Commuter Stations"
               >
@@ -2583,8 +2732,8 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
                 type="button"
                 onClick={() => setShowFactories(v => !v)}
                 className={`px-2.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 border cursor-pointer ${showFactories
-                    ? "bg-orange-500/20 border-orange-400 text-orange-300 shadow-md"
-                    : "bg-slate-800 border-slate-700 text-slate-400"
+                  ? "bg-orange-500/20 border-orange-400 text-orange-300 shadow-md"
+                  : "bg-slate-800 border-slate-700 text-slate-400"
                   }`}
                 title="Toggle Industrial Manufacturing Plants & Factories"
               >
@@ -2621,13 +2770,12 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
 
               {/* Central Supabase Cloud Database Sync Status */}
               <div
-                className={`px-2.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 border ${
-                  syncStatus === "syncing"
+                className={`px-2.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 border ${syncStatus === "syncing"
                     ? "bg-amber-500/15 border-amber-500/30 text-amber-300"
                     : syncStatus === "offline"
-                    ? "bg-rose-500/15 border-rose-500/30 text-rose-300"
-                    : "bg-sky-500/15 border-sky-500/30 text-sky-300"
-                }`}
+                      ? "bg-rose-500/15 border-rose-500/30 text-rose-300"
+                      : "bg-sky-500/15 border-sky-500/30 text-sky-300"
+                  }`}
                 title="Central Supabase Cloud Database: Plotted booths are synchronized in real-time across all users and devices"
               >
                 <Cloud size={13} className={syncStatus === "syncing" ? "animate-pulse" : ""} />
@@ -2635,13 +2783,12 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
                   {syncStatus === "syncing" ? "Syncing..." : syncStatus === "offline" ? "Offline" : "Cloud Synced"}
                 </span>
                 <span
-                  className={`w-1.5 h-1.5 rounded-full ${
-                    syncStatus === "syncing"
+                  className={`w-1.5 h-1.5 rounded-full ${syncStatus === "syncing"
                       ? "bg-amber-400 animate-ping"
                       : syncStatus === "offline"
-                      ? "bg-rose-400"
-                      : "bg-emerald-400 animate-pulse"
-                  }`}
+                        ? "bg-rose-400"
+                        : "bg-emerald-400 animate-pulse"
+                    }`}
                 />
               </div>
 
@@ -2776,8 +2923,8 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
                 type="button"
                 onClick={() => handleSelectBarangayPerimeter(b.id)}
                 className={`px-2.5 py-1 rounded-xl text-[10.5px] font-black transition cursor-pointer shrink-0 flex items-center gap-1.5 backdrop-blur-md border shadow-sm ${isCurrent
-                    ? "bg-cyan-600 text-white border-cyan-400 shadow-md ring-2 ring-cyan-400/40"
-                    : "bg-slate-900/90 text-slate-300 hover:text-white border-slate-800"
+                  ? "bg-cyan-600 text-white border-cyan-400 shadow-md ring-2 ring-cyan-400/40"
+                  : "bg-slate-900/90 text-slate-300 hover:text-white border-slate-800"
                   }`}
               >
                 <span>{b.isEdge ? "🛡️" : "🏛️"}</span>
@@ -2918,8 +3065,8 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
                 type="button"
                 onClick={() => setBrgyInspectorTab("route")}
                 className={`flex-1 py-1 px-2 rounded-lg text-xs font-black transition cursor-pointer flex items-center justify-center gap-1 shrink-0 ${brgyInspectorTab === "route"
-                    ? "bg-cyan-600 text-white shadow-sm"
-                    : "text-slate-400 hover:text-slate-200"
+                  ? "bg-cyan-600 text-white shadow-sm"
+                  : "text-slate-400 hover:text-slate-200"
                   }`}
               >
                 <Route size={12} />
@@ -2930,8 +3077,8 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
                 type="button"
                 onClick={() => setBrgyInspectorTab("booths")}
                 className={`flex-1 py-1 px-2 rounded-lg text-xs font-black transition cursor-pointer flex items-center justify-center gap-1 shrink-0 ${brgyInspectorTab === "booths"
-                    ? "bg-amber-500 text-slate-950 font-black shadow-sm"
-                    : "text-slate-400 hover:text-slate-200"
+                  ? "bg-amber-500 text-slate-950 font-black shadow-sm"
+                  : "text-slate-400 hover:text-slate-200"
                   }`}
               >
                 <span>🟡</span>
@@ -2942,8 +3089,8 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
                 type="button"
                 onClick={() => setBrgyInspectorTab("terminals")}
                 className={`flex-1 py-1 px-2 rounded-lg text-xs font-black transition cursor-pointer flex items-center justify-center gap-1 shrink-0 ${brgyInspectorTab === "terminals"
-                    ? "bg-amber-600 text-white shadow-sm"
-                    : "text-slate-400 hover:text-slate-200"
+                  ? "bg-amber-600 text-white shadow-sm"
+                  : "text-slate-400 hover:text-slate-200"
                   }`}
               >
                 <Bus size={12} />
@@ -2954,8 +3101,8 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
                 type="button"
                 onClick={() => setBrgyInspectorTab("factories")}
                 className={`flex-1 py-1 px-2 rounded-lg text-xs font-black transition cursor-pointer flex items-center justify-center gap-1 shrink-0 ${brgyInspectorTab === "factories"
-                    ? "bg-orange-600 text-white shadow-sm"
-                    : "text-slate-400 hover:text-slate-200"
+                  ? "bg-orange-600 text-white shadow-sm"
+                  : "text-slate-400 hover:text-slate-200"
                   }`}
               >
                 <Factory size={12} />
@@ -2966,8 +3113,8 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
                 type="button"
                 onClick={() => setBrgyInspectorTab("agents")}
                 className={`flex-1 py-1 px-2 rounded-lg text-xs font-black transition cursor-pointer flex items-center justify-center gap-1.5 shrink-0 ${brgyInspectorTab === "agents"
-                    ? "bg-emerald-600 text-white shadow-sm"
-                    : "text-slate-400 hover:text-slate-200"
+                  ? "bg-emerald-600 text-white shadow-sm"
+                  : "text-slate-400 hover:text-slate-200"
                   }`}
               >
                 <Users size={12} />
@@ -3124,11 +3271,10 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
                                 handleFocusPOI(booth.coords);
                               }
                             }}
-                            className={`px-1.5 py-0.5 rounded-lg text-[10px] font-bold transition cursor-pointer flex items-center gap-1 ${
-                              measuringSourceKiosk?.id === booth.id
+                            className={`px-1.5 py-0.5 rounded-lg text-[10px] font-bold transition cursor-pointer flex items-center gap-1 ${measuringSourceKiosk?.id === booth.id
                                 ? "bg-teal-500 text-white shadow-md animate-pulse"
                                 : "bg-teal-600/30 hover:bg-teal-500 text-teal-200 hover:text-white"
-                            }`}
+                              }`}
                             title="Measure distance from this kiosk"
                           >
                             <Ruler size={10} />
@@ -3324,10 +3470,10 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
                       <div
                         key={agent.id}
                         className={`p-2.5 rounded-xl bg-slate-950 border transition space-y-1.5 ${isEditing
-                            ? "border-emerald-500 ring-1 ring-emerald-500/50 shadow-lg"
-                            : tag
-                              ? "border-emerald-500/60 bg-emerald-950/20"
-                              : "border-slate-800 hover:border-slate-700"
+                          ? "border-emerald-500 ring-1 ring-emerald-500/50 shadow-lg"
+                          : tag
+                            ? "border-emerald-500/60 bg-emerald-950/20"
+                            : "border-slate-800 hover:border-slate-700"
                           }`}
                       >
                         <div className="flex items-start justify-between gap-1">
@@ -3519,8 +3665,8 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
                                 onClick={() => handleSaveAgentCoords(agent)}
                                 disabled={!inlineDetectedBarangay}
                                 className={`px-3 py-1 rounded-lg text-[11px] font-black transition cursor-pointer flex items-center gap-1 shadow-md ${inlineDetectedBarangay
-                                    ? "bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-900/40"
-                                    : "bg-slate-800 text-slate-500 cursor-not-allowed"
+                                  ? "bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-900/40"
+                                  : "bg-slate-800 text-slate-500 cursor-not-allowed"
                                   }`}
                               >
                                 <Check size={12} />
@@ -3566,8 +3712,8 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
                   type="button"
                   onClick={() => setCityInspectorTab("waypoint")}
                   className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${cityInspectorTab === "waypoint"
-                      ? "bg-emerald-600 text-white shadow-xs"
-                      : "text-slate-400 hover:text-slate-200"
+                    ? "bg-emerald-600 text-white shadow-xs"
+                    : "text-slate-400 hover:text-slate-200"
                     }`}
                 >
                   City Circuit
@@ -3576,8 +3722,8 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
                   type="button"
                   onClick={() => setCityInspectorTab("tagged_agents")}
                   className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${cityInspectorTab === "tagged_agents"
-                      ? "bg-emerald-600 text-white shadow-xs"
-                      : "text-slate-400 hover:text-slate-200"
+                    ? "bg-emerald-600 text-white shadow-xs"
+                    : "text-slate-400 hover:text-slate-200"
                     }`}
                 >
                   <MapPin size={12} className={cityInspectorTab === "tagged_agents" ? "text-white" : "text-emerald-400"} />
@@ -3735,11 +3881,10 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
                                 handleFocusPOI(booth.coords);
                               }
                             }}
-                            className={`px-1.5 py-0.5 rounded-lg text-[10px] font-bold transition cursor-pointer flex items-center gap-1 ${
-                              measuringSourceKiosk?.id === booth.id
+                            className={`px-1.5 py-0.5 rounded-lg text-[10px] font-bold transition cursor-pointer flex items-center gap-1 ${measuringSourceKiosk?.id === booth.id
                                 ? "bg-teal-500 text-white shadow-md animate-pulse"
                                 : "bg-teal-600/30 hover:bg-teal-500 text-teal-200 hover:text-white"
-                            }`}
+                              }`}
                             title="Measure distance from this kiosk"
                           >
                             <Ruler size={10} />
@@ -3863,8 +4008,8 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
                   type="button"
                   onClick={() => setAgentsModalBarangayFilter("all")}
                   className={`px-3 py-1 rounded-xl font-bold transition cursor-pointer shrink-0 text-xs ${agentsModalBarangayFilter === "all"
-                      ? "bg-emerald-600 text-white shadow-sm"
-                      : "bg-slate-950 text-slate-400 hover:text-slate-200 border border-slate-800"
+                    ? "bg-emerald-600 text-white shadow-sm"
+                    : "bg-slate-950 text-slate-400 hover:text-slate-200 border border-slate-800"
                     }`}
                 >
                   All ({apiAgents.length})
@@ -3878,8 +4023,8 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
                       type="button"
                       onClick={() => setAgentsModalBarangayFilter(b.id)}
                       className={`px-2.5 py-1 rounded-xl font-medium transition cursor-pointer shrink-0 flex items-center gap-1.5 text-xs ${isSel
-                          ? "bg-cyan-600 text-white shadow-sm font-bold"
-                          : "bg-slate-950 text-slate-400 hover:text-slate-200 border border-slate-800"
+                        ? "bg-cyan-600 text-white shadow-sm font-bold"
+                        : "bg-slate-950 text-slate-400 hover:text-slate-200 border border-slate-800"
                         }`}
                     >
                       <span>{b.name}</span>
@@ -4060,7 +4205,7 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
       {/* ================= MODAL: TAG YELLOW BOOTH (COORDINATES, DETECT BARANGAY & BOOTH ADDRESS) ================= */}
       {isBoothModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-200">
-          <div className="relative w-full max-w-xl max-h-[92vh] flex flex-col bg-slate-900 border border-amber-500/50 rounded-3xl shadow-2xl overflow-hidden ring-1 ring-amber-500/20">
+          <div className="relative w-full max-w-2xl sm:max-w-3xl lg:max-w-3xl max-h-[92vh] flex flex-col bg-slate-900 border border-amber-500/50 rounded-3xl shadow-2xl overflow-hidden ring-1 ring-amber-500/20">
             {/* Modal Header */}
             <div className="p-4 sm:p-5 border-b border-slate-800 flex items-center justify-between bg-slate-950/70">
               <div className="flex items-center gap-3">
@@ -4160,8 +4305,8 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
                 {/* Detected Barangay Feedback Banner */}
                 {detectedBarangayResult && (
                   <div className={`p-3 rounded-xl border transition animate-in fade-in ${detectedBarangayResult.id === "outside"
-                      ? "bg-rose-950/30 border-rose-800/60 text-rose-300"
-                      : "bg-emerald-950/40 border-emerald-500/50 text-emerald-200"
+                    ? "bg-rose-950/30 border-rose-800/60 text-rose-300"
+                    : "bg-emerald-950/40 border-emerald-500/50 text-emerald-200"
                     }`}>
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
@@ -4229,46 +4374,303 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
                 </div>
               </div>
 
-              {/* Assigned Teller / Agent Selection from Source API */}
+              {/* Assigned Teller / Agent Selection with Smart Search & 1-to-1 Mapping */}
               <div className="space-y-2 pt-2 border-t border-slate-800">
-                <label className="text-xs font-black text-white flex items-center gap-1.5">
-                  <Users size={13} className="text-blue-400" />
-                  <span>Assign Agent / Teller (Optional - Source API)</span>
-                </label>
-                <select
-                  value={boothFormData.selectedAgentId}
-                  onChange={(e) => {
-                    const agentId = e.target.value;
-                    const ag = apiAgents.find((a) => String(a.id) === String(agentId));
-                    if (ag) {
-                      setBoothFormData((prev) => ({
-                        ...prev,
-                        selectedAgentId: ag.id,
-                        tellerName: ag.fullName,
-                        supervisor: getSupervisorName(ag.supervisor),
-                        contactNumber: ag.contactNumber || prev.contactNumber,
-                        address: prev.address || ag.address || "",
-                        name: prev.name || ag.outlet || `${ag.fullName} Station`
-                      }));
-                    } else {
-                      setBoothFormData((prev) => ({
-                        ...prev,
-                        selectedAgentId: "",
-                        tellerName: "",
-                        supervisor: "",
-                        contactNumber: ""
-                      }));
-                    }
-                  }}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500 cursor-pointer"
-                >
-                  <option value="">-- No specific agent (Generic Booth) --</option>
-                  {apiAgents.map((ag) => (
-                    <option key={ag.id} value={ag.id}>
-                      {ag.fullName} (@{ag.username}) - {ag.outlet || "Outlet"} [Brgy #{ag.brgyId}]
-                    </option>
-                  ))}
-                </select>
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-black text-white flex items-center gap-1.5">
+                    <Users size={13} className="text-blue-400" />
+                    <span>Assign Agent / Teller (1:1 Booth Ratio)</span>
+                  </label>
+                  <span className="text-[10px] font-mono font-bold text-slate-400">
+                    {availableAgents.length} available
+                  </span>
+                </div>
+
+                {/* Active Selection Card if an agent is selected */}
+                {selectedAgentObj ? (
+                  <div className="p-3.5 rounded-2xl bg-gradient-to-r from-blue-950/70 via-slate-900 to-slate-950 border border-blue-500/50 flex items-center justify-between gap-3 shadow-inner">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="relative shrink-0">
+                        <div className="w-10 h-10 rounded-xl bg-blue-600/30 border border-blue-500/40 flex items-center justify-center text-blue-300 font-black text-sm shadow-sm">
+                          {selectedAgentObj.fullName?.charAt(0) || "A"}
+                        </div>
+                        <span
+                          className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-slate-950 ${
+                            checkAgentIsActive(selectedAgentObj) ? "bg-emerald-400" : "bg-slate-500"
+                          }`}
+                        ></span>
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-xs font-black text-white flex items-center gap-2 truncate flex-wrap">
+                          <span className="truncate">{selectedAgentObj.fullName}</span>
+                          <span className="text-[10px] text-blue-400 font-mono shrink-0">@{selectedAgentObj.username}</span>
+                          {checkAgentIsActive(selectedAgentObj) ? (
+                            <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1 shrink-0">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                              Active
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-slate-800 text-slate-400 border border-slate-700 flex items-center gap-1 shrink-0">
+                              <span className="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
+                              Inactive
+                            </span>
+                          )}
+                          <span className="px-1.5 py-0.2 rounded-full text-[8.5px] font-bold bg-blue-500/20 text-blue-300 border border-blue-500/40 shrink-0">
+                            1:1 Assigned
+                          </span>
+                        </div>
+                        <div className="text-[11px] text-slate-300 truncate mt-0.5">
+                          📍 {selectedAgentObj.outlet || "Outlet"} • Supervisor: {getSupervisorName(selectedAgentObj.supervisor)}
+                        </div>
+                        {selectedAgentObj.contactNumber && (
+                          <div className="text-[10px] font-mono text-slate-400 mt-0.5">
+                            📞 {selectedAgentObj.contactNumber}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setIsAgentDropdownOpen((v) => !v)}
+                        className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-blue-300 hover:text-white text-[11px] font-bold transition cursor-pointer border border-slate-700"
+                      >
+                        {isAgentDropdownOpen ? "Close" : "Change Agent"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setBoothFormData((prev) => ({
+                            ...prev,
+                            selectedAgentId: "",
+                            tellerName: "",
+                            supervisor: "",
+                            contactNumber: ""
+                          }));
+                          setIsAgentDropdownOpen(false);
+                          setAgentSearchQuery("");
+                        }}
+                        className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-900/60 text-slate-400 hover:text-rose-300 transition cursor-pointer border border-slate-700"
+                        title="Unassign Agent (Free up for other booths)"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  /* When no agent is currently selected */
+                  <div className="flex items-center justify-between p-3 rounded-xl bg-slate-950/80 border border-slate-800 text-slate-400 text-xs">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-slate-500"></span>
+                      <span className="text-slate-300 font-bold">No agent assigned</span>
+                      <span className="text-[10px] text-slate-500">(Generic Booth)</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setIsAgentDropdownOpen(true)}
+                      className="px-3 py-1.5 rounded-lg bg-blue-600/30 hover:bg-blue-600 text-blue-300 hover:text-white text-[11px] font-bold transition cursor-pointer border border-blue-500/40"
+                    >
+                      + Select Agent
+                    </button>
+                  </div>
+                )}
+
+                {/* Smart Search & Dropdown Picker */}
+                {(!selectedAgentObj || isAgentDropdownOpen) && (
+                  <div className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800 space-y-2.5 mt-1">
+                    {/* Search Input Box */}
+                    <div className="relative">
+                      <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                      <input
+                        type="text"
+                        value={agentSearchQuery}
+                        onChange={(e) => {
+                          setAgentSearchQuery(e.target.value);
+                          if (!isAgentDropdownOpen) setIsAgentDropdownOpen(true);
+                        }}
+                        onFocus={() => setIsAgentDropdownOpen(true)}
+                        placeholder="Search agent by name, username, outlet, supervisor, or 'active'/'inactive'..."
+                        className="w-full bg-slate-900 border border-slate-700/80 focus:border-blue-500 rounded-xl pl-9 pr-8 py-2 text-xs text-white placeholder-slate-500 focus:outline-none transition shadow-inner"
+                      />
+                      {agentSearchQuery && (
+                        <button
+                          type="button"
+                          onClick={() => setAgentSearchQuery("")}
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white p-0.5 cursor-pointer"
+                        >
+                          <X size={13} />
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Quick Filter Status Tabs & Count */}
+                    <div className="flex flex-wrap items-center justify-between gap-2 pt-0.5">
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setAgentStatusFilter("all")}
+                          className={`px-2.5 py-1 rounded-lg text-[10.5px] font-bold transition cursor-pointer border ${
+                            agentStatusFilter === "all"
+                              ? "bg-blue-600 text-white border-blue-500 shadow-sm"
+                              : "bg-slate-900 text-slate-400 border-slate-800 hover:text-white"
+                          }`}
+                        >
+                          All ({availableAgents.length})
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setAgentStatusFilter("active")}
+                          className={`px-2.5 py-1 rounded-lg text-[10.5px] font-bold transition cursor-pointer flex items-center gap-1.5 border ${
+                            agentStatusFilter === "active"
+                              ? "bg-emerald-600 text-white border-emerald-500 shadow-sm"
+                              : "bg-slate-900 text-emerald-400 border-slate-800 hover:text-emerald-300"
+                          }`}
+                        >
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                          <span>Active ({activeAgentsCount})</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setAgentStatusFilter("inactive")}
+                          className={`px-2.5 py-1 rounded-lg text-[10.5px] font-bold transition cursor-pointer flex items-center gap-1.5 border ${
+                            agentStatusFilter === "inactive"
+                              ? "bg-slate-700 text-white border-slate-600 shadow-sm"
+                              : "bg-slate-900 text-slate-400 border-slate-800 hover:text-slate-300"
+                          }`}
+                        >
+                          <span className="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
+                          <span>Inactive ({inactiveAgentsCount})</span>
+                        </button>
+                      </div>
+
+                      <div className="text-[10px] text-slate-400 flex items-center gap-2">
+                        <span>
+                          {agentSearchQuery.trim()
+                            ? `Matching: ${filteredAvailableAgents.length}`
+                            : `Available: ${filteredAvailableAgents.length}`}
+                        </span>
+                        <span className="text-emerald-400 font-bold">✓ 1-to-1</span>
+                      </div>
+                    </div>
+
+                    {/* Scrollable List of Available Agents */}
+                    <div className="max-h-60 overflow-y-auto space-y-1.5 pr-1">
+                      {/* Option to clear / keep generic booth */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setBoothFormData((prev) => ({
+                            ...prev,
+                            selectedAgentId: "",
+                            tellerName: "",
+                            supervisor: "",
+                            contactNumber: ""
+                          }));
+                          setIsAgentDropdownOpen(false);
+                          setAgentSearchQuery("");
+                        }}
+                        className="w-full text-left p-2.5 rounded-xl bg-slate-900/60 hover:bg-slate-900 border border-slate-800 text-xs text-slate-400 hover:text-white transition flex items-center gap-2 cursor-pointer"
+                      >
+                        <span className="w-2 h-2 rounded-full bg-slate-600"></span>
+                        <span>-- No specific agent (Generic Booth) --</span>
+                      </button>
+
+                      {filteredAvailableAgents.length > 0 ? (
+                        filteredAvailableAgents.map((ag) => {
+                          const isSelected = String(boothFormData.selectedAgentId) === String(ag.id);
+                          const isActive = checkAgentIsActive(ag);
+                          return (
+                            <button
+                              type="button"
+                              key={ag.id}
+                              onClick={() => {
+                                setBoothFormData((prev) => ({
+                                  ...prev,
+                                  selectedAgentId: ag.id,
+                                  tellerName: ag.fullName,
+                                  supervisor: getSupervisorName(ag.supervisor),
+                                  contactNumber: ag.contactNumber || prev.contactNumber,
+                                  address: prev.address || ag.address || "",
+                                  name: prev.name || ag.outlet || `${ag.fullName} Station`
+                                }));
+                                setIsAgentDropdownOpen(false);
+                                setAgentSearchQuery("");
+                              }}
+                              className={`w-full text-left p-2.5 sm:p-3 rounded-xl transition flex items-center justify-between gap-3 border cursor-pointer ${
+                                isSelected
+                                  ? "bg-blue-600/25 border-blue-500 text-white shadow-sm"
+                                  : "bg-slate-900/80 hover:bg-slate-900 border-slate-800/80 text-slate-300 hover:border-slate-700"
+                              }`}
+                            >
+                              <div className="flex items-center gap-3 min-w-0">
+                                <div className="relative shrink-0">
+                                  <div className="w-9 h-9 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-200 font-bold text-xs shadow-sm">
+                                    {ag.fullName?.charAt(0) || "A"}
+                                  </div>
+                                  <span
+                                    className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border border-slate-950 ${
+                                      isActive ? "bg-emerald-400 ring-2 ring-emerald-500/30" : "bg-slate-500"
+                                    }`}
+                                  ></span>
+                                </div>
+
+                                <div className="min-w-0">
+                                  <div className="font-bold text-xs text-white flex items-center gap-2 truncate flex-wrap">
+                                    <span className="truncate">{ag.fullName}</span>
+                                    <span className="text-[10px] text-blue-400 font-mono">@{ag.username}</span>
+
+                                    {/* Prominent Active / Inactive Badge */}
+                                    {isActive ? (
+                                      <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1 shrink-0">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                                        Active
+                                      </span>
+                                    ) : (
+                                      <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-slate-800 text-slate-400 border border-slate-700 flex items-center gap-1 shrink-0">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
+                                        Inactive
+                                      </span>
+                                    )}
+
+                                    {isSelected && (
+                                      <span className="px-1.5 py-0.2 rounded bg-blue-500 text-[9px] text-white font-bold shrink-0">
+                                        Selected
+                                      </span>
+                                    )}
+                                  </div>
+
+                                  <div className="text-[11px] text-slate-400 truncate mt-0.5 flex items-center gap-2 flex-wrap">
+                                    <span>📍 {ag.outlet || "Outlet"}</span>
+                                    <span className="text-slate-600">•</span>
+                                    <span>Spvr: {getSupervisorName(ag.supervisor)}</span>
+                                    {ag.contactNumber && (
+                                      <>
+                                        <span className="text-slate-600">•</span>
+                                        <span className="font-mono text-slate-400">📞 {ag.contactNumber}</span>
+                                      </>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="text-right shrink-0">
+                                <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-blue-500/20 text-blue-300 border border-blue-500/30">
+                                  Available (1:1)
+                                </span>
+                              </div>
+                            </button>
+                          );
+                        })
+                      ) : (
+                        <div className="p-4 text-center text-xs text-slate-400 bg-slate-900/60 rounded-xl border border-slate-800">
+                          {availableAgents.length === 0
+                            ? "All registered agents are currently assigned to other booths (1:1 full)."
+                            : `No ${agentStatusFilter !== "all" ? agentStatusFilter : "unassigned"} agent found matching "${agentSearchQuery}".`}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
 
                 <div className="grid grid-cols-2 gap-2.5 pt-1">
                   <div>
