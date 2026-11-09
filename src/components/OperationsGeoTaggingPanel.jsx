@@ -510,6 +510,23 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
   const carMarkerRef = useRef(null);
   const clickedMarkerRef = useRef(null);
   const measureLineGroupRef = useRef(null);
+  const boothMarkersRef = useRef({});
+  const searchContainerRef = useRef(null);
+
+  // Top Agent Search Bar states (replaces the sub-navigation pills)
+  const [topAgentSearchQuery, setTopAgentSearchQuery] = useState("");
+  const [isTopSearchOpen, setIsTopSearchOpen] = useState(false);
+
+  // Close search dropdown on click outside
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(e.target)) {
+        setIsTopSearchOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   const [leafletLoaded, setLeafletLoaded] = useState(false);
   const [selectedEdgeBarangay, setSelectedEdgeBarangay] = useState(EDGE_BARANGAYS_CIRCUIT[0]);
@@ -2194,6 +2211,7 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
       ? userTaggedBooths.filter((b) => b.barangayId === activeBarangayCircuit.id)
       : userTaggedBooths;
 
+    boothMarkersRef.current = {};
     boothsToRender.forEach((booth) => {
       const { coords, name, address, barangayName, detectionConfidence, tellerName, supervisor, contactNumber, notes } = booth;
       if (!coords || coords.length < 2) return;
@@ -2307,6 +2325,13 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
       });
 
       const marker = window.L.marker(coords, { icon: outletIcon }).addTo(group);
+      boothMarkersRef.current[String(booth.id)] = marker;
+      if (booth.agentId) {
+        boothMarkersRef.current[`agent_${booth.agentId}`] = marker;
+      }
+      if (booth.tellerName) {
+        boothMarkersRef.current[`teller_${booth.tellerName.trim().toLowerCase()}`] = marker;
+      }
 
       // Intercept marker click if in active distance measuring mode
       marker.on("click", (e) => {
@@ -2517,11 +2542,273 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
     }
   };
 
+  // Top Agent & Booth Search Results
+  const topSearchResults = useMemo(() => {
+    const q = topAgentSearchQuery.trim().toLowerCase();
+    if (!q) return [];
+
+    const results = [];
+    const seenAgentIds = new Set();
+
+    // 1. Match from apiAgents
+    (apiAgents || []).forEach((ag) => {
+      const name = (ag.fullName || "").toLowerCase();
+      const user = (ag.username || "").toLowerCase();
+      const idStr = String(ag.id || "");
+      if (name.includes(q) || user.includes(q) || idStr === q) {
+        seenAgentIds.add(idStr);
+        // Find assigned booth in userTaggedBooths
+        const assignedBooth = (userTaggedBooths || []).find((b) => {
+          if (b.agentId && String(b.agentId) === idStr) return true;
+          if (b.tellerName) {
+            const t = b.tellerName.toLowerCase().trim();
+            return t.includes(name) || name.includes(t) || (user && t.includes(user));
+          }
+          return false;
+        });
+        results.push({
+          type: "agent",
+          agent: ag,
+          assignedBooth: assignedBooth || null
+        });
+      }
+    });
+
+    // 2. Match directly from userTaggedBooths (tellerName or booth name/address/barangay)
+    (userTaggedBooths || []).forEach((b) => {
+      const bTeller = (b.tellerName || "").toLowerCase();
+      const bName = (b.name || "").toLowerCase();
+      const bAddress = (b.address || "").toLowerCase();
+      const bBrgy = (b.barangayName || "").toLowerCase();
+
+      if (bTeller.includes(q) || bName.includes(q) || bAddress.includes(q) || bBrgy.includes(q)) {
+        if (!b.agentId || !seenAgentIds.has(String(b.agentId))) {
+          results.push({
+            type: "booth",
+            booth: b,
+            agentName: b.tellerName || `Booth ${b.name}`,
+            assignedBooth: b
+          });
+        }
+      }
+    });
+
+    return results.slice(0, 10);
+  }, [topAgentSearchQuery, apiAgents, userTaggedBooths]);
+
+  // Focus and fly to a booth marker on map
+  const handleFocusBooth = (booth, agentName = "") => {
+    if (!booth || !booth.coords) return;
+
+    if (viewMode === "barangay" && activeBarangayCircuit && booth.barangayId !== activeBarangayCircuit.id) {
+      setViewMode("city");
+      setActiveBarangayCircuit(null);
+    }
+
+    if (leafletMapRef.current) {
+      leafletMapRef.current.flyTo(booth.coords, 18, { duration: 1.0 });
+      setTimeout(() => {
+        const marker =
+          boothMarkersRef.current[String(booth.id)] ||
+          (booth.agentId && boothMarkersRef.current[`agent_${booth.agentId}`]) ||
+          (booth.tellerName && boothMarkersRef.current[`teller_${booth.tellerName.trim().toLowerCase()}`]);
+        if (marker && typeof marker.openPopup === "function") {
+          marker.openPopup();
+        }
+      }, 750);
+    }
+
+    setCopiedText(`Focused on Booth ${booth.name || '001'} (Brgy. ${booth.barangayName || ''})${agentName ? ` • ${agentName}` : ''}`);
+    setTimeout(() => setCopiedText(null), 3500);
+  };
+
+  const handleSelectAgentSearch = (agent) => {
+    setIsTopSearchOpen(false);
+    setTopAgentSearchQuery(agent.fullName || agent.username);
+
+    const agentIdStr = String(agent.id || "");
+    const agentNameLower = (agent.fullName || "").toLowerCase().trim();
+    const agentUserLower = (agent.username || "").toLowerCase().trim();
+
+    const matchedBooth = (userTaggedBooths || []).find((b) => {
+      if (b.agentId && String(b.agentId) === agentIdStr) return true;
+      if (b.tellerName) {
+        const tLower = b.tellerName.toLowerCase().trim();
+        return (
+          tLower.includes(agentNameLower) ||
+          agentNameLower.includes(tLower) ||
+          (agentUserLower && tLower.includes(agentUserLower))
+        );
+      }
+      return false;
+    });
+
+    if (matchedBooth) {
+      handleFocusBooth(matchedBooth, agent.fullName);
+    } else {
+      setCopiedText(`${agent.fullName || 'Agent'} is registered but not assigned to any plotted booth yet.`);
+      setTimeout(() => setCopiedText(null), 3500);
+    }
+  };
+
+  const handleSelectBoothSearch = (booth) => {
+    setIsTopSearchOpen(false);
+    setTopAgentSearchQuery(booth.tellerName || `Booth ${booth.name}`);
+    handleFocusBooth(booth, booth.tellerName);
+  };
+
+  const handleSearchKeyDown = (e) => {
+    if (e.key === "Enter" && topSearchResults.length > 0) {
+      e.preventDefault();
+      const first = topSearchResults[0];
+      if (first.type === "agent") {
+        handleSelectAgentSearch(first.agent);
+      } else {
+        handleSelectBoothSearch(first.booth);
+      }
+    } else if (e.key === "Escape") {
+      setIsTopSearchOpen(false);
+    }
+  };
+
   const activeBarangayData = activeBarangayCircuit ? BARANGAY_PERIMETER_ROUTES[activeBarangayCircuit.id] : null;
 
   return (
-    <div className="relative w-full h-full flex flex-col bg-slate-950 text-white font-sans overflow-hidden select-none">
-      {/* ================= 100% PURE FULL-SCREEN MAP CANVAS ================= */}
+    <div className="space-y-3">
+      {/* ================= TOP SUB-NAVIGATION BAR REPLACING 3 PILLS WITH AGENT SEARCH BAR ================= */}
+      <div className="flex items-center justify-between border-b border-slate-200 pb-3 flex-wrap gap-2.5">
+        {/* Agent Search Bar */}
+        <div ref={searchContainerRef} className="relative flex-1 min-w-[260px] sm:min-w-[340px] max-w-md">
+          <div className="relative flex items-center">
+            <Search size={15} className="absolute left-3.5 text-slate-400 pointer-events-none" />
+            <input
+              type="text"
+              value={topAgentSearchQuery}
+              onChange={(e) => {
+                setTopAgentSearchQuery(e.target.value);
+                setIsTopSearchOpen(true);
+              }}
+              onFocus={() => setIsTopSearchOpen(true)}
+              onKeyDown={handleSearchKeyDown}
+              placeholder="Search agent name to locate assigned booth..."
+              className="w-full pl-9 pr-9 py-2 bg-white rounded-2xl border border-slate-200/90 shadow-2xs text-xs font-semibold text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 transition"
+            />
+            {topAgentSearchQuery && (
+              <button
+                type="button"
+                onClick={() => {
+                  setTopAgentSearchQuery("");
+                  setIsTopSearchOpen(false);
+                }}
+                className="absolute right-3 p-1 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition cursor-pointer"
+                title="Clear search"
+              >
+                <X size={13} />
+              </button>
+            )}
+          </div>
+
+          {/* Autocomplete Dropdown */}
+          {isTopSearchOpen && topAgentSearchQuery.trim() && (
+            <div className="absolute top-full left-0 right-0 mt-1.5 z-50 bg-white rounded-2xl border border-slate-200 shadow-2xl overflow-hidden max-h-80 overflow-y-auto">
+              {topSearchResults.length > 0 ? (
+                <div className="py-1 divide-y divide-slate-100">
+                  {topSearchResults.map((res, idx) => {
+                    if (res.type === "agent") {
+                      const ag = res.agent;
+                      const hasBooth = !!res.assignedBooth;
+                      return (
+                        <button
+                          key={`agent-${ag.id}-${idx}`}
+                          type="button"
+                          onClick={() => handleSelectAgentSearch(ag)}
+                          className="w-full px-3.5 py-2.5 text-left hover:bg-emerald-50/70 transition flex items-center justify-between gap-3 group cursor-pointer"
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-black shrink-0 ${
+                              hasBooth ? "bg-emerald-100 text-emerald-800 border border-emerald-200" : "bg-slate-100 text-slate-600"
+                            }`}>
+                              {hasBooth ? <MapPin size={15} className="text-emerald-600" /> : <Users size={15} />}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-xs font-extrabold text-slate-900 group-hover:text-emerald-700 truncate">
+                                {ag.fullName || ag.username}
+                              </p>
+                              <p className="text-[10px] text-slate-500 truncate">
+                                @{ag.username || "agent"} {ag.supervisor ? `• Sup: ${ag.supervisor}` : ""}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="shrink-0 text-right">
+                            {hasBooth ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-200 shadow-2xs">
+                                <span>🏪</span> Booth {res.assignedBooth.name} ({res.assignedBooth.barangayName})
+                              </span>
+                            ) : (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 text-slate-400">
+                                No booth assigned
+                              </span>
+                            )}
+                          </div>
+                        </button>
+                      );
+                    } else {
+                      const b = res.booth;
+                      return (
+                        <button
+                          key={`booth-${b.id}-${idx}`}
+                          type="button"
+                          onClick={() => handleSelectBoothSearch(b)}
+                          className="w-full px-3.5 py-2.5 text-left hover:bg-emerald-50/70 transition flex items-center justify-between gap-3 group cursor-pointer"
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-800 border border-amber-200 flex items-center justify-center text-xs font-black shrink-0">
+                              <Store size={15} />
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-xs font-extrabold text-slate-900 group-hover:text-emerald-700 truncate">
+                                Booth {b.name} {b.tellerName ? `• ${b.tellerName}` : ""}
+                              </p>
+                              <p className="text-[10px] text-slate-500 truncate">
+                                Brgy. {b.barangayName} {b.address ? `• ${b.address}` : ""}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="shrink-0">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-100 text-amber-900 border border-amber-200">
+                              Plotted Booth
+                            </span>
+                          </div>
+                        </button>
+                      );
+                    }
+                  })}
+                </div>
+              ) : (
+                <div className="p-4 text-center text-xs text-slate-400">
+                  No registered agent or plotted booth matching "<strong>{topAgentSearchQuery}</strong>".
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Right side: Franchise Area Badge */}
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] font-bold text-slate-500 hidden sm:inline">
+            Active Franchise Area:
+          </span>
+          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-emerald-100 text-emerald-800 border border-emerald-200">
+            Mandaue City (Lucky Betplay)
+          </span>
+        </div>
+      </div>
+
+      {/* ================= MAP CANVAS CONTAINER ================= */}
+      <div className="h-[720px] md:h-[780px] rounded-3xl overflow-hidden border border-slate-800 shadow-2xl flex flex-col relative bg-slate-950 text-white font-sans select-none">
+        {/* ================= 100% PURE FULL-SCREEN MAP CANVAS ================= */}
       <div
         ref={mapContainerRef}
         className="absolute inset-0 w-full h-full bg-slate-950 z-0 cursor-crosshair"
@@ -5084,6 +5371,7 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }

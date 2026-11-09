@@ -19,7 +19,7 @@ export const FUNCTIONAL_WORKSPACE_TABS = [
   },
   {
     id: "geotagging",
-    label: "Territory GeoTagging & Map",
+    label: "Territory GeoTagging & Road Map",
     icon: MapPin,
     tag: "Boundary Map",
     category: "operations",
@@ -27,11 +27,19 @@ export const FUNCTIONAL_WORKSPACE_TABS = [
   },
   {
     id: "sops",
-    label: "Operations Board",
+    label: "SOP & Task Board",
     icon: Layers,
     tag: "Operations",
     category: "operations",
     color: "text-slate-700"
+  },
+  {
+    id: "weather",
+    label: "Field Weather Radar",
+    icon: CloudSun,
+    tag: "Live Radar",
+    category: "operations",
+    color: "text-blue-500"
   },
   {
     id: "incident_reports",
@@ -189,25 +197,32 @@ export default function MondayStyleSidebar({
       title: "Field & Operations",
       items: [
         {
-          id: "supervisors_attendance",
-          label: "Supervisors Attendance",
-          icon: UserCheck,
-          tag: "Attendance",
-          tabId: "supervisors_attendance"
+          id: "geotagging",
+          label: "Territory GeoTagging & Road Map",
+          icon: MapPin,
+          tag: "Map & Kiosks",
+          tabId: "geotagging"
         },
         {
           id: "sops",
-          label: "Operations Board",
+          label: "SOP & Task Board",
           icon: Layers,
           tag: "SOP Board",
           tabId: "sops"
         },
         {
-          id: "weather_map",
-          label: "Field Hazard Weather Radar",
+          id: "weather",
+          label: "Field Weather Radar",
           icon: CloudSun,
           tag: "Live Radar",
-          tabId: "sops"
+          tabId: "weather"
+        },
+        {
+          id: "supervisors_attendance",
+          label: "Supervisors Attendance",
+          icon: UserCheck,
+          tag: "Attendance",
+          tabId: "supervisors_attendance"
         },
         {
           id: "simcon_equipment",
