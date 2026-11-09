@@ -3,9 +3,9 @@ import {
   ChevronLeft, ChevronRight, Layers, FileText, BarChart3,
   Bot, CloudSun, Sparkles, Search, Plus, Star, ShieldCheck, ShieldAlert,
   Building2, Calculator, Clock, HardHat, Dices, Award, Zap, TrendingUp,
-  Receipt, FileCheck, Sliders, Activity, MailCheck, Wrench, Home,
+  Receipt, FileCheck, Sliders, MailCheck, Wrench, Home,
   Compass, PhoneCall, Mail, DollarSign, CircleDollarSign, Workflow, LayoutDashboard,
-  UserCheck, Users, MapPin, Scale
+  UserCheck, Users, MapPin, Scale, Video
 } from "lucide-react";
 
 export const FUNCTIONAL_WORKSPACE_TABS = [
@@ -18,20 +18,20 @@ export const FUNCTIONAL_WORKSPACE_TABS = [
     color: "text-[#008559]"
   },
   {
+    id: "meetings",
+    label: "Zoom & Google Meet",
+    icon: Video,
+    tag: "Live Meetings",
+    category: "home",
+    color: "text-[#2D8CFF]"
+  },
+  {
     id: "geotagging",
     label: "Territory GeoTagging & Road Map",
     icon: MapPin,
     tag: "Boundary Map",
     category: "operations",
     color: "text-emerald-500"
-  },
-  {
-    id: "sops",
-    label: "SOP & Task Board",
-    icon: Layers,
-    tag: "Operations",
-    category: "operations",
-    color: "text-slate-700"
   },
   {
     id: "weather",
@@ -69,8 +69,8 @@ export const FUNCTIONAL_WORKSPACE_TABS = [
     id: "gross",
     label: "Gross Report",
     icon: BarChart3,
-    tag: "Analytics",
-    category: "analytics",
+    tag: "Revenue",
+    category: "finance",
     color: "text-emerald-500"
   },
   {
@@ -80,6 +80,30 @@ export const FUNCTIONAL_WORKSPACE_TABS = [
     tag: "Betting Ratio",
     category: "finance",
     color: "text-emerald-500"
+  },
+  {
+    id: "payroll_calc",
+    label: "13th Month Payroll Calculator",
+    icon: Calculator,
+    tag: "DOLE P.D. 851",
+    category: "finance",
+    color: "text-amber-500"
+  },
+  {
+    id: "petty_cash",
+    label: "Branch Expense & Vouchers",
+    icon: Receipt,
+    tag: "Petty Cash",
+    category: "finance",
+    color: "text-emerald-600"
+  },
+  {
+    id: "hr_analytics",
+    label: "HR Analytics & Workforce KPI",
+    icon: BarChart3,
+    tag: "HR Analytics",
+    category: "analytics",
+    color: "text-purple-600"
   },
   {
     id: "agents",
@@ -96,6 +120,14 @@ export const FUNCTIONAL_WORKSPACE_TABS = [
     tag: "Attendance",
     category: "operations",
     color: "text-[#008559]"
+  },
+  {
+    id: "dole_handbook",
+    label: "DOLE Legal Guidelines",
+    icon: ShieldCheck,
+    tag: "Legal Suite",
+    category: "hr",
+    color: "text-blue-600"
   },
   {
     id: "permission_matrix",
@@ -185,11 +217,11 @@ export default function MondayStyleSidebar({
           tabId: "home"
         },
         {
-          id: "meeting_scheduler",
+          id: "meetings",
           label: "Zoom & Google Meet Scheduler",
-          icon: Compass,
+          icon: Video,
           tag: "Meetings",
-          tabId: "home"
+          tabId: "meetings"
         }
       ]
     },
@@ -204,13 +236,6 @@ export default function MondayStyleSidebar({
           tabId: "geotagging"
         },
         {
-          id: "sops",
-          label: "SOP & Task Board",
-          icon: Layers,
-          tag: "SOP Board",
-          tabId: "sops"
-        },
-        {
           id: "weather",
           label: "Field Weather Radar",
           icon: CloudSun,
@@ -223,26 +248,6 @@ export default function MondayStyleSidebar({
           icon: UserCheck,
           tag: "Attendance",
           tabId: "supervisors_attendance"
-        },
-        {
-          id: "simcon_equipment",
-          label: "SIMCON Equipment Log",
-          icon: Building2,
-          tag: "SIMCON"
-        },
-        {
-          id: "gaming_draws",
-          label: "Gaming Branch Draws",
-          icon: Dices,
-          tag: "Gaming",
-          tabId: "gross"
-        },
-        {
-          id: "supervisor_audit",
-          label: "Supervisor Audit Checklist",
-          icon: FileCheck,
-          tag: "Audit",
-          tabId: "sops"
         }
       ]
     },
@@ -267,20 +272,15 @@ export default function MondayStyleSidebar({
           id: "payroll_calc",
           label: "13th Month Payroll Calculator",
           icon: Calculator,
-          tag: "DOLE"
+          tag: "DOLE P.D. 851",
+          tabId: "payroll_calc"
         },
         {
           id: "petty_cash",
           label: "Branch Expense & Vouchers",
           icon: Receipt,
-          tag: "Finance"
-        },
-        {
-          id: "shortage_tracker",
-          label: "Teller Shortage / Overage Log",
-          icon: Activity,
-          tag: "Tellers",
-          tabId: "gross"
+          tag: "Petty Cash & Vouchers",
+          tabId: "petty_cash"
         }
       ]
     },
@@ -343,33 +343,53 @@ export default function MondayStyleSidebar({
       ]
     },
     analytics: {
-      title: "Analytics & AI",
+      title: "HR Analytics & Intelligence",
       items: [
         {
-          id: "gross",
-          label: "Gross Report",
+          id: "hr_analytics_overview",
+          label: "Executive HR Overview & KPIs",
           icon: BarChart3,
-          tag: "Financial",
-          tabId: "gross"
+          tag: "Workforce",
+          tabId: "hr_analytics",
+          subView: "overview"
+        },
+        {
+          id: "hr_disciplinary_analytics",
+          label: "Incident & Disciplinary Due Process",
+          icon: ShieldAlert,
+          tag: "NTE Cases",
+          tabId: "hr_analytics",
+          subView: "disciplinary"
+        },
+        {
+          id: "hr_workforce_demographics",
+          label: "Workforce & Headcount Distribution",
+          icon: Users,
+          tag: "Headcount",
+          tabId: "hr_analytics",
+          subView: "workforce"
+        },
+        {
+          id: "hr_attendance_analytics",
+          label: "Supervisors & Field DTR Attendance",
+          icon: UserCheck,
+          tag: "Attendance",
+          tabId: "hr_analytics",
+          subView: "attendance"
+        },
+        {
+          id: "hr_compliance_scorecard",
+          label: "DOLE & 201 File Compliance Scorecard",
+          icon: ShieldCheck,
+          tag: "Compliance",
+          tabId: "hr_analytics",
+          subView: "compliance"
         },
         {
           id: "ai_sidekick_action",
-          label: "HR AI Buddy Sidekick",
+          label: "HR AI Buddy Intelligence Partner",
           icon: Sparkles,
           tag: "AI Partner"
-        },
-        {
-          id: "revenue_trends",
-          label: "Multi-Entity Revenue Trends",
-          icon: TrendingUp,
-          tag: "Betting Ratio",
-          tabId: "revenue_trends"
-        },
-        {
-          id: "compliance_scorecard",
-          label: "DOLE & BIR Scorecard",
-          icon: ShieldCheck,
-          tag: "Compliance"
         }
       ]
     },
@@ -427,6 +447,12 @@ export default function MondayStyleSidebar({
 
   const handleItemSelect = (item) => {
     setActiveItemId(item.id);
+    if (item.subView) {
+      try {
+        localStorage.setItem("hrhub_analytics_active_subview", item.subView);
+        window.dispatchEvent(new CustomEvent("hrhub_analytics_subview_change", { detail: item.subView }));
+      } catch {}
+    }
     if (item.tabId && setWorkspaceTab) {
       setWorkspaceTab(item.tabId);
     } else if (item.id === "ai_sidekick_action") {

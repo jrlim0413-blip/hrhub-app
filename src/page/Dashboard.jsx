@@ -6,7 +6,8 @@ import {
   BriefcaseBusiness, FileText, Sparkles, BarChart3,
   Database, RefreshCw, CheckCircle2, AlertCircle, Clock,
   Bot, Layers, Home, X, CheckCheck, Menu, UserCheck, ShieldAlert,
-  Lock, Wrench, MapPin, CloudSun, Scale, TrendingUp, Flame
+  Lock, Wrench, MapPin, CloudSun, Scale, TrendingUp, Flame, Video,
+  Calculator, Receipt
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import ProfileModal from "../components/ProfileModal";
@@ -24,6 +25,9 @@ import IncidentReportPanel from "../components/IncidentReportPanel";
 import DoleLegalGuidelinesPanel from "../components/DoleLegalGuidelinesPanel";
 import OperationsGeoTaggingPanel from "../components/OperationsGeoTaggingPanel";
 import SupervisorsAttendancePanel from "../components/SupervisorsAttendancePanel";
+import HrAnalyticsPanel from "../components/HrAnalyticsPanel";
+import ThirteenthMonthPayrollPanel from "../components/ThirteenthMonthPayrollPanel";
+import BranchExpensesVouchersPanel from "../components/BranchExpensesVouchersPanel";
 import RolePermissionMatrixPanel from "../components/RolePermissionMatrixPanel";
 import ApiHealthConfigurationPanel from "../components/ApiHealthConfigurationPanel";
 import AiAssistantDrawer from "../components/AiAssistantDrawer";
@@ -208,11 +212,18 @@ const FREQUENT_USAGE_STORAGE_KEY = "hrhub_frequent_tabs_usage_v2";
 const TEN_DAYS_MS = 10 * 24 * 60 * 60 * 1000; // 10 days in milliseconds
 
 const DEFAULT_POPULAR_TAB_IDS = [
-  "home",
+  "incident_reports",
+  "memo",
+  "doc_studio",
+  "agents",
+  "hr_analytics",
+  "payroll_calc",
+  "petty_cash",
   "gross",
+  "meetings",
+  "home",
   "revenue_trends",
   "supervisors_attendance",
-  "sops",
   "geotagging"
 ];
 
@@ -275,6 +286,14 @@ const WORKSPACE_TAB_DEFS = {
     activeClass: "bg-[#008559] text-white ring-2 ring-emerald-300",
     activeIconClass: "text-white",
     inactiveIconClass: "text-emerald-600"
+  },
+  meetings: {
+    id: "meetings",
+    label: "Zoom & Google Meet",
+    icon: Video,
+    activeClass: "bg-[#2D8CFF] text-white ring-2 ring-blue-300",
+    activeIconClass: "text-white",
+    inactiveIconClass: "text-blue-600"
   },
   sops: {
     id: "sops",
@@ -379,6 +398,30 @@ const WORKSPACE_TAB_DEFS = {
     activeClass: "bg-blue-600 text-white ring-2 ring-blue-300",
     activeIconClass: "text-white",
     inactiveIconClass: "text-blue-600"
+  },
+  hr_analytics: {
+    id: "hr_analytics",
+    label: "HR Workforce Analytics",
+    icon: BarChart3,
+    activeClass: "bg-purple-700 text-white ring-2 ring-purple-300",
+    activeIconClass: "text-white",
+    inactiveIconClass: "text-purple-600"
+  },
+  payroll_calc: {
+    id: "payroll_calc",
+    label: "13th Month Payroll",
+    icon: Calculator,
+    activeClass: "bg-amber-600 text-white ring-2 ring-amber-300",
+    activeIconClass: "text-white",
+    inactiveIconClass: "text-amber-600"
+  },
+  petty_cash: {
+    id: "petty_cash",
+    label: "Branch Expense & Vouchers",
+    icon: Receipt,
+    activeClass: "bg-emerald-700 text-white ring-2 ring-emerald-300",
+    activeIconClass: "text-white",
+    inactiveIconClass: "text-emerald-600"
   }
 };
 
@@ -2226,9 +2269,9 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
             </div>
           </div>
 
-          {/* EMPTY WORKSPACE STATE: When no tabs are open yet */}
-          {(!workspaceTab || openTabs.length === 0) && (
-            <div className="rounded-2xl border border-slate-200/90 bg-white/80 backdrop-blur-sm p-8 md:p-12 text-center shadow-xs">
+          {/* EMPTY WORKSPACE STATE or HOME DASHBOARD: Workspace Ready Hub with Frequently Used Modules */}
+          {(!workspaceTab || openTabs.length === 0 || workspaceTab === "home") && (
+            <div className="rounded-2xl border border-slate-200/90 bg-white/80 backdrop-blur-sm p-8 md:p-12 text-center shadow-xs animate-in fade-in">
               <div className="mx-auto w-14 h-14 rounded-2xl bg-emerald-50 text-emerald-600 border border-emerald-100 flex items-center justify-center mb-3 shadow-2xs">
                 <BriefcaseBusiness size={28} />
               </div>
@@ -2286,15 +2329,17 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
             </div>
           )}
 
-          {/* TAB 0: HOME HR DASHBOARD & MEETING SCHEDULER */}
-          {workspaceTab === "home" && (
-            <HomeWorkspaceView
-              currentUser={currentUser}
-              profileName={profileName}
-              onOpenAiBuddy={() => setAiDrawerOpen(true)}
-              setWorkspaceTab={handleOpenWorkspaceTab}
-              profiles={supabaseProfiles}
-            />
+          {/* TAB: ZOOM & GOOGLE MEET VIDEO CONFERENCES */}
+          {workspaceTab === "meetings" && (
+            <div className="animate-in fade-in">
+              <HomeWorkspaceView
+                currentUser={currentUser}
+                profileName={profileName}
+                onOpenAiBuddy={() => setAiDrawerOpen(true)}
+                setWorkspaceTab={handleOpenWorkspaceTab}
+                profiles={supabaseProfiles}
+              />
+            </div>
           )}
 
           {/* TAB: INCIDENT REPORTS & NOTICE TO EXPLAIN (NTE) */}
@@ -2437,6 +2482,35 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
               onSwitchToNte={() => handleOpenWorkspaceTab("incident_reports")}
               onSwitchToApiConfig={() => handleOpenWorkspaceTab("api_health")}
               onOpenAiBuddy={() => setAiDrawerOpen(true)}
+            />
+          )}
+
+          {/* TAB: HR WORKFORCE & OPERATIONAL ANALYTICS */}
+          {workspaceTab === "hr_analytics" && (
+            <HrAnalyticsPanel
+              currentUser={currentUser}
+              profiles={supabaseProfiles}
+              onClose={() => handleCloseWorkspaceTab(null, "hr_analytics")}
+              onNavigate={handleOpenWorkspaceTab}
+              onOpenAiBuddy={() => setAiDrawerOpen(true)}
+            />
+          )}
+
+          {/* TAB: 13TH MONTH PAYROLL CALCULATOR (P.D. 851) */}
+          {workspaceTab === "payroll_calc" && (
+            <ThirteenthMonthPayrollPanel
+              currentUser={currentUser}
+              onClose={() => handleCloseWorkspaceTab(null, "payroll_calc")}
+              onNavigate={handleOpenWorkspaceTab}
+            />
+          )}
+
+          {/* TAB: BRANCH EXPENSES & PETTY CASH VOUCHERS */}
+          {workspaceTab === "petty_cash" && (
+            <BranchExpensesVouchersPanel
+              currentUser={currentUser}
+              onClose={() => handleCloseWorkspaceTab(null, "petty_cash")}
+              onNavigate={handleOpenWorkspaceTab}
             />
           )}
         </div>
