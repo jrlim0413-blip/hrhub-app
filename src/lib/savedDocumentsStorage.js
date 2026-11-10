@@ -11,6 +11,9 @@ export const SAVED_DOCS_TABLE = "saved_documents";
 export const FALLBACK_MEMOS_TABLE = "saved_memos";
 const LOCAL_STORAGE_KEY = "hrhub_saved_documents_store_v1";
 
+// Cache table availability: saved_documents table is not deployed on Supabase, so default to false to eliminate 404 console errors
+let isSavedDocsTableAvailable = false;
+
 // In-memory fallback cache
 const memoryDocsStore = new Map();
 const sessionUsedDocRefs = new Set();
@@ -113,21 +116,7 @@ export async function getSavedDocumentsFromDb(currentUser = null) {
   const localList = getLocalCachedDocs(accountKey);
 
   try {
-    // 1. Attempt primary 'saved_documents' table
-    const { data, error } = await supabase
-      .from(SAVED_DOCS_TABLE)
-      .select("*")
-      .eq("user_id", accountKey)
-      .order("created_at", { ascending: false });
-
-    if (!error && Array.isArray(data) && data.length > 0) {
-      const mapped = data.map(mapDocRowToModel);
-      memoryDocsStore.set(accountKey, mapped);
-      setLocalCachedDocs(accountKey, mapped);
-      return { documents: mapped, source: "supabase_docs" };
-    }
-
-    // 2. Fallback check: check if records were saved into 'saved_memos' with category like 'DOC_STUDIO:%'
+    // 1. Primary check: check records in 'saved_memos' with category like 'DOC_STUDIO:%' (table exists in Supabase)
     const { data: memoDocs, error: memoErr } = await supabase
       .from(FALLBACK_MEMOS_TABLE)
       .select("*")
@@ -142,17 +131,35 @@ export async function getSavedDocumentsFromDb(currentUser = null) {
       return { documents: mapped, source: "supabase_memos" };
     }
 
-    // 3. Fallback: check global fallback in case user_id differs (e.g. admin records)
-    const { data: allDocs, error: allErr } = await supabase
-      .from(SAVED_DOCS_TABLE)
+    // Fallback: check global in saved_memos in case user_id is admin or records are shared
+    const { data: allMemoDocs, error: allMemoErr } = await supabase
+      .from(FALLBACK_MEMOS_TABLE)
       .select("*")
+      .ilike("category", "DOC_STUDIO:%")
       .order("created_at", { ascending: false })
       .limit(50);
 
-    if (!allErr && Array.isArray(allDocs) && allDocs.length > 0) {
-      const mapped = allDocs.map(mapDocRowToModel);
+    if (!allMemoErr && Array.isArray(allMemoDocs) && allMemoDocs.length > 0) {
+      const mapped = allMemoDocs.map(mapMemoDocRowToModel);
       memoryDocsStore.set(accountKey, mapped);
-      return { documents: mapped, source: "supabase_global" };
+      setLocalCachedDocs(accountKey, mapped);
+      return { documents: mapped, source: "supabase_memos_global" };
+    }
+
+    // 2. Only if saved_documents is explicitly deployed and available, query it
+    if (isSavedDocsTableAvailable) {
+      const { data, error } = await supabase
+        .from(SAVED_DOCS_TABLE)
+        .select("*")
+        .eq("user_id", accountKey)
+        .order("created_at", { ascending: false });
+
+      if (!error && Array.isArray(data) && data.length > 0) {
+        const mapped = data.map(mapDocRowToModel);
+        memoryDocsStore.set(accountKey, mapped);
+        setLocalCachedDocs(accountKey, mapped);
+        return { documents: mapped, source: "supabase_docs" };
+      }
     }
   } catch (err) {
     console.warn("Supabase documents query notice, falling back to local cache:", err);
@@ -175,19 +182,7 @@ export async function getAllGlobalDocumentRefs() {
   const allRefs = [];
 
   try {
-    // Check saved_documents
-    const { data, error } = await supabase
-      .from(SAVED_DOCS_TABLE)
-      .select("ref_no")
-      .order("created_at", { ascending: false });
-
-    if (!error && Array.isArray(data)) {
-      data.forEach((r) => {
-        if (r.ref_no) allRefs.push(normalizeDocRef(r.ref_no));
-      });
-    }
-
-    // Check saved_memos fallback
+    // Check saved_memos (which exists in Supabase)
     const { data: memoData, error: memoErr } = await supabase
       .from(FALLBACK_MEMOS_TABLE)
       .select("ref_no, category")
@@ -197,6 +192,20 @@ export async function getAllGlobalDocumentRefs() {
       memoData.forEach((r) => {
         if (r.ref_no) allRefs.push(normalizeDocRef(r.ref_no));
       });
+    }
+
+    // Only query saved_documents if enabled
+    if (isSavedDocsTableAvailable) {
+      const { data, error } = await supabase
+        .from(SAVED_DOCS_TABLE)
+        .select("ref_no")
+        .order("created_at", { ascending: false });
+
+      if (!error && Array.isArray(data)) {
+        data.forEach((r) => {
+          if (r.ref_no) allRefs.push(normalizeDocRef(r.ref_no));
+        });
+      }
     }
   } catch (e) {
     console.warn("Global doc refs query fallback:", e);
@@ -261,15 +270,17 @@ export async function saveDocumentRecordToDb(currentUser = null, docRecord = {})
   let dbError = null;
 
   try {
-    // 1. Try saved_documents table
-    const { error } = await supabase
-      .from(SAVED_DOCS_TABLE)
-      .upsert(payload, { onConflict: "id" });
+    // 1. If saved_documents table is available, attempt it
+    if (isSavedDocsTableAvailable) {
+      const { error } = await supabase
+        .from(SAVED_DOCS_TABLE)
+        .upsert(payload, { onConflict: "id" });
 
-    if (!error) {
-      syncedToSupabase = true;
-    } else {
-      // 2. If saved_documents table doesn't exist, gracefully fallback to saved_memos table
+      if (!error) syncedToSupabase = true;
+    }
+
+    // 2. Otherwise save directly into saved_memos table (which exists in Supabase)
+    if (!syncedToSupabase) {
       const memoPayload = {
         id,
         user_id: accountKey,
@@ -343,10 +354,11 @@ export async function deleteDocumentRecordFromDb(currentUser = null, id) {
   const accountKey = getUserAccountKey(currentUser);
 
   try {
-    await Promise.allSettled([
-      supabase.from(SAVED_DOCS_TABLE).delete().eq("id", id),
-      supabase.from(FALLBACK_MEMOS_TABLE).delete().eq("id", id)
-    ]);
+    const promises = [supabase.from(FALLBACK_MEMOS_TABLE).delete().eq("id", id)];
+    if (isSavedDocsTableAvailable) {
+      promises.push(supabase.from(SAVED_DOCS_TABLE).delete().eq("id", id));
+    }
+    await Promise.allSettled(promises);
   } catch (e) {
     console.warn("Delete document database notice:", e);
   }

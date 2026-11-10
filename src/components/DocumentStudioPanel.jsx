@@ -143,6 +143,15 @@ export const MODULAR_BLOCK_PRESETS = [
           centerLogo: "",
           rightLogo: "/id-assets/pcso_logo.png"
         }
+      },
+      {
+        variant: "header_dual_clean",
+        name: "Corporate Dual-Logo Header (Clean / No Green Line)",
+        description: "Official executive header with company logo left, corporate emblem right, centered company name & Barlaps address, without colored divider line.",
+        defaultData: {
+          companyName: "LUCKY BETPLAY CORPORATION",
+          address: "#257 BARLAPS, A.S. FORTUNA STREET,\nBAKILID, MANDAUE CITY, CEBU 6014"
+        }
       }
     ]
   },
@@ -245,6 +254,14 @@ export const MODULAR_BLOCK_PRESETS = [
           subject: "REQUEST FOR CORPORATE SOCIAL RESPONSIBILITY (CSR) DONATION FOR THE LABOGON FIRE VICTIMS",
           salutation: "Dear AGM Simpal,"
         }
+      },
+      {
+        variant: "address_simple_date",
+        name: "Left-Aligned Bold Date Line",
+        description: "Clean bold date heading formatted as 'Date: November 06, 2026', aligned to the left margin.",
+        defaultData: {
+          dateLine: "Date: November 06, 2026"
+        }
       }
     ]
   },
@@ -267,6 +284,21 @@ The aforementioned individual has NO authority to represent, transact, negotiate
 ANY AND ALL TRANSACTIONS, contracts, agreements, or collection of money or property executed by the said individual are strictly UNAUTHORIZED, ILLEGAL, NULL, AND VOID, and shall not bind or obligate [COMPANY_NAME] nor any of its operating branches.
 
 The general public, gaming outlets, coordinators, field monitoring personnel, and commercial partners are hereby sternly warned and advised to refrain from entertaining or transacting with the above-named person regarding company matters.`
+        }
+      },
+      {
+        variant: "body_non_affiliation_salesforce",
+        name: "Certificate of Non-Affiliation (Salesforce Partner / PCSO)",
+        description: "Official certificate body with centered title, Date line, 4 legal non-affiliation paragraphs with bold highlights, and official verification hotline.",
+        defaultData: {
+          title: "CERTIFICATE OF NON-AFFILIATION",
+          dateLine: "Date: November 06, 2026",
+          personName: "ARJUN BAGUIO PATALINGHUG",
+          personNameTitle: "Arjun Baguio Patalinghug",
+          companyName: "Lucky Betplay Corporation",
+          partnerRole: "Salesforce partner",
+          agencyName: "Philippine Charity Sweepstakes Office (PCSO)",
+          contactNumber: "09243223514"
         }
       },
       {
@@ -474,6 +506,17 @@ MANDATORY DIRECTIVES & TURNOVER PROTOCOLS:
           closeLabel: "Sincerely,",
           title: "OPERATIONS MANAGER"
         }
+      },
+      {
+        variant: "sig_single_certified_by",
+        name: "Certified by Signatory (with Divider Line)",
+        description: "Official single signatory block preceded by a subtle horizontal divider line, 'Certified by:', signature space, and Human Resource Staff designation.",
+        defaultData: {
+          label: "Certified by:",
+          name: "QUENNIE R. CAPUYAN",
+          title: "Human Resource Staff",
+          company: "Lucky Betplay Corporation"
+        }
       }
     ]
   },
@@ -655,6 +698,28 @@ function ElementVisualPreview({ item, selectedCompany, docRef, docDate }) {
         </div>
       );
     }
+    if (item.variant === "header_dual_clean") {
+      return (
+        <div className="pb-3 select-text">
+          <div className="flex items-center justify-between gap-4">
+            <div className="w-14 h-14 flex items-center justify-center shrink-0">
+              <img src={item.data?.leftLogo || selectedCompany.logoUrl} alt={selectedCompany.name} className="max-h-full max-w-full object-contain" />
+            </div>
+            <div className="flex-1 text-center px-2">
+              <h2 className="text-sm font-black uppercase tracking-wider text-slate-900 leading-tight">
+                {item.data?.companyName || selectedCompany.legalName || selectedCompany.name || "LUCKY BETPLAY CORPORATION"}
+              </h2>
+              <p className="text-[10px] font-semibold text-slate-700 mt-1 leading-snug uppercase whitespace-pre-line">
+                {item.data?.address || "#257 BARLAPS, A.S. FORTUNA STREET,\nBAKILID, MANDAUE CITY, CEBU 6014"}
+              </p>
+            </div>
+            <div className="w-14 h-14 flex items-center justify-center shrink-0">
+              <img src={item.data?.rightLogo || selectedCompany.rightLogoUrl || "/logos/group_emblem.jpg"} alt="Corporate Emblem" className="max-h-full max-w-full object-contain" />
+            </div>
+          </div>
+        </div>
+      );
+    }
   }
 
   // Addressing Previews (1:1 with bond paper output, borderless)
@@ -788,6 +853,13 @@ function ElementVisualPreview({ item, selectedCompany, docRef, docDate }) {
             {item.data?.subject?.startsWith("SUBJECT:") ? item.data.subject : `SUBJECT: ${item.data?.subject || "REQUEST FOR CSR DONATION"}`}
           </div>
           <div className="font-bold text-xs text-slate-800">{item.data?.salutation || "Dear AGM Simpal,"}</div>
+        </div>
+      );
+    }
+    if (item.variant === "address_simple_date") {
+      return (
+        <div className="my-2 select-text font-bold text-xs text-slate-950">
+          {item.data?.dateLine || "Date: November 06, 2026"}
         </div>
       );
     }
@@ -960,6 +1032,26 @@ function ElementVisualPreview({ item, selectedCompany, docRef, docDate }) {
         </div>
       );
     }
+    if (item.variant === "body_non_affiliation_salesforce") {
+      return (
+        <div className="space-y-2.5 my-2 text-xs leading-relaxed text-slate-900 select-text">
+          <div className="text-center font-black text-sm tracking-wide uppercase text-slate-950">
+            {item.data?.title || "CERTIFICATE OF NON-AFFILIATION"}
+          </div>
+          {item.data?.dateLine && (
+            <div className="font-bold text-xs text-slate-950">
+              {item.data.dateLine}
+            </div>
+          )}
+          <p className="text-justify line-clamp-3">
+            This is to certify that <strong>{item.data?.personName || "ARJUN BAGUIO PATALINGHUG"}</strong>, is not <strong>affiliated</strong> with <strong>{item.data?.companyName || selectedCompany.name}</strong> as a Salesforce partner under the <strong>{item.data?.agencyName || "Philippine Charity Sweepstakes Office (PCSO)"}</strong>.
+          </p>
+          <div className="text-slate-600 text-[11px] font-mono">
+            Hotline: <strong>{item.data?.contactNumber || "09243223514"}</strong>
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="space-y-2 my-3 select-text">
         {item.data?.title && (
@@ -1116,6 +1208,21 @@ function ElementVisualPreview({ item, selectedCompany, docRef, docDate }) {
           <div className="text-slate-800 text-xs font-semibold">{item.data?.closeLabel || "Sincerely,"}</div>
           <div className="font-black text-xs uppercase text-slate-950 tracking-wider">
             {item.data?.title || "OPERATIONS MANAGER"}
+          </div>
+        </div>
+      );
+    }
+    if (item.variant === "sig_single_certified_by") {
+      return (
+        <div className="pt-3 my-2 text-xs select-text">
+          <div className="border-b border-slate-300 mb-4" />
+          <div className="space-y-4">
+            <div className="text-slate-800 font-semibold">{item.data?.label || "Certified by:"}</div>
+            <div className="space-y-0.5">
+              <div className="font-black text-xs uppercase text-slate-950">{item.data?.name || "QUENNIE R. CAPUYAN"}</div>
+              <div className="text-slate-700 text-[11px]">{item.data?.title || "Human Resource Staff"}</div>
+              <div className="text-slate-500 font-bold uppercase text-[10px]">{item.data?.company || selectedCompany.name}</div>
+            </div>
           </div>
         </div>
       );
@@ -2870,6 +2977,38 @@ export default function DocumentStudioPanel({
         { ...staffSig, category: "signatory" },
         { ...securityFooter, category: "footer" }
       ];
+    } else if (presetKey === "non_affiliation_salesforce") {
+      const dualCleanHeader = MODULAR_BLOCK_PRESETS.find((c) => c.category === "header").items.find((i) => i.variant === "header_dual_clean") || headerItem;
+      const sfBody = MODULAR_BLOCK_PRESETS.find((c) => c.category === "body").items.find((i) => i.variant === "body_non_affiliation_salesforce");
+      const certSig = MODULAR_BLOCK_PRESETS.find((c) => c.category === "signatory").items.find((i) => i.variant === "sig_single_certified_by");
+      presetBlocks = [
+        {
+          ...dualCleanHeader,
+          category: "header",
+          data: {
+            ...dualCleanHeader.defaultData,
+            leftLogo: selectedCompany.logoUrl,
+            rightLogo: selectedCompany.rightLogoUrl || "/logos/group_emblem.jpg",
+            companyName: selectedCompany.legalName || selectedCompany.name || "LUCKY BETPLAY CORPORATION"
+          }
+        },
+        {
+          ...sfBody,
+          category: "body",
+          data: {
+            ...sfBody.defaultData,
+            companyName: selectedCompany.legalName || selectedCompany.name || "Lucky Betplay Corporation"
+          }
+        },
+        {
+          ...certSig,
+          category: "signatory",
+          data: {
+            ...certSig.defaultData,
+            company: selectedCompany.legalName || selectedCompany.name || "Lucky Betplay Corporation"
+          }
+        }
+      ];
     }
 
     const constructed = presetBlocks.map((item) => ({
@@ -3028,54 +3167,83 @@ export default function DocumentStudioPanel({
       el.removeAttribute("suppresscontenteditablewarning");
     });
 
+    // Strictly ensure watermark is absolute, centered, faint, and NEVER in normal flow
+    const watermarkEl = clone.querySelector(".doc-watermark-layer, [class*='opacity-[0.03'], [class*='opacity-[0.04']");
+    if (watermarkEl) {
+      watermarkEl.setAttribute("style", "position: absolute !important; top: 50% !important; left: 50% !important; transform: translate(-50%, -50%) !important; width: 340px !important; height: 340px !important; pointer-events: none !important; z-index: 0 !important; display: flex !important; align-items: center !important; justify-content: center !important; opacity: 0.04 !important; user-select: none !important; margin: 0 !important; padding: 0 !important; overflow: hidden !important;");
+      const wmImg = watermarkEl.querySelector("img");
+      if (wmImg) {
+        wmImg.setAttribute("style", "max-width: 100% !important; max-height: 100% !important; object-fit: contain !important; filter: grayscale(15%) !important; display: block !important; margin: 0 auto !important;");
+      }
+    }
+
+    // Ensure content wrapper fills sheet and distributes top/bottom elements
+    const hasFooter = Boolean(clone.querySelector("[data-category='footer'], .footer-stick-bottom"));
+    const contentEl = clone.querySelector(".space-y-6");
+    if (contentEl) {
+      contentEl.setAttribute("style", `position: relative !important; z-index: 10 !important; display: flex !important; flex-direction: column !important; justify-content: ${hasFooter ? "space-between" : "flex-start"} !important; flex: 1 1 0% !important; width: 100% !important; height: 100% !important; min-height: 100% !important;`);
+    }
+
     const fontCss = FONT_FAMILIES.find((f) => f.id === fontFamily)?.css || "'Inter', sans-serif";
     const currentPaper = currentPaperDef;
+
+    // Collect all stylesheets and style tags without filtering out Tailwind CSS
+    const headStyles = Array.from(document.querySelectorAll("link[rel='stylesheet'], style"))
+      .filter((node) => {
+        const text = node.textContent || "";
+        return !text.includes("printing-agent-id-card");
+      })
+      .map((node) => node.outerHTML)
+      .join("\n");
 
     // 3. Build isolated, self-contained printable document matching exact viewer specifications
     const printHtml = `<!doctype html>
 <html>
 <head>
   <meta charset="utf-8">
+  <base href="${typeof window !== 'undefined' ? window.location.origin : ''}/" />
   <title>${docRef || "DOCUMENT"} - ${selectedCompany.name} (${currentPaper.label})</title>
+  ${headStyles}
   <style>
     @page {
-      size: ${currentPaper.printCss};
-      margin: 0;
+      size: ${currentPaper.printCss} !important;
+      margin: 0 !important;
     }
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-      -webkit-font-smoothing: antialiased;
+    *, *::before, *::after {
+      box-sizing: border-box !important;
+      -webkit-font-smoothing: antialiased !important;
       -webkit-print-color-adjust: exact !important;
       print-color-adjust: exact !important;
+      visibility: visible !important;
     }
     html, body {
-      width: 100%;
-      height: 100%;
-      margin: 0;
-      padding: 0;
-      background: #ffffff;
-      overflow: hidden;
-      font-family: ${fontCss};
-      font-size: ${fontSize}pt;
-      line-height: 1.6;
-      color: #0f172a;
+      width: 100% !important;
+      height: auto !important;
+      min-height: auto !important;
+      max-height: none !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      background: #ffffff !important;
+      overflow: visible !important;
+      font-family: ${fontCss} !important;
+      font-size: ${fontSize}pt !important;
+      line-height: 1.6 !important;
+      color: #0f172a !important;
     }
     .print-sheet {
-      width: 100%;
-      max-width: ${currentPaper.widthIn || '8.5in'};
-      height: 100%;
-      max-height: ${currentPaper.heightIn || '11in'};
-      box-sizing: border-box;
-      position: relative;
-      overflow: hidden;
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
-      padding: ${currentPaper.pageMargin || '0.5in 0.65in'};
-      margin: 0 auto;
-      background: #ffffff;
+      width: ${currentPaper.widthIn || '8.5in'} !important;
+      height: ${currentPaper.heightIn || '11in'} !important;
+      min-height: ${currentPaper.heightIn || '11in'} !important;
+      max-height: ${currentPaper.heightIn || '11in'} !important;
+      box-sizing: border-box !important;
+      position: relative !important;
+      overflow: hidden !important;
+      display: flex !important;
+      flex-direction: column !important;
+      justify-content: space-between !important;
+      padding: ${currentPaper.pageMargin || '0.5in 0.65in'} !important;
+      margin: 0 auto !important;
+      background: #ffffff !important;
       page-break-before: avoid !important;
       break-before: avoid !important;
       page-break-after: avoid !important;
@@ -3083,30 +3251,139 @@ export default function DocumentStudioPanel({
       page-break-inside: avoid !important;
       break-inside: avoid !important;
     }
-    .print-sheet > div {
-      position: relative;
+    .print-sheet * {
+      visibility: visible !important;
+    }
+    /* Centered faint watermark layer - 0 impact on vertical flow */
+    .doc-watermark-layer,
+    .print-sheet > div.doc-watermark-layer,
+    .print-sheet > div[class*="opacity-[0.03"],
+    .print-sheet > div[class*="opacity-[0.04"] {
+      position: absolute !important;
+      top: 50% !important;
+      left: 50% !important;
+      transform: translate(-50%, -50%) !important;
+      width: 340px !important;
+      height: 340px !important;
+      pointer-events: none !important;
+      z-index: 0 !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      opacity: 0.04 !important;
+      user-select: none !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      overflow: hidden !important;
+    }
+    .doc-watermark-layer img,
+    .print-sheet > div.doc-watermark-layer img {
+      max-width: 100% !important;
+      max-height: 100% !important;
+      object-fit: contain !important;
+      filter: grayscale(15%) !important;
+      display: block !important;
+      margin: 0 auto !important;
+    }
+
+    /* Content flow: occupies full sheet height, top items stay top, bottom items stay bottom */
+    .print-sheet > div.space-y-6,
+    .print-sheet > div:not(.doc-watermark-layer):not([class*="absolute"]) {
+      position: relative !important;
+      z-index: 10 !important;
+      flex: 1 1 0% !important;
+      height: 100% !important;
+      min-height: 100% !important;
+      display: flex !important;
+      flex-direction: column !important;
+      justify-content: ${hasFooter ? "space-between" : "flex-start"} !important;
+      width: 100% !important;
     }
     .print-sheet .space-y-6 > * + * {
-      margin-top: 1.15rem;
+      margin-top: 1.15rem !important;
+    }
+    .space-y-3\.5 > * + * {
+      margin-top: 0.75rem !important;
+    }
+    .space-y-4 > * + * {
+      margin-top: 0.85rem !important;
     }
     .print-sheet p {
-      color: #0f172a;
-      text-align: justify;
+      color: #0f172a !important;
     }
     .print-sheet table {
-      border-collapse: collapse;
-      width: 100%;
+      border-collapse: collapse !important;
+      width: 100% !important;
     }
     .print-sheet table th, .print-sheet table td {
-      border: 1px solid #0f172a;
-      padding: 4px 6px;
+      border: 1px solid #0f172a !important;
+      padding: 4px 6px !important;
     }
     img {
-      max-width: 100%;
-      object-fit: contain;
+      max-width: 100% !important;
+      object-fit: contain !important;
+      visibility: visible !important;
     }
-    .no-print {
+    /* Comprehensive utility fallback rules */
+    .w-18, .w-20 { width: 4.5rem !important; height: 4.5rem !important; }
+    .h-18, .h-20 { height: 4.5rem !important; }
+    .w-14 { width: 3.5rem !important; }
+    .h-14 { height: 3.5rem !important; }
+    .w-16 { width: 4rem !important; }
+    .h-16 { height: 4rem !important; }
+    .max-h-full { max-height: 100% !important; }
+    .max-w-full { max-width: 100% !important; }
+    .object-contain { object-fit: contain !important; }
+    .flex { display: flex !important; }
+    .flex-col { flex-direction: column !important; }
+    .flex-1 { flex: 1 1 0% !important; }
+    .items-center { align-items: center !important; }
+    .items-start { align-items: flex-start !important; }
+    .items-end { align-items: flex-end !important; }
+    .justify-between { justify-content: space-between !important; }
+    .justify-center { justify-content: center !important; }
+    .shrink-0 { flex-shrink: 0 !important; }
+    .text-center { text-align: center !important; }
+    .text-right { text-align: right !important; }
+    .text-justify { text-align: justify !important; }
+    .uppercase { text-transform: uppercase !important; }
+    .font-bold { font-weight: 700 !important; }
+    .font-black { font-weight: 900 !important; }
+    .font-semibold { font-weight: 600 !important; }
+    .font-mono { font-family: monospace !important; }
+    .grid { display: grid !important; }
+    .grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+    .grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
+    .gap-8 { gap: 2rem !important; }
+    .gap-6 { gap: 1.5rem !important; }
+    .gap-4 { gap: 1rem !important; }
+    .gap-3 { gap: 0.75rem !important; }
+    .gap-2 { gap: 0.5rem !important; }
+    .pb-4 { padding-bottom: 1rem !important; }
+    .mb-4 { margin-bottom: 1rem !important; }
+    .pb-2 { padding-bottom: 0.5rem !important; }
+    .mb-3 { margin-bottom: 0.75rem !important; }
+    .pt-4 { padding-top: 1rem !important; }
+    .pt-3 { padding-top: 0.75rem !important; }
+    .mt-8 { margin-top: 2rem !important; }
+    .mb-1 { margin-bottom: 0.25rem !important; }
+    .mt-0\.5 { margin-top: 0.125rem !important; }
+    .mt-1 { margin-top: 0.25rem !important; }
+    .border-b-2 { border-bottom-width: 2px !important; border-bottom-style: solid !important; }
+    .border-b { border-bottom-width: 1px !important; border-bottom-style: solid !important; }
+    .border-t { border-top-width: 1px !important; border-top-style: solid !important; }
+    .border-t-2 { border-top-width: 2px !important; border-top-style: solid !important; }
+    .border-emerald-700 { border-color: #047857 !important; }
+    .border-slate-900, .border-slate-800, .border-black { border-color: #0f172a !important; }
+    .border-slate-300, .border-slate-200 { border-color: #cbd5e1 !important; }
+    .leading-tight { line-height: 1.25 !important; }
+    .leading-snug { line-height: 1.375 !important; }
+    .leading-relaxed { line-height: 1.55 !important; }
+    .tracking-wider { letter-spacing: 0.05em !important; }
+    .tracking-wide { letter-spacing: 0.025em !important; }
+    .no-print, .block-hover-controls, [role="tooltip"] {
       display: none !important;
+      visibility: hidden !important;
     }
   </style>
 </head>
@@ -3114,15 +3391,6 @@ export default function DocumentStudioPanel({
   <div class="print-sheet">
     ${clone.innerHTML}
   </div>
-  <script>
-    window.onload = function() {
-      setTimeout(function() {
-        window.focus();
-        window.print();
-        setTimeout(function() { window.close(); }, 500);
-      }, 250);
-    };
-  </script>
 </body>
 </html>`;
 
@@ -3137,6 +3405,51 @@ export default function DocumentStudioPanel({
       printWindow.document.open();
       printWindow.document.write(printHtml);
       printWindow.document.close();
+      printWindow.focus();
+
+      const doTriggerPrint = () => {
+        try {
+          printWindow.focus();
+          printWindow.onafterprint = () => {
+            try {
+              printWindow.close();
+            } catch {}
+          };
+          printWindow.print();
+        } catch (e) {
+          console.warn("Popup print failed, falling back to direct window.print", e);
+          window.print();
+        }
+      };
+
+      const imgs = Array.from(printWindow.document.images || []);
+      if (imgs.length === 0) {
+        setTimeout(doTriggerPrint, 250);
+      } else {
+        let loaded = 0;
+        let triggered = false;
+        const onImgDone = () => {
+          loaded++;
+          if (loaded >= imgs.length && !triggered) {
+            triggered = true;
+            setTimeout(doTriggerPrint, 180);
+          }
+        };
+        imgs.forEach((img) => {
+          if (img.complete) {
+            onImgDone();
+          } else {
+            img.onload = onImgDone;
+            img.onerror = onImgDone;
+          }
+        });
+        setTimeout(() => {
+          if (!triggered) {
+            triggered = true;
+            doTriggerPrint();
+          }
+        }, 650);
+      }
     } else {
       // Invisible iframe fallback if browser popup blocker prevented window.open
       let printFrame = document.getElementById("doc-studio-print-frame");
@@ -3162,7 +3475,7 @@ export default function DocumentStudioPanel({
         } catch {
           window.print();
         }
-      }, 350);
+      }, 400);
     }
   };
 
@@ -3180,27 +3493,24 @@ export default function DocumentStudioPanel({
             margin: 0 !important;
             padding: 0 !important;
             width: 100% !important;
-            height: 100% !important;
-            overflow: hidden !important;
+            height: auto !important;
+            min-height: auto !important;
+            overflow: visible !important;
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
           }
-          body * {
+          header, aside, nav, .no-print, .block-hover-controls, [role="tooltip"] {
+            display: none !important;
             visibility: hidden !important;
           }
-          #coupon-bond-printable, #coupon-bond-printable * {
-            visibility: visible !important;
-          }
           #coupon-bond-printable {
-            position: fixed !important;
-            left: 0 !important;
-            top: 0 !important;
+            position: static !important;
+            transform: none !important;
             width: ${currentPaperDef.widthIn || '8.5in'} !important;
             max-width: ${currentPaperDef.widthIn || '8.5in'} !important;
             height: ${currentPaperDef.heightIn || '11in'} !important;
+            min-height: ${currentPaperDef.heightIn || '11in'} !important;
             max-height: ${currentPaperDef.heightIn || '11in'} !important;
-            min-height: 0 !important;
-            transform: none !important;
             margin: 0 auto !important;
             padding: ${currentPaperDef.pageMargin || '0.5in 0.65in'} !important;
             box-shadow: none !important;
@@ -3217,11 +3527,17 @@ export default function DocumentStudioPanel({
             page-break-inside: avoid !important;
             break-inside: avoid !important;
           }
+          #coupon-bond-printable > div.space-y-6,
+          #coupon-bond-printable > div:not([class*="absolute"]) {
+            flex: 1 1 0% !important;
+            height: 100% !important;
+            min-height: 100% !important;
+            display: flex !important;
+            flex-direction: column !important;
+            justify-content: space-between !important;
+          }
           #coupon-bond-printable .space-y-6 > * + * {
             margin-top: 1.15rem !important;
-          }
-          .no-print, .block-hover-controls, header, aside, [role="tooltip"] {
-            display: none !important;
           }
         }
       `}</style>
@@ -3536,11 +3852,34 @@ export default function DocumentStudioPanel({
 
             {/* Elegant Background Corporate Watermark (Faint corporate logo as in official documents) */}
             {selectedCompany?.logoUrl && (
-              <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none z-0 overflow-hidden">
+              <div
+                className="doc-watermark-layer pointer-events-none select-none overflow-hidden"
+                style={{
+                  position: "absolute",
+                  top: "50%",
+                  left: "50%",
+                  transform: "translate(-50%, -50%)",
+                  width: "360px",
+                  height: "360px",
+                  pointerEvents: "none",
+                  zIndex: 0,
+                  userSelect: "none",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  opacity: 0.04
+                }}
+              >
                 <img
-                  src={selectedCompany.logoUrl}
+                  src={selectedCompany.rightLogoUrl || selectedCompany.logoUrl}
                   alt=""
-                  className="w-96 h-96 object-contain opacity-[0.038] grayscale contrast-125 filter transition-opacity"
+                  style={{
+                    maxWidth: "100%",
+                    maxHeight: "100%",
+                    objectFit: "contain",
+                    filter: "grayscale(15%)",
+                    display: "block"
+                  }}
                 />
               </div>
             )}
@@ -3566,6 +3905,13 @@ export default function DocumentStudioPanel({
                     Or Start with a 1-Click Document Configuration:
                   </span>
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
+                    <button
+                      type="button"
+                      onClick={() => handleLoadFullDocumentPreset("non_affiliation_salesforce")}
+                      className="p-2 rounded-xl border border-indigo-300 bg-indigo-50/80 hover:border-indigo-500 hover:bg-indigo-100 font-black text-indigo-950 transition cursor-pointer"
+                    >
+                      🛡️ Non-Affiliation (Salesforce)
+                    </button>
                     <button
                       type="button"
                       onClick={() => handleLoadFullDocumentPreset("non_affiliation")}
@@ -3614,15 +3960,29 @@ export default function DocumentStudioPanel({
             ) : (
               /* RENDER PLACED MODULAR ELEMENTS SEQUENTIALLY ON THE BOND PAPER */
               /* CRASH-PROOF: strictly scoped by el.category with zero textbox frames */
-              <div className="space-y-6 flex-1 relative z-10">
+              <div
+                className="space-y-6 flex-1 relative z-10"
+                style={{
+                  position: "relative",
+                  zIndex: 10,
+                  display: "flex",
+                  flexDirection: "column",
+                  justifyContent: paperElements.some((e) => e.category === "footer") ? "space-between" : "flex-start",
+                  flex: "1 1 0%",
+                  height: "100%",
+                  minHeight: "100%",
+                  width: "100%"
+                }}
+              >
                 {paperElements.map((el, index) => {
                   const isHovered = activeElementId === el.id;
 
                   return (
                     <div
                       key={el.id}
+                      data-category={el.category}
                       onClick={() => setActiveElementId(el.id)}
-                      className="relative group transition-all"
+                      className={`relative group transition-all ${el.category === "footer" ? "mt-auto footer-stick-bottom" : ""}`}
                     >
                       {/* Floating Control Toolbar for this placed element */}
                       <div className="no-print absolute -top-3.5 right-2 z-20 hidden group-hover:flex items-center gap-1 bg-slate-900 text-white px-2 py-0.5 rounded-lg shadow-md text-[10px] font-bold">
@@ -3675,8 +4035,8 @@ export default function DocumentStudioPanel({
                           {el.variant === "header_dual_logo" && (
                             <div className="border-b-2 border-emerald-700 pb-4 mb-4 select-text">
                               <div className="flex items-center justify-between gap-4">
-                                <div className="w-18 h-18 sm:w-20 sm:h-20 flex items-center justify-center shrink-0">
-                                  <img src={selectedCompany.logoUrl} alt={selectedCompany.name} className="max-h-full max-w-full object-contain" />
+                                <div className="w-18 h-18 sm:w-20 sm:h-20 flex items-center justify-center shrink-0" style={{ width: "5rem", height: "5rem", flexShrink: 0 }}>
+                                  <img src={selectedCompany.logoUrl} alt={selectedCompany.name} style={{ maxHeight: "100%", maxWidth: "100%", objectFit: "contain" }} className="max-h-full max-w-full object-contain" />
                                 </div>
                                 <div className="flex-1 text-center px-2">
                                   <h2 className="text-base sm:text-lg font-black uppercase tracking-wider text-slate-900 leading-tight">
@@ -3692,8 +4052,8 @@ export default function DocumentStudioPanel({
                                     {selectedCompany.contact}
                                   </p>
                                 </div>
-                                <div className="w-18 h-18 sm:w-20 sm:h-20 flex items-center justify-center shrink-0">
-                                  <img src={selectedCompany.rightLogoUrl || "/logos/group_emblem.jpg"} alt="Corporate Emblem" className="max-h-full max-w-full object-contain" />
+                                <div className="w-18 h-18 sm:w-20 sm:h-20 flex items-center justify-center shrink-0" style={{ width: "5rem", height: "5rem", flexShrink: 0 }}>
+                                  <img src={selectedCompany.rightLogoUrl || "/logos/group_emblem.jpg"} alt="Corporate Emblem" style={{ maxHeight: "100%", maxWidth: "100%", objectFit: "contain" }} className="max-h-full max-w-full object-contain" />
                                 </div>
                               </div>
                             </div>
@@ -3786,6 +4146,47 @@ export default function DocumentStudioPanel({
                                   <img
                                     src={el.data?.rightLogo || "/id-assets/pcso_logo.png"}
                                     alt="PCSO Authority Seal"
+                                    className="max-h-full max-w-full object-contain"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {el.variant === "header_dual_clean" && (
+                            <div className="pb-2 mb-4 select-text">
+                              <div className="flex items-center justify-between gap-4">
+                                <div className="w-20 h-20 sm:w-24 sm:h-24 flex items-center justify-center shrink-0" style={{ width: "5.5rem", height: "5.5rem", flexShrink: 0 }}>
+                                  <img
+                                    src={el.data?.leftLogo || selectedCompany.logoUrl}
+                                    alt={selectedCompany.name}
+                                    style={{ maxHeight: "100%", maxWidth: "100%", objectFit: "contain" }}
+                                    className="max-h-full max-w-full object-contain"
+                                  />
+                                </div>
+                                <div className="flex-1 text-center px-2">
+                                  <h2
+                                    contentEditable
+                                    suppressContentEditableWarning
+                                    onBlur={(e) => updateElementData(el.id, "companyName", e.currentTarget.innerText)}
+                                    className="text-sm sm:text-base font-black uppercase tracking-wider text-slate-900 leading-tight outline-none hover:bg-amber-50/50 rounded px-1 transition"
+                                  >
+                                    {el.data?.companyName || selectedCompany.legalName || selectedCompany.name || "LUCKY BETPLAY CORPORATION"}
+                                  </h2>
+                                  <div
+                                    contentEditable
+                                    suppressContentEditableWarning
+                                    onBlur={(e) => updateElementData(el.id, "address", e.currentTarget.innerText)}
+                                    className="text-[11px] sm:text-xs font-semibold text-slate-700 mt-1 leading-snug uppercase outline-none hover:bg-amber-50/50 rounded px-1 transition whitespace-pre-line"
+                                  >
+                                    {el.data?.address || "#257 BARLAPS, A.S. FORTUNA STREET,\nBAKILID, MANDAUE CITY, CEBU 6014"}
+                                  </div>
+                                </div>
+                                <div className="w-18 h-18 sm:w-20 sm:h-20 flex items-center justify-center shrink-0" style={{ width: "5rem", height: "5rem", flexShrink: 0 }}>
+                                  <img
+                                    src={el.data?.rightLogo || selectedCompany.rightLogoUrl || "/logos/group_emblem.jpg"}
+                                    alt="Corporate Group Emblem"
+                                    style={{ maxHeight: "100%", maxWidth: "100%", objectFit: "contain" }}
                                     className="max-h-full max-w-full object-contain"
                                   />
                                 </div>
@@ -4163,13 +4564,108 @@ export default function DocumentStudioPanel({
                               </div>
                             </div>
                           )}
+
+                          {el.variant === "address_simple_date" && (
+                            <div className="my-2 select-text">
+                              <span
+                                contentEditable
+                                suppressContentEditableWarning
+                                onBlur={(e) => updateElementData(el.id, "dateLine", e.currentTarget.innerText)}
+                                className="font-bold text-xs sm:text-sm text-slate-950 outline-none hover:bg-amber-50/50 rounded px-1 transition inline-block"
+                              >
+                                {el.data?.dateLine || "Date: November 06, 2026"}
+                              </span>
+                            </div>
+                          )}
                         </div>
                       )}
 
                       {/* ================= CATEGORY 3: DIRECTIVES & BODY ================= */}
                       {el.category === "body" && (
                         <div>
-                          {el.variant === "body_termination_agency" ? (
+                          {el.variant === "body_non_affiliation_salesforce" ? (
+                            <div className="space-y-4 my-3 text-xs sm:text-sm leading-relaxed text-slate-900 select-text">
+                              {/* Centered Document Title */}
+                              <div className="text-center my-3">
+                                <h2
+                                  contentEditable
+                                  suppressContentEditableWarning
+                                  onBlur={(e) => updateElementData(el.id, "title", e.currentTarget.innerText)}
+                                  className="text-sm sm:text-base font-black uppercase tracking-wider text-slate-950 outline-none hover:bg-amber-50/50 rounded px-2 inline-block transition"
+                                >
+                                  {el.data?.title || "CERTIFICATE OF NON-AFFILIATION"}
+                                </h2>
+                              </div>
+
+                              {/* Date Line */}
+                              {el.data?.dateLine && (
+                                <div className="pt-1 pb-1">
+                                  <span
+                                    contentEditable
+                                    suppressContentEditableWarning
+                                    onBlur={(e) => updateElementData(el.id, "dateLine", e.currentTarget.innerText)}
+                                    className="font-bold text-xs sm:text-sm text-slate-950 outline-none hover:bg-amber-50/50 rounded px-1 transition inline-block"
+                                  >
+                                    {el.data.dateLine}
+                                  </span>
+                                </div>
+                              )}
+
+                              {/* Paragraph 1 */}
+                              <p className="text-justify leading-relaxed">
+                                This is to certify that{" "}
+                                <strong
+                                  contentEditable
+                                  suppressContentEditableWarning
+                                  onBlur={(e) => updateElementData(el.id, "personName", e.currentTarget.innerText)}
+                                  className="font-black text-slate-950 outline-none hover:bg-amber-50/50 rounded px-0.5"
+                                >
+                                  {el.data?.personName || "ARJUN BAGUIO PATALINGHUG"}
+                                </strong>
+                                , is not <strong className="font-bold">affiliated</strong> with{" "}
+                                <strong className="font-bold">{el.data?.companyName || selectedCompany.legalName || selectedCompany.name || "Lucky Betplay Corporation"}</strong> as a Salesforce partner under the{" "}
+                                <strong className="font-bold">{el.data?.agencyName || "Philippine Charity Sweepstakes Office (PCSO)"}</strong>.
+                              </p>
+
+                              {/* Paragraph 2 */}
+                              <p className="text-justify leading-relaxed">
+                                We affirm that the aforementioned individual <strong className="font-bold">has no formal or informal association</strong> with <strong className="font-bold">{el.data?.companyName || selectedCompany.legalName || selectedCompany.name || "Lucky Betplay Corporation"}</strong> in any capacity related to Salesforce services, nor do they represent the company in any activities associated with PCSO.
+                              </p>
+
+                              {/* Paragraph 3 */}
+                              <p className="text-justify leading-relaxed">
+                                Any claims or representation made by this individual suggesting that He is a Salesforce partner of <strong className="font-bold">{el.data?.companyName || selectedCompany.legalName || selectedCompany.name || "Lucky Betplay Corporation"}</strong> or have any related business dealings with the company are <strong className="font-bold">false and unauthorized</strong>.
+                              </p>
+
+                              {/* Paragraph 4 */}
+                              <p className="text-justify leading-relaxed">
+                                This certification is issued for the <strong className="font-bold">purpose of clarifying</strong> that{" "}
+                                <strong
+                                  contentEditable
+                                  suppressContentEditableWarning
+                                  onBlur={(e) => updateElementData(el.id, "personNameTitle", e.currentTarget.innerText)}
+                                  className="font-bold text-slate-950 outline-none hover:bg-amber-50/50 rounded px-0.5"
+                                >
+                                  {el.data?.personNameTitle || "Arjun Baguio Patalinghug"}
+                                </strong>{" "}
+                                has <strong className="font-bold">never been affiliated</strong> with <strong className="font-bold">{el.data?.companyName || selectedCompany.legalName || selectedCompany.name || "Lucky Betplay Corporation"} as a Salesforce partner</strong>.
+                              </p>
+
+                              {/* Paragraph 5 (Verification Hotline) */}
+                              <p className="text-justify leading-relaxed pt-1">
+                                For verification or further inquiries, please contact #:{" "}
+                                <strong
+                                  contentEditable
+                                  suppressContentEditableWarning
+                                  onBlur={(e) => updateElementData(el.id, "contactNumber", e.currentTarget.innerText)}
+                                  className="font-black text-slate-950 outline-none hover:bg-amber-50/50 rounded px-0.5"
+                                >
+                                  {el.data?.contactNumber || "09243223514"}
+                                </strong>
+                                .
+                              </p>
+                            </div>
+                          ) : el.variant === "body_termination_agency" ? (
                             <div className="space-y-4 my-3 text-xs leading-relaxed text-slate-900 select-text">
                               <p
                                 contentEditable
@@ -4775,6 +5271,51 @@ export default function DocumentStudioPanel({
                               </div>
                             </div>
                           )}
+
+                          {el.variant === "sig_single_certified_by" && (
+                            <div className="pt-3 my-2 text-xs select-text">
+                              {/* Horizontal Divider Line */}
+                              <div className="border-b border-slate-300 my-4" />
+
+                              <div className="space-y-6">
+                                <div
+                                  contentEditable
+                                  suppressContentEditableWarning
+                                  onBlur={(e) => updateElementData(el.id, "label", e.currentTarget.innerText)}
+                                  className="text-slate-800 text-xs font-semibold outline-none hover:bg-amber-50/50 rounded px-1 transition inline-block"
+                                >
+                                  {el.data?.label || "Certified by:"}
+                                </div>
+
+                                <div className="space-y-0.5">
+                                  <div
+                                    contentEditable
+                                    suppressContentEditableWarning
+                                    onBlur={(e) => updateElementData(el.id, "name", e.currentTarget.innerText)}
+                                    className="font-black text-slate-950 uppercase text-xs sm:text-sm tracking-wide outline-none hover:bg-amber-50/50 rounded px-1 inline-block"
+                                  >
+                                    {el.data?.name || "QUENNIE R. CAPUYAN"}
+                                  </div>
+                                  <div
+                                    contentEditable
+                                    suppressContentEditableWarning
+                                    onBlur={(e) => updateElementData(el.id, "title", e.currentTarget.innerText)}
+                                    className="text-slate-700 font-semibold text-[11px] sm:text-xs outline-none hover:bg-amber-50/50 rounded px-1"
+                                  >
+                                    {el.data?.title || "Human Resource Staff"}
+                                  </div>
+                                  <div
+                                    contentEditable
+                                    suppressContentEditableWarning
+                                    onBlur={(e) => updateElementData(el.id, "company", e.currentTarget.innerText)}
+                                    className="text-slate-600 font-bold uppercase text-[10px] sm:text-[11px] outline-none hover:bg-amber-50/50 rounded px-1"
+                                  >
+                                    {el.data?.company || selectedCompany.legalName || selectedCompany.name || "Lucky Betplay Corporation"}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       )}
 
@@ -4933,10 +5474,7 @@ export default function DocumentStudioPanel({
                           cardLeft: rect.left,
                         });
                       }}
-                      onMouseMove={(e) => {
-                        setHoveredPreview((prev) => (prev ? { ...prev, x: e.clientX, y: e.clientY } : null));
-                      }}
-                      onMouseLeave={() => setHoveredPreview(null)}
+                                            onMouseLeave={() => setHoveredPreview(null)}
                       className="p-3.5 rounded-2xl border-2 border-amber-300 bg-amber-50/30 hover:border-amber-500 hover:shadow-md transition-all cursor-grab active:cursor-grabbing group space-y-2 shadow-2xs relative"
                     >
                       <div className="flex items-start justify-between gap-2">
@@ -5018,10 +5556,7 @@ export default function DocumentStudioPanel({
                         cardLeft: rect.left,
                       });
                     }}
-                    onMouseMove={(e) => {
-                      setHoveredPreview((prev) => (prev ? { ...prev, x: e.clientX, y: e.clientY } : null));
-                    }}
-                    onMouseLeave={() => setHoveredPreview(null)}
+                                        onMouseLeave={() => setHoveredPreview(null)}
                     className="p-3.5 rounded-2xl border-2 border-amber-300 bg-amber-50/20 hover:border-amber-500 hover:shadow-md transition-all cursor-grab active:cursor-grabbing group space-y-2 shadow-2xs relative"
                   >
                     <div className="flex items-start justify-between gap-2">
@@ -5102,10 +5637,7 @@ export default function DocumentStudioPanel({
                         cardLeft: rect.left,
                       });
                     }}
-                    onMouseMove={(e) => {
-                      setHoveredPreview((prev) => (prev ? { ...prev, x: e.clientX, y: e.clientY } : null));
-                    }}
-                    onMouseLeave={() => setHoveredPreview(null)}
+                                        onMouseLeave={() => setHoveredPreview(null)}
                     className="p-3.5 rounded-2xl border border-slate-200 bg-white hover:border-amber-400 hover:shadow-md transition-all cursor-grab active:cursor-grabbing group space-y-2 shadow-2xs relative"
                   >
                     <div className="flex items-start justify-between gap-2">
@@ -5160,6 +5692,13 @@ export default function DocumentStudioPanel({
               1-Click Preset Layouts:
             </span>
             <div className="grid grid-cols-2 gap-1.5 text-[11px]">
+              <button
+                type="button"
+                onClick={() => handleLoadFullDocumentPreset("non_affiliation_salesforce")}
+                className="p-1.5 rounded-lg bg-indigo-50 border border-indigo-300 hover:border-indigo-500 font-black text-indigo-950 transition truncate text-left cursor-pointer col-span-2"
+              >
+                🛡️ Non-Affiliation (Salesforce Partner)
+              </button>
               <button
                 type="button"
                 onClick={() => handleLoadFullDocumentPreset("non_affiliation")}
