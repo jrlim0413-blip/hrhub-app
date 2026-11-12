@@ -13,7 +13,10 @@ import {
   resolveCompanyFromMemoRef,
   sanitizeMemoRef
 } from "./MemoGeneratorPanel";
-import { getUserSettings, saveUserSettings } from "../lib/userSettingsStorage";
+import {
+  getUserSettings,
+  filterValidLetterheadFields
+} from "../lib/userSettingsStorage";
 import {
   generateUniqueDocRef,
   registerUsedDocRef,
@@ -85,8 +88,19 @@ export const FONT_FAMILIES = [
 ];
 
 // ================= PALETTE LIBRARY: PURE MODULAR BUILDING BLOCKS =================
+export const resolveCompanyTokens = (text, company) => {
+  if (!text || typeof text !== "string" || !company) return text || "";
+  return text
+    .replace(/\[COMPANY_NAME\]/g, company.name || "")
+    .replace(/\[COMPANY_LEGAL_NAME\]/g, company.legalName || company.name || "")
+    .replace(/\[COMPANY_CODE\]/g, company.code || "")
+    .replace(/\[COMPANY_ADDRESS\]/g, company.address || "")
+    .replace(/\[COMPANY_CONTACT\]/g, company.contact || "")
+    .replace(/\[COMPANY_TAGLINE\]/g, company.tagline || "");
+};
+
 export const MODULAR_BLOCK_PRESETS = [
-  // 1. HEADERS (Iba't ibang Header Template Designs)
+  // 1. HEADERS (Corporate Letterhead Templates)
   {
     category: "header",
     categoryLabel: "1. Header Designs",
@@ -123,7 +137,7 @@ export const MODULAR_BLOCK_PRESETS = [
         name: "PCSO AAC Accreditation Header",
         description: "Formal gaming authority header with PCSO AAC authorized agent designation, provincial accreditation, and compliance badge.",
         defaultData: {
-          aacNumber: "AAC-CEBU-2026-089"
+          aacNumber: "AAC-[COMPANY_CODE]-2026-089"
         }
       },
       {
@@ -147,16 +161,13 @@ export const MODULAR_BLOCK_PRESETS = [
       {
         variant: "header_dual_clean",
         name: "Corporate Dual-Logo Header (Clean / No Green Line)",
-        description: "Official executive header with company logo left, corporate emblem right, centered company name & Barlaps address, without colored divider line.",
-        defaultData: {
-          companyName: "LUCKY BETPLAY CORPORATION",
-          address: "#257 BARLAPS, A.S. FORTUNA STREET,\nBAKILID, MANDAUE CITY, CEBU 6014"
-        }
+        description: "Official executive header with company logo left, corporate emblem right, centered company name & address, without colored divider line.",
+        defaultData: {}
       }
     ]
   },
 
-  // 2. ADDRESSING & METADATA (Iba't ibang Addressing designs)
+  // 2. ADDRESSING & METADATA (Addressing & Routing Layouts)
   {
     category: "addressing",
     categoryLabel: "2. Addressing & Metadata",
@@ -164,11 +175,12 @@ export const MODULAR_BLOCK_PRESETS = [
       {
         variant: "address_termination_agency",
         name: "Agency Agreement Termination Addressing",
-        description: "Official termination notice address block with Date line, Addressee Name, Field Station / Office, RE: Subject, and Salutation.",
+        description: "Official termination notice address block with Date line, Addressee Name, Field Station / Office, Company Entity, RE: Subject, and Salutation.",
         defaultData: {
           dateLine: "Date: _____________________",
           recipientName: "MR. DANIEL PADILLA",
           recipientOffice: "STL-ILIGAN OFFICE, LANAO DEL NORTE",
+          recipientCompany: "[COMPANY_LEGAL_NAME]",
           subject: "RE: TERMINATION OF AGENCY AGREEMENT",
           salutation: "Dear Mr. Padilla,"
         }
@@ -176,11 +188,12 @@ export const MODULAR_BLOCK_PRESETS = [
       {
         variant: "address_letter_to_explain",
         name: "Letter of Explanation / NTE Addressing",
-        description: "Official Letter of Explanation heading with left-aligned Date, Recipient Name, Designation, Station / Area, RE: Subject, and Salutation.",
+        description: "Official Letter of Explanation heading with left-aligned Date, Recipient Name, Designation, Company Entity, Station / Area, RE: Subject, and Salutation.",
         defaultData: {
           date: "SEPTEMBER 28, 2026",
           recipientName: "MOSHER BEBOT",
           recipientTitle: "SALES SUPERVISOR",
+          recipientCompany: "[COMPANY_LEGAL_NAME]",
           recipientStation: "MAGUINDANAO DEL NORTE",
           subject: "RE: LETTER OF EXPLANATION",
           salutation: "Dear Gomez,"
@@ -193,7 +206,7 @@ export const MODULAR_BLOCK_PRESETS = [
         defaultData: {
           title: "OFFICIAL MEMORANDUM",
           to: "ALL BRANCH MANAGERS, AREA COORDINATORS & FIELD STAFF",
-          from: "HUMAN RESOURCES DEPARTMENT",
+          from: "[COMPANY_NAME] — HUMAN RESOURCES DEPARTMENT",
           subject: "MANDATORY DIRECTIVES AND OPERATIONAL GUIDELINES"
         }
       },
@@ -204,7 +217,7 @@ export const MODULAR_BLOCK_PRESETS = [
         defaultData: {
           recipientName: "MR. ROBERTO TAN",
           recipientTitle: "Accredited Coordinator / Branch Supervisor",
-          recipientCompany: "Mandaue Central Station Operations",
+          recipientCompany: "[COMPANY_NAME] — Operations Division",
           salutation: "DEAR MR. TAN:"
         }
       },
@@ -214,7 +227,7 @@ export const MODULAR_BLOCK_PRESETS = [
         description: "Prominent centered headline banner with bold reference badge, ideal for public circulars and community advisories.",
         defaultData: {
           bannerTitle: "PUBLIC ADVISORY & FORMAL NOTICE",
-          to: "TO THE GENERAL PATRONIZING PUBLIC AND ALL GAMING OUTLETS"
+          to: "TO THE GENERAL PATRONIZING PUBLIC AND ALL GAMING OUTLETS OF [COMPANY_NAME]"
         }
       },
       {
@@ -224,7 +237,7 @@ export const MODULAR_BLOCK_PRESETS = [
         defaultData: {
           conferralText: "THIS CERTIFICATE IS PROUDLY CONFERRED UPON",
           awardeeName: "MS. MARIA SANTOS",
-          awardeeTitle: "Senior Area Coordinator • Operations Division"
+          awardeeTitle: "Senior Area Coordinator • [COMPANY_NAME]"
         }
       },
       {
@@ -266,7 +279,7 @@ export const MODULAR_BLOCK_PRESETS = [
     ]
   },
 
-  // 3. DIRECTIVES & BODY (Iba't ibang Directives Body templates)
+  // 3. DIRECTIVES & BODY (Directives & Certification Templates)
   {
     category: "body",
     categoryLabel: "3. Directives & Body",
@@ -295,7 +308,7 @@ The general public, gaming outlets, coordinators, field monitoring personnel, an
           dateLine: "Date: November 06, 2026",
           personName: "ARJUN BAGUIO PATALINGHUG",
           personNameTitle: "Arjun Baguio Patalinghug",
-          companyName: "Lucky Betplay Corporation",
+          companyName: "",
           partnerRole: "Salesforce partner",
           agencyName: "Philippine Charity Sweepstakes Office (PCSO)",
           contactNumber: "09243223514"
@@ -342,7 +355,7 @@ MANDATORY DIRECTIVES & TURNOVER PROTOCOLS:
             "5.8. In case of loss of trust and confidence in the concerned member.",
             "5.9. In case of violation of any provision of the 2020 STL RIRR, rules, regulations, and ethical conduct now in force and those which may from time to time be promulgated by the Company."
           ],
-          companyWarning: "Moreover, this action will not be tolerated by 5A Royal Gaming OPC, as these are grounds for cancellation of your Agency Agreement.",
+          companyWarning: "Moreover, this action will not be tolerated by [COMPANY_LEGAL_NAME], as these are grounds for cancellation of your Agency Agreement.",
           conclusionParagraph: "In conclusion, your Agency Agreement is hereby terminated effective _____________________."
         }
       },
@@ -421,7 +434,7 @@ MANDATORY DIRECTIVES & TURNOVER PROTOCOLS:
     ]
   },
 
-  // 4. SIGNATORIES (Iba't ibang Signatory designs)
+  // 4. SIGNATORIES (Signatory & Certification Layouts)
   {
     category: "signatory",
     categoryLabel: "4. Signatory Blocks",
@@ -482,7 +495,7 @@ MANDATORY DIRECTIVES & TURNOVER PROTOCOLS:
           closeLabel: "Sincerely yours,",
           name: "QUENNIE R. CAPUYAN",
           title: "Human Resource Staff",
-          company: "Lucky Betplay Corporation"
+          company: ""
         }
       },
       {
@@ -515,13 +528,13 @@ MANDATORY DIRECTIVES & TURNOVER PROTOCOLS:
           label: "Certified by:",
           name: "QUENNIE R. CAPUYAN",
           title: "Human Resource Staff",
-          company: "Lucky Betplay Corporation"
+          company: ""
         }
       }
     ]
   },
 
-  // 5. FOOTERS & LEGAL INSTRUMENTS (Iba't ibang Footer designs)
+  // 5. FOOTERS & LEGAL INSTRUMENTS (Footer & Legal Blocks)
   {
     category: "footer",
     categoryLabel: "5. Footers & Notarial",
@@ -540,8 +553,8 @@ MANDATORY DIRECTIVES & TURNOVER PROTOCOLS:
         name: "Corporate Security & Verification Strip",
         description: "Bottom security footer with document tracking code, verification QR placeholder, and confidentiality notice.",
         defaultData: {
-          docCode: "SEC-VERIFIED-2026",
-          noticeText: "This document is an authentic corporate instrument generated via HrHub Corporate System. Tampering is punishable by law."
+          docCode: "[COMPANY_CODE]-VERIFIED-2026",
+          noticeText: "This document is an authentic corporate instrument issued by [COMPANY_NAME] via HrHub Corporate System. Tampering is punishable by law."
         }
       },
       {
@@ -549,8 +562,8 @@ MANDATORY DIRECTIVES & TURNOVER PROTOCOLS:
         name: "Regional Branch Hotline Strip",
         description: "Subtle bottom bar listing official regional operations hotline numbers, compliance email, and headquarters address.",
         defaultData: {
-          hotline: "(+63 32) 231-9042 | (+63 32) 418-5522",
-          email: "compliance@hrhub-operations.com"
+          hotline: "",
+          email: ""
         }
       },
       {
@@ -558,16 +571,16 @@ MANDATORY DIRECTIVES & TURNOVER PROTOCOLS:
         name: "Page & ISO Compliance Tracker",
         description: "Standard document control line showing Form Code, Revision Number, and Page Numbering.",
         defaultData: {
-          formCode: "FORM-HRD-2026-REV03",
+          formCode: "[COMPANY_CODE]-FORM-HRD-2026-REV03",
           pageText: "Page 1 of 1"
         }
       },
       {
         variant: "footer_division_center",
         name: "Corporate Division Centered Footer",
-        description: "Official centered division title ('HUMAN RESOURCE MANAGEMENT DIVISION') matching corporate letterheads.",
+        description: "Official centered division title reflecting the active company entity and division.",
         defaultData: {
-          divisionText: "HUMAN RESOURCE MANAGEMENT DIVISION"
+          divisionText: "[COMPANY_NAME] • HUMAN RESOURCE MANAGEMENT DIVISION"
         }
       }
     ]
@@ -667,7 +680,7 @@ function ElementVisualPreview({ item, selectedCompany, docRef, docDate }) {
             </div>
           </div>
           <div className="text-right text-xs font-mono">
-            <span className="block font-black text-slate-900 text-sm">{item.data?.aacNumber || "AAC-CEBU-2026-089"}</span>
+            <span className="block font-black text-slate-900 text-sm">{resolveCompanyTokens(item.data?.aacNumber || "AAC-[COMPANY_CODE]-2026-089", selectedCompany)}</span>
             <span className="text-slate-500 text-[11px]">PCSO Accredited Agent</span>
           </div>
         </div>
@@ -707,10 +720,10 @@ function ElementVisualPreview({ item, selectedCompany, docRef, docDate }) {
             </div>
             <div className="flex-1 text-center px-2">
               <h2 className="text-sm font-black uppercase tracking-wider text-slate-900 leading-tight">
-                {item.data?.companyName || selectedCompany.legalName || selectedCompany.name || "LUCKY BETPLAY CORPORATION"}
+                {resolveCompanyTokens(item.data?.companyName || selectedCompany.legalName || selectedCompany.name, selectedCompany)}
               </h2>
               <p className="text-[10px] font-semibold text-slate-700 mt-1 leading-snug uppercase whitespace-pre-line">
-                {item.data?.address || "#257 BARLAPS, A.S. FORTUNA STREET,\nBAKILID, MANDAUE CITY, CEBU 6014"}
+                {resolveCompanyTokens(item.data?.address || selectedCompany.address || "", selectedCompany)}
               </p>
             </div>
             <div className="w-14 h-14 flex items-center justify-center shrink-0">
@@ -727,31 +740,33 @@ function ElementVisualPreview({ item, selectedCompany, docRef, docDate }) {
     if (item.variant === "address_termination_agency") {
       return (
         <div className="my-3 text-xs text-slate-900 space-y-2 select-text">
-          <div className="font-bold text-slate-900">{item.data?.dateLine || "Date: _____________________"}</div>
+          <div className="font-bold text-slate-900">{resolveCompanyTokens(item.data?.dateLine || "Date: _____________________", selectedCompany)}</div>
           <div className="space-y-0.5">
-            <div className="font-black text-xs uppercase text-slate-950">{item.data?.recipientName || "MR. DANIEL PADILLA"}</div>
-            <div className="font-bold text-[11px] uppercase text-slate-800">{item.data?.recipientOffice || "STL-ILIGAN OFFICE, LANAO DEL NORTE"}</div>
+            <div className="font-black text-xs uppercase text-slate-950">{resolveCompanyTokens(item.data?.recipientName || "MR. DANIEL PADILLA", selectedCompany)}</div>
+            <div className="font-bold text-[11px] uppercase text-slate-800">{resolveCompanyTokens(item.data?.recipientOffice || "STL-ILIGAN OFFICE, LANAO DEL NORTE", selectedCompany)}</div>
+            <div className="font-bold text-[11px] uppercase text-slate-700">{resolveCompanyTokens(item.data?.recipientCompany || "[COMPANY_LEGAL_NAME]", selectedCompany)}</div>
           </div>
           <div className="font-black text-xs uppercase text-slate-950 pt-1">
-            {item.data?.subject || "RE: TERMINATION OF AGENCY AGREEMENT"}
+            {resolveCompanyTokens(item.data?.subject || "RE: TERMINATION OF AGENCY AGREEMENT", selectedCompany)}
           </div>
-          <div className="font-bold text-xs text-slate-900 pt-0.5">{item.data?.salutation || "Dear Mr. Padilla,"}</div>
+          <div className="font-bold text-xs text-slate-900 pt-0.5">{resolveCompanyTokens(item.data?.salutation || "Dear Mr. Padilla,", selectedCompany)}</div>
         </div>
       );
     }
     if (item.variant === "address_letter_to_explain") {
       return (
         <div className="my-3 text-xs text-slate-900 space-y-2 select-text">
-          <div className="font-bold uppercase text-slate-900">{item.data?.date || "SEPTEMBER 28, 2026"}</div>
+          <div className="font-bold uppercase text-slate-900">{resolveCompanyTokens(item.data?.date || "SEPTEMBER 28, 2026", selectedCompany)}</div>
           <div className="space-y-0.5">
-            <div className="font-black text-xs uppercase text-slate-950">{item.data?.recipientName || "MOSHER BEBOT"}</div>
-            <div className="font-bold text-[11px] uppercase text-slate-800">{item.data?.recipientTitle || "SALES SUPERVISOR"}</div>
-            <div className="font-semibold text-[11px] uppercase text-slate-700">{item.data?.recipientStation || "MAGUINDANAO DEL NORTE"}</div>
+            <div className="font-black text-xs uppercase text-slate-950">{resolveCompanyTokens(item.data?.recipientName || "MOSHER BEBOT", selectedCompany)}</div>
+            <div className="font-bold text-[11px] uppercase text-slate-800">{resolveCompanyTokens(item.data?.recipientTitle || "SALES SUPERVISOR", selectedCompany)}</div>
+            <div className="font-bold text-[11px] uppercase text-slate-800">{resolveCompanyTokens(item.data?.recipientCompany || "[COMPANY_LEGAL_NAME]", selectedCompany)}</div>
+            <div className="font-semibold text-[11px] uppercase text-slate-700">{resolveCompanyTokens(item.data?.recipientStation || "MAGUINDANAO DEL NORTE", selectedCompany)}</div>
           </div>
           <div className="font-black italic text-xs uppercase text-slate-950 pt-1">
-            {item.data?.subject || "RE: LETTER OF EXPLANATION"}
+            {resolveCompanyTokens(item.data?.subject || "RE: LETTER OF EXPLANATION", selectedCompany)}
           </div>
-          <div className="font-bold text-xs text-slate-900 pt-0.5">{item.data?.salutation || "Dear Gomez,"}</div>
+          <div className="font-bold text-xs text-slate-900 pt-0.5">{resolveCompanyTokens(item.data?.salutation || "Dear Gomez,", selectedCompany)}</div>
         </div>
       );
     }
@@ -765,11 +780,11 @@ function ElementVisualPreview({ item, selectedCompany, docRef, docDate }) {
           <div className="grid grid-cols-1 gap-2 text-xs">
             <div className="flex items-baseline">
               <span className="font-black text-slate-600 w-24 shrink-0 tracking-wide">FOR / TO:</span>
-              <span className="font-bold text-slate-900 flex-1">{item.data?.to || "ALL CONCERNED (BRANCH SUPERVISORS & FIELD STAFF)"}</span>
+              <span className="font-bold text-slate-900 flex-1">{resolveCompanyTokens(item.data?.to || selectedCompany.defaultTo || "ALL CONCERNED (BRANCH SUPERVISORS & FIELD STAFF)", selectedCompany)}</span>
             </div>
             <div className="flex items-baseline">
               <span className="font-black text-slate-600 w-24 shrink-0 tracking-wide">FROM:</span>
-              <span className="font-bold text-slate-900 flex-1">{item.data?.from || "HUMAN RESOURCES DEPARTMENT"}</span>
+              <span className="font-bold text-slate-900 flex-1">{resolveCompanyTokens(item.data?.from || "[COMPANY_NAME] — HUMAN RESOURCES DEPARTMENT", selectedCompany)}</span>
             </div>
             <div className="flex items-baseline">
               <span className="font-black text-slate-600 w-24 shrink-0 tracking-wide">DATE:</span>
@@ -777,7 +792,7 @@ function ElementVisualPreview({ item, selectedCompany, docRef, docDate }) {
             </div>
             <div className="flex items-baseline border-b border-slate-300 pb-2">
               <span className="font-black text-slate-600 w-24 shrink-0 tracking-wide">SUBJECT:</span>
-              <span className="font-black text-slate-950 flex-1 uppercase">{item.data?.subject || "MANDATORY OPERATIONAL DIRECTIVES"}</span>
+              <span className="font-black text-slate-950 flex-1 uppercase">{resolveCompanyTokens(item.data?.subject || "MANDATORY OPERATIONAL DIRECTIVES", selectedCompany)}</span>
             </div>
           </div>
         </div>
@@ -791,12 +806,12 @@ function ElementVisualPreview({ item, selectedCompany, docRef, docDate }) {
             <span className="block font-mono text-[11px] text-slate-500">REF: {docRef}</span>
           </div>
           <div className="space-y-0.5">
-            <div className="font-black text-sm uppercase text-slate-900">{item.data?.recipientName || "MR. ROBERTO TAN"}</div>
-            <div className="font-semibold text-xs text-slate-700">{item.data?.recipientTitle || "Accredited Coordinator • Branch Operations"}</div>
-            <div className="text-xs text-slate-600">{item.data?.recipientCompany || "Operations Division"}</div>
+            <div className="font-black text-sm uppercase text-slate-900">{resolveCompanyTokens(item.data?.recipientName || "MR. ROBERTO TAN", selectedCompany)}</div>
+            <div className="font-semibold text-xs text-slate-700">{resolveCompanyTokens(item.data?.recipientTitle || "Accredited Coordinator • Branch Operations", selectedCompany)}</div>
+            <div className="text-xs text-slate-600">{resolveCompanyTokens(item.data?.recipientCompany || "[COMPANY_NAME] — Operations Division", selectedCompany)}</div>
           </div>
           <div className="font-black text-xs text-slate-900 pt-1">
-            {item.data?.salutation || "DEAR MR. TAN:"}
+            {resolveCompanyTokens(item.data?.salutation || "DEAR MR. TAN:", selectedCompany)}
           </div>
         </div>
       );
@@ -808,11 +823,11 @@ function ElementVisualPreview({ item, selectedCompany, docRef, docDate }) {
             {docRef} • {docDate}
           </div>
           <h2 className="text-lg font-black uppercase tracking-widest text-slate-950">
-            {item.data?.bannerTitle || "PUBLIC ADVISORY & FORMAL NOTICE"}
+            {resolveCompanyTokens(item.data?.bannerTitle || "PUBLIC ADVISORY & FORMAL NOTICE", selectedCompany)}
           </h2>
           <div className="h-0.5 w-32 bg-amber-600 mx-auto" />
           <p className="text-xs font-bold text-slate-700 mt-2">
-            {item.data?.to || "TO THE GENERAL PATRONIZING PUBLIC AND ALL GAMING OUTLETS"}
+            {resolveCompanyTokens(item.data?.to || "TO THE GENERAL PATRONIZING PUBLIC AND ALL GAMING OUTLETS OF [COMPANY_NAME]", selectedCompany)}
           </p>
         </div>
       );
@@ -821,13 +836,13 @@ function ElementVisualPreview({ item, selectedCompany, docRef, docDate }) {
       return (
         <div className="text-center my-4 space-y-2 select-text">
           <p className="text-xs font-black tracking-widest text-amber-700 uppercase">
-            {item.data?.conferralText || "THIS CERTIFICATE IS PROUDLY CONFERRED UPON"}
+            {resolveCompanyTokens(item.data?.conferralText || "THIS CERTIFICATE IS PROUDLY CONFERRED UPON", selectedCompany)}
           </p>
           <h2 className="text-2xl font-black uppercase text-slate-950">
-            {item.data?.awardeeName || "MS. MARIA SANTOS"}
+            {resolveCompanyTokens(item.data?.awardeeName || "MS. MARIA SANTOS", selectedCompany)}
           </h2>
           <p className="text-xs font-bold text-slate-600">
-            {item.data?.awardeeTitle || "Senior Area Coordinator • Operations Division"}
+            {resolveCompanyTokens(item.data?.awardeeTitle || "Senior Area Coordinator • [COMPANY_NAME]", selectedCompany)}
           </p>
         </div>
       );
@@ -872,11 +887,11 @@ function ElementVisualPreview({ item, selectedCompany, docRef, docDate }) {
         <div className="space-y-3 my-3 select-text">
           <div className="text-center">
             <h3 className="text-base font-black uppercase tracking-wider text-slate-900">
-              {item.data?.title || "CERTIFICATE OF MERIT & INCENTIVE VOUCHER"}
+              {resolveCompanyTokens(item.data?.title || "CERTIFICATE OF MERIT & INCENTIVE VOUCHER", selectedCompany)}
             </h3>
           </div>
           <p className="text-justify text-xs leading-relaxed text-slate-800">
-            {item.data?.citation || "In sincere appreciation of outstanding dedication, exemplary teamwork, and consistent quota achievement in regional operations..."}
+            {resolveCompanyTokens(item.data?.citation || "In sincere appreciation of outstanding dedication, exemplary teamwork, and consistent quota achievement in regional operations for [COMPANY_NAME].", selectedCompany)}
           </p>
           <div className="p-3.5 rounded-xl border-2 border-amber-400 bg-gradient-to-r from-amber-50 via-amber-100/50 to-amber-50 text-slate-900">
             <div className="flex justify-between items-center border-b border-amber-300 pb-1.5 mb-2">
@@ -936,7 +951,7 @@ function ElementVisualPreview({ item, selectedCompany, docRef, docDate }) {
       return (
         <div className="space-y-2 my-2 text-xs leading-relaxed text-slate-900 select-text">
           <p className="line-clamp-2 text-justify">
-            {(item.data?.introText || "").replace(/\[COMPANY_NAME\]/g, selectedCompany.name)}
+            {resolveCompanyTokens(item.data?.introText || "", selectedCompany)}
           </p>
           <div className="my-2 border border-slate-900 rounded overflow-hidden">
             <table className="w-full text-[10px] text-slate-900 border-collapse">
@@ -970,7 +985,7 @@ function ElementVisualPreview({ item, selectedCompany, docRef, docDate }) {
             </table>
           </div>
           <p className="line-clamp-2 text-justify text-slate-700">
-            {(item.data?.justificationText2 || "").replace(/\[COMPANY_NAME\]/g, selectedCompany.name)}
+            {resolveCompanyTokens(item.data?.justificationText2 || "", selectedCompany)}
           </p>
         </div>
       );
@@ -1024,7 +1039,7 @@ function ElementVisualPreview({ item, selectedCompany, docRef, docDate }) {
             <div>• 5.9. In case of violation of any provision of the 2020 STL RIRR, rules, regulations, and ethical conduct now in force...</div>
           </div>
           <p className="text-justify font-normal">
-            {item.data?.companyWarning || "Moreover, this action will not be tolerated by 5A Royal Gaming OPC, as these are grounds for cancellation of your Agency Agreement."}
+            {resolveCompanyTokens(item.data?.companyWarning || "Moreover, this action will not be tolerated by [COMPANY_LEGAL_NAME], as these are grounds for cancellation of your Agency Agreement.", selectedCompany)}
           </p>
           <p className="font-medium">
             {item.data?.conclusionParagraph || "In conclusion, your Agency Agreement is hereby terminated effective _____________________."}
@@ -1033,10 +1048,11 @@ function ElementVisualPreview({ item, selectedCompany, docRef, docDate }) {
       );
     }
     if (item.variant === "body_non_affiliation_salesforce") {
+      const resolvedCompanyName = resolveCompanyTokens(item.data?.companyName || selectedCompany.legalName || selectedCompany.name, selectedCompany);
       return (
         <div className="space-y-2.5 my-2 text-xs leading-relaxed text-slate-900 select-text">
           <div className="text-center font-black text-sm tracking-wide uppercase text-slate-950">
-            {item.data?.title || "CERTIFICATE OF NON-AFFILIATION"}
+            {resolveCompanyTokens(item.data?.title || "CERTIFICATE OF NON-AFFILIATION", selectedCompany)}
           </div>
           {item.data?.dateLine && (
             <div className="font-bold text-xs text-slate-950">
@@ -1044,7 +1060,7 @@ function ElementVisualPreview({ item, selectedCompany, docRef, docDate }) {
             </div>
           )}
           <p className="text-justify line-clamp-3">
-            This is to certify that <strong>{item.data?.personName || "ARJUN BAGUIO PATALINGHUG"}</strong>, is not <strong>affiliated</strong> with <strong>{item.data?.companyName || selectedCompany.name}</strong> as a Salesforce partner under the <strong>{item.data?.agencyName || "Philippine Charity Sweepstakes Office (PCSO)"}</strong>.
+            This is to certify that <strong>{item.data?.personName || "ARJUN BAGUIO PATALINGHUG"}</strong>, is not <strong>affiliated</strong> with <strong>{resolvedCompanyName}</strong> as a Salesforce partner under the <strong>{item.data?.agencyName || "Philippine Charity Sweepstakes Office (PCSO)"}</strong>.
           </p>
           <div className="text-slate-600 text-[11px] font-mono">
             Hotline: <strong>{item.data?.contactNumber || "09243223514"}</strong>
@@ -1056,11 +1072,11 @@ function ElementVisualPreview({ item, selectedCompany, docRef, docDate }) {
       <div className="space-y-2 my-3 select-text">
         {item.data?.title && (
           <h3 className="text-sm font-black uppercase tracking-wider text-slate-900">
-            {item.data.title}
+            {resolveCompanyTokens(item.data.title, selectedCompany)}
           </h3>
         )}
         <div className="text-justify text-xs leading-relaxed text-slate-800 whitespace-pre-line">
-          {(item.data?.bodyText || "").replace(/[COMPANY_NAME]/g, selectedCompany.name)}
+          {resolveCompanyTokens(item.data?.bodyText || "", selectedCompany)}
         </div>
       </div>
     );
@@ -1133,16 +1149,19 @@ function ElementVisualPreview({ item, selectedCompany, docRef, docDate }) {
             <div className="font-bold text-slate-500 uppercase text-[10px] mb-5">{item.data?.col1Label || "Prepared by:"}</div>
             <div className="border-b border-slate-800 pb-1 font-black text-slate-900 text-xs">{item.data?.col1Name || "JEVINCE JAYE S. JUBAY"}</div>
             <div className="text-slate-500 text-[10px]">{item.data?.col1Title || "HRMD Manager"}</div>
+            <div className="text-slate-400 font-bold uppercase text-[9px]">{selectedCompany.name}</div>
           </div>
           <div>
             <div className="font-bold text-slate-500 uppercase text-[10px] mb-5">{item.data?.col2Label || "Noted by:"}</div>
             <div className="border-b border-slate-800 pb-1 font-black text-slate-900 text-xs">{item.data?.col2Name || "ATTY. REGIONAL COUNSEL"}</div>
             <div className="text-slate-500 text-[10px]">{item.data?.col2Title || "Legal Directorate"}</div>
+            <div className="text-slate-400 font-bold uppercase text-[9px]">{selectedCompany.name}</div>
           </div>
           <div>
             <div className="font-bold text-slate-500 uppercase text-[10px] mb-5">{item.data?.col3Label || "Approved by:"}</div>
             <div className="border-b border-slate-800 pb-1 font-black text-slate-900 text-xs">{item.data?.col3Name || "CHARMIE JEAN M. SIMPAL"}</div>
             <div className="text-slate-500 text-[10px]">{item.data?.col3Title || "President & CEO"}</div>
+            <div className="text-slate-400 font-bold uppercase text-[9px]">{selectedCompany.name}</div>
           </div>
         </div>
       );
@@ -1152,7 +1171,7 @@ function ElementVisualPreview({ item, selectedCompany, docRef, docDate }) {
         <div className="border-t-2 border-dashed border-slate-400 pt-3 my-4 text-xs select-text">
           <div className="flex justify-between items-center pb-1.5 mb-2">
             <span className="font-black uppercase tracking-wider text-slate-900 text-[11px]">{item.data?.stubTitle || "ACKNOWLEDGMENT & RECEIVING SLIP"}</span>
-            <span className="font-mono text-[10px] text-slate-500 font-bold">Duplicate Copy • Return to HRMD</span>
+            <span className="font-mono text-[10px] text-slate-500 font-bold">{selectedCompany.code} Copy • Return to HRMD</span>
           </div>
           <div className="grid grid-cols-3 gap-4 pt-3 text-[11px]">
             <div className="border-b border-slate-800 pb-1">
@@ -1175,7 +1194,7 @@ function ElementVisualPreview({ item, selectedCompany, docRef, docDate }) {
           <div className="space-y-0.5">
             <div className="font-black text-xs uppercase text-slate-950 border-b border-slate-800 pb-0.5 w-48">{item.data?.name || "QUENNIE R. CAPUYAN"}</div>
             <div className="text-slate-600 text-[11px]">{item.data?.title || "Human Resource Staff"}</div>
-            <div className="text-slate-500 font-bold uppercase text-[9px]">{item.data?.company || selectedCompany.name}</div>
+            <div className="text-slate-500 font-bold uppercase text-[9px]">{resolveCompanyTokens(item.data?.company || selectedCompany.legalName || selectedCompany.name, selectedCompany)}</div>
           </div>
         </div>
       );
@@ -1189,6 +1208,9 @@ function ElementVisualPreview({ item, selectedCompany, docRef, docDate }) {
             </div>
             <div className="text-slate-700 text-[11px]">
               {item.data?.issuerTitle || "HR Salesforce Specialist"}
+            </div>
+            <div className="text-slate-500 font-bold uppercase text-[9px]">
+              {selectedCompany.name}
             </div>
           </div>
           <div className="space-y-2 pt-2">
@@ -1206,8 +1228,13 @@ function ElementVisualPreview({ item, selectedCompany, docRef, docDate }) {
       return (
         <div className="pt-4 my-2 text-xs select-text space-y-6">
           <div className="text-slate-800 text-xs font-semibold">{item.data?.closeLabel || "Sincerely,"}</div>
-          <div className="font-black text-xs uppercase text-slate-950 tracking-wider">
-            {item.data?.title || "OPERATIONS MANAGER"}
+          <div>
+            <div className="font-black text-xs uppercase text-slate-950 tracking-wider">
+              {item.data?.title || "OPERATIONS MANAGER"}
+            </div>
+            <div className="text-slate-500 font-bold uppercase text-[10px] mt-0.5">
+              {selectedCompany.name}
+            </div>
           </div>
         </div>
       );
@@ -1221,7 +1248,7 @@ function ElementVisualPreview({ item, selectedCompany, docRef, docDate }) {
             <div className="space-y-0.5">
               <div className="font-black text-xs uppercase text-slate-950">{item.data?.name || "QUENNIE R. CAPUYAN"}</div>
               <div className="text-slate-700 text-[11px]">{item.data?.title || "Human Resource Staff"}</div>
-              <div className="text-slate-500 font-bold uppercase text-[10px]">{item.data?.company || selectedCompany.name}</div>
+              <div className="text-slate-500 font-bold uppercase text-[10px]">{resolveCompanyTokens(item.data?.company || selectedCompany.legalName || selectedCompany.name, selectedCompany)}</div>
             </div>
           </div>
         </div>
@@ -1234,7 +1261,7 @@ function ElementVisualPreview({ item, selectedCompany, docRef, docDate }) {
     if (item.variant === "footer_division_center") {
       return (
         <div className="border-t border-slate-300 pt-3 mt-4 text-center text-xs text-slate-600 font-black tracking-widest uppercase select-text">
-          {item.data?.divisionText || "HUMAN RESOURCE MANAGEMENT DIVISION"}
+          {resolveCompanyTokens(item.data?.divisionText || "[COMPANY_NAME] • HUMAN RESOURCE MANAGEMENT DIVISION", selectedCompany)}
         </div>
       );
     }
@@ -1258,20 +1285,28 @@ function ElementVisualPreview({ item, selectedCompany, docRef, docDate }) {
         </div>
       );
     }
-    if (item.variant === "footer_corporate_bar") {
+    if (item.variant === "footer_corporate_security") {
       return (
-        <div className="border-t border-slate-300 pt-3 mt-4 flex items-center justify-between text-[11px] text-slate-500 font-mono select-text">
-          <div>{selectedCompany.contact} • {selectedCompany.address}</div>
-          <div className="italic text-[10px]">Strictly Confidential • Official Records</div>
+        <div className="border-t border-slate-300 pt-3 mt-4 flex items-center justify-between gap-4 text-[10px] text-slate-500 font-mono select-text">
+          <div className="font-bold text-slate-700 shrink-0">{resolveCompanyTokens(item.data?.docCode || "[COMPANY_CODE]-VERIFIED-2026", selectedCompany)}</div>
+          <div className="italic text-right">{resolveCompanyTokens(item.data?.noticeText || "This document is an authentic corporate instrument issued by [COMPANY_NAME] via HrHub Corporate System.", selectedCompany)}</div>
         </div>
       );
     }
-    if (item.variant === "footer_doc_control") {
+    if (item.variant === "footer_contact_hotline") {
+      return (
+        <div className="border-t border-slate-300 pt-3 mt-4 flex items-center justify-between text-[11px] text-slate-500 font-mono select-text">
+          <div>{resolveCompanyTokens(item.data?.hotline || selectedCompany.contact || selectedCompany.address, selectedCompany)}</div>
+          <div>{resolveCompanyTokens(item.data?.email || `${selectedCompany.legalName || selectedCompany.name} Official Records`, selectedCompany)}</div>
+        </div>
+      );
+    }
+    if (item.variant === "footer_page_tracker") {
       return (
         <div className="border-t border-slate-300 pt-2 mt-4 flex justify-between text-[10px] text-slate-500 font-mono select-text">
-          <span>{docRef} • REV-01</span>
-          <span>Page 1 of 1</span>
-          <span>CONFIDENTIAL DOCUMENT</span>
+          <span>{resolveCompanyTokens(item.data?.formCode || "[COMPANY_CODE]-FORM-HRD-2026-REV03", selectedCompany)}</span>
+          <span>{item.data?.pageText || "Page 1 of 1"}</span>
+          <span>{selectedCompany.name}</span>
         </div>
       );
     }
@@ -1774,6 +1809,16 @@ function TemplateEditorModal({
                         />
                       </div>
                     </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-600 block mb-0.5">Entity / Company Name (Dynamic Token):</label>
+                      <input
+                        type="text"
+                        value={formData.recipientCompany ?? "[COMPANY_LEGAL_NAME]"}
+                        onChange={(e) => updateField("recipientCompany", e.target.value)}
+                        placeholder="[COMPANY_LEGAL_NAME]"
+                        className="w-full px-3 py-1.5 rounded-lg border border-slate-300 text-xs font-bold uppercase text-slate-800"
+                      />
+                    </div>
                   </div>
                   <div>
                     <label className="block text-[11px] font-black text-slate-700 mb-1">Subject (RE:) Line:</label>
@@ -1830,6 +1875,16 @@ function TemplateEditorModal({
                         value={formData.recipientOffice || ""}
                         onChange={(e) => updateField("recipientOffice", e.target.value)}
                         placeholder="STL-ILIGAN OFFICE, LANAO DEL NORTE"
+                        className="w-full px-3 py-1.5 rounded-lg border border-slate-300 text-xs font-bold uppercase text-slate-800"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-600 block mb-0.5">Entity / Company Name (Dynamic Token):</label>
+                      <input
+                        type="text"
+                        value={formData.recipientCompany ?? "[COMPANY_LEGAL_NAME]"}
+                        onChange={(e) => updateField("recipientCompany", e.target.value)}
+                        placeholder="[COMPANY_LEGAL_NAME]"
                         className="w-full px-3 py-1.5 rounded-lg border border-slate-300 text-xs font-bold uppercase text-slate-800"
                       />
                     </div>
@@ -2592,17 +2647,28 @@ export default function DocumentStudioPanel({
   onOpenAiBuddy = () => { },
   onSwitchToMemo = () => { }
 }) {
-  // Selected Company Entity (Default: Lucky Betplay Corporation)
+  // Selected Company Entity (Default: Lucky Betplay Corporation) with HRMD & user letterhead defaults
   const [selectedCompanyId, setSelectedCompanyId] = useState("lucky_betplay");
+  const [letterheadOverrides, setLetterheadOverrides] = useState({});
+  const companies = useMemo(() => {
+    return COMPANIES.map((company) => ({
+      ...company,
+      ...letterheadOverrides[company.id]
+    }));
+  }, [letterheadOverrides]);
   const selectedCompany = useMemo(() => {
-    return COMPANIES.find((c) => c.id === selectedCompanyId) || COMPANIES[0];
-  }, [selectedCompanyId]);
+    return companies.find((c) => c.id === selectedCompanyId) || companies[0];
+  }, [companies, selectedCompanyId]);
+  const selectedCompanyCodeRef = useRef(selectedCompany?.code || "LBC");
+  selectedCompanyCodeRef.current = selectedCompany?.code || "LBC";
 
   // Bond Paper Settings
   const [paperSize, setPaperSize] = useState("letter"); // 'letter' | 'legal' | 'a4'
   const [fontFamily, setFontFamily] = useState("inter");
   const [fontSize, setFontSize] = useState(13.8); // pt
   const [zoomScale, setZoomScale] = useState(100);
+  const [watermarkOpacity, setWatermarkOpacity] = useState(4); // 0 to 35%
+  const [watermarkScale, setWatermarkScale] = useState(100); // 50 to 150%
 
   // Active paper size definition
   const currentPaperDef = useMemo(() => {
@@ -2654,21 +2720,28 @@ export default function DocumentStudioPanel({
   const [toastMessage, setToastMessage] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
 
-  // Fetch saved documents on mount
+  // Fetch saved documents & inherited letterhead defaults on mount
   useEffect(() => {
     let isMounted = true;
     (async () => {
       try {
         setIsLoadingSavedDocs(true);
-        const [{ documents }, globalRefs] = await Promise.all([
+        const [{ documents }, globalRefs, userSettingsRes] = await Promise.all([
           getSavedDocumentsFromDb(currentUser),
-          getAllGlobalDocumentRefs()
+          getAllGlobalDocumentRefs(),
+          getUserSettings(currentUser)
         ]);
         if (isMounted) {
+          const settings = userSettingsRes?.settings || {};
+          const companyIds = COMPANIES.map((c) => c.id);
+          const mergedLetterheads = {
+            ...filterValidLetterheadFields(settings.organizationLetterheadDefaults, companyIds),
+            ...filterValidLetterheadFields(settings.letterheadDefaults, companyIds)
+          };
+          setLetterheadOverrides(mergedLetterheads);
           setSavedDocs(documents || []);
-          setDocRef((prev) => {
-            const compCode = selectedCompany?.code || "LBC";
-            return generateUniqueDocRef(compCode, globalRefs);
+          setDocRef(() => {
+            return generateUniqueDocRef(selectedCompanyCodeRef.current, globalRefs);
           });
         }
       } catch (e) {
@@ -2695,17 +2768,104 @@ export default function DocumentStudioPanel({
     );
     setDocRef(newRef);
 
-    // Synchronize placed header elements and company-bound fields with the new entity
+    // Synchronize all modular categories (header, addressing, body, signatory, footer) with the new entity
     setPaperElements((prev) =>
       prev.map((el) => {
         if (el.category === "header") {
+          if (el.variant === "header_dual_clean") {
+            return {
+              ...el,
+              data: {
+                ...el.data,
+                leftLogo: comp.logoUrl,
+                rightLogo: comp.rightLogoUrl || "/logos/group_emblem.jpg",
+                companyName: "",
+                address: ""
+              }
+            };
+          }
+          if (el.variant === "header_triple_logo") {
+            return {
+              ...el,
+              data: {
+                ...el.data,
+                centerLogo: comp.logoUrl,
+                leftLogo: comp.rightLogoUrl || "/id-assets/group_emblem.jpg",
+                rightLogo: el.data?.rightLogo || "/id-assets/pcso_logo.png"
+              }
+            };
+          }
           return {
             ...el,
             data: {
               ...el.data,
               centerLogo: comp.logoUrl,
-              leftLogo: el.data?.leftLogo || comp.rightLogoUrl || "/id-assets/group_emblem.jpg",
-              rightLogo: el.data?.rightLogo || "/id-assets/pcso_logo.png"
+              leftLogo: comp.logoUrl,
+              rightLogo: comp.rightLogoUrl || "/logos/group_emblem.jpg",
+              companyName: "",
+              address: "",
+              contact: "",
+              tagline: "",
+              aacNumber: el.variant === "header_aac_compliance" ? "AAC-[COMPANY_CODE]-2026-089" : el.data?.aacNumber
+            }
+          };
+        }
+        if (el.category === "addressing") {
+          if (el.variant === "address_termination_agency" || el.variant === "address_letter_to_explain") {
+            return {
+              ...el,
+              data: {
+                ...el.data,
+                recipientCompany: "[COMPANY_LEGAL_NAME]"
+              }
+            };
+          }
+          if (el.variant === "address_formal_letter") {
+            return {
+              ...el,
+              data: {
+                ...el.data,
+                recipientCompany: "[COMPANY_NAME] — Operations Division"
+              }
+            };
+          }
+          if (el.variant === "address_public_notice") {
+            return {
+              ...el,
+              data: {
+                ...el.data,
+                to: "TO THE GENERAL PATRONIZING PUBLIC AND ALL GAMING OUTLETS OF [COMPANY_NAME]"
+              }
+            };
+          }
+          if (el.variant === "address_certificate_ribbon") {
+            return {
+              ...el,
+              data: {
+                ...el.data,
+                awardeeTitle: "Senior Area Coordinator • [COMPANY_NAME]"
+              }
+            };
+          }
+          if (el.variant === "address_memo_grid") {
+            const matchedDefaultTo = COMPANIES.some((c) => c.defaultTo && c.defaultTo === el.data?.to);
+            return {
+              ...el,
+              data: {
+                ...el.data,
+                to: matchedDefaultTo ? (comp.defaultTo || el.data?.to) : el.data?.to,
+                companyName: ""
+              }
+            };
+          }
+          return el;
+        }
+        if (el.variant === "body_non_affiliation_salesforce") {
+          return {
+            ...el,
+            data: {
+              ...el.data,
+              companyName: ""
             }
           };
         }
@@ -2714,16 +2874,35 @@ export default function DocumentStudioPanel({
             ...el,
             data: {
               ...el.data,
-              companyWarning: `Moreover, this action will not be tolerated by ${comp.legalName || comp.name}, as these are grounds for cancellation of your Agency Agreement.`
+              companyWarning: "Moreover, this action will not be tolerated by [COMPANY_LEGAL_NAME], as these are grounds for cancellation of your Agency Agreement."
             }
           };
         }
-        if (el.variant === "sig_staff_requestor") {
+        if (el.category === "signatory") {
           return {
             ...el,
             data: {
               ...el.data,
-              company: comp.name
+              company: ""
+            }
+          };
+        }
+        if (el.category === "footer") {
+          if (el.variant === "footer_contact_hotline") {
+            return {
+              ...el,
+              data: {
+                ...el.data,
+                hotline: "",
+                email: ""
+              }
+            };
+          }
+          return {
+            ...el,
+            data: {
+              ...el.data,
+              company: ""
             }
           };
         }
@@ -2731,7 +2910,7 @@ export default function DocumentStudioPanel({
       })
     );
 
-    triggerToast(`Letterhead entity set to ${comp.name}`, "info");
+    triggerToast(`Document entity switched to ${comp.name}`, "info");
   };
 
   // Save custom template to local storage
@@ -2852,6 +3031,17 @@ export default function DocumentStudioPanel({
     triggerToast(`✓ Added "${item.name}" to Coupon Bond`, "success");
   };
 
+  // Preserve [COMPANY_*] tokens when contentEditable text is blurred unmodified
+  const handleTokenAwareBlur = (elemId, key, rawValue, editedText, fallbackTemplate = "") => {
+    const baseTemplate = rawValue || fallbackTemplate;
+    const resolvedBefore = resolveCompanyTokens(baseTemplate, selectedCompany).trim();
+    const nextTrimmed = (editedText || "").trim();
+    if (nextTrimmed === resolvedBefore) {
+      return;
+    }
+    updateElementData(elemId, key, editedText);
+  };
+
   // Update field inside a paper element safely
   const updateElementData = (elemId, key, value) => {
     setPaperElements((prev) =>
@@ -2932,25 +3122,9 @@ export default function DocumentStudioPanel({
       const agencyBody = MODULAR_BLOCK_PRESETS.find((c) => c.category === "body").items.find((i) => i.variant === "body_termination_agency");
       const opsSig = MODULAR_BLOCK_PRESETS.find((c) => c.category === "signatory").items.find((i) => i.variant === "sig_operations_manager");
       presetBlocks = [
-        {
-          ...tripleHeader,
-          category: "header",
-          data: {
-            ...tripleHeader.defaultData,
-            centerLogo: selectedCompany.logoUrl,
-            leftLogo: selectedCompany.rightLogoUrl || "/id-assets/group_emblem.jpg",
-            rightLogo: "/id-assets/pcso_logo.png"
-          }
-        },
+        { ...tripleHeader, category: "header" },
         { ...termAddr, category: "addressing" },
-        {
-          ...agencyBody,
-          category: "body",
-          data: {
-            ...agencyBody.defaultData,
-            companyWarning: `Moreover, this action will not be tolerated by ${selectedCompany.legalName || selectedCompany.name}, as these are grounds for cancellation of your Agency Agreement.`
-          }
-        },
+        { ...agencyBody, category: "body" },
         { ...opsSig, category: "signatory" }
       ];
     } else if (presetKey === "letter_of_explain") {
@@ -2982,32 +3156,9 @@ export default function DocumentStudioPanel({
       const sfBody = MODULAR_BLOCK_PRESETS.find((c) => c.category === "body").items.find((i) => i.variant === "body_non_affiliation_salesforce");
       const certSig = MODULAR_BLOCK_PRESETS.find((c) => c.category === "signatory").items.find((i) => i.variant === "sig_single_certified_by");
       presetBlocks = [
-        {
-          ...dualCleanHeader,
-          category: "header",
-          data: {
-            ...dualCleanHeader.defaultData,
-            leftLogo: selectedCompany.logoUrl,
-            rightLogo: selectedCompany.rightLogoUrl || "/logos/group_emblem.jpg",
-            companyName: selectedCompany.legalName || selectedCompany.name || "LUCKY BETPLAY CORPORATION"
-          }
-        },
-        {
-          ...sfBody,
-          category: "body",
-          data: {
-            ...sfBody.defaultData,
-            companyName: selectedCompany.legalName || selectedCompany.name || "Lucky Betplay Corporation"
-          }
-        },
-        {
-          ...certSig,
-          category: "signatory",
-          data: {
-            ...certSig.defaultData,
-            company: selectedCompany.legalName || selectedCompany.name || "Lucky Betplay Corporation"
-          }
-        }
+        { ...dualCleanHeader, category: "header" },
+        { ...sfBody, category: "body" },
+        { ...certSig, category: "signatory" }
       ];
     }
 
@@ -3167,13 +3318,20 @@ export default function DocumentStudioPanel({
       el.removeAttribute("suppresscontenteditablewarning");
     });
 
-    // Strictly ensure watermark is absolute, centered, faint, and NEVER in normal flow
+    const wmSize = Math.round((360 * watermarkScale) / 100);
+    const wmOpacity = (watermarkOpacity / 100).toFixed(2);
+
+    // Strictly ensure watermark is absolute, centered, adjustable, and NEVER in normal flow
     const watermarkEl = clone.querySelector(".doc-watermark-layer, [class*='opacity-[0.03'], [class*='opacity-[0.04']");
     if (watermarkEl) {
-      watermarkEl.setAttribute("style", "position: absolute !important; top: 50% !important; left: 50% !important; transform: translate(-50%, -50%) !important; width: 340px !important; height: 340px !important; pointer-events: none !important; z-index: 0 !important; display: flex !important; align-items: center !important; justify-content: center !important; opacity: 0.04 !important; user-select: none !important; margin: 0 !important; padding: 0 !important; overflow: hidden !important;");
-      const wmImg = watermarkEl.querySelector("img");
-      if (wmImg) {
-        wmImg.setAttribute("style", "max-width: 100% !important; max-height: 100% !important; object-fit: contain !important; filter: grayscale(15%) !important; display: block !important; margin: 0 auto !important;");
+      if (watermarkOpacity <= 0) {
+        watermarkEl.remove();
+      } else {
+        watermarkEl.setAttribute("style", `position: absolute !important; top: 50% !important; left: 50% !important; transform: translate(-50%, -50%) !important; width: ${wmSize}px !important; height: ${wmSize}px !important; pointer-events: none !important; z-index: 0 !important; display: flex !important; align-items: center !important; justify-content: center !important; opacity: ${wmOpacity} !important; user-select: none !important; margin: 0 !important; padding: 0 !important; overflow: hidden !important;`);
+        const wmImg = watermarkEl.querySelector("img");
+        if (wmImg) {
+          wmImg.setAttribute("style", "max-width: 100% !important; max-height: 100% !important; object-fit: contain !important; filter: grayscale(15%) !important; display: block !important; margin: 0 auto !important;");
+        }
       }
     }
 
@@ -3263,14 +3421,14 @@ export default function DocumentStudioPanel({
       top: 50% !important;
       left: 50% !important;
       transform: translate(-50%, -50%) !important;
-      width: 340px !important;
-      height: 340px !important;
+      width: ${wmSize}px !important;
+      height: ${wmSize}px !important;
       pointer-events: none !important;
       z-index: 0 !important;
-      display: flex !important;
+      display: ${watermarkOpacity > 0 ? "flex" : "none"} !important;
       align-items: center !important;
       justify-content: center !important;
-      opacity: 0.04 !important;
+      opacity: ${wmOpacity} !important;
       user-select: none !important;
       margin: 0 !important;
       padding: 0 !important;
@@ -3534,7 +3692,7 @@ export default function DocumentStudioPanel({
             min-height: 100% !important;
             display: flex !important;
             flex-direction: column !important;
-            justify-content: space-between !important;
+            justify-content: ${paperElements.some((e) => e.category === "footer") ? "space-between" : "flex-start"} !important;
           }
           #coupon-bond-printable .space-y-6 > * + * {
             margin-top: 1.15rem !important;
@@ -3567,7 +3725,7 @@ export default function DocumentStudioPanel({
         {/* Center: Entity Switcher */}
         <div className="flex items-center gap-1.5 overflow-x-auto py-1 scrollbar-none">
           <span className="text-[11px] font-bold text-slate-400 mr-1 hidden sm:inline">Entity:</span>
-          {COMPANIES.map((comp) => {
+          {companies.map((comp) => {
             const isSelected = selectedCompanyId === comp.id;
             return (
               <button
@@ -3807,6 +3965,39 @@ export default function DocumentStudioPanel({
                 />
                 <span className="font-mono text-[11px] font-bold text-slate-700">{fontSize}pt</span>
               </div>
+
+              {/* Watermark Intensity & Size Controls */}
+              <div className="flex items-center gap-2 border-l border-slate-200 pl-3">
+                <span className="font-bold text-slate-500 text-[11px] uppercase">Watermark:</span>
+                <div className="flex items-center gap-1" title="Adjust watermark opacity (thickness)">
+                  <span className="text-[10px] font-semibold text-slate-400 uppercase">Opacity</span>
+                  <input
+                    type="range"
+                    min="0"
+                    max="35"
+                    step="1"
+                    value={watermarkOpacity}
+                    onChange={(e) => setWatermarkOpacity(parseInt(e.target.value, 10))}
+                    className="w-16 accent-amber-600 cursor-pointer"
+                  />
+                  <span className="font-mono text-[11px] font-bold text-slate-700 w-7 text-right">
+                    {watermarkOpacity === 0 ? "Off" : `${watermarkOpacity}%`}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1" title="Adjust watermark dimensions (scale)">
+                  <span className="text-[10px] font-semibold text-slate-400 uppercase">Scale</span>
+                  <input
+                    type="range"
+                    min="50"
+                    max="150"
+                    step="5"
+                    value={watermarkScale}
+                    onChange={(e) => setWatermarkScale(parseInt(e.target.value, 10))}
+                    className="w-14 accent-amber-600 cursor-pointer"
+                  />
+                  <span className="font-mono text-[11px] font-bold text-slate-700 w-9 text-right">{watermarkScale}%</span>
+                </div>
+              </div>
             </div>
 
             {/* Elements count indicator */}
@@ -3851,7 +4042,7 @@ export default function DocumentStudioPanel({
             )}
 
             {/* Elegant Background Corporate Watermark (Faint corporate logo as in official documents) */}
-            {selectedCompany?.logoUrl && (
+            {selectedCompany?.logoUrl && watermarkOpacity > 0 && (
               <div
                 className="doc-watermark-layer pointer-events-none select-none overflow-hidden"
                 style={{
@@ -3859,19 +4050,19 @@ export default function DocumentStudioPanel({
                   top: "50%",
                   left: "50%",
                   transform: "translate(-50%, -50%)",
-                  width: "360px",
-                  height: "360px",
+                  width: `${Math.round((360 * watermarkScale) / 100)}px`,
+                  height: `${Math.round((360 * watermarkScale) / 100)}px`,
                   pointerEvents: "none",
                   zIndex: 0,
                   userSelect: "none",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  opacity: 0.04
+                  opacity: watermarkOpacity / 100
                 }}
               >
                 <img
-                  src={selectedCompany.rightLogoUrl || selectedCompany.logoUrl}
+                  src={selectedCompany.logoUrl}
                   alt=""
                   style={{
                     maxWidth: "100%",
@@ -4113,7 +4304,7 @@ export default function DocumentStudioPanel({
                                 </div>
                               </div>
                               <div className="border border-slate-300 p-1.5 rounded text-center text-[10px] font-mono bg-slate-50">
-                                <span className="block font-black text-slate-800">{el.data?.aacNumber || "AAC-CEBU-2026-089"}</span>
+                                <span className="block font-black text-slate-800">{resolveCompanyTokens(el.data?.aacNumber || "AAC-[COMPANY_CODE]-2026-089", selectedCompany)}</span>
                                 <span className="text-slate-500">Accredited Agency</span>
                               </div>
                             </div>
@@ -4168,18 +4359,26 @@ export default function DocumentStudioPanel({
                                   <h2
                                     contentEditable
                                     suppressContentEditableWarning
-                                    onBlur={(e) => updateElementData(el.id, "companyName", e.currentTarget.innerText)}
+                                    onBlur={(e) => {
+                                      const next = e.currentTarget.innerText.trim();
+                                      const fallback = (selectedCompany.legalName || selectedCompany.name || "").trim();
+                                      handleTokenAwareBlur(el.id, "companyName", el.data?.companyName, next === fallback ? "" : next, fallback);
+                                    }}
                                     className="text-sm sm:text-base font-black uppercase tracking-wider text-slate-900 leading-tight outline-none hover:bg-amber-50/50 rounded px-1 transition"
                                   >
-                                    {el.data?.companyName || selectedCompany.legalName || selectedCompany.name || "LUCKY BETPLAY CORPORATION"}
+                                    {resolveCompanyTokens(el.data?.companyName || selectedCompany.legalName || selectedCompany.name, selectedCompany)}
                                   </h2>
                                   <div
                                     contentEditable
                                     suppressContentEditableWarning
-                                    onBlur={(e) => updateElementData(el.id, "address", e.currentTarget.innerText)}
+                                    onBlur={(e) => {
+                                      const next = e.currentTarget.innerText.trim();
+                                      const fallback = (selectedCompany.address || "").trim();
+                                      handleTokenAwareBlur(el.id, "address", el.data?.address, next === fallback ? "" : next, fallback);
+                                    }}
                                     className="text-[11px] sm:text-xs font-semibold text-slate-700 mt-1 leading-snug uppercase outline-none hover:bg-amber-50/50 rounded px-1 transition whitespace-pre-line"
                                   >
-                                    {el.data?.address || "#257 BARLAPS, A.S. FORTUNA STREET,\nBAKILID, MANDAUE CITY, CEBU 6014"}
+                                    {resolveCompanyTokens(el.data?.address || selectedCompany.address || "", selectedCompany)}
                                   </div>
                                 </div>
                                 <div className="w-18 h-18 sm:w-20 sm:h-20 flex items-center justify-center shrink-0" style={{ width: "5rem", height: "5rem", flexShrink: 0 }}>
@@ -4204,28 +4403,36 @@ export default function DocumentStudioPanel({
                               <div
                                 contentEditable
                                 suppressContentEditableWarning
-                                onBlur={(e) => updateElementData(el.id, "dateLine", e.currentTarget.innerText)}
+                                onBlur={(e) => handleTokenAwareBlur(el.id, "dateLine", el.data?.dateLine, e.currentTarget.innerText, "Date: _____________________")}
                                 className="font-bold text-xs text-slate-900 outline-none hover:bg-amber-50/50 rounded px-1 transition inline-block"
                               >
-                                {el.data?.dateLine || "Date: _____________________"}
+                                {resolveCompanyTokens(el.data?.dateLine || "Date: _____________________", selectedCompany)}
                               </div>
 
                               <div className="space-y-0.5">
                                 <div
                                   contentEditable
                                   suppressContentEditableWarning
-                                  onBlur={(e) => updateElementData(el.id, "recipientName", e.currentTarget.innerText)}
+                                  onBlur={(e) => handleTokenAwareBlur(el.id, "recipientName", el.data?.recipientName, e.currentTarget.innerText, "MR. DANIEL PADILLA")}
                                   className="font-black text-sm uppercase text-slate-950 outline-none hover:bg-amber-50/50 rounded px-1 transition"
                                 >
-                                  {el.data?.recipientName || "MR. DANIEL PADILLA"}
+                                  {resolveCompanyTokens(el.data?.recipientName || "MR. DANIEL PADILLA", selectedCompany)}
                                 </div>
                                 <div
                                   contentEditable
                                   suppressContentEditableWarning
-                                  onBlur={(e) => updateElementData(el.id, "recipientOffice", e.currentTarget.innerText)}
+                                  onBlur={(e) => handleTokenAwareBlur(el.id, "recipientOffice", el.data?.recipientOffice, e.currentTarget.innerText, "STL-ILIGAN OFFICE, LANAO DEL NORTE")}
                                   className="font-bold text-xs uppercase text-slate-800 outline-none hover:bg-amber-50/50 rounded px-1 transition"
                                 >
-                                  {el.data?.recipientOffice || "STL-ILIGAN OFFICE, LANAO DEL NORTE"}
+                                  {resolveCompanyTokens(el.data?.recipientOffice || "STL-ILIGAN OFFICE, LANAO DEL NORTE", selectedCompany)}
+                                </div>
+                                <div
+                                  contentEditable
+                                  suppressContentEditableWarning
+                                  onBlur={(e) => handleTokenAwareBlur(el.id, "recipientCompany", el.data?.recipientCompany, e.currentTarget.innerText, "[COMPANY_LEGAL_NAME]")}
+                                  className="font-bold text-xs uppercase text-slate-700 outline-none hover:bg-amber-50/50 rounded px-1 transition"
+                                >
+                                  {resolveCompanyTokens(el.data?.recipientCompany || "[COMPANY_LEGAL_NAME]", selectedCompany)}
                                 </div>
                               </div>
 
@@ -4233,20 +4440,20 @@ export default function DocumentStudioPanel({
                                 <span
                                   contentEditable
                                   suppressContentEditableWarning
-                                  onBlur={(e) => updateElementData(el.id, "subject", e.currentTarget.innerText)}
+                                  onBlur={(e) => handleTokenAwareBlur(el.id, "subject", el.data?.subject, e.currentTarget.innerText, "RE: TERMINATION OF AGENCY AGREEMENT")}
                                   className="font-black text-xs uppercase text-slate-950 outline-none hover:bg-amber-50/50 rounded px-1 transition inline-block"
                                 >
-                                  {el.data?.subject || "RE: TERMINATION OF AGENCY AGREEMENT"}
+                                  {resolveCompanyTokens(el.data?.subject || "RE: TERMINATION OF AGENCY AGREEMENT", selectedCompany)}
                                 </span>
                               </div>
 
                               <div
                                 contentEditable
                                 suppressContentEditableWarning
-                                onBlur={(e) => updateElementData(el.id, "salutation", e.currentTarget.innerText)}
+                                onBlur={(e) => handleTokenAwareBlur(el.id, "salutation", el.data?.salutation, e.currentTarget.innerText, "Dear Mr. Padilla,")}
                                 className="font-bold text-xs text-slate-900 pt-0.5 outline-none hover:bg-amber-50/50 rounded px-1 transition"
                               >
-                                {el.data?.salutation || "Dear Mr. Padilla,"}
+                                {resolveCompanyTokens(el.data?.salutation || "Dear Mr. Padilla,", selectedCompany)}
                               </div>
                             </div>
                           )}
@@ -4255,36 +4462,44 @@ export default function DocumentStudioPanel({
                               <div
                                 contentEditable
                                 suppressContentEditableWarning
-                                onBlur={(e) => updateElementData(el.id, "date", e.currentTarget.innerText)}
+                                onBlur={(e) => handleTokenAwareBlur(el.id, "date", el.data?.date, e.currentTarget.innerText, docDate || "SEPTEMBER 28, 2026")}
                                 className="font-bold text-xs text-slate-900 outline-none hover:bg-amber-50/50 rounded px-1 transition uppercase tracking-wide inline-block"
                               >
-                                {el.data?.date || docDate || "SEPTEMBER 28, 2026"}
+                                {resolveCompanyTokens(el.data?.date || docDate || "SEPTEMBER 28, 2026", selectedCompany)}
                               </div>
 
                               <div className="space-y-0.5">
                                 <div
                                   contentEditable
                                   suppressContentEditableWarning
-                                  onBlur={(e) => updateElementData(el.id, "recipientName", e.currentTarget.innerText)}
+                                  onBlur={(e) => handleTokenAwareBlur(el.id, "recipientName", el.data?.recipientName, e.currentTarget.innerText, "MOSHER BEBOT")}
                                   className="font-black text-sm uppercase text-slate-950 outline-none hover:bg-amber-50/50 rounded px-1 transition"
                                 >
-                                  {el.data?.recipientName || "MOSHER BEBOT"}
+                                  {resolveCompanyTokens(el.data?.recipientName || "MOSHER BEBOT", selectedCompany)}
                                 </div>
                                 <div
                                   contentEditable
                                   suppressContentEditableWarning
-                                  onBlur={(e) => updateElementData(el.id, "recipientTitle", e.currentTarget.innerText)}
+                                  onBlur={(e) => handleTokenAwareBlur(el.id, "recipientTitle", el.data?.recipientTitle, e.currentTarget.innerText, "SALES SUPERVISOR")}
                                   className="font-bold text-xs uppercase text-slate-800 outline-none hover:bg-amber-50/50 rounded px-1 transition"
                                 >
-                                  {el.data?.recipientTitle || "SALES SUPERVISOR"}
+                                  {resolveCompanyTokens(el.data?.recipientTitle || "SALES SUPERVISOR", selectedCompany)}
                                 </div>
                                 <div
                                   contentEditable
                                   suppressContentEditableWarning
-                                  onBlur={(e) => updateElementData(el.id, "recipientStation", e.currentTarget.innerText)}
+                                  onBlur={(e) => handleTokenAwareBlur(el.id, "recipientCompany", el.data?.recipientCompany, e.currentTarget.innerText, "[COMPANY_LEGAL_NAME]")}
+                                  className="font-bold text-xs uppercase text-slate-800 outline-none hover:bg-amber-50/50 rounded px-1 transition"
+                                >
+                                  {resolveCompanyTokens(el.data?.recipientCompany || "[COMPANY_LEGAL_NAME]", selectedCompany)}
+                                </div>
+                                <div
+                                  contentEditable
+                                  suppressContentEditableWarning
+                                  onBlur={(e) => handleTokenAwareBlur(el.id, "recipientStation", el.data?.recipientStation, e.currentTarget.innerText, "MAGUINDANAO DEL NORTE")}
                                   className="font-semibold text-xs uppercase text-slate-700 outline-none hover:bg-amber-50/50 rounded px-1 transition"
                                 >
-                                  {el.data?.recipientStation || "MAGUINDANAO DEL NORTE"}
+                                  {resolveCompanyTokens(el.data?.recipientStation || "MAGUINDANAO DEL NORTE", selectedCompany)}
                                 </div>
                               </div>
 
@@ -4292,20 +4507,20 @@ export default function DocumentStudioPanel({
                                 <span
                                   contentEditable
                                   suppressContentEditableWarning
-                                  onBlur={(e) => updateElementData(el.id, "subject", e.currentTarget.innerText)}
+                                  onBlur={(e) => handleTokenAwareBlur(el.id, "subject", el.data?.subject, e.currentTarget.innerText, "RE: LETTER OF EXPLANATION")}
                                   className="font-black italic text-xs uppercase text-slate-950 outline-none hover:bg-amber-50/50 rounded px-1 transition"
                                 >
-                                  {el.data?.subject || "RE: LETTER OF EXPLANATION"}
+                                  {resolveCompanyTokens(el.data?.subject || "RE: LETTER OF EXPLANATION", selectedCompany)}
                                 </span>
                               </div>
 
                               <div
                                 contentEditable
                                 suppressContentEditableWarning
-                                onBlur={(e) => updateElementData(el.id, "salutation", e.currentTarget.innerText)}
+                                onBlur={(e) => handleTokenAwareBlur(el.id, "salutation", el.data?.salutation, e.currentTarget.innerText, "Dear Gomez,")}
                                 className="font-bold text-xs text-slate-900 pt-1 outline-none hover:bg-amber-50/50 rounded px-1 transition"
                               >
-                                {el.data?.salutation || "Dear Gomez,"}
+                                {resolveCompanyTokens(el.data?.salutation || "Dear Gomez,", selectedCompany)}
                               </div>
                             </div>
                           )}
@@ -4322,10 +4537,10 @@ export default function DocumentStudioPanel({
                                   <span
                                     contentEditable
                                     suppressContentEditableWarning
-                                    onBlur={(e) => updateElementData(el.id, "to", e.currentTarget.innerText)}
+                                    onBlur={(e) => handleTokenAwareBlur(el.id, "to", el.data?.to, e.currentTarget.innerText, selectedCompany.defaultTo || "ALL CONCERNED")}
                                     className="font-bold text-slate-900 flex-1 outline-none hover:bg-amber-50/50 rounded px-1 transition"
                                   >
-                                    {el.data?.to || "ALL CONCERNED"}
+                                    {resolveCompanyTokens(el.data?.to || selectedCompany.defaultTo || "ALL CONCERNED", selectedCompany)}
                                   </span>
                                 </div>
                                 <div className="flex items-baseline">
@@ -4333,10 +4548,10 @@ export default function DocumentStudioPanel({
                                   <span
                                     contentEditable
                                     suppressContentEditableWarning
-                                    onBlur={(e) => updateElementData(el.id, "from", e.currentTarget.innerText)}
+                                    onBlur={(e) => handleTokenAwareBlur(el.id, "from", el.data?.from, e.currentTarget.innerText, "[COMPANY_NAME] — HUMAN RESOURCES DEPARTMENT")}
                                     className="font-bold text-slate-900 flex-1 outline-none hover:bg-amber-50/50 rounded px-1 transition"
                                   >
-                                    {el.data?.from || "HUMAN RESOURCES DEPARTMENT"}
+                                    {resolveCompanyTokens(el.data?.from || "[COMPANY_NAME] — HUMAN RESOURCES DEPARTMENT", selectedCompany)}
                                   </span>
                                 </div>
                                 <div className="flex items-baseline">
@@ -4348,10 +4563,10 @@ export default function DocumentStudioPanel({
                                   <span
                                     contentEditable
                                     suppressContentEditableWarning
-                                    onBlur={(e) => updateElementData(el.id, "subject", e.currentTarget.innerText)}
+                                    onBlur={(e) => handleTokenAwareBlur(el.id, "subject", el.data?.subject, e.currentTarget.innerText, "OFFICIAL DIRECTIVE")}
                                     className="font-black text-slate-950 flex-1 uppercase outline-none hover:bg-amber-50/50 rounded px-1 transition"
                                   >
-                                    {el.data?.subject || "OFFICIAL DIRECTIVE"}
+                                    {resolveCompanyTokens(el.data?.subject || "OFFICIAL DIRECTIVE", selectedCompany)}
                                   </span>
                                 </div>
                               </div>
@@ -4368,35 +4583,35 @@ export default function DocumentStudioPanel({
                                 <div
                                   contentEditable
                                   suppressContentEditableWarning
-                                  onBlur={(e) => updateElementData(el.id, "recipientName", e.currentTarget.innerText)}
+                                  onBlur={(e) => handleTokenAwareBlur(el.id, "recipientName", el.data?.recipientName, e.currentTarget.innerText, "RECIPIENT NAME")}
                                   className="font-black text-sm uppercase text-slate-900 outline-none hover:bg-amber-50/50 rounded px-1 transition"
                                 >
-                                  {el.data?.recipientName || "RECIPIENT NAME"}
+                                  {resolveCompanyTokens(el.data?.recipientName || "RECIPIENT NAME", selectedCompany)}
                                 </div>
                                 <div
                                   contentEditable
                                   suppressContentEditableWarning
-                                  onBlur={(e) => updateElementData(el.id, "recipientTitle", e.currentTarget.innerText)}
+                                  onBlur={(e) => handleTokenAwareBlur(el.id, "recipientTitle", el.data?.recipientTitle, e.currentTarget.innerText, "Designation")}
                                   className="font-semibold text-xs text-slate-700 outline-none hover:bg-amber-50/50 rounded px-1 transition"
                                 >
-                                  {el.data?.recipientTitle || "Designation"}
+                                  {resolveCompanyTokens(el.data?.recipientTitle || "Designation", selectedCompany)}
                                 </div>
                                 <div
                                   contentEditable
                                   suppressContentEditableWarning
-                                  onBlur={(e) => updateElementData(el.id, "recipientCompany", e.currentTarget.innerText)}
+                                  onBlur={(e) => handleTokenAwareBlur(el.id, "recipientCompany", el.data?.recipientCompany, e.currentTarget.innerText, "[COMPANY_NAME] — Operations Division")}
                                   className="text-xs text-slate-600 outline-none hover:bg-amber-50/50 rounded px-1 transition"
                                 >
-                                  {el.data?.recipientCompany || "Company / Station"}
+                                  {resolveCompanyTokens(el.data?.recipientCompany || "[COMPANY_NAME] — Operations Division", selectedCompany)}
                                 </div>
                               </div>
                               <div
                                 contentEditable
                                 suppressContentEditableWarning
-                                onBlur={(e) => updateElementData(el.id, "salutation", e.currentTarget.innerText)}
+                                onBlur={(e) => handleTokenAwareBlur(el.id, "salutation", el.data?.salutation, e.currentTarget.innerText, "DEAR SIR/MADAM:")}
                                 className="font-black text-xs text-slate-900 pt-1 outline-none hover:bg-amber-50/50 rounded px-1 transition"
                               >
-                                {el.data?.salutation || "DEAR SIR/MADAM:"}
+                                {resolveCompanyTokens(el.data?.salutation || "DEAR SIR/MADAM:", selectedCompany)}
                               </div>
                             </div>
                           )}
@@ -4409,19 +4624,19 @@ export default function DocumentStudioPanel({
                               <h2
                                 contentEditable
                                 suppressContentEditableWarning
-                                onBlur={(e) => updateElementData(el.id, "bannerTitle", e.currentTarget.innerText)}
+                                onBlur={(e) => handleTokenAwareBlur(el.id, "bannerTitle", el.data?.bannerTitle, e.currentTarget.innerText, "PUBLIC ADVISORY & FORMAL NOTICE")}
                                 className="text-lg sm:text-xl font-black uppercase tracking-widest text-slate-950 outline-none hover:bg-amber-50/50 rounded px-2 transition"
                               >
-                                {el.data?.bannerTitle || "PUBLIC ADVISORY & FORMAL NOTICE"}
+                                {resolveCompanyTokens(el.data?.bannerTitle || "PUBLIC ADVISORY & FORMAL NOTICE", selectedCompany)}
                               </h2>
                               <div className="h-0.5 w-28 bg-amber-600 mx-auto" />
                               <p
                                 contentEditable
                                 suppressContentEditableWarning
-                                onBlur={(e) => updateElementData(el.id, "to", e.currentTarget.innerText)}
+                                onBlur={(e) => handleTokenAwareBlur(el.id, "to", el.data?.to, e.currentTarget.innerText, "TO THE GENERAL PATRONIZING PUBLIC AND ALL GAMING OUTLETS OF [COMPANY_NAME]")}
                                 className="text-xs font-bold text-slate-700 mt-2 outline-none hover:bg-amber-50/50 rounded px-1 transition"
                               >
-                                {el.data?.to || "TO THE GENERAL PATRONIZING PUBLIC"}
+                                {resolveCompanyTokens(el.data?.to || "TO THE GENERAL PATRONIZING PUBLIC AND ALL GAMING OUTLETS OF [COMPANY_NAME]", selectedCompany)}
                               </p>
                             </div>
                           )}
@@ -4429,23 +4644,23 @@ export default function DocumentStudioPanel({
                           {el.variant === "address_certificate_ribbon" && (
                             <div className="text-center my-6 space-y-2.5 select-text">
                               <p className="text-xs font-black tracking-widest text-amber-700 uppercase">
-                                {el.data?.conferralText || "THIS CERTIFICATE IS PROUDLY CONFERRED UPON"}
+                                {resolveCompanyTokens(el.data?.conferralText || "THIS CERTIFICATE IS PROUDLY CONFERRED UPON", selectedCompany)}
                               </p>
                               <h2
                                 contentEditable
                                 suppressContentEditableWarning
-                                onBlur={(e) => updateElementData(el.id, "awardeeName", e.currentTarget.innerText)}
+                                onBlur={(e) => handleTokenAwareBlur(el.id, "awardeeName", el.data?.awardeeName, e.currentTarget.innerText, "AWARDEE NAME")}
                                 className="text-xl sm:text-2xl font-black uppercase text-slate-950 outline-none hover:bg-amber-50/50 rounded px-2 transition"
                               >
-                                {el.data?.awardeeName || "AWARDEE NAME"}
+                                {resolveCompanyTokens(el.data?.awardeeName || "AWARDEE NAME", selectedCompany)}
                               </h2>
                               <p
                                 contentEditable
                                 suppressContentEditableWarning
-                                onBlur={(e) => updateElementData(el.id, "awardeeTitle", e.currentTarget.innerText)}
+                                onBlur={(e) => handleTokenAwareBlur(el.id, "awardeeTitle", el.data?.awardeeTitle, e.currentTarget.innerText, "Senior Area Coordinator • [COMPANY_NAME]")}
                                 className="text-xs font-bold text-slate-600 outline-none hover:bg-amber-50/50 rounded px-1 transition"
                               >
-                                {el.data?.awardeeTitle || "Designation"}
+                                {resolveCompanyTokens(el.data?.awardeeTitle || "Senior Area Coordinator • [COMPANY_NAME]", selectedCompany)}
                               </p>
                             </div>
                           )}
@@ -4484,18 +4699,18 @@ export default function DocumentStudioPanel({
                                   <div
                                     contentEditable
                                     suppressContentEditableWarning
-                                    onBlur={(e) => updateElementData(el.id, "toCompany", e.currentTarget.innerText)}
+                                    onBlur={(e) => handleTokenAwareBlur(el.id, "toCompany", el.data?.toCompany, e.currentTarget.innerText, "SGC Corporation")}
                                     className="text-[11px] text-slate-700 outline-none hover:bg-amber-50/50 rounded px-1 transition"
                                   >
-                                    {el.data?.toCompany || "SGC Corporation"}
+                                    {resolveCompanyTokens(el.data?.toCompany || "SGC Corporation", selectedCompany)}
                                   </div>
                                   <div
                                     contentEditable
                                     suppressContentEditableWarning
-                                    onBlur={(e) => updateElementData(el.id, "toAddress", e.currentTarget.innerText)}
+                                    onBlur={(e) => handleTokenAwareBlur(el.id, "toAddress", el.data?.toAddress, e.currentTarget.innerText, "Purok Daisy, New Isabela, Tacurong City, Sultan Kudarat")}
                                     className="text-[11px] text-slate-600 outline-none hover:bg-amber-50/50 rounded px-1 transition"
                                   >
-                                    {el.data?.toAddress || "Purok Daisy, New Isabela, Tacurong City, Sultan Kudarat"}
+                                    {resolveCompanyTokens(el.data?.toAddress || "Purok Daisy, New Isabela, Tacurong City, Sultan Kudarat", selectedCompany)}
                                   </div>
                                 </div>
                               </div>
@@ -4623,18 +4838,25 @@ export default function DocumentStudioPanel({
                                   {el.data?.personName || "ARJUN BAGUIO PATALINGHUG"}
                                 </strong>
                                 , is not <strong className="font-bold">affiliated</strong> with{" "}
-                                <strong className="font-bold">{el.data?.companyName || selectedCompany.legalName || selectedCompany.name || "Lucky Betplay Corporation"}</strong> as a Salesforce partner under the{" "}
-                                <strong className="font-bold">{el.data?.agencyName || "Philippine Charity Sweepstakes Office (PCSO)"}</strong>.
+                                <strong className="font-bold">{resolveCompanyTokens(el.data?.companyName || selectedCompany.name || selectedCompany.legalName, selectedCompany)}</strong> as a Salesforce partner under the{" "}
+                                <strong
+                                  contentEditable
+                                  suppressContentEditableWarning
+                                  onBlur={(e) => updateElementData(el.id, "agencyName", e.currentTarget.innerText)}
+                                  className="font-bold text-slate-950 outline-none hover:bg-amber-50/50 rounded px-0.5"
+                                >
+                                  {el.data?.agencyName || "Philippine Charity Sweepstakes Office (PCSO)"}
+                                </strong>.
                               </p>
 
                               {/* Paragraph 2 */}
                               <p className="text-justify leading-relaxed">
-                                We affirm that the aforementioned individual <strong className="font-bold">has no formal or informal association</strong> with <strong className="font-bold">{el.data?.companyName || selectedCompany.legalName || selectedCompany.name || "Lucky Betplay Corporation"}</strong> in any capacity related to Salesforce services, nor do they represent the company in any activities associated with PCSO.
+                                We affirm that the aforementioned individual <strong className="font-bold">has no formal or informal association</strong> with <strong className="font-bold">{resolveCompanyTokens(el.data?.companyName || selectedCompany.name || selectedCompany.legalName, selectedCompany)}</strong> in any capacity related to Salesforce services, nor do they represent the company in any activities associated with PCSO.
                               </p>
 
                               {/* Paragraph 3 */}
                               <p className="text-justify leading-relaxed">
-                                Any claims or representation made by this individual suggesting that He is a Salesforce partner of <strong className="font-bold">{el.data?.companyName || selectedCompany.legalName || selectedCompany.name || "Lucky Betplay Corporation"}</strong> or have any related business dealings with the company are <strong className="font-bold">false and unauthorized</strong>.
+                                Any claims or representation made by this individual suggesting that He is a Salesforce partner of <strong className="font-bold">{resolveCompanyTokens(el.data?.companyName || selectedCompany.name || selectedCompany.legalName, selectedCompany)}</strong> or have any related business dealings with the company are <strong className="font-bold">false and unauthorized</strong>.
                               </p>
 
                               {/* Paragraph 4 */}
@@ -4648,7 +4870,7 @@ export default function DocumentStudioPanel({
                                 >
                                   {el.data?.personNameTitle || "Arjun Baguio Patalinghug"}
                                 </strong>{" "}
-                                has <strong className="font-bold">never been affiliated</strong> with <strong className="font-bold">{el.data?.companyName || selectedCompany.legalName || selectedCompany.name || "Lucky Betplay Corporation"} as a Salesforce partner</strong>.
+                                has <strong className="font-bold">never been affiliated</strong> with <strong className="font-bold">{resolveCompanyTokens(el.data?.companyName || selectedCompany.name || selectedCompany.legalName, selectedCompany)} as a Salesforce partner</strong>.
                               </p>
 
                               {/* Paragraph 5 (Verification Hotline) */}
@@ -4670,19 +4892,19 @@ export default function DocumentStudioPanel({
                               <p
                                 contentEditable
                                 suppressContentEditableWarning
-                                onBlur={(e) => updateElementData(el.id, "incidentParagraph", e.currentTarget.innerText)}
+                                onBlur={(e) => handleTokenAwareBlur(el.id, "incidentParagraph", el.data?.incidentParagraph, e.currentTarget.innerText, "Based on the Incident Report last March 7, 2025, it was determined that you have been involved in a quarrel within the premises of the Company. This action constitutes, based on the Agency Agreement signed and notarized on _____________________, which is attached as Annex A of this letter, which, is a terminable case.")}
                                 className="text-justify indent-6 outline-none hover:bg-amber-50/20 rounded p-1 transition"
                               >
-                                {el.data?.incidentParagraph || "Based on the Incident Report last March 7, 2025, it was determined that you have been involved in a quarrel within the premises of the Company. This action constitutes, based on the Agency Agreement signed and notarized on _____________________, which is attached as Annex A of this letter, which, is a terminable case."}
+                                {resolveCompanyTokens(el.data?.incidentParagraph || "Based on the Incident Report last March 7, 2025, it was determined that you have been involved in a quarrel within the premises of the Company. This action constitutes, based on the Agency Agreement signed and notarized on _____________________, which is attached as Annex A of this letter, which, is a terminable case.", selectedCompany)}
                               </p>
 
                               <p
                                 contentEditable
                                 suppressContentEditableWarning
-                                onBlur={(e) => updateElementData(el.id, "provisionsIntro", e.currentTarget.innerText)}
+                                onBlur={(e) => handleTokenAwareBlur(el.id, "provisionsIntro", el.data?.provisionsIntro, e.currentTarget.innerText, "As stated in the General Provisions of the Agency Agreement – TERMINATION “The Company may immediately terminate this Contract of the concerned member of the SALESFORCE on account of any of the following:")}
                                 className="text-justify outline-none hover:bg-amber-50/20 rounded p-1 transition"
                               >
-                                {el.data?.provisionsIntro || "As stated in the General Provisions of the Agency Agreement – TERMINATION “The Company may immediately terminate this Contract of the concerned member of the SALESFORCE on account of any of the following:"}
+                                {resolveCompanyTokens(el.data?.provisionsIntro || "As stated in the General Provisions of the Agency Agreement – TERMINATION “The Company may immediately terminate this Contract of the concerned member of the SALESFORCE on account of any of the following:", selectedCompany)}
                               </p>
 
                               {/* Indented Bullets */}
@@ -4713,19 +4935,19 @@ export default function DocumentStudioPanel({
                               <p
                                 contentEditable
                                 suppressContentEditableWarning
-                                onBlur={(e) => updateElementData(el.id, "companyWarning", e.currentTarget.innerText)}
+                                onBlur={(e) => handleTokenAwareBlur(el.id, "companyWarning", el.data?.companyWarning, e.currentTarget.innerText, "Moreover, this action will not be tolerated by [COMPANY_LEGAL_NAME], as these are grounds for cancellation of your Agency Agreement.")}
                                 className="text-justify outline-none hover:bg-amber-50/20 rounded p-1 transition"
                               >
-                                {el.data?.companyWarning || "Moreover, this action will not be tolerated by 5A Royal Gaming OPC, as these are grounds for cancellation of your Agency Agreement."}
+                                {resolveCompanyTokens(el.data?.companyWarning || "Moreover, this action will not be tolerated by [COMPANY_LEGAL_NAME], as these are grounds for cancellation of your Agency Agreement.", selectedCompany)}
                               </p>
 
                               <p
                                 contentEditable
                                 suppressContentEditableWarning
-                                onBlur={(e) => updateElementData(el.id, "conclusionParagraph", e.currentTarget.innerText)}
+                                onBlur={(e) => handleTokenAwareBlur(el.id, "conclusionParagraph", el.data?.conclusionParagraph, e.currentTarget.innerText, "In conclusion, your Agency Agreement is hereby terminated effective _____________________.")}
                                 className="text-justify outline-none hover:bg-amber-50/20 rounded p-1 transition"
                               >
-                                {el.data?.conclusionParagraph || "In conclusion, your Agency Agreement is hereby terminated effective _____________________."}
+                                {resolveCompanyTokens(el.data?.conclusionParagraph || "In conclusion, your Agency Agreement is hereby terminated effective _____________________.", selectedCompany)}
                               </p>
                             </div>
                           ) : el.variant === "body_letter_of_explain" ? (
@@ -4733,10 +4955,10 @@ export default function DocumentStudioPanel({
                               <p
                                 contentEditable
                                 suppressContentEditableWarning
-                                onBlur={(e) => updateElementData(el.id, "reportCitation", e.currentTarget.innerText)}
+                                onBlur={(e) => handleTokenAwareBlur(el.id, "reportCitation", el.data?.reportCitation, e.currentTarget.innerText, "We received a report from Ms. Quennie R. Capuyan, HR Admin, of the following allegations:")}
                                 className="text-justify outline-none hover:bg-amber-50/20 rounded p-1 transition"
                               >
-                                {el.data?.reportCitation || "We received a report from Ms. Quennie R. Capuyan, HR Admin, of the following allegations:"}
+                                {resolveCompanyTokens(el.data?.reportCitation || "We received a report from Ms. Quennie R. Capuyan, HR Admin, of the following allegations:", selectedCompany)}
                               </p>
 
                               {/* Allegations Bullets */}
@@ -4765,19 +4987,19 @@ export default function DocumentStudioPanel({
                               <p
                                 contentEditable
                                 suppressContentEditableWarning
-                                onBlur={(e) => updateElementData(el.id, "explanationNotice", e.currentTarget.innerText)}
+                                onBlur={(e) => handleTokenAwareBlur(el.id, "explanationNotice", el.data?.explanationNotice, e.currentTarget.innerText, "In view thereof, you are hereby requested to explain in writing (in a language you are most comfortable with) within three (3) days from receipt hereof why your Agency Agreement with the company shall not be terminated for the said offense/s.")}
                                 className="text-justify outline-none hover:bg-amber-50/20 rounded p-1 transition"
                               >
-                                {el.data?.explanationNotice || "In view thereof, you are hereby requested to explain in writing (in a language you are most comfortable with) within three (3) days from receipt hereof why your Agency Agreement with the company shall not be terminated for the said offense/s."}
+                                {resolveCompanyTokens(el.data?.explanationNotice || "In view thereof, you are hereby requested to explain in writing (in a language you are most comfortable with) within three (3) days from receipt hereof why your Agency Agreement with the company shall not be terminated for the said offense/s.", selectedCompany)}
                               </p>
 
                               <p
                                 contentEditable
                                 suppressContentEditableWarning
-                                onBlur={(e) => updateElementData(el.id, "contractClauseIntro", e.currentTarget.innerText)}
+                                onBlur={(e) => handleTokenAwareBlur(el.id, "contractClauseIntro", el.data?.contractClauseIntro, e.currentTarget.innerText, "As stated in the General Provisions of the Agency Agreement – TERMINATION “The Company may immediately terminate this Contract of the concerned member of the SALESFORCE on account of any of the following:")}
                                 className="text-justify outline-none hover:bg-amber-50/20 rounded p-1 transition"
                               >
-                                {el.data?.contractClauseIntro || "As stated in the General Provisions of the Agency Agreement – TERMINATION “The Company may immediately terminate this Contract of the concerned member of the SALESFORCE on account of any of the following:"}
+                                {resolveCompanyTokens(el.data?.contractClauseIntro || "As stated in the General Provisions of the Agency Agreement – TERMINATION “The Company may immediately terminate this Contract of the concerned member of the SALESFORCE on account of any of the following:", selectedCompany)}
                               </p>
 
                               {/* Indented Contract Clauses */}
@@ -4798,19 +5020,19 @@ export default function DocumentStudioPanel({
                               <p
                                 contentEditable
                                 suppressContentEditableWarning
-                                onBlur={(e) => updateElementData(el.id, "waiverWarning", e.currentTarget.innerText)}
+                                onBlur={(e) => handleTokenAwareBlur(el.id, "waiverWarning", el.data?.waiverWarning, e.currentTarget.innerText, "Failure to submit a response letter shall mean waiving your right to be heard and this case shall be dealt with given the available information.")}
                                 className="text-justify outline-none hover:bg-amber-50/20 rounded p-1 transition"
                               >
-                                {el.data?.waiverWarning || "Failure to submit a response letter shall mean waiving your right to be heard and this case shall be dealt with given the available information."}
+                                {resolveCompanyTokens(el.data?.waiverWarning || "Failure to submit a response letter shall mean waiving your right to be heard and this case shall be dealt with given the available information.", selectedCompany)}
                               </p>
 
                               <p
                                 contentEditable
                                 suppressContentEditableWarning
-                                onBlur={(e) => updateElementData(el.id, "closingDirective", e.currentTarget.innerText)}
+                                onBlur={(e) => handleTokenAwareBlur(el.id, "closingDirective", el.data?.closingDirective, e.currentTarget.innerText, "Please be guided accordingly.")}
                                 className="outline-none hover:bg-amber-50/20 rounded p-1 transition font-medium"
                               >
-                                {el.data?.closingDirective || "Please be guided accordingly."}
+                                {resolveCompanyTokens(el.data?.closingDirective || "Please be guided accordingly.", selectedCompany)}
                               </p>
                             </div>
                           ) : el.variant === "body_request_proposal_table" ? (
@@ -4818,19 +5040,19 @@ export default function DocumentStudioPanel({
                               <p
                                 contentEditable
                                 suppressContentEditableWarning
-                                onBlur={(e) => updateElementData(el.id, "introText", e.currentTarget.innerText)}
+                                onBlur={(e) => handleTokenAwareBlur(el.id, "introText", el.data?.introText, e.currentTarget.innerText)}
                                 className="text-justify outline-none hover:bg-amber-50/20 rounded p-1 transition"
                               >
-                                {(el.data?.introText || "").replace(/\[COMPANY_NAME\]/g, selectedCompany.name)}
+                                {resolveCompanyTokens(el.data?.introText || "", selectedCompany)}
                               </p>
 
                               <p
                                 contentEditable
                                 suppressContentEditableWarning
-                                onBlur={(e) => updateElementData(el.id, "proposalText", e.currentTarget.innerText)}
+                                onBlur={(e) => handleTokenAwareBlur(el.id, "proposalText", el.data?.proposalText, e.currentTarget.innerText)}
                                 className="text-justify outline-none hover:bg-amber-50/20 rounded p-1 transition"
                               >
-                                {(el.data?.proposalText || "").replace(/\[COMPANY_NAME\]/g, selectedCompany.name)}
+                                {resolveCompanyTokens(el.data?.proposalText || "", selectedCompany)}
                               </p>
 
                               {/* Itemized Cost Breakdown Table */}
@@ -4877,10 +5099,10 @@ export default function DocumentStudioPanel({
                                 <p
                                   contentEditable
                                   suppressContentEditableWarning
-                                  onBlur={(e) => updateElementData(el.id, "justificationText1", e.currentTarget.innerText)}
+                                  onBlur={(e) => handleTokenAwareBlur(el.id, "justificationText1", el.data?.justificationText1, e.currentTarget.innerText)}
                                   className="text-justify outline-none hover:bg-amber-50/20 rounded p-1 transition"
                                 >
-                                  {el.data.justificationText1.replace(/\[COMPANY_NAME\]/g, selectedCompany.name)}
+                                  {resolveCompanyTokens(el.data.justificationText1, selectedCompany)}
                                 </p>
                               )}
 
@@ -4888,10 +5110,10 @@ export default function DocumentStudioPanel({
                                 <p
                                   contentEditable
                                   suppressContentEditableWarning
-                                  onBlur={(e) => updateElementData(el.id, "justificationText2", e.currentTarget.innerText)}
+                                  onBlur={(e) => handleTokenAwareBlur(el.id, "justificationText2", el.data?.justificationText2, e.currentTarget.innerText)}
                                   className="text-justify outline-none hover:bg-amber-50/20 rounded p-1 transition"
                                 >
-                                  {el.data.justificationText2.replace(/\[COMPANY_NAME\]/g, selectedCompany.name)}
+                                  {resolveCompanyTokens(el.data.justificationText2, selectedCompany)}
                                 </p>
                               )}
 
@@ -4899,10 +5121,10 @@ export default function DocumentStudioPanel({
                                 <p
                                   contentEditable
                                   suppressContentEditableWarning
-                                  onBlur={(e) => updateElementData(el.id, "closingRequest", e.currentTarget.innerText)}
+                                  onBlur={(e) => handleTokenAwareBlur(el.id, "closingRequest", el.data?.closingRequest, e.currentTarget.innerText)}
                                   className="text-justify outline-none hover:bg-amber-50/20 rounded p-1 transition"
                                 >
-                                  {el.data.closingRequest.replace(/\[COMPANY_NAME\]/g, selectedCompany.name)}
+                                  {resolveCompanyTokens(el.data.closingRequest, selectedCompany)}
                                 </p>
                               )}
 
@@ -4910,10 +5132,10 @@ export default function DocumentStudioPanel({
                                 <p
                                   contentEditable
                                   suppressContentEditableWarning
-                                  onBlur={(e) => updateElementData(el.id, "thankYouText", e.currentTarget.innerText)}
+                                  onBlur={(e) => handleTokenAwareBlur(el.id, "thankYouText", el.data?.thankYouText, e.currentTarget.innerText)}
                                   className="text-justify outline-none hover:bg-amber-50/20 rounded p-1 transition font-medium"
                                 >
-                                  {el.data.thankYouText.replace(/\[COMPANY_NAME\]/g, selectedCompany.name)}
+                                  {resolveCompanyTokens(el.data.thankYouText, selectedCompany)}
                                 </p>
                               )}
                             </div>
@@ -4921,16 +5143,16 @@ export default function DocumentStudioPanel({
                             <div className="space-y-4 my-3 select-text">
                               <div className="text-center">
                                 <h3 className="text-base font-black uppercase tracking-wider text-slate-900">
-                                  {el.data?.title || "CERTIFICATE OF MERIT & INCENTIVE VOUCHER"}
+                                  {resolveCompanyTokens(el.data?.title || "CERTIFICATE OF MERIT & INCENTIVE VOUCHER", selectedCompany)}
                                 </h3>
                               </div>
                               <p
                                 contentEditable
                                 suppressContentEditableWarning
-                                onBlur={(e) => updateElementData(el.id, "citation", e.currentTarget.innerText)}
+                                onBlur={(e) => handleTokenAwareBlur(el.id, "citation", el.data?.citation, e.currentTarget.innerText)}
                                 className="text-justify leading-relaxed text-slate-800 outline-none hover:bg-amber-50/30 rounded p-1 transition"
                               >
-                                {el.data?.citation || ""}
+                                {resolveCompanyTokens(el.data?.citation || "", selectedCompany)}
                               </p>
 
                               {/* Authentic Incentive Voucher Card */}
@@ -4975,12 +5197,12 @@ export default function DocumentStudioPanel({
                           ) : el.variant === "body_numbered_directives" ? (
                             <div className="space-y-2 my-3 select-text">
                               <h4 className="text-xs font-black uppercase tracking-wider text-slate-900">
-                                {el.data?.title || "DIRECTIVES"}
+                                {resolveCompanyTokens(el.data?.title || "DIRECTIVES", selectedCompany)}
                               </h4>
                               <ol className="list-decimal list-inside space-y-1.5 text-xs text-justify leading-relaxed">
                                 {(el.data?.items || []).map((it, idx) => (
                                   <li key={idx} className="text-slate-800 font-semibold">
-                                    <span>{it}</span>
+                                    <span>{resolveCompanyTokens(it, selectedCompany)}</span>
                                   </li>
                                 ))}
                               </ol>
@@ -4989,26 +5211,26 @@ export default function DocumentStudioPanel({
                             <div className="p-3.5 rounded-xl border-l-4 border-rose-600 bg-rose-50/60 my-3 space-y-1 select-text">
                               <div className="flex items-center gap-1.5 text-rose-800 font-black text-xs uppercase tracking-wider">
                                 <AlertTriangle size={15} />
-                                <span>{el.data?.boxTitle || "COMPLIANCE NOTICE"}</span>
+                                <span>{resolveCompanyTokens(el.data?.boxTitle || "COMPLIANCE NOTICE", selectedCompany)}</span>
                               </div>
                               <p className="text-xs text-rose-950 font-semibold leading-relaxed text-justify">
-                                {el.data?.boxMessage || ""}
+                                {resolveCompanyTokens(el.data?.boxMessage || "", selectedCompany)}
                               </p>
                             </div>
                           ) : (
                             <div className="space-y-2.5 my-3 select-text">
                               {el.data?.title && (
                                 <h3 className="text-sm font-black uppercase tracking-wider text-slate-900">
-                                  {el.data.title}
+                                  {resolveCompanyTokens(el.data.title, selectedCompany)}
                                 </h3>
                               )}
                               <div
                                 contentEditable
                                 suppressContentEditableWarning
-                                onBlur={(e) => updateElementData(el.id, "bodyText", e.currentTarget.innerText)}
+                                onBlur={(e) => handleTokenAwareBlur(el.id, "bodyText", el.data?.bodyText, e.currentTarget.innerText)}
                                 className="text-justify leading-relaxed text-slate-800 whitespace-pre-line outline-none hover:bg-amber-50/20 rounded p-1 transition"
                               >
-                                {(el.data?.bodyText || "").replace(/\[COMPANY_NAME\]/g, selectedCompany.name)}
+                                {resolveCompanyTokens(el.data?.bodyText || "", selectedCompany)}
                               </div>
                             </div>
                           )}
@@ -5111,16 +5333,19 @@ export default function DocumentStudioPanel({
                                 <div className="font-bold text-slate-500 uppercase text-[10px] mb-6">{el.data?.col1Label || "Prepared by:"}</div>
                                 <div className="border-b border-slate-800 pb-1 font-black text-slate-900 text-xs">{el.data?.col1Name}</div>
                                 <div className="text-slate-500 text-[10px]">{el.data?.col1Title}</div>
+                                <div className="text-slate-500 font-bold uppercase text-[9px] mt-0.5">{selectedCompany.name}</div>
                               </div>
                               <div>
                                 <div className="font-bold text-slate-500 uppercase text-[10px] mb-6">{el.data?.col2Label || "Noted by:"}</div>
                                 <div className="border-b border-slate-800 pb-1 font-black text-slate-900 text-xs">{el.data?.col2Name}</div>
                                 <div className="text-slate-500 text-[10px]">{el.data?.col2Title}</div>
+                                <div className="text-slate-500 font-bold uppercase text-[9px] mt-0.5">{selectedCompany.name}</div>
                               </div>
                               <div>
                                 <div className="font-bold text-slate-500 uppercase text-[10px] mb-6">{el.data?.col3Label || "Approved by:"}</div>
                                 <div className="border-b border-slate-800 pb-1 font-black text-slate-900 text-xs">{el.data?.col3Name}</div>
                                 <div className="text-slate-500 text-[10px]">{el.data?.col3Title}</div>
+                                <div className="text-slate-500 font-bold uppercase text-[9px] mt-0.5">{selectedCompany.name}</div>
                               </div>
                             </div>
                           )}
@@ -5129,7 +5354,7 @@ export default function DocumentStudioPanel({
                             <div className="border-t-2 border-dashed border-slate-400 pt-3 my-4 text-xs select-text">
                               <div className="flex justify-between items-center pb-1.5 mb-2">
                                 <span className="font-black uppercase tracking-wider text-slate-900 text-[11px]">{el.data?.stubTitle || "ACKNOWLEDGMENT & RECEIVING SLIP"}</span>
-                                <span className="font-mono text-[10px] text-slate-500 font-bold">Duplicate Copy</span>
+                                <span className="font-mono text-[10px] text-slate-500 font-bold">{selectedCompany.code} Copy • Return to HRMD</span>
                               </div>
                               <div className="grid grid-cols-3 gap-4 pt-4 text-[11px]">
                                 <div className="border-b border-slate-900 pb-1">
@@ -5177,10 +5402,14 @@ export default function DocumentStudioPanel({
                                 <div
                                   contentEditable
                                   suppressContentEditableWarning
-                                  onBlur={(e) => updateElementData(el.id, "company", e.currentTarget.innerText)}
+                                  onBlur={(e) => {
+                                    const next = e.currentTarget.innerText.trim();
+                                    const fallback = (selectedCompany.name || selectedCompany.legalName || "").trim();
+                                    handleTokenAwareBlur(el.id, "company", el.data?.company, next === fallback ? "" : next, fallback);
+                                  }}
                                   className="text-slate-500 font-bold uppercase text-[10px] outline-none hover:bg-amber-50/50 rounded"
                                 >
-                                  {el.data?.company || selectedCompany.name}
+                                  {resolveCompanyTokens(el.data?.company || selectedCompany.name || selectedCompany.legalName, selectedCompany)}
                                 </div>
                               </div>
                             </div>
@@ -5205,6 +5434,9 @@ export default function DocumentStudioPanel({
                                 >
                                   {el.data?.title || "OPERATIONS MANAGER"}
                                 </div>
+                                <div className="text-slate-600 font-bold uppercase text-[10px] px-1">
+                                  {selectedCompany.name || selectedCompany.legalName}
+                                </div>
                               </div>
                             </div>
                           )}
@@ -5228,6 +5460,9 @@ export default function DocumentStudioPanel({
                                   className="text-slate-700 font-semibold text-[11px] outline-none hover:bg-amber-50/50 rounded"
                                 >
                                   {el.data?.issuerTitle || "HR Salesforce Specialist"}
+                                </div>
+                                <div className="text-slate-600 font-bold uppercase text-[10px]">
+                                  {selectedCompany.name || selectedCompany.legalName}
                                 </div>
                               </div>
 
@@ -5307,10 +5542,14 @@ export default function DocumentStudioPanel({
                                   <div
                                     contentEditable
                                     suppressContentEditableWarning
-                                    onBlur={(e) => updateElementData(el.id, "company", e.currentTarget.innerText)}
+                                    onBlur={(e) => {
+                                      const next = e.currentTarget.innerText.trim();
+                                      const fallback = (selectedCompany.name || selectedCompany.legalName || "").trim();
+                                      handleTokenAwareBlur(el.id, "company", el.data?.company, next === fallback ? "" : next, fallback);
+                                    }}
                                     className="text-slate-600 font-bold uppercase text-[10px] sm:text-[11px] outline-none hover:bg-amber-50/50 rounded px-1"
                                   >
-                                    {el.data?.company || selectedCompany.legalName || selectedCompany.name || "Lucky Betplay Corporation"}
+                                    {resolveCompanyTokens(el.data?.company || selectedCompany.name || selectedCompany.legalName, selectedCompany)}
                                   </div>
                                 </div>
                               </div>
@@ -5327,12 +5566,12 @@ export default function DocumentStudioPanel({
                               <p className="font-bold">REPUBLIC OF THE PHILIPPINES )</p>
                               <p className="font-bold">PROVINCE OF CEBU, MANDAUE CITY ) S.S.</p>
                               <p className="text-justify leading-relaxed">
-                                SUBSCRIBED AND SWORN to before me this _____ day of _______________ {el.data?.docYear || "2026"} at {el.data?.city || "Mandaue City, Cebu"}, affiant exhibiting competent evidence of identity.
+                                SUBSCRIBED AND SWORN to before me this _____ day of _______________ {resolveCompanyTokens(el.data?.docYear || "2026", selectedCompany)} at {resolveCompanyTokens(el.data?.city || "Mandaue City, Cebu", selectedCompany)}, affiant exhibiting competent evidence of identity.
                               </p>
                               <div className="flex justify-between items-end pt-5">
                                 <div className="text-[10px] text-slate-500 font-mono">
                                   <p>Doc. No. ____; Page No. ____;</p>
-                                  <p>Book No. ____; Series of {el.data?.docYear || "2026"}.</p>
+                                  <p>Book No. ____; Series of {resolveCompanyTokens(el.data?.docYear || "2026", selectedCompany)}.</p>
                                 </div>
                                 <div className="text-center w-56 border-t border-slate-900 pt-1 font-bold text-xs">
                                   NOTARY PUBLIC
@@ -5342,25 +5581,26 @@ export default function DocumentStudioPanel({
                           )}
 
                           {el.variant === "footer_corporate_security" && (
-                            <div className="border-t border-slate-200 pt-3 mt-6 flex items-center justify-between text-[10px] text-slate-500 font-mono select-text">
+                            <div className="border-t border-slate-200 pt-3 mt-6 flex items-center justify-between gap-3 text-[10px] text-slate-500 font-mono select-text">
                               <div className="flex items-center gap-1.5">
-                                <Shield size={12} className="text-emerald-700" />
-                                <span>{el.data?.noticeText || "Authentic corporate instrument generated via HrHub."}</span>
+                                <Shield size={12} className="text-emerald-700 shrink-0" />
+                                <span>{resolveCompanyTokens(el.data?.noticeText || "This document is an authentic corporate instrument issued by [COMPANY_NAME] via HrHub Corporate System.", selectedCompany)}</span>
                               </div>
-                              <span className="font-bold text-slate-700">{el.data?.docCode || "SEC-VERIFIED"}</span>
+                              <span className="font-bold text-slate-700 shrink-0">{resolveCompanyTokens(el.data?.docCode || "[COMPANY_CODE]-VERIFIED-2026", selectedCompany)}</span>
                             </div>
                           )}
 
                           {el.variant === "footer_contact_hotline" && (
                             <div className="border-t border-slate-200 pt-2 mt-4 text-center text-[10px] text-slate-500 font-semibold select-text">
-                              <span>Hotline: {el.data?.hotline || "(+63 32) 231-9042"} • Inquiries: {el.data?.email || "compliance@hrhub-operations.com"}</span>
+                              <span>{resolveCompanyTokens(el.data?.hotline || selectedCompany.contact || selectedCompany.address, selectedCompany)} • {resolveCompanyTokens(el.data?.email || `${selectedCompany.legalName || selectedCompany.name} Official Records`, selectedCompany)}</span>
                             </div>
                           )}
 
                           {el.variant === "footer_page_tracker" && (
                             <div className="border-t border-slate-200 pt-1.5 mt-4 flex justify-between text-[9px] text-slate-400 font-mono select-text">
-                              <span>{el.data?.formCode || "FORM-HRD-2026"}</span>
-                              <span>{el.data?.pageText || "Page 1 of 1"}</span>
+                              <span>{resolveCompanyTokens(el.data?.formCode || "[COMPANY_CODE]-FORM-HRD-2026-REV03", selectedCompany)}</span>
+                              <span className="font-semibold text-slate-500">{selectedCompany.name}</span>
+                              <span>{resolveCompanyTokens(el.data?.pageText || "Page 1 of 1", selectedCompany)}</span>
                             </div>
                           )}
 
@@ -5369,10 +5609,10 @@ export default function DocumentStudioPanel({
                               <span
                                 contentEditable
                                 suppressContentEditableWarning
-                                onBlur={(e) => updateElementData(el.id, "divisionText", e.currentTarget.innerText)}
+                                onBlur={(e) => handleTokenAwareBlur(el.id, "divisionText", el.data?.divisionText, e.currentTarget.innerText, "[COMPANY_NAME] • HUMAN RESOURCE MANAGEMENT DIVISION")}
                                 className="outline-none hover:bg-amber-50/50 rounded px-2 transition inline-block"
                               >
-                                {el.data?.divisionText || "HUMAN RESOURCE MANAGEMENT DIVISION"}
+                                {resolveCompanyTokens(el.data?.divisionText || "[COMPANY_NAME] • HUMAN RESOURCE MANAGEMENT DIVISION", selectedCompany)}
                               </span>
                             </div>
                           )}

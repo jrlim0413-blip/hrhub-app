@@ -4,12 +4,60 @@
  * per user account without localStorage.
  */
 
-import { supabase } from "./supabase";
+import { supabase } from "./supabase.js";
 
 export const USER_SETTINGS_TABLE = "user_settings";
+export const ORGANIZATION_DEFAULT_ACCOUNT_KEY = "admin@hrhub.com";
+export const SETTINGS_SCHEMA_VERSION = 2;
+export const LETTERHEAD_FIELDS = ["legalName", "tagline", "address", "contact"];
+
+// Prior v1 factory values so untouched defaults on existing accounts upgrade cleanly once
+const LEGACY_V1_FACTORY_DEFAULTS = {
+  fontSize: 13.3,
+  signatoryLayout: "dual",
+  signatory: { size: 52, offsetX: 0, offsetY: 0 },
+  approver: { size: 52, offsetX: 0, offsetY: 0 },
+  watermarkOpacity: 18
+};
 
 // In-memory session cache (replaces localStorage)
 const memorySettingsStore = new Map();
+
+/**
+ * Validates per-company letterhead overrides so invalid or blank company headings never blank a letterhead.
+ */
+export function filterValidLetterheadFields(letterheadMap, validCompanyIds = null) {
+  if (!letterheadMap || typeof letterheadMap !== "object" || Array.isArray(letterheadMap)) {
+    return {};
+  }
+
+  const companyIds = Array.isArray(validCompanyIds) && validCompanyIds.length > 0
+    ? validCompanyIds
+    : Object.keys(letterheadMap);
+
+  return companyIds.reduce((defaults, companyId) => {
+    const savedFields = letterheadMap[companyId];
+    if (!savedFields || typeof savedFields !== "object" || Array.isArray(savedFields)) {
+      return defaults;
+    }
+    if (
+      Object.prototype.hasOwnProperty.call(savedFields, "legalName") &&
+      (typeof savedFields.legalName !== "string" || savedFields.legalName.trim().length === 0)
+    ) {
+      return defaults;
+    }
+
+    const validFields = Object.fromEntries(
+      LETTERHEAD_FIELDS
+        .filter((field) => typeof savedFields[field] === "string")
+        .map((field) => [field, savedFields[field]])
+    );
+    if (Object.keys(validFields).length > 0) {
+      defaults[companyId] = validFields;
+    }
+    return defaults;
+  }, {});
+}
 
 /**
  * Extracts a normalized, stable account key for the current user.
@@ -35,35 +83,36 @@ export function getUserAccountKey(currentUser = null) {
 }
 
 /**
- * Clean factory baseline defaults for all user-configurable parameters
+ * Clean factory baseline defaults aligned with HRMD (admin@hrhub.com) master defaults
  */
 export function getDefaultUserSettings() {
   return {
-    version: 1,
+    version: SETTINGS_SCHEMA_VERSION,
     directives: {
       fontFamily: "Arial, Helvetica, sans-serif",
-      fontSize: 13.3
+      fontSize: 14.6
     },
     signatory: {
       name: "JEVINCE JAYE S. JUBAY, CHRP",
       title: "HRMD Manager",
       label: "ISSUED BY:",
       signature: null,
-      size: 52,
-      offsetX: 0,
-      offsetY: 0
+      size: 80,
+      offsetX: -12,
+      offsetY: -38
     },
     approver: {
       name: "CHARMIE JEAN M. SIMPAL",
       title: "President & CEO",
       label: "NOTED & APPROVED BY:",
       signature: null,
-      size: 52,
+      size: 118,
       offsetX: 0,
-      offsetY: 0
+      offsetY: -45
     },
-    signatoryLayout: "dual", // "dual" | "single"
-    letterheadDefaults: {}, // Per-company custom overrides
+    signatoryLayout: "single", // "dual" | "single"
+    letterheadDefaults: {}, // Per-company custom overrides for the active user
+    organizationLetterheadDefaults: {}, // Organization baseline synced from HRMD (admin@hrhub.com)
     headerDefaults: {
       defaultTo: "HR ON-SITE, CIC, AND FIELD MONITORING",
       defaultFrom: "HUMAN RESOURCES DEPARTMENT",
@@ -71,7 +120,7 @@ export function getDefaultUserSettings() {
     },
     watermark: {
       size: 380,
-      opacity: 18,
+      opacity: 25,
       showDiagonalStamp: false,
       diagonalStampText: "OFFICIAL MEMORANDUM"
     },
@@ -86,6 +135,184 @@ export function getDefaultUserSettings() {
     emailWebhookUrl: "",
     activeDraft: null,
     updatedAt: new Date().toISOString()
+  };
+}
+
+const pickNumber = (colVal, jsonVal, fallback) => {
+  if (colVal !== null && colVal !== undefined && colVal !== "") {
+    return Number(colVal);
+  }
+  if (jsonVal !== null && jsonVal !== undefined && jsonVal !== "") {
+    return Number(jsonVal);
+  }
+  return fallback;
+};
+
+const pickBool = (colVal, jsonVal, fallback) => {
+  if (colVal !== null && colVal !== undefined) return Boolean(colVal);
+  if (jsonVal !== null && jsonVal !== undefined) return Boolean(jsonVal);
+  return fallback;
+};
+
+/**
+ * Normalizes a Supabase 'user_settings' row into the frontend settings structure.
+ */
+export function mapUserSettingsRow(data, baseDefaults = getDefaultUserSettings()) {
+  if (!data || typeof data !== "object") return baseDefaults;
+  const jsonSettings = data.settings_json || data.settings || {};
+
+  return {
+    ...baseDefaults,
+    ...jsonSettings,
+    directives: {
+      fontFamily: data.directives_font_family || jsonSettings.directives?.fontFamily || baseDefaults.directives.fontFamily,
+      fontSize: pickNumber(data.directives_font_size, jsonSettings.directives?.fontSize, baseDefaults.directives.fontSize)
+    },
+    signatory: {
+      name: data.signatory_name || jsonSettings.signatory?.name || baseDefaults.signatory.name,
+      title: data.signatory_title || jsonSettings.signatory?.title || baseDefaults.signatory.title,
+      label: data.signatory_label || jsonSettings.signatory?.label || baseDefaults.signatory.label,
+      signature: data.signatory_signature ?? jsonSettings.signatory?.signature ?? null,
+      size: pickNumber(data.signatory_size, jsonSettings.signatory?.size, baseDefaults.signatory.size),
+      offsetX: pickNumber(data.signatory_offset_x, jsonSettings.signatory?.offsetX, baseDefaults.signatory.offsetX),
+      offsetY: pickNumber(data.signatory_offset_y, jsonSettings.signatory?.offsetY, baseDefaults.signatory.offsetY)
+    },
+    approver: {
+      name: data.approver_name || jsonSettings.approver?.name || baseDefaults.approver.name,
+      title: data.approver_title || jsonSettings.approver?.title || baseDefaults.approver.title,
+      label: data.approver_label || jsonSettings.approver?.label || baseDefaults.approver.label,
+      signature: data.approver_signature ?? jsonSettings.approver?.signature ?? null,
+      size: pickNumber(data.approver_size, jsonSettings.approver?.size, baseDefaults.approver.size),
+      offsetX: pickNumber(data.approver_offset_x, jsonSettings.approver?.offsetX, baseDefaults.approver.offsetX),
+      offsetY: pickNumber(data.approver_offset_y, jsonSettings.approver?.offsetY, baseDefaults.approver.offsetY)
+    },
+    signatoryLayout: data.signatory_layout || jsonSettings.signatoryLayout || baseDefaults.signatoryLayout,
+    letterheadDefaults: filterValidLetterheadFields(data.letterhead_defaults || jsonSettings.letterheadDefaults || {}),
+    organizationLetterheadDefaults: baseDefaults.organizationLetterheadDefaults || {},
+    headerDefaults: {
+      defaultTo: data.memo_to_default || jsonSettings.headerDefaults?.defaultTo || baseDefaults.headerDefaults.defaultTo,
+      defaultFrom: data.memo_from_default || jsonSettings.headerDefaults?.defaultFrom || baseDefaults.headerDefaults.defaultFrom,
+      defaultSubject: data.memo_subject_default || jsonSettings.headerDefaults?.defaultSubject || baseDefaults.headerDefaults.defaultSubject
+    },
+    watermark: {
+      size: pickNumber(data.watermark_size, jsonSettings.watermark?.size, baseDefaults.watermark.size),
+      opacity: pickNumber(data.watermark_opacity, jsonSettings.watermark?.opacity, baseDefaults.watermark.opacity),
+      showDiagonalStamp: pickBool(data.show_diagonal_stamp, jsonSettings.watermark?.showDiagonalStamp, baseDefaults.watermark.showDiagonalStamp),
+      diagonalStampText: data.diagonal_stamp_text || jsonSettings.watermark?.diagonalStampText || baseDefaults.watermark.diagonalStampText
+    },
+    includedCompanyIds: Array.isArray(data.included_company_ids)
+      ? data.included_company_ids
+      : (jsonSettings.includedCompanyIds || baseDefaults.includedCompanyIds),
+    emailWebhookUrl: data.email_webhook_url || jsonSettings.emailWebhookUrl || baseDefaults.emailWebhookUrl || "",
+    activeDraft: data.active_draft || jsonSettings.activeDraft || null,
+    updatedAt: data.updated_at || new Date().toISOString()
+  };
+}
+
+/**
+ * Builds the shared organization template from HRMD's (admin@hrhub.com) saved settings.
+ * Personal e-signature images and active entity filter remain per-account.
+ */
+export function buildOrganizationBaseline(adminRow = null) {
+  const factoryDefaults = getDefaultUserSettings();
+  if (!adminRow) return factoryDefaults;
+
+  const adminMapped = mapUserSettingsRow(adminRow, factoryDefaults);
+  return {
+    ...factoryDefaults,
+    version: SETTINGS_SCHEMA_VERSION,
+    directives: { ...adminMapped.directives },
+    signatory: {
+      ...adminMapped.signatory,
+      signature: null
+    },
+    approver: {
+      ...adminMapped.approver,
+      signature: null
+    },
+    signatoryLayout: adminMapped.signatoryLayout,
+    letterheadDefaults: {},
+    organizationLetterheadDefaults: filterValidLetterheadFields(adminMapped.letterheadDefaults),
+    headerDefaults: { ...adminMapped.headerDefaults },
+    watermark: { ...adminMapped.watermark },
+    includedCompanyIds: [...factoryDefaults.includedCompanyIds],
+    emailWebhookUrl: adminMapped.emailWebhookUrl || "",
+    activeDraft: null
+  };
+}
+
+const isLegacySignatoryBox = (box, legacy) =>
+  Number(box.size) === legacy.size &&
+  Number(box.offsetX) === legacy.offsetX &&
+  Number(box.offsetY) === legacy.offsetY;
+
+/**
+ * Resolves effective account settings from the user's own row and HRMD's organization template row.
+ */
+export function resolveUserSettingsFromRows(ownRow = null, adminRow = null, accountKey = "") {
+  const factoryDefaults = getDefaultUserSettings();
+
+  if (accountKey === ORGANIZATION_DEFAULT_ACCOUNT_KEY) {
+    if (!ownRow) return factoryDefaults;
+    const mapped = mapUserSettingsRow(ownRow, factoryDefaults);
+    return {
+      ...mapped,
+      version: Number(ownRow?.settings_json?.version ?? ownRow?.settings?.version ?? SETTINGS_SCHEMA_VERSION),
+      organizationLetterheadDefaults: {}
+    };
+  }
+
+  const orgBaseline = buildOrganizationBaseline(adminRow);
+  if (!ownRow) {
+    return orgBaseline;
+  }
+
+  const ownMapped = mapUserSettingsRow(ownRow, orgBaseline);
+  const rawOwnVersion = Number(ownRow?.settings_json?.version ?? ownRow?.settings?.version ?? 1);
+  const shouldUpgradeLegacyV1 = Number.isFinite(rawOwnVersion) && rawOwnVersion < SETTINGS_SCHEMA_VERSION;
+
+  const mergedDirectives = { ...ownMapped.directives };
+  const mergedSignatory = { ...ownMapped.signatory };
+  const mergedApprover = { ...ownMapped.approver };
+  const mergedWatermark = { ...ownMapped.watermark };
+  let mergedSignatoryLayout = ownMapped.signatoryLayout;
+  let mergedWebhookUrl = ownMapped.emailWebhookUrl;
+
+  if (shouldUpgradeLegacyV1) {
+    if (Number(mergedDirectives.fontSize) === LEGACY_V1_FACTORY_DEFAULTS.fontSize) {
+      mergedDirectives.fontSize = orgBaseline.directives.fontSize;
+    }
+    if (mergedSignatoryLayout === LEGACY_V1_FACTORY_DEFAULTS.signatoryLayout) {
+      mergedSignatoryLayout = orgBaseline.signatoryLayout;
+    }
+    if (isLegacySignatoryBox(mergedSignatory, LEGACY_V1_FACTORY_DEFAULTS.signatory)) {
+      mergedSignatory.size = orgBaseline.signatory.size;
+      mergedSignatory.offsetX = orgBaseline.signatory.offsetX;
+      mergedSignatory.offsetY = orgBaseline.signatory.offsetY;
+    }
+    if (isLegacySignatoryBox(mergedApprover, LEGACY_V1_FACTORY_DEFAULTS.approver)) {
+      mergedApprover.size = orgBaseline.approver.size;
+      mergedApprover.offsetX = orgBaseline.approver.offsetX;
+      mergedApprover.offsetY = orgBaseline.approver.offsetY;
+    }
+    if (Number(mergedWatermark.opacity) === LEGACY_V1_FACTORY_DEFAULTS.watermarkOpacity) {
+      mergedWatermark.opacity = orgBaseline.watermark.opacity;
+    }
+    if (!mergedWebhookUrl && orgBaseline.emailWebhookUrl) {
+      mergedWebhookUrl = orgBaseline.emailWebhookUrl;
+    }
+  }
+
+  return {
+    ...ownMapped,
+    version: SETTINGS_SCHEMA_VERSION,
+    directives: mergedDirectives,
+    signatory: mergedSignatory,
+    approver: mergedApprover,
+    signatoryLayout: mergedSignatoryLayout,
+    watermark: mergedWatermark,
+    emailWebhookUrl: mergedWebhookUrl,
+    organizationLetterheadDefaults: orgBaseline.organizationLetterheadDefaults
   };
 }
 
@@ -105,7 +332,9 @@ export function getLocalUserSettings(currentUser = null) {
       signatory: { ...defaults.signatory, ...(cached.signatory || {}) },
       approver: { ...defaults.approver, ...(cached.approver || {}) },
       headerDefaults: { ...defaults.headerDefaults, ...(cached.headerDefaults || {}) },
-      watermark: { ...defaults.watermark, ...(cached.watermark || {}) }
+      watermark: { ...defaults.watermark, ...(cached.watermark || {}) },
+      letterheadDefaults: filterValidLetterheadFields(cached.letterheadDefaults || {}),
+      organizationLetterheadDefaults: filterValidLetterheadFields(cached.organizationLetterheadDefaults || {})
     };
   }
 
@@ -113,66 +342,38 @@ export function getLocalUserSettings(currentUser = null) {
 }
 
 /**
- * Loads user settings directly from Supabase ('user_settings' table) for the account
+ * Loads user settings directly from Supabase ('user_settings' table) for the account,
+ * inheriting organization defaults configured on HRMD (admin@hrhub.com) for other/new accounts.
  */
 export async function getUserSettings(currentUser = null) {
   const accountKey = getUserAccountKey(currentUser);
   const defaults = getDefaultUserSettings();
 
   try {
-    const { data, error } = await supabase
-      .from(USER_SETTINGS_TABLE)
-      .select("*")
-      .eq("user_id", accountKey)
-      .maybeSingle();
+    let dataRows = null;
+    let error = null;
 
-    if (!error && data) {
-      // Map dedicated DB table columns + JSON fallback
-      const jsonSettings = data.settings_json || data.settings || {};
+    if (accountKey === ORGANIZATION_DEFAULT_ACCOUNT_KEY) {
+      const res = await supabase
+        .from(USER_SETTINGS_TABLE)
+        .select("*")
+        .eq("user_id", accountKey)
+        .maybeSingle();
+      error = res.error;
+      dataRows = res.data ? [res.data] : [];
+    } else {
+      const res = await supabase
+        .from(USER_SETTINGS_TABLE)
+        .select("*")
+        .in("user_id", [accountKey, ORGANIZATION_DEFAULT_ACCOUNT_KEY]);
+      error = res.error;
+      dataRows = Array.isArray(res.data) ? res.data : [];
+    }
 
-      const merged = {
-        ...defaults,
-        ...jsonSettings,
-        directives: {
-          fontFamily: data.directives_font_family || jsonSettings.directives?.fontFamily || defaults.directives.fontFamily,
-          fontSize: data.directives_font_size ? Number(data.directives_font_size) : (jsonSettings.directives?.fontSize || defaults.directives.fontSize)
-        },
-        signatory: {
-          name: data.signatory_name || jsonSettings.signatory?.name || defaults.signatory.name,
-          title: data.signatory_title || jsonSettings.signatory?.title || defaults.signatory.title,
-          label: data.signatory_label || jsonSettings.signatory?.label || defaults.signatory.label,
-          signature: data.signatory_signature || jsonSettings.signatory?.signature || null,
-          size: data.signatory_size ? Number(data.signatory_size) : (jsonSettings.signatory?.size || defaults.signatory.size),
-          offsetX: data.signatory_offset_x !== null && data.signatory_offset_x !== undefined ? Number(data.signatory_offset_x) : (jsonSettings.signatory?.offsetX ?? defaults.signatory.offsetX),
-          offsetY: data.signatory_offset_y !== null && data.signatory_offset_y !== undefined ? Number(data.signatory_offset_y) : (jsonSettings.signatory?.offsetY ?? defaults.signatory.offsetY)
-        },
-        approver: {
-          name: data.approver_name || jsonSettings.approver?.name || defaults.approver.name,
-          title: data.approver_title || jsonSettings.approver?.title || defaults.approver.title,
-          label: data.approver_label || jsonSettings.approver?.label || defaults.approver.label,
-          signature: data.approver_signature || jsonSettings.approver?.signature || null,
-          size: data.approver_size ? Number(data.approver_size) : (jsonSettings.approver?.size || defaults.approver.size),
-          offsetX: data.approver_offset_x !== null && data.approver_offset_x !== undefined ? Number(data.approver_offset_x) : (jsonSettings.approver?.offsetX ?? defaults.approver.offsetX),
-          offsetY: data.approver_offset_y !== null && data.approver_offset_y !== undefined ? Number(data.approver_offset_y) : (jsonSettings.approver?.offsetY ?? defaults.approver.offsetY)
-        },
-        signatoryLayout: data.signatory_layout || jsonSettings.signatoryLayout || defaults.signatoryLayout,
-        letterheadDefaults: data.letterhead_defaults || jsonSettings.letterheadDefaults || {},
-        headerDefaults: {
-          defaultTo: data.memo_to_default || jsonSettings.headerDefaults?.defaultTo || defaults.headerDefaults.defaultTo,
-          defaultFrom: data.memo_from_default || jsonSettings.headerDefaults?.defaultFrom || defaults.headerDefaults.defaultFrom,
-          defaultSubject: data.memo_subject_default || jsonSettings.headerDefaults?.defaultSubject || defaults.headerDefaults.defaultSubject
-        },
-        watermark: {
-          size: data.watermark_size ? Number(data.watermark_size) : (jsonSettings.watermark?.size || defaults.watermark.size),
-          opacity: data.watermark_opacity !== null && data.watermark_opacity !== undefined ? Number(data.watermark_opacity) : (jsonSettings.watermark?.opacity ?? defaults.watermark.opacity),
-          showDiagonalStamp: data.show_diagonal_stamp !== null && data.show_diagonal_stamp !== undefined ? Boolean(data.show_diagonal_stamp) : (jsonSettings.watermark?.showDiagonalStamp ?? defaults.watermark.showDiagonalStamp),
-          diagonalStampText: data.diagonal_stamp_text || jsonSettings.watermark?.diagonalStampText || defaults.watermark.diagonalStampText
-        },
-        includedCompanyIds: Array.isArray(data.included_company_ids) ? data.included_company_ids : (jsonSettings.includedCompanyIds || defaults.includedCompanyIds),
-        emailWebhookUrl: data.email_webhook_url || jsonSettings.emailWebhookUrl || "",
-        activeDraft: data.active_draft || jsonSettings.activeDraft || null,
-        updatedAt: data.updated_at || new Date().toISOString()
-      };
+    if (!error && Array.isArray(dataRows) && dataRows.length > 0) {
+      const ownRow = dataRows.find((row) => row.user_id === accountKey) || null;
+      const adminRow = dataRows.find((row) => row.user_id === ORGANIZATION_DEFAULT_ACCOUNT_KEY) || null;
+      const merged = resolveUserSettingsFromRows(ownRow, adminRow, accountKey);
 
       // Cache in active session memory
       memorySettingsStore.set(accountKey, merged);
@@ -205,6 +406,7 @@ export async function saveUserSettings(currentUser = null, settingsPartial = {})
   const merged = {
     ...current,
     ...settingsPartial,
+    version: SETTINGS_SCHEMA_VERSION,
     directives: { ...current.directives, ...(settingsPartial.directives || {}) },
     signatory: { ...current.signatory, ...(settingsPartial.signatory || {}) },
     approver: { ...current.approver, ...(settingsPartial.approver || {}) },
@@ -213,8 +415,12 @@ export async function saveUserSettings(currentUser = null, settingsPartial = {})
     updatedAt: new Date().toISOString()
   };
 
-  // Cache in active session memory
+  // Cache in active session memory (retaining transient organizationLetterheadDefaults)
   memorySettingsStore.set(accountKey, merged);
+
+  // Strip transient organizationLetterheadDefaults before persisting per-account overrides
+  const persistableJson = { ...merged };
+  delete persistableJson.organizationLetterheadDefaults;
 
   // Dedicated row payload with both explicit columns & JSON document column
   const payload = {
@@ -247,7 +453,7 @@ export async function saveUserSettings(currentUser = null, settingsPartial = {})
     included_company_ids: merged.includedCompanyIds,
     letterhead_defaults: merged.letterheadDefaults,
     active_draft: merged.activeDraft || null,
-    settings_json: merged,
+    settings_json: persistableJson,
     updated_at: merged.updatedAt
   };
 
@@ -318,7 +524,9 @@ export async function resetUserSettings(currentUser = null) {
       }, { onConflict: "user_id" });
 
     if (!error) syncedToSupabase = true;
-  } catch {}
+  } catch (err) {
+    console.warn("Supabase user_settings reset notice:", err);
+  }
 
   return { success: true, syncedToSupabase, settings: defaults };
 }

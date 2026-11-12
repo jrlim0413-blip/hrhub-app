@@ -19,7 +19,8 @@ import {
   getUserAccountKey,
   getUserSettings,
   getLocalUserSettings,
-  saveUserSettings
+  saveUserSettings,
+  filterValidLetterheadFields
 } from "../lib/userSettingsStorage";
 import {
   getSavedMemosFromDb,
@@ -100,7 +101,7 @@ export const COMPANIES = [
     rightLogoUrl: CORPORATE_GROUP_EMBLEM,
     code: "LBC",
     address: "#257 Barlaps, A.S. Fortuna Street, Bakilid, Mandaue City, Cebu 6014",
-    contact: "stl.operations@luckybetplay.com | Tel: (+63 32) 231-9042",
+    contact: "imsoroglohr@gmail.com",
     accentColor: "#059669",
     accentBg: "bg-emerald-600",
     accentText: "text-emerald-600",
@@ -117,14 +118,14 @@ export const COMPANIES = [
   {
     id: "sgc",
     name: "Simpal Group of Companies",
-    legalName: "SIMPAL GROUP OF COMPANIES",
-    tagline: "Corporate Executive Holding & Group Administration",
+    legalName: "SGC CORPORATION",
+    tagline: "",
     category: "Parent & Holding Enterprise",
     logoUrl: "/logos/SGC.png",
     rightLogoUrl: CORPORATE_GROUP_EMBLEM,
     code: "SGC",
-    address: "Penthouse Level, Corporate Executive Tower, Cebu Business Park, Cebu City, Philippines",
-    contact: "corporate@simpalgroup.com | Tel: (+63 32) 412-8888",
+    address: "PUROK DAISY, NEW ISABELA, TACURONG CITY, SULTAN KUDARAT",
+    contact: "imsoroglohr@gmail.com",
     accentColor: "#059669",
     accentBg: "bg-emerald-500",
     accentText: "text-emerald-600",
@@ -165,14 +166,14 @@ export const COMPANIES = [
   {
     id: "5a_royal",
     name: "5A Royal Gaming OPC",
-    legalName: "5A ROYAL GAMING ONE PERSON CORPORATION",
-    tagline: "Premier Leisure, Gaming & Entertainment Ventures",
+    legalName: "5A ROYAL GAMING OPC",
+    tagline: "PCSO STL Authorized Agent Corporation (AAC Province of Maguindanao)",
     category: "One Person Corporation (Leisure & Gaming)",
     logoUrl: "/logos/5A.png",
     rightLogoUrl: CORPORATE_GROUP_EMBLEM,
     code: "5ARG",
-    address: "Regional Executive Hub, Central Visayas Operations, Cebu, Philippines",
-    contact: "admin@5aroyalgaming.com | Tel: (+63 32) 418-5522",
+    address: "Sitio Grotto, Brgy. Tamontaka, Datu Odin Sinsuat, Maguindanao del Norte",
+    contact: "imsoroglohr@gmail.com",
     accentColor: "#059669",
     accentBg: "bg-emerald-600",
     accentText: "text-emerald-600",
@@ -189,14 +190,14 @@ export const COMPANIES = [
   {
     id: "glowing_fortune",
     name: "Glowing Fortune OPC",
-    legalName: "GLOWING FORTUNE ENTERTAINMENT CORP.",
-    tagline: "Hospitality, Leisure & Gaming Services",
+    legalName: "GLOWING FORTUNE OPC",
+    tagline: "PCSO STL Authorized Agent Corporation (AAC Province of Lanao del Norte & Lanao del Sur)",
     category: "Gaming & Hospitality Enterprise",
     logoUrl: "/logos/GLOW.png",
     rightLogoUrl: CORPORATE_GROUP_EMBLEM,
     code: "GFC",
-    address: "Commercial Center Arcade, A.S. Fortuna Street, Mandaue City, Cebu",
-    contact: "inquiries@glowingfortune.ph | Tel: (+63 32) 346-1189",
+    address: "13th Avenue, Bonifacio Street, Brgy. Tibanga, City of Iligan, Lanao del Norte",
+    contact: "imsoroglohr@gmail.com",
     accentColor: "#059669",
     accentBg: "bg-emerald-600",
     accentText: "text-emerald-600",
@@ -213,14 +214,14 @@ export const COMPANIES = [
   {
     id: "imperial_gaming",
     name: "Imperial Gaming OPC",
-    legalName: "IMPERIAL GAMING ONE PERSON CORPORATION",
-    tagline: "Corporate Entertainment & Leisure Administration",
+    legalName: "IMPERIAL GAMING OPC",
+    tagline: "PCSO STL Authorized Agent Corporation (AAC City of Cotabato)",
     category: "One Person Corporation (Gaming)",
     logoUrl: "/logos/IMP.png",
     rightLogoUrl: CORPORATE_GROUP_EMBLEM,
     code: "IMP",
-    address: "Metro Cebu Business Center, Cebu City, Philippines",
-    contact: "corporate@imperialgaming.com | Tel: (+63 32) 238-9901",
+    address: "#013 Anacleto Badoy Street, Poblacion II., Cotabato City",
+    contact: "imsoroglohr@gmail.com",
     accentColor: "#059669",
     accentBg: "bg-emerald-600",
     accentText: "text-emerald-600",
@@ -236,27 +237,7 @@ export const COMPANIES = [
   }
 ];
 
-const LETTERHEAD_FIELDS = ["legalName", "tagline", "address", "contact"];
-
-const filterValidLetterheadFields = (letterheadMap) => {
-  if (!letterheadMap || typeof letterheadMap !== "object" || Array.isArray(letterheadMap)) return {};
-
-  return COMPANIES.reduce((defaults, company) => {
-    const savedFields = letterheadMap[company.id];
-    if (!savedFields || typeof savedFields !== "object" || Array.isArray(savedFields)) return defaults;
-
-    const validFields = Object.fromEntries(
-      LETTERHEAD_FIELDS
-        .filter((field) =>
-          typeof savedFields[field] === "string" &&
-          (field !== "legalName" || savedFields[field].trim().length > 0)
-        )
-        .map((field) => [field, savedFields[field]])
-    );
-    if (Object.keys(validFields).length) defaults[company.id] = validFields;
-    return defaults;
-  }, {});
-};
+const COMPANY_IDS = COMPANIES.map((company) => company.id);
 
 const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (character) => ({
   "&": "&amp;",
@@ -721,6 +702,8 @@ export default function MemoGeneratorPanel({
   const userAccountKey = useMemo(() => getUserAccountKey(currentUser), [currentUser]);
   const initialUserSettings = useMemo(() => getLocalUserSettings(currentUser), [currentUser]);
   const isSettingsInitialized = useRef(false);
+  const initialDraftRef = useRef(initialDraft);
+  initialDraftRef.current = initialDraft;
 
   // Stepper State: 1 = Header & Addressing, 2 = Body Directives, 3 = Signatories, 4 = Final Memo & Multi-Company
   const [currentStep, setCurrentStep] = useState(1);
@@ -728,15 +711,23 @@ export default function MemoGeneratorPanel({
 
   // Selected Company State - Default to Lucky Betplay Corporation (LBC)
   const [selectedCompanyId, setSelectedCompanyId] = useState("lucky_betplay");
+  const [organizationLetterheadDefaults, setOrganizationLetterheadDefaults] = useState(() => {
+    return filterValidLetterheadFields(initialUserSettings.organizationLetterheadDefaults, COMPANY_IDS);
+  });
   const [savedLetterheadDefaults, setSavedLetterheadDefaults] = useState(() => {
-    return filterValidLetterheadFields(initialUserSettings.letterheadDefaults);
+    return filterValidLetterheadFields(initialUserSettings.letterheadDefaults, COMPANY_IDS);
   });
   const [letterheadOverrides, setLetterheadOverrides] = useState(() => savedLetterheadDefaults);
   const [dirtyLetterheadCompanyIds, setDirtyLetterheadCompanyIds] = useState([]);
   const [letterheadStatus, setLetterheadStatus] = useState(null);
   const companies = useMemo(
-    () => COMPANIES.map((company) => ({ ...company, ...letterheadOverrides[company.id] })),
-    [letterheadOverrides]
+    () =>
+      COMPANIES.map((company) => ({
+        ...company,
+        ...organizationLetterheadDefaults[company.id],
+        ...letterheadOverrides[company.id]
+      })),
+    [organizationLetterheadDefaults, letterheadOverrides]
   );
   const selectedCompany = useMemo(() => {
     return companies.find((company) => company.id === selectedCompanyId) || companies[0];
@@ -750,9 +741,15 @@ export default function MemoGeneratorPanel({
     const now = new Date();
     return new Intl.DateTimeFormat("en-US", { month: "long", day: "2-digit", year: "numeric" }).format(now).toUpperCase();
   });
-  const [memoTo, setMemoTo] = useState("HR ON-SITE, CIC, AND FIELD MONITORING");
-  const [memoFrom, setMemoFrom] = useState("HUMAN RESOURCES DEPARTMENT");
-  const [memoSubject, setMemoSubject] = useState("IMMEDIATE RESPONSE AND COMMUNICATION ACCESSIBILITY");
+  const [memoTo, setMemoTo] = useState(() => {
+    return initialUserSettings.headerDefaults?.defaultTo || "HR ON-SITE, CIC, AND FIELD MONITORING";
+  });
+  const [memoFrom, setMemoFrom] = useState(() => {
+    return initialUserSettings.headerDefaults?.defaultFrom || "HUMAN RESOURCES DEPARTMENT";
+  });
+  const [memoSubject, setMemoSubject] = useState(() => {
+    return initialUserSettings.headerDefaults?.defaultSubject || "IMMEDIATE RESPONSE AND COMMUNICATION ACCESSIBILITY";
+  });
 
   // Step 2: Memorandum Body Directives State (Starts clean / empty canvas or with loaded draft)
   const [memoContent, setMemoContent] = useState("");
@@ -765,7 +762,7 @@ export default function MemoGeneratorPanel({
     return initialUserSettings.directives?.fontFamily || "Arial, Helvetica, sans-serif";
   });
   const [directivesFontSize, setDirectivesFontSize] = useState(() => {
-    return Number(initialUserSettings.directives?.fontSize) || 13.3;
+    return Number(initialUserSettings.directives?.fontSize) || 14.6;
   });
   const [isSourceMode, setIsSourceMode] = useState(false);
   const [shapesMenuOpen, setShapesMenuOpen] = useState(false);
@@ -808,7 +805,7 @@ export default function MemoGeneratorPanel({
   };
 
   const handleSetFontSize = (size) => {
-    const clamped = Math.max(9, Math.min(26, Number(size) || 13.3));
+    const clamped = Math.max(9, Math.min(26, Number(size) || 14.6));
     setDirectivesFontSize(clamped);
     saveUserSettings(currentUser, { directives: { fontFamily: directivesFontFamily, fontSize: clamped } });
   };
@@ -959,14 +956,28 @@ export default function MemoGeneratorPanel({
   }, [memoSubject, memoContent]);
 
   // Step 3: Signatory Setup & E-Signature States
-  const [signatoryLayout, setSignatoryLayout] = useState("dual"); // 'dual' | 'single'
-  const [signatoryLabel, setSignatoryLabel] = useState("ISSUED BY:");
-  const [signatoryName, setSignatoryName] = useState("JEVINCE JAYE S. JUBAY, CHRP");
-  const [signatoryTitle, setSignatoryTitle] = useState("HRMD Manager");
+  const [signatoryLayout, setSignatoryLayout] = useState(() => {
+    return initialUserSettings.signatoryLayout || "single";
+  }); // 'dual' | 'single'
+  const [signatoryLabel, setSignatoryLabel] = useState(() => {
+    return initialUserSettings.signatory?.label || "ISSUED BY:";
+  });
+  const [signatoryName, setSignatoryName] = useState(() => {
+    return initialUserSettings.signatory?.name || "JEVINCE JAYE S. JUBAY, CHRP";
+  });
+  const [signatoryTitle, setSignatoryTitle] = useState(() => {
+    return initialUserSettings.signatory?.title || "HRMD Manager";
+  });
   const [signatoryCompany, setSignatoryCompany] = useState(selectedCompany.name);
-  const [approverLabel, setApproverLabel] = useState("NOTED & APPROVED BY:");
-  const [approverName, setApproverName] = useState("CHARMIE JEAN M. SIMPAL");
-  const [approverTitle, setApproverTitle] = useState("President & CEO");
+  const [approverLabel, setApproverLabel] = useState(() => {
+    return initialUserSettings.approver?.label || "NOTED & APPROVED BY:";
+  });
+  const [approverName, setApproverName] = useState(() => {
+    return initialUserSettings.approver?.name || "CHARMIE JEAN M. SIMPAL";
+  });
+  const [approverTitle, setApproverTitle] = useState(() => {
+    return initialUserSettings.approver?.title || "President & CEO";
+  });
 
   // E-Signatures (Loaded from and saved to user account settings)
   const [signatorySignature, setSignatorySignature] = useState(() => {
@@ -978,23 +989,23 @@ export default function MemoGeneratorPanel({
 
   // Signature Position Offsets & Sizes (Horizontal, Vertical alignment & Scale)
   const [signatoryOffsetX, setSignatoryOffsetX] = useState(() => {
-    return initialUserSettings.signatory?.offsetX ?? 48;
+    return initialUserSettings.signatory?.offsetX ?? -12;
   });
   const [signatoryOffsetY, setSignatoryOffsetY] = useState(() => {
-    return initialUserSettings.signatory?.offsetY ?? -3;
+    return initialUserSettings.signatory?.offsetY ?? -38;
   });
   const [signatorySize, setSignatorySize] = useState(() => {
-    return initialUserSettings.signatory?.size ?? 56;
+    return initialUserSettings.signatory?.size ?? 80;
   });
 
   const [approverOffsetX, setApproverOffsetX] = useState(() => {
-    return initialUserSettings.approver?.offsetX ?? 48;
+    return initialUserSettings.approver?.offsetX ?? 0;
   });
   const [approverOffsetY, setApproverOffsetY] = useState(() => {
-    return initialUserSettings.approver?.offsetY ?? -3;
+    return initialUserSettings.approver?.offsetY ?? -45;
   });
   const [approverSize, setApproverSize] = useState(() => {
-    return initialUserSettings.approver?.size ?? 56;
+    return initialUserSettings.approver?.size ?? 118;
   });
 
   useEffect(() => {
@@ -1024,15 +1035,25 @@ export default function MemoGeneratorPanel({
   const [paperSize, setPaperSize] = useState("auto"); // "auto" | "short" | "a4" | "legal13" | "legal14"
   const [previewEntityIndex, setPreviewEntityIndex] = useState(0);
   const [previewViewMode, setPreviewViewMode] = useState("slide"); // "slide" | "scroll"
-  const [watermarkOpacity, setWatermarkOpacity] = useState(6); // 4% to 25% (default 6% for clean look)
-  const [watermarkSize, setWatermarkSize] = useState(400);
-  const [showDiagonalStamp, setShowDiagonalStamp] = useState(false);
-  const [diagonalStampText, setDiagonalStampText] = useState("OFFICIAL MEMORANDUM • CONFIDENTIAL");
+  const [watermarkOpacity, setWatermarkOpacity] = useState(() => {
+    return initialUserSettings.watermark?.opacity ?? 25;
+  });
+  const [watermarkSize, setWatermarkSize] = useState(() => {
+    return initialUserSettings.watermark?.size ?? 380;
+  });
+  const [showDiagonalStamp, setShowDiagonalStamp] = useState(() => {
+    return Boolean(initialUserSettings.watermark?.showDiagonalStamp);
+  });
+  const [diagonalStampText, setDiagonalStampText] = useState(() => {
+    return initialUserSettings.watermark?.diagonalStampText || "OFFICIAL MEMORANDUM";
+  });
 
   // Multi-Company Distribution Inclusion State (Default: all 6 entities included)
-  const [includedCompanyIds, setIncludedCompanyIds] = useState(() =>
-    COMPANIES.map((c) => c.id)
-  );
+  const [includedCompanyIds, setIncludedCompanyIds] = useState(() => {
+    return Array.isArray(initialUserSettings.includedCompanyIds) && initialUserSettings.includedCompanyIds.length > 0
+      ? initialUserSettings.includedCompanyIds
+      : COMPANY_IDS;
+  });
 
   const activeCompanies = useMemo(() => {
     return companies.filter((company) => includedCompanyIds.includes(company.id));
@@ -1164,10 +1185,17 @@ export default function MemoGeneratorPanel({
           return;
         }
 
-        if (settings.letterheadDefaults && Object.keys(settings.letterheadDefaults).length > 0) {
-          const filtered = filterValidLetterheadFields(settings.letterheadDefaults);
-          setSavedLetterheadDefaults(filtered);
-          setLetterheadOverrides(filtered);
+        const orgLetterheads = filterValidLetterheadFields(settings.organizationLetterheadDefaults, COMPANY_IDS);
+        setOrganizationLetterheadDefaults(orgLetterheads);
+
+        const filteredOwnLetterheads = filterValidLetterheadFields(settings.letterheadDefaults, COMPANY_IDS);
+        setSavedLetterheadDefaults(filteredOwnLetterheads);
+        setLetterheadOverrides(filteredOwnLetterheads);
+
+        if (!initialDraftRef.current && !settings.activeDraft && settings.headerDefaults) {
+          if (settings.headerDefaults.defaultTo) setMemoTo(settings.headerDefaults.defaultTo);
+          if (settings.headerDefaults.defaultFrom) setMemoFrom(settings.headerDefaults.defaultFrom);
+          if (settings.headerDefaults.defaultSubject) setMemoSubject(settings.headerDefaults.defaultSubject);
         }
 
         if (settings.directives?.fontFamily) {

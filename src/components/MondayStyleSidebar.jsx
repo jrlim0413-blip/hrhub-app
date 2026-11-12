@@ -5,7 +5,7 @@ import {
   Building2, Calculator, Clock, HardHat, Dices, Award, Zap, TrendingUp,
   Receipt, FileCheck, Sliders, MailCheck, Wrench, Home,
   Compass, PhoneCall, Mail, DollarSign, CircleDollarSign, Workflow, LayoutDashboard,
-  UserCheck, Users, MapPin, Scale, Video
+  UserCheck, Users, MapPin, Scale, Video, Banknote
 } from "lucide-react";
 
 export const FUNCTIONAL_WORKSPACE_TABS = [
@@ -64,6 +64,14 @@ export const FUNCTIONAL_WORKSPACE_TABS = [
     tag: "Certificates & Notices",
     category: "hr",
     color: "text-amber-600"
+  },
+  {
+    id: "salary_compensation",
+    label: "Salary & Compensation w/ Payslip",
+    icon: Banknote,
+    tag: "Payroll & Payslip",
+    category: "hr",
+    color: "text-emerald-600"
   },
   {
     id: "gross",
@@ -307,6 +315,13 @@ export default function MondayStyleSidebar({
           icon: Award,
           tag: "Certificates & Letters",
           tabId: "doc_studio"
+        },
+        {
+          id: "salary_compensation",
+          label: "Salary & Compensation w/ Payslip",
+          icon: Banknote,
+          tag: "Excel + OCR",
+          tabId: "salary_compensation"
         },
         {
           id: "agents",

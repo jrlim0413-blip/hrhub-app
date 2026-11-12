@@ -7,7 +7,7 @@ import {
   Database, RefreshCw, CheckCircle2, AlertCircle, Clock,
   Bot, Layers, Home, X, CheckCheck, Menu, UserCheck, ShieldAlert,
   Lock, Wrench, MapPin, CloudSun, Scale, TrendingUp, Flame, Video,
-  Calculator, Receipt
+  Calculator, Receipt, Banknote
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import ProfileModal from "../components/ProfileModal";
@@ -28,6 +28,7 @@ import SupervisorsAttendancePanel from "../components/SupervisorsAttendancePanel
 import HrAnalyticsPanel from "../components/HrAnalyticsPanel";
 import ThirteenthMonthPayrollPanel from "../components/ThirteenthMonthPayrollPanel";
 import BranchExpensesVouchersPanel from "../components/BranchExpensesVouchersPanel";
+import SalaryCompensationPanel from "../components/SalaryCompensationPanel";
 import RolePermissionMatrixPanel from "../components/RolePermissionMatrixPanel";
 import ApiHealthConfigurationPanel from "../components/ApiHealthConfigurationPanel";
 import AiAssistantDrawer from "../components/AiAssistantDrawer";
@@ -215,6 +216,7 @@ const DEFAULT_POPULAR_TAB_IDS = [
   "incident_reports",
   "memo",
   "doc_studio",
+  "salary_compensation",
   "agents",
   "hr_analytics",
   "payroll_calc",
@@ -420,6 +422,14 @@ const WORKSPACE_TAB_DEFS = {
     label: "Branch Expense & Vouchers",
     icon: Receipt,
     activeClass: "bg-emerald-700 text-white ring-2 ring-emerald-300",
+    activeIconClass: "text-white",
+    inactiveIconClass: "text-emerald-600"
+  },
+  salary_compensation: {
+    id: "salary_compensation",
+    label: "Salary & Compensation w/ Payslip",
+    icon: Banknote,
+    activeClass: "bg-[#008559] text-white ring-2 ring-emerald-300",
     activeIconClass: "text-white",
     inactiveIconClass: "text-emerald-600"
   }
@@ -2513,6 +2523,15 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
               onNavigate={handleOpenWorkspaceTab}
             />
           )}
+
+          {/* TAB: SALARY & COMPENSATION WITH PAYSLIP (EXCEL + OCR + DB) */}
+          {workspaceTab === "salary_compensation" && (
+            <SalaryCompensationPanel
+              currentUser={currentUser}
+              profiles={supabaseProfiles}
+              onClose={() => handleCloseWorkspaceTab(null, "salary_compensation")}
+            />
+          )}
         </div>
       </div>
     )}
@@ -2524,6 +2543,7 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
         hidden={
           isGeoTaggingMounted ||
           workspaceTab === "geotagging" ||
+          (!isCommunicationView && workspaceTab === "salary_compensation") ||
           (workspaceTab === "sops" && operationsSubTab === "geotagging") ||
           (activeView === "sop" && (workspaceTab === "home" || workspaceTab === "memo"))
         }

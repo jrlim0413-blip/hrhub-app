@@ -83,6 +83,13 @@ export const WORKSPACE_TABS_CONFIG = [
     sidebarTabId: "memo"
   },
   {
+    id: "salary_compensation",
+    label: "Salary & Compensation w/ Payslip (Excel & OCR)",
+    code: "WORKSPACE TAB: HR PAYROLL • MANAGE_SALARY_COMPENSATION",
+    description: "Upload Excel or OCR payroll files, verify extracted compensation records, save batches to database, and issue printable payslips.",
+    sidebarTabId: "salary_compensation"
+  },
+  {
     id: "gross",
     label: "Gross Revenue & Financial Remittance Reports",
     code: "WORKSPACE TAB: FINANCE • VIEW_FINANCIAL_REPORTS",
@@ -345,6 +352,7 @@ export const FACTORY_ROLE_TIER_PERMISSIONS = {
     sops: true,
     incident_reports: true,
     memo: true,
+    salary_compensation: true,
     gross: true,
     agents: true,
     employee_pre_registration: true,
@@ -387,6 +395,7 @@ export const FACTORY_ROLE_TIER_PERMISSIONS = {
     sops: true,
     incident_reports: true,
     memo: true,
+    salary_compensation: true,
     gross: false,
     agents: true,
     employee_pre_registration: false,
@@ -429,6 +438,7 @@ export const FACTORY_ROLE_TIER_PERMISSIONS = {
     sops: true,
     incident_reports: true,
     memo: true,
+    salary_compensation: false,
     gross: true,
     agents: true,
     employee_pre_registration: false,
@@ -471,6 +481,7 @@ export const FACTORY_ROLE_TIER_PERMISSIONS = {
     sops: false,
     incident_reports: true,
     memo: true,
+    salary_compensation: true,
     gross: true,
     agents: false,
     employee_pre_registration: false,

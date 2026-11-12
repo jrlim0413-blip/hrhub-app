@@ -5,9 +5,14 @@ import {
   Copy, Check, Filter, Trash2, ShieldAlert,
   Sparkles, X, ChevronDown, Edit3, MapPin, UserCheck,
   Phone, UserCog, CheckSquare, Layers, Sliders,
-  LayoutGrid, List, User
+  LayoutGrid, List, User, Send
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
+import PreRegisterInviteModal from "./PreRegisterInviteModal";
+import {
+  copyRichInviteToClipboard,
+  getPortalInviteUrl
+} from "../lib/preRegisterInvite";
 import {
   saveStoredEmployee,
   updateStoredEmployeeApproval,
@@ -124,6 +129,7 @@ export default function EmployeeDirectoryPanel({
 
   const [notice, setNotice] = useState(null);
   const [copiedId, setCopiedId] = useState(null);
+  const [inviteEmployee, setInviteEmployee] = useState(null);
 
   // New Employee Form State (Preserves exact existing pre-registration system)
   const [newEmployee, setNewEmployee] = useState({
@@ -559,9 +565,10 @@ export default function EmployeeDirectoryPanel({
 
       setNotice({
         type: "success",
-        message: `Successfully pre-registered ${trimmedEmail}! They can now use First-Time Setup to create their password.`
+        message: `Successfully pre-registered ${trimmedEmail}! Opening the HRHub Logo invite card so you can send their First-Time Setup instructions.`
       });
       setIsAddModalOpen(false);
+      setInviteEmployee(newRecord);
       setNewEmployee({
         email: "",
         name: "",
@@ -670,11 +677,27 @@ export default function EmployeeDirectoryPanel({
     }
   };
 
-  const copyActivationInstructions = (email, id) => {
-    const text = `Hi! You have been registered in the HrHub portal. Please go to http://localhost:5173, click "First-Time Setup", and enter your email (${email}) to create your personal password.`;
-    navigator.clipboard?.writeText(text);
-    setCopiedId(id);
-    setTimeout(() => setCopiedId(null), 2500);
+  const copyActivationInstructions = async (profileOrEmail, id) => {
+    const employeeObj =
+      typeof profileOrEmail === "object" && profileOrEmail !== null
+        ? profileOrEmail
+        : { email: String(profileOrEmail || ""), id };
+    const recordId = employeeObj.id || id;
+    try {
+      const res = await copyRichInviteToClipboard(employeeObj, getPortalInviteUrl());
+      setCopiedId(recordId);
+      setNotice({
+        type: "success",
+        message:
+          res.mode === "rich_html"
+            ? `Copied setup instructions w/ HRHub Logo for ${employeeObj.email}! Paste into Gmail/Outlook for the full logo card, or Messenger/Viber for the portal preview.`
+            : `Copied setup instructions for ${employeeObj.email}! Click the Send button to copy/download the HRHub Logo image card for Messenger or Viber.`
+      });
+      setTimeout(() => setNotice(null), 5000);
+      setTimeout(() => setCopiedId(null), 2500);
+    } catch (err) {
+      console.warn("Clipboard copy warning:", err);
+    }
   };
 
   return (
@@ -1147,8 +1170,18 @@ export default function EmployeeDirectoryPanel({
 
                     <button
                       type="button"
-                      onClick={() => copyActivationInstructions(prof.email, prof.id)}
-                      title="Copy Setup Instructions"
+                      onClick={() => setInviteEmployee(prof)}
+                      title="Send Setup Invite Card (w/ HRHub Logo)"
+                      className="inline-flex items-center gap-1 px-2 py-1.5 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-600 hover:text-white text-[10px] font-bold transition cursor-pointer"
+                    >
+                      <Send size={12} />
+                      <span>Invite</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => copyActivationInstructions(prof)}
+                      title="Copy Setup Instructions (w/ HRHub Logo)"
                       className="p-1.5 rounded-xl border border-slate-200 bg-white text-slate-500 hover:text-emerald-700 hover:border-emerald-300 hover:bg-emerald-50/50 transition cursor-pointer"
                     >
                       {copiedId === prof.id ? <Check size={13} className="text-emerald-600" /> : <Copy size={13} />}
@@ -1283,8 +1316,16 @@ export default function EmployeeDirectoryPanel({
                           )}
                           <button
                             type="button"
-                            onClick={() => copyActivationInstructions(prof.email, prof.id)}
-                            title="Copy setup message"
+                            onClick={() => setInviteEmployee(prof)}
+                            title="Send setup invite card (w/ HRHub Logo)"
+                            className="p-1 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-600 hover:text-white transition cursor-pointer"
+                          >
+                            <Send size={13} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => copyActivationInstructions(prof)}
+                            title="Copy setup message (w/ HRHub Logo)"
                             className="p-1 rounded-lg border border-slate-200 text-slate-400 hover:text-slate-700 transition cursor-pointer"
                           >
                             {copiedId === prof.id ? <Check size={13} className="text-emerald-600" /> : <Copy size={13} />}
@@ -1805,6 +1846,13 @@ export default function EmployeeDirectoryPanel({
           </div>
         </div>
       )}
+
+      {/* Pre-Registered Account Branded Invite Studio (w/ HRHub Logo) */}
+      <PreRegisterInviteModal
+        key={inviteEmployee?.email || inviteEmployee?.id || "closed"}
+        employee={inviteEmployee}
+        onClose={() => setInviteEmployee(null)}
+      />
     </div>
   );
 }
