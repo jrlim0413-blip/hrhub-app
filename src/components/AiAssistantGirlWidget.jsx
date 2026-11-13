@@ -161,7 +161,7 @@ export default function AiAssistantGirlWidget({
       if (audioPlayerRef.current) {
         try {
           audioPlayerRef.current.pause();
-        } catch {}
+        } catch { }
       }
       if (typeof window !== "undefined" && window.speechSynthesis) {
         window.speechSynthesis.cancel();
@@ -202,7 +202,7 @@ export default function AiAssistantGirlWidget({
       try {
         audioPlayerRef.current.pause();
         audioPlayerRef.current.currentTime = 0;
-      } catch {}
+      } catch { }
     }
     if (typeof window !== "undefined" && window.speechSynthesis) {
       window.speechSynthesis.cancel();
@@ -451,8 +451,8 @@ export default function AiAssistantGirlWidget({
                       handleToggleVoice();
                     }}
                     className={`flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-semibold transition cursor-pointer ${voiceEnabled
-                        ? "bg-cyan-500/20 text-cyan-300 border border-cyan-400/40 hover:bg-cyan-500/30"
-                        : "bg-slate-800/80 text-slate-400 border border-slate-700/60 hover:text-slate-200"
+                      ? "bg-cyan-500/20 text-cyan-300 border border-cyan-400/40 hover:bg-cyan-500/30"
+                      : "bg-slate-800/80 text-slate-400 border border-slate-700/60 hover:text-slate-200"
                       }`}
                     title={voiceEnabled ? "Mute Voice (I-mute ang boses)" : "Enable Natural Female Voice (I-on ang boses babae)"}
                   >

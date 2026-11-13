@@ -17,6 +17,7 @@ import GrossReportPanel from "../components/GrossReportPanel";
 import MultiAreaBettingRatioView from "../components/MultiAreaBettingRatioView";
 import EmployeeDirectoryPanel from "../components/EmployeeDirectoryPanel";
 import ShiftAttendanceOverviewPanel from "../components/ShiftAttendanceOverviewPanel";
+import CompanyBulletinFeed from "../components/CompanyBulletinFeed";
 import PoliciesHandbooksPanel from "../components/PoliciesHandbooksPanel";
 import WeatherWidget from "../components/WeatherWidget";
 import MemoGeneratorPanel from "../components/MemoGeneratorPanel";
@@ -676,11 +677,30 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
     company: profileCompany || currentUser?.company || "Simpal Group of Companies"
   }), [currentUser, profileEmail, profileRole, profileCompany]);
 
+  // Determine whether current user is Head Office HRMD Master Account
+  const isHRMD = useMemo(() => {
+    const curEmail = (currentUser?.email || profileEmail || "").toLowerCase().trim();
+    const role = (profileRole || currentUser?.role || "").toLowerCase().trim();
+    const name = (profileName || currentUser?.name || "").toLowerCase().trim();
+
+    return (
+      curEmail === "admin@hrhub.com" ||
+      curEmail === "jay@simpalgroup.com" ||
+      curEmail === "efilfonimda@gmail.com" ||
+      curEmail.includes("hrmd") ||
+      name.replace(/\s+/g, "") === "hrmd" ||
+      role === "super administrator" ||
+      role === "super admin" ||
+      role === "hr administrator"
+    );
+  }, [currentUser, profileEmail, profileRole, profileName]);
+
   const isCommWorkspaceAllowed = isUserTabAllowed(currentUserObj, "communication", matrixData);
   const canViewBulletin = isUserFeatureAllowed(currentUserObj, "comm_bulletin", matrixData);
   const canPostBulletin = isUserFeatureAllowed(currentUserObj, "comm_post_bulletin", matrixData);
   const canViewDirectory = isUserFeatureAllowed(currentUserObj, "comm_directory", matrixData);
-  const canViewAttendance = isUserFeatureAllowed(currentUserObj, "comm_attendance", matrixData);
+  // Shift & Attendance is strictly restricted to HRMD master accounts
+  const canViewAttendance = isHRMD && isUserFeatureAllowed(currentUserObj, "comm_attendance", matrixData);
   const canViewPolicies = isUserFeatureAllowed(currentUserObj, "comm_policies", matrixData);
 
   // Automatically select the first authorized sub-tab if active sub-tab is restricted
@@ -689,7 +709,7 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
       const tabs = [
         { id: "bulletin", allowed: canViewBulletin },
         { id: "directory", allowed: canViewDirectory },
-        { id: "attendance", allowed: canViewAttendance },
+        ...(isHRMD ? [{ id: "attendance", allowed: canViewAttendance }] : []),
         { id: "policies", allowed: canViewPolicies }
       ];
       const currentAllowed = tabs.find((t) => t.id === communicationTab)?.allowed;
@@ -700,7 +720,7 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
         }
       }
     }
-  }, [activeView, isCommWorkspaceAllowed, communicationTab, canViewBulletin, canViewDirectory, canViewAttendance, canViewPolicies]);
+  }, [activeView, isCommWorkspaceAllowed, communicationTab, canViewBulletin, canViewDirectory, canViewAttendance, canViewPolicies, isHRMD]);
 
   // Direct Team Chat State
   const [activeDirectChatUser, setActiveDirectChatUser] = useState(null);
@@ -1916,7 +1936,7 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
                   {[
                     { id: "bulletin", icon: Megaphone, label: "Company Bulletin", allowed: canViewBulletin },
                     { id: "directory", icon: Users, label: "Employee Directory", badge: supabaseProfiles.filter(p => !p.is_approved).length, allowed: canViewDirectory },
-                    { id: "attendance", icon: Calendar, label: "Shift & Attendance", allowed: canViewAttendance },
+                    ...(isHRMD ? [{ id: "attendance", icon: Calendar, label: "Shift & Attendance", allowed: canViewAttendance }] : []),
                     { id: "policies", icon: ShieldCheck, label: "Policies & Handbooks", allowed: canViewPolicies }
                   ].map(({ id, icon: Icon, label, badge, allowed }) => (
                     <button
@@ -1992,13 +2012,14 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
                     profiles={supabaseProfiles}
                     presenceMap={presenceMap}
                     onOpenChat={handleOpenDirectChat}
+                    onOpenWorkspaceTab={handleOpenWorkspaceTab}
                   />
                 ) : (
                   <div className="bg-white rounded-3xl border border-slate-200/90 p-8 text-center space-y-3">
                     <Lock size={28} className="mx-auto text-amber-500" />
                     <h3 className="text-base font-extrabold text-slate-900">Shift & Attendance Overview Restricted</h3>
                     <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
-                      Viewing shift rosters and on-duty personnel is restricted for your role. Contact Head Office to request capability clearance.
+                      Shift schedules and live attendance records are exclusively reserved for Head Office HRMD administrators.
                     </p>
                   </div>
                 )
@@ -2015,7 +2036,7 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
                   </div>
                 )
               ) : (
-                /* Bulletin View */
+                /* Bulletin View - Facebook Style Feed */
                 !canViewBulletin ? (
                   <div className="bg-white rounded-3xl border border-slate-200/90 p-8 text-center space-y-3">
                     <Lock size={28} className="mx-auto text-amber-500" />
@@ -2025,171 +2046,15 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
                     </p>
                   </div>
                 ) : (
-                  <>
-                    {/* Announcement Posting Form (Gated by canPostBulletin) */}
-                    {canPostBulletin ? (
-                      <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm space-y-3">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <div className="w-8 h-8 rounded-full bg-slate-900 text-emerald-400 font-bold text-xs flex items-center justify-center shrink-0">
-                              {userInitials}
-                            </div>
-                            <div>
-                              <span className="text-xs font-bold text-slate-800">{profileName}</span>
-                              <span className="text-[10px] text-slate-400 block">{displayRole} · {displayCompany}</span>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-[9px] font-extrabold text-emerald-700">
-                              <Sparkles size={10} className="text-emerald-600" /> Live Feed
-                            </span>
-                            <button
-                              type="button"
-                              onClick={fetchMemos}
-                              title="Refresh Announcements"
-                              className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-slate-100 rounded-lg transition"
-                            >
-                              <RefreshCw size={12} className={loadingMemos ? "animate-spin text-emerald-600" : ""} />
-                            </button>
-                          </div>
-                        </div>
-
-                        <div className="space-y-2">
-                          <input
-                            type="text"
-                            value={memoTitle}
-                            onChange={(e) => setMemoTitle(e.target.value)}
-                            placeholder="Memo Title (e.g. Q3 Health & Safety Guidelines)..."
-                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-1.5 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-emerald-500 transition font-medium"
-                          />
-
-                          <textarea
-                            rows={2}
-                            value={newPostContent}
-                            onChange={(e) => setNewPostContent(e.target.value)}
-                            placeholder="Write the official memo or announcement content..."
-                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-emerald-500 transition resize-none"
-                          />
-                        </div>
-
-                        {memoNotice && (
-                          <div className={`p-2 rounded-xl text-xs flex items-center gap-2 border ${
-                            memoNotice.type === "success"
-                              ? "bg-emerald-50 border-emerald-200 text-emerald-800"
-                              : memoNotice.type === "warning"
-                              ? "bg-amber-50 border-amber-200 text-amber-800"
-                              : "bg-rose-50 border-rose-200 text-rose-800"
-                          }`}>
-                            {memoNotice.type === "success" ? <CheckCircle2 size={13} className="shrink-0 text-emerald-600" /> : <AlertCircle size={13} className="shrink-0" />}
-                            <span className="text-[11px] font-medium">{memoNotice.message}</span>
-                          </div>
-                        )}
-
-                        <div className="pt-2 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2">
-                          <div className="flex items-center gap-1.5 text-[10px]">
-                            <span className="text-slate-400 font-bold mr-1">Category:</span>
-                            {[
-                              { label: "Official Memo", icon: Megaphone },
-                              { label: "Happy Events", icon: Sparkles },
-                              { label: "Recognition", icon: Award }
-                            ].map(({ label, icon: Icon }) => (
-                              <button
-                                key={label}
-                                type="button"
-                                onClick={() => setMemoCategory(label)}
-                                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg font-bold transition ${
-                                  memoCategory === label
-                                    ? "bg-emerald-100 text-emerald-800 border border-emerald-300 shadow-xs"
-                                    : "bg-slate-100 text-slate-600 hover:bg-slate-200/80"
-                                }`}
-                              >
-                                <Icon size={11} /> {label}
-                              </button>
-                            ))}
-                          </div>
-
-                          <div className="flex items-center gap-2 ml-auto">
-                            <button
-                              type="button"
-                              onClick={handleCreatePost}
-                              disabled={isPosting || !newPostContent.trim()}
-                              className="bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-emerald-400 font-bold px-4 py-1.5 rounded-xl text-xs flex items-center gap-1.5 transition shadow-sm cursor-pointer"
-                            >
-                              <Send size={12} /> {isPosting ? "Publishing..." : "Publish Memo"}
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-3.5 text-xs text-slate-500 flex items-center justify-between gap-3">
-                        <div className="flex items-center gap-2">
-                          <Lock size={14} className="text-slate-400 shrink-0" />
-                          <span>Official announcement broadcasting is restricted to authorized Head Office & HRMD administrators.</span>
-                        </div>
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 bg-white border border-slate-200 px-2 py-0.5 rounded-md">
-                          Read-Only Feed
-                        </span>
-                      </div>
-                    )}
-
-                    <div className="space-y-4">
-                      {loadingMemos && displayMemos.length === 0 ? (
-                        <div className="p-8 text-center bg-white border border-slate-200 rounded-2xl">
-                          <RefreshCw size={20} className="animate-spin text-emerald-600 mx-auto mb-2" />
-                          <p className="text-xs font-bold text-slate-600">Loading company announcements...</p>
-                        </div>
-                      ) : (
-                        displayMemos.map((post) => (
-                          <article key={post.id} className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-3 relative transition hover:border-slate-300">
-                            <div className="flex items-start justify-between gap-2">
-                              <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-xl bg-slate-900 text-emerald-400 font-bold text-xs flex items-center justify-center shrink-0 shadow-sm">
-                                  {post.author ? post.author.slice(0, 2).toUpperCase() : "HR"}
-                                </div>
-                                <div>
-                                  <div className="flex items-center gap-1.5">
-                                    <h4 className="font-bold text-slate-900 text-xs">{post.author}</h4>
-                                    {post.isOfficial && (
-                                      <span className="inline-flex items-center gap-1 rounded bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 text-[8px] font-black text-emerald-700 uppercase tracking-wider">
-                                        <CheckCircle2 size={8} className="text-emerald-600" /> Official Memo
-                                      </span>
-                                    )}
-                                  </div>
-                                  <p className="text-[10px] text-slate-500">{post.company} • {post.time}</p>
-                                </div>
-                              </div>
-
-                              <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full border ${post.badgeColor}`}>
-                                {post.badge}
-                              </span>
-                            </div>
-
-                            <div className="space-y-1.5 pt-1">
-                              <h3 className="font-extrabold text-slate-900 text-sm">{post.title}</h3>
-                              <p className="text-xs text-slate-600 leading-relaxed whitespace-pre-wrap">{post.content}</p>
-                              {post.imageUrl && (
-                                <div className="mt-2 rounded-xl overflow-hidden border border-slate-200 max-h-60">
-                                  <img src={post.imageUrl} alt="Memo attachment" className="w-full object-cover" />
-                                </div>
-                              )}
-                            </div>
-
-                            <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500 font-semibold">
-                              <button className="flex items-center gap-1.5 hover:text-emerald-600 transition cursor-pointer">
-                                <ThumbsUp size={14} /> <span>{post.likes} Acknowledgments</span>
-                              </button>
-                              <button className="flex items-center gap-1.5 hover:text-emerald-600 transition cursor-pointer">
-                                <MessageCircle size={14} /> <span>{post.comments} Comments</span>
-                              </button>
-                              <button className="flex items-center gap-1.5 hover:text-emerald-600 transition cursor-pointer">
-                                <Share2 size={14} /> <span>Share</span>
-                              </button>
-                            </div>
-                          </article>
-                        ))
-                      )}
-                    </div>
-                  </>
+                  <CompanyBulletinFeed
+                    currentUser={currentUser}
+                    profileName={profileName}
+                    profileRole={displayRole}
+                    profileCompany={displayCompany}
+                    userInitials={userInitials}
+                    isHRMD={isHRMD}
+                    canPost={canPostBulletin}
+                  />
                 )
               )}
             </main>
