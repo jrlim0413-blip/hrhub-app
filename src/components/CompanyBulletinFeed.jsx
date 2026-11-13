@@ -5,7 +5,7 @@ import {
   CheckCircle2, AlertCircle, RefreshCw, MoreHorizontal,
   Clock, Calendar, Globe, Camera, Smile, ShieldCheck,
   User, Check, ChevronDown, Video, Film, Link2, Play,
-  FileVideo
+  FileVideo, Filter, ArrowRight
 } from "lucide-react";
 import {
   getBulletinPostsFromDb,
@@ -356,7 +356,12 @@ export default function CompanyBulletinFeed({
     }
   };
 
-  // 11. Filtered Feed
+  // 11. Pinned post extraction for executive spotlight
+  const primaryPinnedPost = useMemo(() => {
+    return posts.find((p) => Boolean(p.pinned)) || null;
+  }, [posts]);
+
+  // 12. Filtered Feed (Strictly chronological: newest post is ALWAYS at the very top)
   const filteredPosts = useMemo(() => {
     return posts.filter((p) => {
       if (activeFilter === "pinned") return Boolean(p.pinned);
@@ -364,8 +369,7 @@ export default function CompanyBulletinFeed({
       if (activeFilter !== "all") return p.category === activeFilter;
       return true;
     }).sort((a, b) => {
-      if (a.pinned && !b.pinned) return -1;
-      if (!a.pinned && b.pinned) return 1;
+      // Newest post is always at the top regardless of pinned status
       return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
     });
   }, [posts, activeFilter]);
@@ -723,8 +727,8 @@ export default function CompanyBulletinFeed({
       {/* ============================================================ */}
       {/* 2. FEED TOOLBAR & CATEGORY FILTER TABS                       */}
       {/* ============================================================ */}
-      <div className="bg-white rounded-2xl border border-slate-200/90 p-2.5 flex items-center justify-between gap-2 shadow-2xs overflow-x-auto scrollbar-none">
-        <div className="flex items-center gap-1.5">
+      <div className="bg-white rounded-2xl border border-slate-200/90 p-2 sm:p-2.5 flex flex-wrap items-center justify-between gap-2 shadow-2xs">
+        <div className="flex items-center gap-1.5 flex-wrap flex-1 min-w-0">
           {[
             { id: "all", label: "All Posts" },
             { id: "HR Motivation", label: "💡 Motivation" },
@@ -732,7 +736,7 @@ export default function CompanyBulletinFeed({
             { id: "videos", label: "🎥 Videos" },
             { id: "Announcement", label: "Announcements" },
             { id: "Official Memo", label: "Memos" },
-            { id: "pinned", label: "Pinned" }
+            { id: "pinned", label: "📌 Pinned" }
           ].map((tab) => {
             const isActive = activeFilter === tab.id;
             return (
@@ -740,7 +744,7 @@ export default function CompanyBulletinFeed({
                 key={tab.id}
                 type="button"
                 onClick={() => setActiveFilter(tab.id)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer whitespace-nowrap ${
+                className={`px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-xl text-[11px] sm:text-xs font-bold transition cursor-pointer whitespace-nowrap ${
                   isActive
                     ? "bg-slate-900 text-white shadow-xs"
                     : "bg-slate-50 hover:bg-slate-100 text-slate-600"
@@ -756,11 +760,51 @@ export default function CompanyBulletinFeed({
           type="button"
           onClick={fetchFeed}
           title="Refresh Feed"
-          className="p-1.5 text-slate-400 hover:text-emerald-700 hover:bg-slate-100 rounded-xl transition cursor-pointer shrink-0"
+          className="p-1.5 text-slate-400 hover:text-emerald-700 hover:bg-slate-100 rounded-xl transition cursor-pointer shrink-0 self-start sm:self-center"
         >
           <RefreshCw size={14} className={loading ? "animate-spin text-emerald-600" : ""} />
         </button>
       </div>
+
+      {/* ============================================================ */}
+      {/* 2B. PINNED ANNOUNCEMENT EXECUTIVE SPOTLIGHT BANNER           */}
+      {/* ============================================================ */}
+      {primaryPinnedPost && activeFilter === "all" && (
+        <div
+          onClick={() => {
+            const el = document.getElementById(`post_card_${primaryPinnedPost.id}`);
+            if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+          }}
+          className="bg-gradient-to-r from-amber-500/15 via-amber-500/5 to-white border-2 border-amber-400/80 rounded-2xl p-4 shadow-xs hover:shadow-md transition cursor-pointer relative overflow-hidden group/pin"
+        >
+          <div className="flex items-center justify-between gap-2 mb-1.5">
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-400 text-slate-950 font-black text-[10px] tracking-tight uppercase shadow-xs">
+              <Pin size={11} className="fill-slate-950 text-slate-950" />
+              <span>📌 Pinned by Head Office HRMD</span>
+            </div>
+            <span className="text-[10px] text-slate-400 font-mono">
+              {formatRelativeTime(primaryPinnedPost.createdAt)}
+            </span>
+          </div>
+
+          <h4 className="text-sm font-black text-slate-900 group-hover/pin:text-amber-900 transition line-clamp-1">
+            {primaryPinnedPost.title || "Important Official Announcement"}
+          </h4>
+          <p className="text-xs text-slate-600 mt-1 line-clamp-2 leading-relaxed">
+            {primaryPinnedPost.content}
+          </p>
+
+          <div className="mt-2.5 pt-2 border-t border-amber-300/40 flex items-center justify-between text-[11px]">
+            <span className="text-slate-500 font-medium truncate">
+              By <strong className="text-slate-800">{primaryPinnedPost.authorName}</strong> • {primaryPinnedPost.authorCompany}
+            </span>
+            <span className="text-amber-800 font-bold group-hover/pin:translate-x-1 transition flex items-center gap-1 shrink-0">
+              <span>Jump to Post</span>
+              <ArrowRight size={12} />
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* ============================================================ */}
       {/* 3. POSTS FEED LIST                                           */}
@@ -794,18 +838,23 @@ export default function CompanyBulletinFeed({
             return (
               <article
                 key={post.id}
+                id={`post_card_${post.id}`}
                 className={`bg-white rounded-2xl border transition shadow-xs overflow-hidden ${
-                  post.pinned ? "border-amber-300 ring-1 ring-amber-100" : "border-slate-200/90 hover:border-slate-300"
+                  post.pinned
+                    ? "border-2 border-amber-400/90 shadow-md ring-2 ring-amber-300/30 bg-gradient-to-b from-amber-50/20 via-white to-white"
+                    : "border-slate-200/90 hover:border-slate-300"
                 }`}
               >
                 {/* Pinned Ribbon */}
                 {post.pinned && (
-                  <div className="bg-amber-50 border-b border-amber-200/80 px-4 py-1 text-[10px] font-bold text-amber-800 flex items-center justify-between">
+                  <div className="bg-gradient-to-r from-amber-400 via-amber-300 to-amber-400 border-b border-amber-300 text-slate-950 px-4 py-1.5 text-[10px] font-black uppercase tracking-wider flex items-center justify-between shadow-xs">
                     <span className="flex items-center gap-1.5">
-                      <Pin size={11} className="text-amber-600 fill-amber-500" />
-                      Pinned Announcement • Visible at Top
+                      <Pin size={12} className="fill-slate-950 text-slate-950" />
+                      <span>📌 PINNED ANNOUNCEMENT • HEAD OFFICE HRMD</span>
                     </span>
-                    <span className="uppercase text-[9px] font-black tracking-wider text-amber-700/80">Head Office</span>
+                    <span className="text-[9px] bg-slate-950/15 px-2 py-0.5 rounded-full font-extrabold tracking-wider">
+                      OFFICIAL PRIORITY
+                    </span>
                   </div>
                 )}
 
@@ -825,6 +874,12 @@ export default function CompanyBulletinFeed({
                           <span className="inline-flex items-center gap-1 rounded bg-emerald-50 border border-emerald-200 px-1.5 py-0.2 text-[9px] font-black text-emerald-700 uppercase">
                             <CheckCircle2 size={9} className="text-emerald-600" />
                             Official
+                          </span>
+                        )}
+                        {post.pinned && (
+                          <span className="inline-flex items-center gap-1 rounded bg-amber-100 border border-amber-300 px-1.5 py-0.2 text-[9px] font-black text-amber-900 uppercase">
+                            <Pin size={9} className="fill-amber-700 text-amber-700" />
+                            Pinned
                           </span>
                         )}
                         {post.videoUrl && (
