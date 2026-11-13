@@ -24,6 +24,8 @@ const INITIAL_STARTER_POSTS = [
     title: "Welcome to HrHub Enterprise Company Bulletin",
     content: "Welcome to the official company communication board! Here you can find enterprise-wide announcements, policy memorandums, employee milestones, and updates across all Simpal Group subsidiaries.\n\nFeel free to like, acknowledge, and leave comments below to engage with your colleagues across all branches.",
     imageUrl: null,
+    videoUrl: null,
+    videoType: null,
     likes: ["admin@hrhub.com"],
     comments: [
       {
@@ -39,6 +41,52 @@ const INITIAL_STARTER_POSTS = [
     pinned: true,
     isOfficial: true,
     createdAt: new Date(Date.now() - 3600000 * 24).toISOString()
+  },
+  {
+    id: "post_starter_hr_motivation",
+    authorName: "H R M D",
+    authorEmail: "admin@hrhub.com",
+    authorRole: "HR Administrator",
+    authorCompany: "Simpal Group of Companies",
+    category: "HR Motivation",
+    title: "Monday Fuel: The Power of Teamwork & Dedication",
+    content: "Start your week strong! Success in our multi-branch operations comes from continuous dedication, integrity, and supporting each team member.\n\nEnjoy this motivational short video on leadership and excellence in the workplace. Keep shining across all our field stations!",
+    imageUrl: null,
+    videoUrl: "https://www.youtube.com/watch?v=wnHW6o8WMas",
+    videoType: "youtube",
+    likes: ["admin@hrhub.com", "jrlim0413@gmail.com"],
+    comments: [
+      {
+        id: "comm_mot_1",
+        authorName: "Kin John Aguinaldo",
+        authorEmail: "aguinaldokinjohn@gmail.com",
+        authorRole: "HR Admin V",
+        authorCompany: "5A Royal Gaming OPC",
+        content: "Very inspiring! Sharing this with our Maguindanao team today.",
+        createdAt: new Date(Date.now() - 3600000 * 5).toISOString()
+      }
+    ],
+    pinned: false,
+    isOfficial: false,
+    createdAt: new Date(Date.now() - 3600000 * 6).toISOString()
+  },
+  {
+    id: "post_starter_hr_reminder",
+    authorName: "H R M D",
+    authorEmail: "admin@hrhub.com",
+    authorRole: "HR Administrator",
+    authorCompany: "Simpal Group of Companies",
+    category: "HR Reminder",
+    title: "Operational Reminder: Daily Attendance Logging & Cut-Off Schedules",
+    content: "Good day team! A quick operational reminder for all branch supervisors and entity administrators:\n\n1. Ensure all on-duty attendance entries are logged before 10:00 AM daily.\n2. Review Cash Advance (CA) balances prior to the upcoming payroll cut-off.\n3. Keep your station incident logs updated in the HrHub workspace.\n\nThank you for keeping our operations smooth and DOLE-compliant!",
+    imageUrl: null,
+    videoUrl: null,
+    videoType: null,
+    likes: ["admin@hrhub.com"],
+    comments: [],
+    pinned: true,
+    isOfficial: true,
+    createdAt: new Date(Date.now() - 3600000 * 12).toISOString()
   }
 ];
 
@@ -106,6 +154,8 @@ export async function createBulletinPostInDb(postData) {
     title: postData.title ? postData.title.trim() : "",
     content: postData.content ? postData.content.trim() : "",
     imageUrl: postData.imageUrl || null,
+    videoUrl: postData.videoUrl || null,
+    videoType: postData.videoType || null,
     likes: [],
     comments: [],
     pinned: Boolean(postData.pinned),
@@ -234,3 +284,4 @@ export async function deleteCommentFromBulletinPostInDb(postId, commentId) {
   await saveFeedToDatabase(updatedFeed);
   return { success: true, allPosts: updatedFeed };
 }
+
