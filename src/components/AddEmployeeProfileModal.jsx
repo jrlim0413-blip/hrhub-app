@@ -1,9 +1,10 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import {
   X, User, Mail, Building2, MapPin, Phone, ShieldCheck,
-  Camera, Image as ImageIcon, Upload, FileText, CheckCircle2,
+  Camera, Upload, FileText, CheckCircle2,
   AlertCircle, Sparkles, ShieldAlert, Trash2, Calendar,
-  Briefcase, Heart, Plus, ExternalLink, RefreshCw
+  Briefcase, Heart, Plus, ExternalLink, RefreshCw, Eye, Paperclip,
+  Check, Download
 } from "lucide-react";
 
 const COVER_PRESETS = [
@@ -76,14 +77,18 @@ export default function AddEmployeeProfileModal({
   roles = [],
   branches = [],
   defaultBranchMap = {},
-  onFileIncidentReport
+  onFileIncidentReport,
+  mode = "add", // 'add' | 'edit'
+  initialData = null
 }) {
   const [activeTab, setActiveTab] = useState("details"); // 'details' | 'requirements' | 'disciplinary'
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [notice, setNotice] = useState(null);
+  const [hasSaved, setHasSaved] = useState(false);
 
   // Form State
   const [formData, setFormData] = useState({
+    id: "",
     name: "",
     email: "",
     company: userEntityCompany,
@@ -99,7 +104,8 @@ export default function AddEmployeeProfileModal({
     sssNumber: "",
     philhealthNumber: "",
     pagibigNumber: "",
-    tinNumber: ""
+    tinNumber: "",
+    is_approved: true
   });
 
   // Media States
@@ -114,6 +120,74 @@ export default function AddEmployeeProfileModal({
   const avatarInputRef = useRef(null);
   const coverInputRef = useRef(null);
   const fileInputRef = useRef(null);
+
+  // Synchronize state whenever modal opens or initialData changes
+  useEffect(() => {
+    if (!isOpen) return;
+
+    if (initialData) {
+      const meta = initialData.metadata || {};
+      const targetCompany = initialData.company || userEntityCompany;
+      const targetBranch = initialData.branch || meta.branch || defaultBranchMap[targetCompany] || "Head Office (Mandaue)";
+
+      setFormData({
+        id: initialData.id || "",
+        name: initialData.name || (initialData.email ? initialData.email.split("@")[0].replace(/[._]/g, " ").replace(/\b\w/g, (l) => l.toUpperCase()) : ""),
+        email: initialData.email || "",
+        company: targetCompany,
+        role: initialData.role || "Team Member",
+        branch: targetBranch,
+        department: meta.department || initialData.department || "Operations & Field Terminals",
+        phone: initialData.phone || meta.phone || "",
+        employmentStatus: meta.employment_status || "Regular Full-Time",
+        dateHired: meta.date_hired || new Date().toISOString().split("T")[0],
+        emergencyName: meta.emergency_contact_name || "",
+        emergencyPhone: meta.emergency_contact_phone || "",
+        sssNumber: meta.sss_number || "",
+        philhealthNumber: meta.philhealth_number || "",
+        pagibigNumber: meta.pagibig_number || "",
+        tinNumber: meta.tin_number || "",
+        is_approved: typeof initialData.is_approved === "boolean" ? initialData.is_approved : true
+      });
+
+      setAvatarUrl(meta.avatar_url || initialData.avatar_url || null);
+      setSelectedPresetId(meta.cover_preset_id || "preset_emerald");
+      setCustomCoverUrl(meta.custom_cover_url || null);
+      setRequirementsFiles(Array.isArray(meta.requirements_files) ? meta.requirements_files : []);
+      setActiveTab("details");
+      setHasSaved(true); // Existing profile is already saved
+      setNotice(null);
+    } else {
+      const defBranch = defaultBranchMap[userEntityCompany] || "Head Office (Mandaue)";
+      setFormData({
+        id: "",
+        name: "",
+        email: "",
+        company: userEntityCompany,
+        role: "Team Member",
+        branch: defBranch,
+        department: "Operations & Field Terminals",
+        phone: "",
+        employmentStatus: "Regular Full-Time",
+        dateHired: new Date().toISOString().split("T")[0],
+        emergencyName: "",
+        emergencyPhone: "",
+        sssNumber: "",
+        philhealthNumber: "",
+        pagibigNumber: "",
+        tinNumber: "",
+        is_approved: true
+      });
+
+      setAvatarUrl(null);
+      setSelectedPresetId("preset_emerald");
+      setCustomCoverUrl(null);
+      setRequirementsFiles([]);
+      setActiveTab("details");
+      setHasSaved(false);
+      setNotice(null);
+    }
+  }, [isOpen, initialData, userEntityCompany]);
 
   if (!isOpen) return null;
 
@@ -182,6 +256,10 @@ export default function AddEmployeeProfileModal({
           height = Math.round((height * maxW) / width);
           width = maxW;
         }
+        if (height > maxH) {
+          width = Math.round((width * maxH) / height);
+          height = maxH;
+        }
         canvas.width = width;
         canvas.height = height;
         const ctx = canvas.getContext("2d");
@@ -194,39 +272,41 @@ export default function AddEmployeeProfileModal({
     reader.readAsDataURL(file);
   };
 
-  // 201 File Requirements Upload Handler
-  const handleRequirementsFileSelect = (e) => {
+  // Multi-file 201 Uploader Handler
+  const handleFileRequirementsSelect = (e) => {
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
 
-    files.forEach((file) => {
-      // 10MB per file check
-      if (file.size > 10 * 1024 * 1024) {
-        setNotice({ type: "warning", message: `File ${file.name} exceeds 10MB limit.` });
-        return;
-      }
+    const remainingSlots = 12 - requirementsFiles.length;
+    if (remainingSlots <= 0) {
+      setNotice({ type: "warning", message: "Maximum of 12 requirement files reached." });
+      return;
+    }
 
+    const filesToProcess = files.slice(0, remainingSlots);
+
+    filesToProcess.forEach((file) => {
       const reader = new FileReader();
       reader.onload = (event) => {
-        const newFileItem = {
-          id: `req_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+        const newDoc = {
+          id: `req-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
           name: file.name,
           size: file.size,
           type: file.type || "application/octet-stream",
           category: selectedReqCategory,
           dataUrl: event.target.result,
-          uploadedAt: new Date().toISOString()
+          uploadedAt: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
         };
-        setRequirementsFiles((prev) => [newFileItem, ...prev]);
+        setRequirementsFiles((prev) => [...prev, newDoc]);
       };
       reader.readAsDataURL(file);
     });
 
-    // Reset input
-    if (fileInputRef.current) fileInputRef.current.value = "";
+    if (e.target) e.target.value = "";
+    setNotice({ type: "success", message: `Attached ${filesToProcess.length} document file(s) under "${selectedReqCategory}".` });
   };
 
-  const handleRemoveReqFile = (fileId) => {
+  const handleRemoveRequirementFile = (fileId) => {
     setRequirementsFiles((prev) => prev.filter((f) => f.id !== fileId));
   };
 
@@ -241,14 +321,17 @@ export default function AddEmployeeProfileModal({
     }
 
     return {
+      ...(initialData || {}),
+      id: initialData?.id || formData.id || `emp-${Date.now()}`,
       name: trimmedName,
       email: cleanEmail,
       company: formData.company || userEntityCompany,
       role: formData.role || "Team Member",
       branch: formData.branch || defaultBranchMap[formData.company] || "Branch Office",
       phone: formData.phone || "",
-      is_approved: true,
+      is_approved: typeof formData.is_approved === "boolean" ? formData.is_approved : true,
       metadata: {
+        ...(initialData?.metadata || {}),
         avatar_url: avatarUrl || null,
         cover_preset_id: selectedPresetId,
         custom_cover_url: customCoverUrl || null,
@@ -262,7 +345,7 @@ export default function AddEmployeeProfileModal({
         pagibig_number: formData.pagibigNumber,
         tin_number: formData.tinNumber,
         requirements_files: requirementsFiles,
-        created_at: new Date().toISOString()
+        updated_at: new Date().toISOString()
       }
     };
   };
@@ -282,7 +365,14 @@ export default function AddEmployeeProfileModal({
     try {
       const record = buildProfileRecord();
       await onSave(record);
-      onClose();
+      setHasSaved(true);
+
+      if (mode === "edit") {
+        setNotice({ type: "success", message: `Profile details for ${record.name} updated successfully!` });
+        setTimeout(() => onClose(), 1000);
+      } else {
+        onClose();
+      }
     } catch (err) {
       console.error("Error saving employee profile:", err);
       setNotice({ type: "warning", message: "Failed to save profile. Please check connection and try again." });
@@ -291,8 +381,8 @@ export default function AddEmployeeProfileModal({
     }
   };
 
-  // Save & File Incident Report Handler
-  const handleSaveAndFileIR = async () => {
+  // Launch Incident Report Directly for this Employee
+  const handleFileIncidentReportDirectly = async () => {
     if (!formData.name.trim()) {
       setNotice({ type: "warning", message: "Please enter employee name before creating an Incident Report." });
       setActiveTab("details");
@@ -302,6 +392,7 @@ export default function AddEmployeeProfileModal({
     setIsSubmitting(true);
     try {
       const record = buildProfileRecord();
+      // Ensure latest changes are persisted
       await onSave(record);
       onClose();
 
@@ -310,9 +401,16 @@ export default function AddEmployeeProfileModal({
         onFileIncidentReport(record);
       } else {
         localStorage.setItem("hrhub_incident_target_employee", JSON.stringify(record));
-        window.dispatchEvent(new CustomEvent("hrhub_switch_workspace_tab", {
-          detail: { tabId: "incident_reports", employee: record }
-        }));
+        window.dispatchEvent(
+          new CustomEvent("hrhub_switch_workspace_tab", {
+            detail: { tabId: "incident_reports", employee: record }
+          })
+        );
+        window.dispatchEvent(
+          new CustomEvent("hrhub_file_incident_report", {
+            detail: { employee: record }
+          })
+        );
       }
     } catch (err) {
       console.error("Save & File IR error:", err);
@@ -326,17 +424,62 @@ export default function AddEmployeeProfileModal({
     ? formData.name.split(" ").filter(Boolean).map((n) => n[0]).join("").slice(0, 2).toUpperCase()
     : "HR";
 
+  // Tab definitions:
+  // In 'add' mode before saving: ONLY Details and Requirements are shown (NO IR requirement).
+  // In 'edit' mode or after saving: The Disciplinary / Incident Report (IR) tab is visible and accessible.
+  const isEditOrSaved = mode === "edit" || hasSaved;
+  const availableTabs = [
+    { id: "details", label: "Personal & Job Details", icon: User },
+    { id: "requirements", label: `201 Documents & IDs (${requirementsFiles.length})`, icon: FileText },
+    ...(isEditOrSaved ? [
+      { id: "disciplinary", label: "Due Process & Incident (IR)", icon: ShieldAlert }
+    ] : [])
+  ];
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 backdrop-blur-sm p-3 sm:p-5 animate-in fade-in duration-150">
-      <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl w-full max-w-2xl max-h-[92vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-150">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 backdrop-blur-md p-2 sm:p-4 md:p-6 overflow-y-auto animate-in fade-in duration-150">
+      {/* BOND PAPER FORMATTED DOSSIER CONTAINER (max-w-4xl, min-h-[720px], official executive aesthetic) */}
+      <div className="bg-white rounded-3xl border border-slate-300 shadow-2xl w-full max-w-4xl min-h-[720px] max-h-[92vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-150 relative ring-1 ring-slate-900/5">
         
         {/* ============================================================ */}
-        {/* 1. PROFESSIONAL COVER & AVATAR HEADER                         */}
+        {/* 1. OFFICIAL EXECUTIVE BOND PAPER HEADER                      */}
         {/* ============================================================ */}
-        <div className="relative">
+        <div className="px-6 py-3.5 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800 shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-400/30">
+              <FileText size={17} />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-black uppercase tracking-widest text-emerald-400">
+                  Personnel 201 File Dossier
+                </span>
+                <span className="text-[9px] px-2 py-0.2 rounded-full bg-slate-800 text-slate-300 font-semibold border border-slate-700">
+                  {formData.company}
+                </span>
+              </div>
+              <h2 className="text-base font-extrabold text-white tracking-tight">
+                {mode === "edit" ? `Employee Profile — ${formData.name || "Employee"}` : "Add Comprehensive Employee Profile"}
+              </h2>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-2 rounded-xl bg-slate-800/80 hover:bg-rose-600 text-slate-300 hover:text-white transition cursor-pointer"
+            title="Close dossier"
+          >
+            <X size={17} />
+          </button>
+        </div>
+
+        {/* ============================================================ */}
+        {/* 2. EXECUTIVE COVER & AVATAR BANNER                           */}
+        {/* ============================================================ */}
+        <div className="relative shrink-0">
           {/* Cover Banner */}
           <div
-            className={`w-full h-32 sm:h-36 relative overflow-hidden transition-all duration-300 ${
+            className={`w-full h-36 sm:h-44 relative overflow-hidden transition-all duration-300 ${
               customCoverUrl ? "bg-slate-950" : `bg-gradient-to-r ${activePreset.gradient}`
             }`}
           >
@@ -351,41 +494,33 @@ export default function AddEmployeeProfileModal({
             <div className="absolute top-3 left-4 right-4 flex items-center justify-between text-white z-20">
               <span className="text-[10px] font-black tracking-wider uppercase bg-black/40 backdrop-blur-xs px-2.5 py-1 rounded-full border border-white/20 flex items-center gap-1.5 shadow-xs">
                 <Sparkles size={11} className="text-amber-300" />
-                <span>Executive Employee Profiling</span>
+                <span>Executive Personnel Profiling</span>
               </span>
 
-              <button
-                type="button"
-                onClick={onClose}
-                className="p-1.5 rounded-full bg-black/50 hover:bg-rose-600 text-white/80 hover:text-white transition cursor-pointer shadow-md"
-              >
-                <X size={16} />
-              </button>
-            </div>
-
-            {/* Cover Action Tools (Upload Custom or Reset) */}
-            <div className="absolute bottom-2.5 right-3 flex items-center gap-1.5 z-20">
-              {customCoverUrl ? (
-                <button
-                  type="button"
-                  onClick={() => setCustomCoverUrl(null)}
-                  className="px-2.5 py-1 rounded-lg bg-black/60 hover:bg-black/80 text-white text-[10px] font-bold transition flex items-center gap-1"
-                  title="Revert to preset cover design"
-                >
-                  <RefreshCw size={11} />
-                  <span>Use Preset</span>
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => coverInputRef.current?.click()}
-                  className="px-2.5 py-1 rounded-lg bg-black/50 hover:bg-black/80 text-white text-[10px] font-bold transition flex items-center gap-1 border border-white/20 cursor-pointer shadow-xs"
-                  title="Upload custom cover photo"
-                >
-                  <Camera size={11} className="text-emerald-400" />
-                  <span>Custom Cover</span>
-                </button>
-              )}
+              {/* Cover Action Tools */}
+              <div className="flex items-center gap-1.5">
+                {customCoverUrl ? (
+                  <button
+                    type="button"
+                    onClick={() => setCustomCoverUrl(null)}
+                    className="px-2.5 py-1 rounded-lg bg-black/60 hover:bg-black/80 text-white text-[10px] font-bold transition flex items-center gap-1 cursor-pointer"
+                    title="Revert to preset cover design"
+                  >
+                    <RefreshCw size={11} />
+                    <span>Use Preset</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => coverInputRef.current?.click()}
+                    className="px-2.5 py-1 rounded-lg bg-black/50 hover:bg-black/80 text-white text-[10px] font-bold transition flex items-center gap-1 border border-white/20 cursor-pointer shadow-xs"
+                    title="Upload custom cover photo"
+                  >
+                    <Camera size={11} className="text-emerald-400" />
+                    <span>Custom Cover</span>
+                  </button>
+                )}
+              </div>
             </div>
 
             <input
@@ -397,55 +532,76 @@ export default function AddEmployeeProfileModal({
             />
           </div>
 
-          {/* Overlapping Avatar Profile Photo */}
-          <div className="px-6 pb-2 relative flex items-end justify-between -mt-12 sm:-mt-14 z-30">
-            <div className="relative group/avatar">
-              <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-2xl ring-4 ring-white bg-slate-900 text-emerald-400 font-black text-2xl flex items-center justify-center shadow-xl overflow-hidden relative">
-                {avatarUrl ? (
-                  <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
-                ) : (
-                  <span>{initials}</span>
+          {/* Overlapping Avatar Profile Photo & Identity Strip */}
+          <div className="px-6 pb-3 relative flex flex-col sm:flex-row sm:items-end justify-between -mt-14 sm:-mt-16 z-30 gap-4">
+            <div className="flex items-end gap-4">
+              <div className="relative group/avatar shrink-0">
+                <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-2xl ring-4 ring-white bg-slate-900 text-emerald-400 font-black text-2xl flex items-center justify-center shadow-xl overflow-hidden relative">
+                  {avatarUrl ? (
+                    <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
+                  ) : (
+                    <span>{initials}</span>
+                  )}
+
+                  {/* Hover Camera Overlay */}
+                  <div
+                    onClick={() => avatarInputRef.current?.click()}
+                    className="absolute inset-0 bg-slate-950/60 text-white flex flex-col items-center justify-center opacity-0 group-hover/avatar:opacity-100 transition cursor-pointer"
+                  >
+                    <Camera size={20} className="text-emerald-400 mb-0.5" />
+                    <span className="text-[9px] font-bold">Change Photo</span>
+                  </div>
+                </div>
+
+                {avatarUrl && (
+                  <button
+                    type="button"
+                    onClick={() => setAvatarUrl(null)}
+                    className="absolute -top-1 -right-1 p-1 rounded-full bg-slate-900 text-white hover:bg-rose-600 transition shadow cursor-pointer"
+                    title="Remove photo"
+                  >
+                    <X size={11} />
+                  </button>
                 )}
 
-                {/* Hover Camera Overlay */}
-                <div
-                  onClick={() => avatarInputRef.current?.click()}
-                  className="absolute inset-0 bg-slate-950/60 text-white flex flex-col items-center justify-center opacity-0 group-hover/avatar:opacity-100 transition cursor-pointer"
-                >
-                  <Camera size={20} className="text-emerald-400 mb-0.5" />
-                  <span className="text-[9px] font-bold">Change Photo</span>
-                </div>
+                <input
+                  ref={avatarInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleAvatarSelect}
+                  className="hidden"
+                />
               </div>
 
-              {avatarUrl && (
-                <button
-                  type="button"
-                  onClick={() => setAvatarUrl(null)}
-                  className="absolute -top-1 -right-1 p-1 rounded-full bg-slate-900 text-white hover:bg-rose-600 transition shadow cursor-pointer"
-                  title="Remove photo"
-                >
-                  <X size={11} />
-                </button>
-              )}
-
-              <input
-                ref={avatarInputRef}
-                type="file"
-                accept="image/*"
-                onChange={handleAvatarSelect}
-                className="hidden"
-              />
+              {/* Identity summary */}
+              <div className="min-w-0 pb-1">
+                <h3 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight truncate">
+                  {formData.name || (mode === "edit" ? "Employee Record" : "New Employee Profile")}
+                </h3>
+                <div className="flex flex-wrap items-center gap-1.5 mt-1 text-xs">
+                  <span className="px-2.5 py-0.5 rounded-md font-bold bg-emerald-50 text-emerald-800 border border-emerald-200/70">
+                    {formData.role}
+                  </span>
+                  <span className="px-2 py-0.5 rounded-md font-semibold bg-slate-100 text-slate-700">
+                    {formData.department}
+                  </span>
+                  <span className="px-2 py-0.5 rounded-md text-slate-500 flex items-center gap-1">
+                    <MapPin size={11} className="text-emerald-600" />
+                    <span>{formData.branch}</span>
+                  </span>
+                </div>
+              </div>
             </div>
 
             {/* Default Cover Presets Selector Pills */}
             {!customCoverUrl && (
-              <div className="hidden sm:flex items-center gap-1 bg-slate-100/90 border border-slate-200/80 rounded-xl p-1 mb-2 shadow-2xs">
+              <div className="hidden md:flex items-center gap-1 bg-slate-100/90 border border-slate-200/80 rounded-xl p-1 shadow-2xs self-end">
                 {COVER_PRESETS.map((preset) => (
                   <button
                     key={preset.id}
                     type="button"
                     onClick={() => setSelectedPresetId(preset.id)}
-                    className={`px-2 py-0.5 rounded-lg text-[9px] font-bold transition ${
+                    className={`px-2 py-0.5 rounded-lg text-[9px] font-bold transition cursor-pointer ${
                       selectedPresetId === preset.id
                         ? "bg-slate-900 text-white shadow-xs"
                         : "text-slate-600 hover:text-slate-900"
@@ -460,15 +616,11 @@ export default function AddEmployeeProfileModal({
         </div>
 
         {/* ============================================================ */}
-        {/* 2. TAB NAVIGATION                                            */}
+        {/* 3. BOND PAPER DOSSIER TABS                                   */}
         {/* ============================================================ */}
-        <div className="px-6 border-b border-slate-100 flex items-center justify-between gap-2 bg-white">
+        <div className="px-6 border-b border-slate-200 flex items-center justify-between gap-2 bg-slate-50/70 shrink-0">
           <div className="flex items-center gap-2">
-            {[
-              { id: "details", label: "Details & Job Info", icon: User },
-              { id: "requirements", label: `201 Files & IDs (${requirementsFiles.length})`, icon: FileText },
-              { id: "disciplinary", label: "Conduct & Incident (IR)", icon: ShieldAlert }
-            ].map((tab) => {
+            {availableTabs.map((tab) => {
               const isActive = activeTab === tab.id;
               const Icon = tab.icon;
               return (
@@ -476,10 +628,10 @@ export default function AddEmployeeProfileModal({
                   key={tab.id}
                   type="button"
                   onClick={() => setActiveTab(tab.id)}
-                  className={`py-3 px-3 text-xs font-bold border-b-2 flex items-center gap-1.5 transition cursor-pointer ${
+                  className={`py-3 px-3.5 text-xs font-bold border-b-2 flex items-center gap-1.5 transition cursor-pointer ${
                     isActive
-                      ? "border-emerald-600 text-emerald-800"
-                      : "border-transparent text-slate-500 hover:text-slate-800"
+                      ? "border-emerald-600 text-emerald-800 bg-white"
+                      : "border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-100/60"
                   }`}
                 >
                   <Icon size={14} className={isActive ? "text-emerald-600" : "text-slate-400"} />
@@ -490,196 +642,217 @@ export default function AddEmployeeProfileModal({
           </div>
 
           <span className="text-[10px] text-slate-400 font-medium hidden sm:inline">
-            Registered under <strong className="text-slate-700">{userEntityCompany}</strong>
+            Status: <strong className={formData.is_approved ? "text-emerald-600" : "text-amber-600"}>{formData.is_approved ? "Approved Active" : "Pending Review"}</strong>
           </span>
         </div>
 
         {/* Validation Notice Banner */}
         {notice && (
-          <div className={`mx-6 mt-3 p-3 rounded-2xl text-xs flex items-center gap-2 border ${
+          <div className={`mx-6 mt-3 p-3 rounded-2xl text-xs flex items-center gap-2 border shrink-0 ${
             notice.type === "success"
-              ? "bg-emerald-50 border-emerald-200 text-emerald-800"
-              : "bg-amber-50 border-amber-200 text-amber-800"
+              ? "bg-emerald-50 text-emerald-900 border-emerald-200"
+              : "bg-amber-50 text-amber-900 border-amber-200"
           }`}>
-            <AlertCircle size={14} className="shrink-0" />
-            <span className="font-medium">{notice.message}</span>
+            {notice.type === "success" ? (
+              <CheckCircle2 size={15} className="text-emerald-600 shrink-0" />
+            ) : (
+              <AlertCircle size={15} className="text-amber-600 shrink-0" />
+            )}
+            <span className="font-semibold">{notice.message}</span>
           </div>
         )}
 
         {/* ============================================================ */}
-        {/* 3. TAB CONTENTS                                              */}
+        {/* 4. BOND PAPER BODY / FORM SECTIONS                           */}
         {/* ============================================================ */}
-        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar">
+        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-5 custom-scrollbar bg-white">
           
-          {/* TAB 1: DETAILS & EMPLOYMENT INFO */}
+          {/* TAB 1: PERSONAL & EMPLOYMENT DETAILS */}
           {activeTab === "details" && (
-            <div className="space-y-4 animate-in fade-in duration-150">
-              {/* Full Name */}
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-700">Full Name *</label>
-                <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-xs focus-within:border-emerald-500 focus-within:bg-white focus-within:ring-2 focus-within:ring-emerald-100 transition">
-                  <User size={15} className="text-slate-400 shrink-0" />
-                  <input
-                    type="text"
-                    required
-                    value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    placeholder="e.g. Maria Santos"
-                    className="w-full border-0 bg-transparent text-slate-900 placeholder:text-slate-400 focus:outline-none font-bold"
-                  />
+            <div className="space-y-5 animate-in fade-in duration-150">
+              
+              {/* Section A: Primary Employment Assignment */}
+              <div className="p-4 rounded-2xl border border-slate-200/90 bg-slate-50/50 space-y-3">
+                <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-slate-700">
+                  <Briefcase size={14} className="text-emerald-600" />
+                  <span>Primary Assignment & Corporate Entity</span>
                 </div>
-              </div>
 
-              {/* Company & Branch */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-700">Company Entity</label>
-                  <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-100/90 px-3.5 py-2.5 text-xs text-slate-700 font-bold">
-                    <Building2 size={14} className="text-emerald-600 shrink-0" />
-                    <span className="truncate">{formData.company}</span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                  {/* Full Name */}
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-slate-700">Full Name *</label>
+                    <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-xs focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-100 transition shadow-2xs">
+                      <User size={15} className="text-slate-400 shrink-0" />
+                      <input
+                        type="text"
+                        required
+                        value={formData.name}
+                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                        placeholder="e.g. Maria Santos"
+                        className="w-full border-0 bg-transparent text-slate-900 placeholder:text-slate-400 focus:outline-none font-bold"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Company Entity */}
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-slate-700">Company Entity</label>
+                    <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-100/90 px-3.5 py-2.5 text-xs text-slate-700 font-bold">
+                      <Building2 size={14} className="text-emerald-600 shrink-0" />
+                      <span className="truncate">{formData.company}</span>
+                    </div>
+                  </div>
+
+                  {/* Branch Location */}
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-slate-700">Branch / Work Location *</label>
+                    <select
+                      value={formData.branch}
+                      onChange={(e) => setFormData({ ...formData, branch: e.target.value })}
+                      className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs text-slate-800 font-semibold focus:border-emerald-500 focus:outline-none cursor-pointer shadow-2xs"
+                    >
+                      {branches.map((br) => (
+                        <option key={br} value={br}>{br}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Designation / Role */}
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-slate-700">Designation / Role *</label>
+                    <select
+                      value={formData.role}
+                      onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+                      className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs text-slate-800 font-semibold focus:border-emerald-500 focus:outline-none cursor-pointer shadow-2xs"
+                    >
+                      {roles.map((r) => (
+                        <option key={r} value={r}>{r}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Department */}
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-slate-700">Department</label>
+                    <select
+                      value={formData.department}
+                      onChange={(e) => setFormData({ ...formData, department: e.target.value })}
+                      className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs text-slate-800 font-semibold focus:border-emerald-500 focus:outline-none cursor-pointer shadow-2xs"
+                    >
+                      {DEPARTMENTS.map((dept) => (
+                        <option key={dept} value={dept}>{dept}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Employment Status */}
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-slate-700">Employment Status</label>
+                    <select
+                      value={formData.employmentStatus}
+                      onChange={(e) => setFormData({ ...formData, employmentStatus: e.target.value })}
+                      className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs text-slate-800 font-semibold focus:border-emerald-500 focus:outline-none cursor-pointer shadow-2xs"
+                    >
+                      {EMPLOYMENT_STATUSES.map((st) => (
+                        <option key={st} value={st}>{st}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Date Hired */}
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-slate-700">Date Hired</label>
+                    <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-xs focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-100 transition shadow-2xs">
+                      <Calendar size={14} className="text-slate-400 shrink-0" />
+                      <input
+                        type="date"
+                        value={formData.dateHired}
+                        onChange={(e) => setFormData({ ...formData, dateHired: e.target.value })}
+                        className="w-full border-0 bg-transparent text-slate-800 font-semibold focus:outline-none cursor-pointer"
+                      />
+                    </div>
                   </div>
                 </div>
-
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-700">Branch / Work Location *</label>
-                  <select
-                    value={formData.branch}
-                    onChange={(e) => setFormData({ ...formData, branch: e.target.value })}
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs text-slate-800 font-semibold focus:border-emerald-500 focus:bg-white focus:outline-none cursor-pointer"
-                  >
-                    {branches.map((br) => (
-                      <option key={br} value={br}>{br}</option>
-                    ))}
-                  </select>
-                </div>
               </div>
 
-              {/* Role & Department */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-700">Designation / Role *</label>
-                  <select
-                    value={formData.role}
-                    onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs text-slate-800 font-semibold focus:border-emerald-500 focus:bg-white focus:outline-none cursor-pointer"
-                  >
-                    {roles.map((r) => (
-                      <option key={r} value={r}>{r}</option>
-                    ))}
-                  </select>
+              {/* Section B: Contact & Emergency Information */}
+              <div className="p-4 rounded-2xl border border-slate-200/90 bg-slate-50/50 space-y-3">
+                <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-slate-700">
+                  <Phone size={14} className="text-emerald-600" />
+                  <span>Contact & Emergency Information</span>
                 </div>
 
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-700">Department</label>
-                  <select
-                    value={formData.department}
-                    onChange={(e) => setFormData({ ...formData, department: e.target.value })}
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs text-slate-800 font-semibold focus:border-emerald-500 focus:bg-white focus:outline-none cursor-pointer"
-                  >
-                    {DEPARTMENTS.map((dept) => (
-                      <option key={dept} value={dept}>{dept}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              {/* Email & Contact Phone */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-700 flex items-center justify-between">
-                    <span>Work Email</span>
-                    <span className="text-[10px] text-slate-400 font-normal">Optional</span>
-                  </label>
-                  <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-xs focus-within:border-emerald-500 focus-within:bg-white transition">
-                    <Mail size={14} className="text-slate-400 shrink-0" />
-                    <input
-                      type="email"
-                      value={formData.email}
-                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                      placeholder="e.g. maria@company.com"
-                      className="w-full border-0 bg-transparent text-slate-800 placeholder:text-slate-400 focus:outline-none font-medium"
-                    />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-slate-700 flex items-center justify-between">
+                      <span>Work Email Address</span>
+                      <span className="text-[10px] text-slate-400 font-normal">Optional</span>
+                    </label>
+                    <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-xs focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-100 transition shadow-2xs">
+                      <Mail size={14} className="text-slate-400 shrink-0" />
+                      <input
+                        type="email"
+                        value={formData.email}
+                        onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                        placeholder="e.g. maria@company.com"
+                        className="w-full border-0 bg-transparent text-slate-800 placeholder:text-slate-400 focus:outline-none font-medium"
+                      />
+                    </div>
                   </div>
-                </div>
 
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-700">Contact Number</label>
-                  <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-xs focus-within:border-emerald-500 focus-within:bg-white transition">
-                    <Phone size={14} className="text-slate-400 shrink-0" />
-                    <input
-                      type="text"
-                      value={formData.phone}
-                      onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                      placeholder="e.g. 0917-555-0199"
-                      className="w-full border-0 bg-transparent text-slate-800 placeholder:text-slate-400 focus:outline-none font-medium"
-                    />
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-slate-700">Contact Number</label>
+                    <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-xs focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-100 transition shadow-2xs">
+                      <Phone size={14} className="text-slate-400 shrink-0" />
+                      <input
+                        type="text"
+                        value={formData.phone}
+                        onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                        placeholder="e.g. 0917-555-0199"
+                        className="w-full border-0 bg-transparent text-slate-800 placeholder:text-slate-400 focus:outline-none font-medium"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-slate-700">Emergency Contact Person</label>
+                    <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-xs focus-within:border-emerald-500 transition shadow-2xs">
+                      <Heart size={14} className="text-rose-500 shrink-0" />
+                      <input
+                        type="text"
+                        value={formData.emergencyName}
+                        onChange={(e) => setFormData({ ...formData, emergencyName: e.target.value })}
+                        placeholder="e.g. Juan Santos (Spouse / Guardian)"
+                        className="w-full border-0 bg-transparent text-slate-800 placeholder:text-slate-400 focus:outline-none font-medium"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-slate-700">Emergency Phone Number</label>
+                    <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-xs focus-within:border-emerald-500 transition shadow-2xs">
+                      <Phone size={14} className="text-rose-500 shrink-0" />
+                      <input
+                        type="text"
+                        value={formData.emergencyPhone}
+                        onChange={(e) => setFormData({ ...formData, emergencyPhone: e.target.value })}
+                        placeholder="e.g. 0918-123-4567"
+                        className="w-full border-0 bg-transparent text-slate-800 placeholder:text-slate-400 focus:outline-none font-medium"
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
 
-              {/* Status & Date Hired */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-700">Employment Status</label>
-                  <select
-                    value={formData.employmentStatus}
-                    onChange={(e) => setFormData({ ...formData, employmentStatus: e.target.value })}
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs text-slate-800 font-semibold focus:border-emerald-500 focus:bg-white focus:outline-none cursor-pointer"
-                  >
-                    {EMPLOYMENT_STATUSES.map((st) => (
-                      <option key={st} value={st}>{st}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-700">Date Hired</label>
-                  <input
-                    type="date"
-                    value={formData.dateHired}
-                    onChange={(e) => setFormData({ ...formData, dateHired: e.target.value })}
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs text-slate-800 font-semibold focus:border-emerald-500 focus:bg-white focus:outline-none cursor-pointer"
-                  />
-                </div>
-              </div>
-
-              {/* Emergency Contact */}
-              <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-2">
-                <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700">
-                  <Heart size={14} className="text-rose-500" />
-                  <span>Emergency Contact Person</span>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                  <input
-                    type="text"
-                    value={formData.emergencyName}
-                    onChange={(e) => setFormData({ ...formData, emergencyName: e.target.value })}
-                    placeholder="Contact Name (e.g. Juan Santos)"
-                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-800 placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none"
-                  />
-                  <input
-                    type="text"
-                    value={formData.emergencyPhone}
-                    onChange={(e) => setFormData({ ...formData, emergencyPhone: e.target.value })}
-                    placeholder="Emergency Phone (e.g. 0918-123-4567)"
-                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-800 placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none"
-                  />
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* TAB 2: 201 FILES & STATUTORY REQUIREMENTS */}
-          {activeTab === "requirements" && (
-            <div className="space-y-4 animate-in fade-in duration-150">
-              {/* Statutory Numbers */}
-              <div className="space-y-2">
-                <span className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+              {/* Section C: Statutory Philippine Government IDs */}
+              <div className="p-4 rounded-2xl border border-slate-200/90 bg-slate-50/50 space-y-3">
+                <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-slate-700">
                   <ShieldCheck size={14} className="text-emerald-600" />
-                  Philippine Statutory Government IDs
-                </span>
+                  <span>Philippine Statutory Government Identification Numbers</span>
+                </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
                   <div className="space-y-1">
                     <label className="text-[11px] font-bold text-slate-600">SSS Number</label>
                     <input
@@ -687,7 +860,7 @@ export default function AddEmployeeProfileModal({
                       value={formData.sssNumber}
                       onChange={(e) => setFormData({ ...formData, sssNumber: e.target.value })}
                       placeholder="e.g. 34-1234567-8"
-                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-800 font-mono focus:border-emerald-500 focus:bg-white focus:outline-none"
+                      className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-800 font-mono focus:border-emerald-500 focus:outline-none shadow-2xs"
                     />
                   </div>
 
@@ -698,7 +871,7 @@ export default function AddEmployeeProfileModal({
                       value={formData.philhealthNumber}
                       onChange={(e) => setFormData({ ...formData, philhealthNumber: e.target.value })}
                       placeholder="e.g. 12-345678901-2"
-                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-800 font-mono focus:border-emerald-500 focus:bg-white focus:outline-none"
+                      className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-800 font-mono focus:border-emerald-500 focus:outline-none shadow-2xs"
                     />
                   </div>
 
@@ -708,169 +881,221 @@ export default function AddEmployeeProfileModal({
                       type="text"
                       value={formData.pagibigNumber}
                       onChange={(e) => setFormData({ ...formData, pagibigNumber: e.target.value })}
-                      placeholder="e.g. 1234-5678-9012"
-                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-800 font-mono focus:border-emerald-500 focus:bg-white focus:outline-none"
+                      placeholder="e.g. 1210-9876-5432"
+                      className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-800 font-mono focus:border-emerald-500 focus:outline-none shadow-2xs"
                     />
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-[11px] font-bold text-slate-600">Tax ID (TIN)</label>
+                    <label className="text-[11px] font-bold text-slate-600">TIN Number</label>
                     <input
                       type="text"
                       value={formData.tinNumber}
                       onChange={(e) => setFormData({ ...formData, tinNumber: e.target.value })}
                       placeholder="e.g. 123-456-789-000"
-                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-800 font-mono focus:border-emerald-500 focus:bg-white focus:outline-none"
+                      className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-800 font-mono focus:border-emerald-500 focus:outline-none shadow-2xs"
                     />
                   </div>
                 </div>
               </div>
 
-              {/* 201 File Attachments Uploader */}
-              <div className="pt-2 border-t border-slate-100 space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
-                    <FileText size={14} className="text-indigo-600" />
-                    Attach 201 File Document Proofs
-                  </span>
-                  <span className="text-[10px] text-slate-400 font-medium">Max 10MB per file</span>
-                </div>
+              {/* Section D: Portal Access Approval Toggle */}
+              <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-3.5 flex items-start gap-3">
+                <input
+                  type="checkbox"
+                  id="modalApprovalCheckbox"
+                  checked={formData.is_approved}
+                  onChange={(e) => setFormData({ ...formData, is_approved: e.target.checked })}
+                  className="mt-0.5 h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                />
+                <label htmlFor="modalApprovalCheckbox" className="text-xs text-slate-700 font-medium cursor-pointer">
+                  <strong className="block font-bold text-slate-900">Approved Personnel & Directory Profile</strong>
+                  Active corporate standing. Permits this employee to be included in the company workforce roster and access HRHub features.
+                </label>
+              </div>
+            </div>
+          )}
 
-                <div className="flex flex-col sm:flex-row items-stretch gap-2">
-                  <select
-                    value={selectedReqCategory}
-                    onChange={(e) => setSelectedReqCategory(e.target.value)}
-                    className="flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-800 font-medium focus:border-emerald-500 focus:bg-white focus:outline-none"
-                  >
-                    {REQUIREMENT_CATEGORIES.map((cat) => (
-                      <option key={cat} value={cat}>{cat}</option>
-                    ))}
-                  </select>
+          {/* TAB 2: 201 FILES & STATUTORY REQUIREMENTS */}
+          {activeTab === "requirements" && (
+            <div className="space-y-4 animate-in fade-in duration-150">
+              <div className="p-4 rounded-2xl bg-emerald-50/60 border border-emerald-200/80 space-y-3">
+                <div className="flex items-center gap-2 text-emerald-950 font-black text-xs uppercase tracking-wider">
+                  <Upload size={15} className="text-emerald-600" />
+                  <span>Attach 201 Personnel Clearances & Legal Records</span>
+                </div>
+                <p className="text-xs text-emerald-900/80 leading-relaxed">
+                  Upload PDF or scanned copies of mandatory pre-employment compliance files (NBI Clearance, Signed Employment Contract, Government IDs, Medical Records, etc.).
+                </p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
+                  <div className="sm:col-span-2">
+                    <select
+                      value={selectedReqCategory}
+                      onChange={(e) => setSelectedReqCategory(e.target.value)}
+                      className="w-full rounded-xl border border-emerald-300 bg-white px-3 py-2 text-xs text-slate-800 font-semibold focus:outline-none cursor-pointer shadow-xs"
+                    >
+                      {REQUIREMENT_CATEGORIES.map((cat) => (
+                        <option key={cat} value={cat}>{cat}</option>
+                      ))}
+                    </select>
+                  </div>
 
                   <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
-                    className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-emerald-400 font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm cursor-pointer shrink-0 transition"
+                    className="py-2 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-sm transition cursor-pointer flex items-center justify-center gap-1.5"
                   >
-                    <Upload size={13} />
-                    <span>Upload Document</span>
+                    <Plus size={14} />
+                    <span>Upload File(s)</span>
                   </button>
+
                   <input
                     ref={fileInputRef}
                     type="file"
                     multiple
-                    accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
-                    onChange={handleRequirementsFileSelect}
+                    accept=".pdf,image/*,.doc,.docx"
+                    onChange={handleFileRequirementsSelect}
                     className="hidden"
                   />
                 </div>
+              </div>
 
-                {/* Attached Files List */}
+              {/* Uploaded Documents List */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-black text-slate-800 uppercase tracking-wider">
+                    Attached 201 Documents ({requirementsFiles.length})
+                  </span>
+                  <span className="text-[11px] text-slate-400">Max 12 attachments per employee</span>
+                </div>
+
                 {requirementsFiles.length > 0 ? (
-                  <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-                    {requirementsFiles.map((file) => (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    {requirementsFiles.map((f) => (
                       <div
-                        key={file.id}
-                        className="p-2.5 rounded-xl border border-slate-200 bg-slate-50 flex items-center justify-between gap-3 text-xs"
+                        key={f.id}
+                        className="p-3 rounded-xl border border-slate-200 bg-white hover:border-emerald-300 hover:shadow-xs transition flex items-start justify-between gap-2"
                       >
-                        <div className="flex items-center gap-2.5 min-w-0">
-                          <div className="p-2 rounded-lg bg-emerald-100 text-emerald-800 shrink-0">
-                            <FileText size={14} />
-                          </div>
+                        <div className="flex items-start gap-2.5 min-w-0">
+                          <span className="p-2 rounded-lg bg-emerald-50 text-emerald-600 shrink-0">
+                            <FileText size={16} />
+                          </span>
                           <div className="min-w-0">
-                            <p className="font-bold text-slate-800 truncate text-[11px]">{file.name}</p>
-                            <p className="text-[10px] text-slate-500 truncate">
-                              <span className="font-semibold text-emerald-700">{file.category}</span> • {(file.size / 1024).toFixed(1)} KB
+                            <p className="text-xs font-bold text-slate-800 truncate" title={f.name}>
+                              {f.name}
+                            </p>
+                            <span className="inline-block px-1.5 py-0.2 rounded text-[9px] font-bold bg-slate-100 text-slate-600 truncate mt-0.5 max-w-[200px]">
+                              {f.category}
+                            </span>
+                            <p className="text-[10px] text-slate-400 mt-0.5">
+                              {(f.size / 1024).toFixed(1)} KB • {f.uploadedAt}
                             </p>
                           </div>
                         </div>
 
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveReqFile(file.id)}
-                          className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer"
-                          title="Remove file"
-                        >
-                          <Trash2 size={13} />
-                        </button>
+                        <div className="flex items-center gap-1 shrink-0">
+                          {f.dataUrl && (
+                            <a
+                              href={f.dataUrl}
+                              download={f.name}
+                              className="p-1 rounded-lg text-slate-400 hover:text-emerald-700 hover:bg-emerald-50 transition cursor-pointer"
+                              title="Download document"
+                            >
+                              <Download size={13} />
+                            </a>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveRequirementFile(f.id)}
+                            className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer"
+                            title="Remove file"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <div className="p-6 rounded-2xl border-2 border-dashed border-slate-200 text-center space-y-1 text-slate-400">
-                    <FileText size={22} className="mx-auto text-slate-300" />
+                  <div className="p-8 rounded-2xl border-2 border-dashed border-slate-200 text-center space-y-1.5 text-slate-400">
+                    <FileText size={24} className="mx-auto text-slate-300" />
                     <p className="text-xs font-bold text-slate-600">No 201 files attached yet</p>
-                    <p className="text-[11px]">Upload Clearances, Contracts, IDs, or Member Data Records.</p>
+                    <p className="text-[11px]">Upload Clearances, Contracts, Government IDs, or Member Data Records.</p>
                   </div>
                 )}
               </div>
             </div>
           )}
 
-          {/* TAB 3: DISCIPLINARY & INCIDENT ACTIONS */}
-          {activeTab === "disciplinary" && (
+          {/* TAB 3: DISCIPLINARY & DUE PROCESS (INCIDENT REPORT) */}
+          {/* Shown exclusively when in edit mode or after profile has been saved */}
+          {activeTab === "disciplinary" && isEditOrSaved && (
             <div className="space-y-4 animate-in fade-in duration-150">
-              <div className="p-4 rounded-2xl bg-rose-50/70 border border-rose-200/80 space-y-2">
+              <div className="p-5 rounded-2xl bg-rose-50/80 border border-rose-200/90 space-y-3">
                 <div className="flex items-center gap-2 text-rose-900 font-black text-xs uppercase tracking-wider">
-                  <ShieldAlert size={16} className="text-rose-600" />
-                  <span>Disciplinary Action & Incident Report (IR)</span>
+                  <ShieldAlert size={17} className="text-rose-600" />
+                  <span>DOLE Twin-Notice Due Process & Incident Report (IR)</span>
                 </div>
                 <p className="text-xs text-rose-800/90 leading-relaxed">
-                  Need to document a station cash shortage, unexcused absence, policy violation, or behavioral incident for <strong>{formData.name || "this employee"}</strong>?
+                  Need to document a station cash shortage, unexcused absence, company policy violation, or behavioral incident for <strong>{formData.name || "this employee"}</strong>?
                 </p>
-                <p className="text-[11px] text-rose-700">
-                  You can immediately save this profile and jump directly into creating an official Incident Report (IR) or Notice to Explain (NTE) under DOLE due process.
+                <p className="text-[11px] text-rose-700 leading-relaxed">
+                  Filing an Incident Report automatically registers the case in the Central Incident Ledger, preparing the formal Notice to Explain (NTE) under Article 297 with a mandatory 5-day defense window.
                 </p>
 
                 <div className="pt-2">
                   <button
                     type="button"
                     disabled={isSubmitting}
-                    onClick={handleSaveAndFileIR}
+                    onClick={handleFileIncidentReportDirectly}
                     className="w-full py-3 px-4 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-black text-xs shadow-md shadow-rose-600/30 transition cursor-pointer flex items-center justify-center gap-2"
                   >
                     <ShieldAlert size={16} />
-                    <span>Save Profile & File Incident Report (IR) Now &rarr;</span>
+                    <span>File Incident Report (IR) for {formData.name || "this Employee"} &rarr;</span>
                   </button>
                 </div>
               </div>
 
               <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2 text-xs text-slate-600">
-                <h4 className="font-bold text-slate-800">DOLE Twin-Notice Due Process Compliance</h4>
+                <h4 className="font-bold text-slate-800">HR Administrative Due Process Protocol</h4>
                 <p className="text-[11px] text-slate-500 leading-relaxed">
-                  Filing an Incident Report automatically registers the case in the Central Incident Ledger, preparing the formal Notice to Explain (NTE) with a mandatory 5-day defense window.
+                  Launching an Incident Report links directly to the formal investigation pipeline. You may preview and print the official Notice to Explain (NTE), record employee defense statements, and route to Simpal Group of Companies Head Office HRMD.
                 </p>
               </div>
             </div>
           )}
 
-          {/* Form Actions Footer */}
-          <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-3">
+          {/* ============================================================ */}
+          {/* 5. FORM ACTIONS FOOTER                                       */}
+          {/* ============================================================ */}
+          <div className="pt-4 border-t border-slate-200 flex items-center justify-between gap-3">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50 transition cursor-pointer"
+              className="px-4 py-2.5 rounded-xl border border-slate-300 bg-white text-xs font-bold text-slate-700 hover:bg-slate-100 transition cursor-pointer"
             >
               Cancel
             </button>
 
             <div className="flex items-center gap-2">
-              {activeTab !== "disciplinary" && (
+              {/* Only show IR button if editing an existing employee or after information is updated */}
+              {isEditOrSaved && (
                 <button
                   type="button"
-                  onClick={handleSaveAndFileIR}
-                  className="px-3.5 py-2.5 rounded-xl border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 text-xs font-bold transition cursor-pointer flex items-center gap-1.5"
-                  title="Save profile and jump directly to file an Incident Report"
+                  onClick={handleFileIncidentReportDirectly}
+                  className="px-4 py-2.5 rounded-xl border border-rose-200 bg-rose-50 hover:bg-rose-600 hover:text-white text-rose-700 text-xs font-extrabold shadow-sm transition cursor-pointer flex items-center gap-1.5"
+                  title="File Incident Report (IR) / NTE for this employee"
                 >
-                  <ShieldAlert size={13} />
-                  <span className="hidden sm:inline">Save &amp; File IR</span>
+                  <ShieldAlert size={14} />
+                  <span>File Incident Report (IR)</span>
                 </button>
               )}
 
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-extrabold shadow-md shadow-emerald-600/20 transition cursor-pointer flex items-center gap-2"
+                className="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-extrabold shadow-md shadow-emerald-600/20 transition cursor-pointer flex items-center gap-2"
               >
                 {isSubmitting ? (
                   <>
@@ -880,7 +1105,7 @@ export default function AddEmployeeProfileModal({
                 ) : (
                   <>
                     <CheckCircle2 size={14} />
-                    <span>Save Employee Profile</span>
+                    <span>{mode === "edit" ? "Save Profile Changes" : "Save Employee Profile"}</span>
                   </>
                 )}
               </button>

@@ -101,13 +101,10 @@ export default function EmployeeDirectoryPanel({
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isSubmittingAdd, setIsSubmittingAdd] = useState(false);
 
-  // Professional Add Employee Profile Modal State
-  const [isEntityModalOpen, setIsEntityModalOpen] = useState(false);
-
-  // Edit Profile Modal State
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [isSubmittingEdit, setIsSubmittingEdit] = useState(false);
-  const [editingEmployee, setEditingEmployee] = useState(null);
+  // Unified Enhanced Employee Profiling Modal State (For Add & Edit across all accounts)
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [profileModalMode, setProfileModalMode] = useState("add"); // 'add' | 'edit'
+  const [selectedProfileForModal, setSelectedProfileForModal] = useState(null);
 
   const [notice, setNotice] = useState(null);
   const [copiedId, setCopiedId] = useState(null);
@@ -320,22 +317,18 @@ export default function EmployeeDirectoryPanel({
     setTimeout(() => setNotice(null), 4000);
   };
 
-  // Open Edit Employee Modal
+  // Open Enhanced Employee Profiling Modal in Edit Mode (Available for all accounts)
   const handleOpenEdit = (profile) => {
-    const defBranch = profile.branch || DEFAULT_BRANCH_MAP[profile.company] || "Head Office (Mandaue)";
+    setProfileModalMode("edit");
+    setSelectedProfileForModal(profile);
+    setIsProfileModalOpen(true);
+  };
 
-    setEditingEmployee({
-      id: profile.id,
-      email: profile.email || "",
-      name: profile.name || (profile.email ? profile.email.split("@")[0].replace(/[._]/g, " ").replace(/\b\w/g, (l) => l.toUpperCase()) : ""),
-      company: profile.company || "Simpal Group of Companies",
-      role: profile.role || "Team Member",
-      branch: defBranch,
-      phone: profile.phone || "",
-      created_by: profile.created_by || profile.metadata?.created_by || "",
-      is_approved: typeof profile.is_approved === "boolean" ? profile.is_approved : true
-    });
-    setIsEditModalOpen(true);
+  // Open Enhanced Employee Profiling Modal in Add Mode
+  const handleOpenAddProfileModal = () => {
+    setProfileModalMode("add");
+    setSelectedProfileForModal(null);
+    setIsProfileModalOpen(true);
   };
 
   // Open Add / Pre-Registration Modal (HRMD Only)
@@ -352,94 +345,6 @@ export default function EmployeeDirectoryPanel({
       isApproved: true
     });
     setIsAddModalOpen(true);
-  };
-
-  // Submit Edit Employee Form
-  const handleEditEmployeeSubmit = async (e) => {
-    e.preventDefault();
-    if (!editingEmployee || !editingEmployee.email) return;
-
-    setIsSubmittingEdit(true);
-    const targetEmail = editingEmployee.email.trim().toLowerCase();
-
-    try {
-      const updatedRecord = {
-        ...editingEmployee,
-        email: targetEmail,
-        name: editingEmployee.name.trim() || targetEmail.split("@")[0].replace(/[._]/g, " ").replace(/\b\w/g, (l) => l.toUpperCase())
-      };
-
-      // 1. Save to persistent storage immediately
-      saveStoredEmployee(updatedRecord);
-
-      // 2. Update UI state in parent dashboard
-      if (onUpdateProfile) {
-        onUpdateProfile(editingEmployee.id, updatedRecord);
-      }
-
-      // 3. Sync to Supabase Database
-      try {
-        const updatePayload = {
-          name: updatedRecord.name,
-          company: updatedRecord.company,
-          role: updatedRecord.role,
-          is_approved: updatedRecord.is_approved
-        };
-        if (updatedRecord.branch) updatePayload.branch = updatedRecord.branch;
-        if (updatedRecord.phone) updatePayload.phone = updatedRecord.phone;
-
-        if (editingEmployee.id && !String(editingEmployee.id).startsWith("prof-") && !String(editingEmployee.id).startsWith("db-") && !String(editingEmployee.id).startsWith("emp-")) {
-          const { error: idErr } = await supabase
-            .from("profiles")
-            .update(updatePayload)
-            .eq("id", editingEmployee.id);
-
-          if (idErr) {
-            // Fallback for schemas with only standard columns
-            await supabase.from("profiles").update({
-              name: updatedRecord.name,
-              company: updatedRecord.company,
-              role: updatedRecord.role,
-              is_approved: updatedRecord.is_approved
-            }).eq("id", editingEmployee.id);
-          }
-        } else {
-          const { error: emailErr } = await supabase
-            .from("profiles")
-            .update(updatePayload)
-            .ilike("email", targetEmail);
-
-          if (emailErr) {
-            await supabase.from("profiles").update({
-              name: updatedRecord.name,
-              company: updatedRecord.company,
-              role: updatedRecord.role,
-              is_approved: updatedRecord.is_approved
-            }).ilike("email", targetEmail);
-          }
-        }
-      } catch (dbErr) {
-        console.warn("Edit db sync note:", dbErr);
-      }
-
-      setNotice({
-        type: "success",
-        message: `Successfully updated ${updatedRecord.name}.`
-      });
-      setIsEditModalOpen(false);
-      setEditingEmployee(null);
-      if (onRefresh) onRefresh();
-    } catch (err) {
-      console.error("Edit profile error:", err);
-      setNotice({
-        type: "warning",
-        message: `Updated local profile for ${targetEmail}.`
-      });
-      setIsEditModalOpen(false);
-    } finally {
-      setIsSubmittingEdit(false);
-      setTimeout(() => setNotice(null), 4000);
-    }
   };
 
   // Delete employee handler
@@ -563,39 +468,61 @@ export default function EmployeeDirectoryPanel({
     }
   };
 
-  // Open Professional Add Employee Profile Modal
-  const handleOpenEntityModal = () => {
-    setIsEntityModalOpen(true);
-  };
-
-  // Submit Handler for Professional Employee Profile
-  const handleSaveAddEmployeeProfile = async (record) => {
+  // Save Handler for Enhanced Employee Profile Modal (Handles both Add & Edit)
+  const handleSaveProfileModal = async (record) => {
     try {
       const creatorEmail = (currentEmail || "").trim().toLowerCase();
+      const existingId = selectedProfileForModal?.id || record.id || `emp-prof-${Date.now()}`;
       const fullRecord = {
+        ...(selectedProfileForModal || {}),
         ...record,
-        id: `emp-prof-${Date.now()}`,
-        created_by: creatorEmail,
-        created_by_email: creatorEmail,
+        id: existingId,
+        created_by: selectedProfileForModal?.created_by || creatorEmail,
+        created_by_email: selectedProfileForModal?.created_by_email || creatorEmail,
         metadata: {
+          ...(selectedProfileForModal?.metadata || {}),
           ...(record.metadata || {}),
-          created_by: creatorEmail,
-          created_by_email: creatorEmail,
-          added_at: new Date().toISOString()
+          created_by: selectedProfileForModal?.created_by || creatorEmail,
+          created_by_email: selectedProfileForModal?.created_by_email || creatorEmail,
+          updated_at: new Date().toISOString()
         }
       };
 
       await saveStoredEmployee(fullRecord);
 
+      // Also sync to profiles table if it's an existing registered user
+      try {
+        if (selectedProfileForModal?.id && !String(selectedProfileForModal.id).startsWith("prof-") && !String(selectedProfileForModal.id).startsWith("db-") && !String(selectedProfileForModal.id).startsWith("emp-")) {
+          await supabase.from("profiles").update({
+            name: fullRecord.name,
+            company: fullRecord.company,
+            role: fullRecord.role,
+            is_approved: fullRecord.is_approved
+          }).eq("id", selectedProfileForModal.id);
+        } else if (fullRecord.email) {
+          await supabase.from("profiles").update({
+            name: fullRecord.name,
+            company: fullRecord.company,
+            role: fullRecord.role,
+            is_approved: fullRecord.is_approved
+          }).ilike("email", fullRecord.email);
+        }
+      } catch (e) {
+        console.debug("Profiles db sync:", e);
+      }
+
       if (onUpdateProfile) {
-        onUpdateProfile(null, fullRecord);
+        onUpdateProfile(fullRecord.id, fullRecord);
       }
 
       setNotice({
         type: "success",
-        message: `Successfully registered profile for ${fullRecord.name} under ${fullRecord.company}!`
+        message: profileModalMode === "edit"
+          ? `Successfully updated profile for ${fullRecord.name}!`
+          : `Successfully registered profile for ${fullRecord.name} under ${fullRecord.company}!`
       });
-      setIsEntityModalOpen(false);
+      setIsProfileModalOpen(false);
+      setSelectedProfileForModal(null);
       if (onRefresh) onRefresh();
     } catch (err) {
       console.error("Error saving employee profile:", err);
@@ -725,7 +652,7 @@ export default function EmployeeDirectoryPanel({
           {/* Add Employee Profile: Available for both HRMD & Branch/Entity Accounts */}
           <button
             type="button"
-            onClick={handleOpenEntityModal}
+            onClick={handleOpenAddProfileModal}
             className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2.5 rounded-xl font-bold text-xs shadow-sm shadow-emerald-600/20 transition cursor-pointer"
           >
             <UserPlus size={15} />
@@ -964,7 +891,7 @@ export default function EmployeeDirectoryPanel({
             </p>
             <button
               type="button"
-              onClick={handleOpenEntityModal}
+              onClick={handleOpenAddProfileModal}
               className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2.5 rounded-xl font-bold text-xs shadow-sm shadow-emerald-600/20 transition cursor-pointer"
             >
               <UserPlus size={15} />
@@ -1154,17 +1081,6 @@ export default function EmployeeDirectoryPanel({
                   ) : <div />}
 
                   <div className="flex items-center gap-1.5">
-                    {/* Direct Link to File Incident Report */}
-                    <button
-                      type="button"
-                      onClick={() => handleFileIncidentReportForEmployee(prof)}
-                      title="File Incident Report (IR) / NTE for this employee"
-                      className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-600 hover:text-white text-[10px] font-bold transition cursor-pointer shadow-2xs"
-                    >
-                      <ShieldAlert size={12} />
-                      <span className="hidden sm:inline">File IR</span>
-                    </button>
-
                     {canManageProfiles && (
                       <button
                         type="button"
@@ -1304,16 +1220,6 @@ export default function EmployeeDirectoryPanel({
                       </td>
                       <td className="py-3 px-4 text-right">
                         <div className="flex items-center justify-end gap-1.5">
-                          {/* Direct Incident Report Trigger */}
-                          <button
-                            type="button"
-                            onClick={() => handleFileIncidentReportForEmployee(prof)}
-                            title="File Incident Report (IR) / NTE for this employee"
-                            className="p-1 rounded-lg border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-600 hover:text-white transition cursor-pointer"
-                          >
-                            <ShieldAlert size={13} />
-                          </button>
-
                           {canManageProfiles && (
                             <button
                               type="button"
@@ -1677,16 +1583,21 @@ export default function EmployeeDirectoryPanel({
         </div>
       )}
 
-      {/* Professional Add Employee Profile Modal */}
+      {/* Comprehensive Bond Paper Sized Employee Profile Modal (Used for both Add and Edit across all accounts) */}
       <AddEmployeeProfileModal
-        isOpen={isEntityModalOpen}
-        onClose={() => setIsEntityModalOpen(false)}
-        onSave={handleSaveAddEmployeeProfile}
+        isOpen={isProfileModalOpen}
+        onClose={() => {
+          setIsProfileModalOpen(false);
+          setSelectedProfileForModal(null);
+        }}
+        onSave={handleSaveProfileModal}
         userEntityCompany={userEntityCompany}
         roles={ROLES}
         branches={BRANCH_PRESETS}
         defaultBranchMap={DEFAULT_BRANCH_MAP}
         onFileIncidentReport={handleFileIncidentReportForEmployee}
+        mode={profileModalMode}
+        initialData={selectedProfileForModal}
       />
 
       {/* Pre-Registered Account Branded Invite Studio (w/ HRHub Logo) */}
