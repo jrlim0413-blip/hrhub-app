@@ -1,11 +1,10 @@
 import { useState, useMemo, useEffect } from "react";
 import {
   Users, Search, ShieldCheck, CheckCircle2, Clock,
-  RefreshCw, UserPlus, Mail, Building2, Briefcase,
-  Copy, Check, Filter, Trash2, ShieldAlert,
-  Sparkles, X, ChevronDown, Edit3, MapPin, UserCheck,
-  Phone, UserCog, CheckSquare, Layers, Sliders,
-  LayoutGrid, List, User, Send
+  RefreshCw, UserPlus, Mail, Building2,
+  Copy, Check, Trash2, ShieldAlert,
+  Sparkles, X, Edit3, MapPin,
+  Sliders, LayoutGrid, List, User, UserCog, Send
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import PreRegisterInviteModal from "./PreRegisterInviteModal";
@@ -20,7 +19,6 @@ import {
 } from "../lib/employeeStorage";
 import {
   isUserFeatureAllowed,
-  isUserTabAllowed,
   getRbacMatrixData
 } from "../lib/rbacStorage";
 
@@ -68,14 +66,7 @@ const DEFAULT_BRANCH_MAP = {
   "Imperial Gaming OPC": "Cotabato City Branch"
 };
 
-const STANDARD_HR_HANDLERS = [
-  "H R M D (Head Office)",
-  "HR Lucky Betplay (Mandaue)",
-  "HR 5A Royal Gaming (Maguindanao)",
-  "HR Glowing Fortune (Iligan & Lanao)",
-  "HR Imperial Gaming (Cotabato)",
-  "HR SIMCON Construction"
-];
+
 
 export default function EmployeeDirectoryPanel({
   profiles = [],
@@ -101,15 +92,14 @@ export default function EmployeeDirectoryPanel({
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedFilter, setSelectedFilter] = useState("all"); // 'all' | 'online' | 'pending' | 'approved'
   const [selectedSubsidiary, setSelectedSubsidiary] = useState("all");
-  const [selectedHRFilter, setSelectedHRFilter] = useState("all"); // 'all' | 'unassigned' | specific HR
   const [selectedBranchFilter, setSelectedBranchFilter] = useState("all");
   const [viewMode, setViewMode] = useState("grid"); // 'grid' | 'table'
 
-  // Pre-Registration Modal State (Kept completely intact)
+  // Pre-Registration Modal State (Exclusively for HRMD)
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isSubmittingAdd, setIsSubmittingAdd] = useState(false);
 
-  // Entity Employee Profiling Modal State (For Per-Entity / Company Accounts)
+  // Entity Employee Profiling Modal State (For Branch / Entity Accounts)
   const [isEntityModalOpen, setIsEntityModalOpen] = useState(false);
   const [isSubmittingEntity, setIsSubmittingEntity] = useState(false);
   const [newEntityEmployee, setNewEntityEmployee] = useState({
@@ -122,7 +112,7 @@ export default function EmployeeDirectoryPanel({
     isApproved: true
   });
 
-  // Edit Profile / Diversify HR Assignment Modal State
+  // Edit Profile Modal State
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isSubmittingEdit, setIsSubmittingEdit] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState(null);
@@ -131,21 +121,15 @@ export default function EmployeeDirectoryPanel({
   const [copiedId, setCopiedId] = useState(null);
   const [inviteEmployee, setInviteEmployee] = useState(null);
 
-  // New Employee Form State (Preserves exact existing pre-registration system)
+  // New Employee Form State (Exclusively for HRMD Pre-registration)
   const [newEmployee, setNewEmployee] = useState({
     email: "",
     name: "",
     company: "Simpal Group of Companies",
     role: "Team Member",
     branch: "",
-    assigned_hr: "",
     isApproved: true
   });
-
-  // Managed Personnel Profiles (Excludes Master Superadmin/HRMD from deletion/revocation)
-  const managedProfiles = useMemo(() => {
-    return (profiles || []).filter((p) => (p.email || "").trim().toLowerCase() !== "admin@hrhub.com");
-  }, [profiles]);
 
   // Current logged in HR profile
   const currentProfile = useMemo(() => {
@@ -153,53 +137,55 @@ export default function EmployeeDirectoryPanel({
     return (profiles || []).find((p) => (p.email || "").toLowerCase().trim() === curEmail);
   }, [profiles, currentEmail]);
 
-  // Determine whether logged in account is Head Office (HR Administrator) or a Per-Entity / Branch Account
-  const isHeadOffice = useMemo(() => {
+  // Determine whether logged in account is Head Office HRMD Administrator
+  const isHRMD = useMemo(() => {
     const curEmail = (currentEmail || "").toLowerCase().trim();
-    const company = (currentProfile?.company || "").toLowerCase().trim();
     const role = (currentProfile?.role || "").toLowerCase().trim();
+    const name = (currentProfile?.name || "").toLowerCase().trim();
 
     return (
       curEmail === "admin@hrhub.com" ||
       curEmail === "jay@simpalgroup.com" ||
       curEmail === "efilfonimda@gmail.com" ||
       curEmail.includes("hrmd") ||
-      role === "hr administrator" ||
+      name.replace(/\s+/g, "") === "hrmd" ||
       role === "super administrator" ||
-      role.includes("super admin") ||
-      (company.includes("simpal group") && !company.includes("construction")) ||
-      company.includes("head office")
+      role === "super admin" ||
+      role === "hr administrator"
     );
   }, [currentEmail, currentProfile]);
 
-  const isEntityAccount = !isHeadOffice;
+  const isHeadOffice = isHRMD;
+  const isEntityAccount = !isHRMD;
   const userEntityCompany = currentProfile?.company || "Lucky Betplay Corporation";
 
-  // Dynamic list of available HR Handlers for assignment & filtering
-  const availableHRHandlers = useMemo(() => {
-    const set = new Set(STANDARD_HR_HANDLERS);
+  // Managed Personnel Profiles:
+  // - If HRMD: Full corporate personnel directory across all subsidiaries (excludes master superadmin from deletion)
+  // - If Non-HRMD Branch/Entity Account: ONLY the employee profiles that they themselves added!
+  const managedProfiles = useMemo(() => {
+    const curEmail = (currentEmail || "").trim().toLowerCase();
 
-    // Add HR officers discovered from existing profiles
-    (profiles || []).forEach((p) => {
-      const role = (p.role || "").toLowerCase();
-      const name = p.name?.trim();
-      if (role.includes("hr") || role.includes("admin") || role.includes("manager")) {
-        if (name && !name.toLowerCase().includes("super administrator")) {
-          set.add(name);
-        }
-      }
-      if (p.assigned_hr && p.assigned_hr.trim()) {
-        set.add(p.assigned_hr.trim());
-      }
-    });
-
-    // Add current user name if logged in
-    if (currentProfile?.name) {
-      set.add(currentProfile.name);
+    if (isHRMD) {
+      return (profiles || []).filter((p) => (p.email || "").trim().toLowerCase() !== "admin@hrhub.com");
     }
 
-    return Array.from(set).sort();
-  }, [profiles, currentProfile]);
+    // For all other accounts: strictly filter to employees created/added by this user
+    return (profiles || []).filter((p) => {
+      const email = (p.email || "").trim().toLowerCase();
+      if (email === "admin@hrhub.com") return false;
+
+      const createdBy = (
+        p.created_by ||
+        p.created_by_email ||
+        p.metadata?.created_by ||
+        p.metadata?.created_by_email ||
+        p.added_by ||
+        ""
+      ).trim().toLowerCase();
+
+      return Boolean(curEmail && createdBy === curEmail);
+    });
+  }, [profiles, isHRMD, currentEmail]);
 
   // Calculate statistics for managed personnel
   const stats = useMemo(() => {
@@ -219,14 +205,16 @@ export default function EmployeeDirectoryPanel({
     return { total, onlineCount, approvedCount, pendingCount };
   }, [managedProfiles, onlineEmails, currentEmail]);
 
-  // Pre-Registration: Exclusively for Head Office HR Administrator to create system login accounts
-  const canPreRegister = isHeadOffice;
+  // Pre-Registration: Exclusively for Head Office HR Administrator
+  const canPreRegister = isHRMD;
 
-  // Add Employee Profile: Exclusively for Per-Entity / Company Accounts to add employee profiles
+  // Add Employee Profile: For Per-Entity / Company Accounts to add their branch employees
   const canAddEntityEmployee = isEntityAccount;
 
   // Profile Administration Permission Check (Edit, Approve, Decommission)
   const canManageProfiles = useMemo(() => {
+    // Both HRMD and accounts managing their own added employees can manage
+    if (isHRMD || isEntityAccount) return true;
     const curEmail = (currentEmail || "").toLowerCase().trim();
     const userObj = {
       email: curEmail,
@@ -238,7 +226,7 @@ export default function EmployeeDirectoryPanel({
       isUserFeatureAllowed(userObj, "comm_manage_profiles", matrixData) ||
       isUserFeatureAllowed(userObj, "provision_employee_records", matrixData)
     );
-  }, [currentEmail, currentProfile, matrixData]);
+  }, [isHRMD, isEntityAccount, currentEmail, currentProfile, matrixData]);
 
   // Filtered & Sorted profiles
   const filteredProfiles = useMemo(() => {
@@ -248,40 +236,30 @@ export default function EmployeeDirectoryPanel({
       const company = (p.company || "Simpal Group of Companies").toLowerCase();
       const role = (p.role || "Team Member").toLowerCase();
       const branch = (p.branch || "").toLowerCase();
-      const assignedHR = (p.assigned_hr || "").toLowerCase();
       const isOnline = (currentEmail && email === currentEmail) || onlineEmails.has(email);
 
-      // Search matching (matches name, email, company, role, branch, or assigned HR)
+      // Search matching (matches name, email, company, role, or branch)
       const query = searchQuery.toLowerCase().trim();
       const matchesSearch = !query ||
         email.includes(query) ||
         name.includes(query) ||
         company.includes(query) ||
         role.includes(query) ||
-        branch.includes(query) ||
-        assignedHR.includes(query);
+        branch.includes(query);
 
       // Tab filter
       let matchesFilter = true;
-      if (selectedFilter === "online") matchesFilter = isOnline;
+      if (selectedFilter === "online") matchesFilter = isHRMD && isOnline;
       else if (selectedFilter === "approved") matchesFilter = Boolean(p.is_approved);
       else if (selectedFilter === "pending") matchesFilter = !p.is_approved;
 
       // Subsidiary filter
       const matchesSubsidiary = selectedSubsidiary === "all" || p.company === selectedSubsidiary;
 
-      // HR Diversification filter
-      let matchesHR = true;
-      if (selectedHRFilter === "unassigned") {
-        matchesHR = !p.assigned_hr;
-      } else if (selectedHRFilter !== "all") {
-        matchesHR = (p.assigned_hr || "").trim().toLowerCase() === selectedHRFilter.toLowerCase().trim();
-      }
-
       // Branch filter
       const matchesBranch = selectedBranchFilter === "all" || (p.branch || "").trim().toLowerCase() === selectedBranchFilter.toLowerCase().trim();
 
-      return matchesSearch && matchesFilter && matchesSubsidiary && matchesHR && matchesBranch;
+      return matchesSearch && matchesFilter && matchesSubsidiary && matchesBranch;
     }).sort((a, b) => {
       const aEmail = a.email?.toLowerCase() || "";
       const bEmail = b.email?.toLowerCase() || "";
@@ -292,13 +270,15 @@ export default function EmployeeDirectoryPanel({
       if (selectedFilter === "pending") {
         return aEmail.localeCompare(bEmail);
       }
-      // 2. Active online profiles first
-      if (aOnline && !bOnline) return -1;
-      if (!aOnline && bOnline) return 1;
-      // 3. Alphabetical by email
-      return aEmail.localeCompare(bEmail);
+      // 2. Active online profiles first ONLY in HRMD view
+      if (isHRMD) {
+        if (aOnline && !bOnline) return -1;
+        if (!aOnline && bOnline) return 1;
+      }
+      // 3. Alphabetical by email or name
+      return (a.name || aEmail).localeCompare(b.name || bEmail);
     });
-  }, [managedProfiles, searchQuery, selectedFilter, selectedSubsidiary, selectedHRFilter, selectedBranchFilter, onlineEmails, currentEmail, currentProfile]);
+  }, [managedProfiles, searchQuery, selectedFilter, selectedSubsidiary, selectedBranchFilter, onlineEmails, currentEmail, isHRMD]);
 
   // Toggle approval status
   const handleToggleApproval = async (profile) => {
@@ -351,7 +331,6 @@ export default function EmployeeDirectoryPanel({
   // Open Edit Employee Modal
   const handleOpenEdit = (profile) => {
     const defBranch = profile.branch || DEFAULT_BRANCH_MAP[profile.company] || "Head Office (Mandaue)";
-    const defHR = profile.assigned_hr || (currentProfile?.name || currentEmail || "H R M D (Head Office)");
 
     setEditingEmployee({
       id: profile.id,
@@ -360,17 +339,16 @@ export default function EmployeeDirectoryPanel({
       company: profile.company || "Simpal Group of Companies",
       role: profile.role || "Team Member",
       branch: defBranch,
-      assigned_hr: defHR,
       phone: profile.phone || "",
+      created_by: profile.created_by || profile.metadata?.created_by || "",
       is_approved: typeof profile.is_approved === "boolean" ? profile.is_approved : true
     });
     setIsEditModalOpen(true);
   };
 
-  // Open Add / Pre-Registration Modal with Branch HR default pre-fill
+  // Open Add / Pre-Registration Modal (HRMD Only)
   const handleOpenAddModal = () => {
     const defBranch = currentProfile?.branch || DEFAULT_BRANCH_MAP[currentProfile?.company] || "Head Office (Mandaue)";
-    const defHR = currentProfile?.name || currentEmail || "H R M D (Head Office)";
     const defComp = currentProfile?.company || "Simpal Group of Companies";
 
     setNewEmployee({
@@ -379,7 +357,6 @@ export default function EmployeeDirectoryPanel({
       company: defComp,
       role: "Team Member",
       branch: defBranch,
-      assigned_hr: defHR,
       isApproved: true
     });
     setIsAddModalOpen(true);
@@ -417,7 +394,6 @@ export default function EmployeeDirectoryPanel({
           is_approved: updatedRecord.is_approved
         };
         if (updatedRecord.branch) updatePayload.branch = updatedRecord.branch;
-        if (updatedRecord.assigned_hr) updatePayload.assigned_hr = updatedRecord.assigned_hr;
         if (updatedRecord.phone) updatePayload.phone = updatedRecord.phone;
 
         if (editingEmployee.id && !String(editingEmployee.id).startsWith("prof-") && !String(editingEmployee.id).startsWith("db-") && !String(editingEmployee.id).startsWith("emp-")) {
@@ -456,7 +432,7 @@ export default function EmployeeDirectoryPanel({
 
       setNotice({
         type: "success",
-        message: `Successfully updated ${updatedRecord.name} (Assigned to: ${updatedRecord.assigned_hr || "Unassigned"}).`
+        message: `Successfully updated ${updatedRecord.name}.`
       });
       setIsEditModalOpen(false);
       setEditingEmployee(null);
@@ -511,13 +487,13 @@ export default function EmployeeDirectoryPanel({
     if (onRefresh) onRefresh();
   };
 
-  // Pre-Registration Submit Handler (Preserves exact existing pre-registration flow)
+  // Pre-Registration Submit Handler (Exclusively for HRMD)
   const handleAddEmployeeSubmit = async (e) => {
     e.preventDefault();
     if (!canPreRegister) {
       setNotice({
         type: "warning",
-        message: "Access Restricted: Only HR Administrator or authorized accounts in the Role Permission Matrix can pre-register employees."
+        message: "Access Restricted: Only HRMD administrator can pre-register accounts."
       });
       return;
     }
@@ -529,7 +505,6 @@ export default function EmployeeDirectoryPanel({
 
     try {
       const assignedBranch = newEmployee.branch || DEFAULT_BRANCH_MAP[newEmployee.company] || "Head Office (Mandaue)";
-      const assignedHR = newEmployee.assigned_hr || (currentProfile?.name || currentEmail || "H R M D (Head Office)");
 
       const newRecord = {
         id: `prof-${Date.now()}`,
@@ -539,7 +514,12 @@ export default function EmployeeDirectoryPanel({
         company: newEmployee.company,
         role: newEmployee.role,
         branch: assignedBranch,
-        assigned_hr: assignedHR,
+        created_by: "admin@hrhub.com",
+        created_by_email: "admin@hrhub.com",
+        metadata: {
+          created_by: "admin@hrhub.com",
+          pre_registered: true
+        },
         created_at: new Date().toISOString()
       };
 
@@ -575,7 +555,6 @@ export default function EmployeeDirectoryPanel({
         company: "Simpal Group of Companies",
         role: "Team Member",
         branch: "",
-        assigned_hr: "",
         isApproved: true
       });
       if (onRefresh) onRefresh();
@@ -629,7 +608,7 @@ export default function EmployeeDirectoryPanel({
     setIsSubmittingEntity(true);
     try {
       const assignedBranch = newEntityEmployee.branch || DEFAULT_BRANCH_MAP[newEntityEmployee.company] || "Branch Office";
-      const assignedHR = currentProfile?.name || currentEmail || "Branch HR";
+      const creatorEmail = (currentEmail || "").trim().toLowerCase();
 
       const newRecord = {
         id: `emp-entity-${Date.now()}`,
@@ -639,8 +618,14 @@ export default function EmployeeDirectoryPanel({
         company: newEntityEmployee.company || userEntityCompany,
         role: newEntityEmployee.role || "Team Member",
         branch: assignedBranch,
-        assigned_hr: assignedHR,
         phone: newEntityEmployee.phone || "",
+        created_by: creatorEmail,
+        created_by_email: creatorEmail,
+        metadata: {
+          created_by: creatorEmail,
+          created_by_email: creatorEmail,
+          added_at: new Date().toISOString()
+        },
         created_at: new Date().toISOString()
       };
 
@@ -729,7 +714,7 @@ export default function EmployeeDirectoryPanel({
           </div>
           <h2 className="mt-1 text-2xl font-black text-slate-900 tracking-tight">Employee Directory</h2>
           <p className="mt-0.5 text-xs text-slate-500 max-w-xl">
-            Enterprise personnel database, corporate roles, branch assignments, and diversified HR handler portfolios.
+            Enterprise personnel database, corporate roles, and branch assignments.
           </p>
         </div>
 
@@ -756,7 +741,7 @@ export default function EmployeeDirectoryPanel({
             </button>
           )}
 
-          {/* Head Office: Pre-Register System Login Account */}
+          {/* Head Office: Pre-Register System Login Account (HRMD Only) */}
           {isHeadOffice && (
             <button
               type="button"
@@ -769,7 +754,7 @@ export default function EmployeeDirectoryPanel({
           )}
 
           {/* Per-Entity / Company Account: Add Employee Profile for their Entity */}
-          {isEntityAccount && (
+          {canAddEntityEmployee && (
             <button
               type="button"
               onClick={handleOpenEntityModal}
@@ -782,62 +767,90 @@ export default function EmployeeDirectoryPanel({
         </div>
       </div>
 
-      {/* Corporate Metric KPI Cards (Clean 3-Card Balanced Layout) */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        {/* Card 1: Total Personnel */}
-        <div className="bg-white border border-slate-200/90 rounded-2xl p-4.5 shadow-xs">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Total Personnel</span>
-            <span className="p-2 rounded-xl bg-slate-100 text-slate-600">
-              <Users size={16} />
-            </span>
+      {/* Metric KPI Cards (3 Cards for HRMD, 2 Cards for Branch/Entity Accounts) */}
+      {isHRMD ? (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {/* Card 1: Total Personnel */}
+          <div className="bg-white border border-slate-200/90 rounded-2xl p-4.5 shadow-xs">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Total Personnel</span>
+              <span className="p-2 rounded-xl bg-slate-100 text-slate-600">
+                <Users size={16} />
+              </span>
+            </div>
+            <p className="mt-3 text-2xl font-black text-slate-900 tracking-tight">{stats.total}</p>
+            <p className="text-[11px] text-slate-400 mt-0.5">Enrolled across subsidiaries</p>
           </div>
-          <p className="mt-3 text-2xl font-black text-slate-900 tracking-tight">{stats.total}</p>
-          <p className="text-[11px] text-slate-400 mt-0.5">Enrolled across subsidiaries</p>
-        </div>
 
-        {/* Card 2: Active Online */}
-        <div className="bg-white border border-slate-200/90 rounded-2xl p-4.5 shadow-xs">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Active Online</span>
-            <span className="p-2 rounded-xl bg-emerald-50 text-emerald-700">
-              <Sparkles size={16} />
-            </span>
+          {/* Card 2: Active Online (Exclusively for HRMD) */}
+          <div className="bg-white border border-slate-200/90 rounded-2xl p-4.5 shadow-xs">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Active Online</span>
+              <span className="p-2 rounded-xl bg-emerald-50 text-emerald-700">
+                <Sparkles size={16} />
+              </span>
+            </div>
+            <div className="mt-3 flex items-center gap-2">
+              <p className="text-2xl font-black text-emerald-700 tracking-tight">{stats.onlineCount}</p>
+              <span className="flex h-2.5 w-2.5 relative">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-400 mt-0.5">Real-time active sessions</p>
           </div>
-          <div className="mt-3 flex items-center gap-2">
-            <p className="text-2xl font-black text-emerald-700 tracking-tight">{stats.onlineCount}</p>
-            <span className="flex h-2.5 w-2.5 relative">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
-            </span>
-          </div>
-          <p className="text-[11px] text-slate-400 mt-0.5">Real-time active sessions</p>
-        </div>
 
-        {/* Card 3: Pending Review */}
-        <div className={`border rounded-2xl p-4.5 shadow-xs transition ${stats.pendingCount > 0
-            ? "bg-amber-50/60 border-amber-200"
-            : "bg-white border-slate-200/90"
-          }`}>
-          <div className="flex items-center justify-between">
-            <span className={`text-[11px] font-bold uppercase tracking-wider ${stats.pendingCount > 0 ? "text-amber-900" : "text-slate-500"
-              }`}>
-              Pending Review
-            </span>
-            <span className={`p-2 rounded-xl ${stats.pendingCount > 0 ? "bg-amber-100 text-amber-800" : "bg-slate-100 text-slate-600"
-              }`}>
-              <Clock size={16} />
-            </span>
-          </div>
-          <p className={`mt-3 text-2xl font-black tracking-tight ${stats.pendingCount > 0 ? "text-amber-700" : "text-slate-900"
+          {/* Card 3: Pending Review */}
+          <div className={`border rounded-2xl p-4.5 shadow-xs transition ${stats.pendingCount > 0
+              ? "bg-amber-50/60 border-amber-200"
+              : "bg-white border-slate-200/90"
             }`}>
-            {stats.pendingCount}
-          </p>
-          <p className="text-[11px] text-slate-400 mt-0.5">
-            {stats.pendingCount > 0 ? "Requires authorization" : "All accounts verified"}
-          </p>
+            <div className="flex items-center justify-between">
+              <span className={`text-[11px] font-bold uppercase tracking-wider ${stats.pendingCount > 0 ? "text-amber-900" : "text-slate-500"
+                }`}>
+                Pending Review
+              </span>
+              <span className={`p-2 rounded-xl ${stats.pendingCount > 0 ? "bg-amber-100 text-amber-800" : "bg-slate-100 text-slate-600"
+                }`}>
+                <Clock size={16} />
+              </span>
+            </div>
+            <p className={`mt-3 text-2xl font-black tracking-tight ${stats.pendingCount > 0 ? "text-amber-700" : "text-slate-900"
+              }`}>
+              {stats.pendingCount}
+            </p>
+            <p className="text-[11px] text-slate-400 mt-0.5">
+              {stats.pendingCount > 0 ? "Requires authorization" : "All accounts verified"}
+            </p>
+          </div>
         </div>
-      </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {/* Card 1: My Registered Employees */}
+          <div className="bg-white border border-slate-200/90 rounded-2xl p-4.5 shadow-xs">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">My Registered Employees</span>
+              <span className="p-2 rounded-xl bg-slate-100 text-slate-600">
+                <Users size={16} />
+              </span>
+            </div>
+            <p className="mt-3 text-2xl font-black text-slate-900 tracking-tight">{stats.total}</p>
+            <p className="text-[11px] text-slate-400 mt-0.5">Employees added under your branch/account</p>
+          </div>
+
+          {/* Card 2: Active Profiles */}
+          <div className="bg-white border border-slate-200/90 rounded-2xl p-4.5 shadow-xs">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Active Profiles</span>
+              <span className="p-2 rounded-xl bg-emerald-50 text-emerald-700">
+                <ShieldCheck size={16} />
+              </span>
+            </div>
+            <p className="mt-3 text-2xl font-black text-emerald-700 tracking-tight">{stats.approvedCount}</p>
+            <p className="text-[11px] text-slate-400 mt-0.5">Approved in system registry</p>
+          </div>
+        </div>
+      )}
 
       {/* Unified Corporate Toolbar: Status Tabs & Filter Bar */}
       <div className="bg-white border border-slate-200/90 rounded-2xl shadow-xs overflow-hidden">
@@ -845,8 +858,8 @@ export default function EmployeeDirectoryPanel({
         <div className="px-4 pt-2.5 pb-0 border-b border-slate-100 flex items-center justify-between gap-4 overflow-x-auto bg-slate-50/40">
           <div className="flex items-center gap-1 sm:gap-2 -mb-px">
             {[
-              { id: "all", label: "All Personnel", count: stats.total },
-              { id: "online", label: "Online Now", count: stats.onlineCount, isOnlineTab: true },
+              { id: "all", label: isHRMD ? "All Personnel" : "All Employees", count: stats.total },
+              ...(isHRMD ? [{ id: "online", label: "Online Now", count: stats.onlineCount, isOnlineTab: true }] : []),
               { id: "approved", label: "Approved", count: stats.approvedCount },
               { id: "pending", label: "Pending Review", count: stats.pendingCount, isPendingTab: true }
             ].map((tab) => {
@@ -881,14 +894,13 @@ export default function EmployeeDirectoryPanel({
           </div>
 
           {/* Reset link if filters active */}
-          {(selectedHRFilter !== "all" || selectedSubsidiary !== "all" || selectedBranchFilter !== "all" || searchQuery || selectedFilter !== "all") && (
+          {(selectedSubsidiary !== "all" || selectedBranchFilter !== "all" || searchQuery || selectedFilter !== "all") && (
             <button
               type="button"
               onClick={() => {
                 setSearchQuery("");
                 setSelectedFilter("all");
                 setSelectedSubsidiary("all");
-                setSelectedHRFilter("all");
                 setSelectedBranchFilter("all");
               }}
               className="text-xs font-semibold text-rose-600 hover:text-rose-700 hover:underline px-2 py-1 shrink-0 cursor-pointer"
@@ -921,26 +933,6 @@ export default function EmployeeDirectoryPanel({
 
           {/* Dropdown Filters and View Mode Switcher */}
           <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
-            {/* HR Handler Select */}
-            <div className="relative">
-              <select
-                value={selectedHRFilter}
-                onChange={(e) => setSelectedHRFilter(e.target.value)}
-                className={`h-9 text-xs font-medium border rounded-xl px-3 py-1.5 focus:outline-none focus:border-emerald-500 cursor-pointer transition ${selectedHRFilter !== "all"
-                    ? "bg-emerald-50 border-emerald-300 text-emerald-900 font-bold"
-                    : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100"
-                  }`}
-              >
-                <option value="all">👥 HR: All Handlers</option>
-                <option value="unassigned">⚠️ Unassigned</option>
-                <optgroup label="HR Officers">
-                  {availableHRHandlers.map((hr) => (
-                    <option key={hr} value={hr}>{hr}</option>
-                  ))}
-                </optgroup>
-              </select>
-            </div>
-
             {/* Company Select */}
             <select
               value={selectedSubsidiary}
@@ -994,30 +986,49 @@ export default function EmployeeDirectoryPanel({
 
       {/* Directory Content */}
       {filteredProfiles.length === 0 ? (
-        <div className="bg-white border border-slate-200 rounded-3xl p-12 text-center space-y-3">
-          <div className="w-12 h-12 rounded-2xl bg-slate-100 text-slate-400 mx-auto flex items-center justify-center">
-            <Users size={24} />
+        !isHRMD && managedProfiles.length === 0 ? (
+          <div className="bg-white border border-slate-200/90 rounded-3xl p-12 text-center space-y-3.5 shadow-xs">
+            <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-700 mx-auto flex items-center justify-center">
+              <Users size={24} />
+            </div>
+            <h4 className="text-base font-bold text-slate-800">No employee profiles added yet</h4>
+            <p className="text-xs text-slate-500 max-w-sm mx-auto leading-relaxed">
+              You haven&apos;t added any employee profiles for your branch yet. Click &quot;Add Employee Profile&quot; to register your personnel.
+            </p>
+            <button
+              type="button"
+              onClick={handleOpenEntityModal}
+              className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2.5 rounded-xl font-bold text-xs shadow-sm shadow-emerald-600/20 transition cursor-pointer"
+            >
+              <UserPlus size={15} />
+              <span>Add Employee Profile</span>
+            </button>
           </div>
-          <h4 className="text-base font-bold text-slate-800">No personnel found</h4>
-          <p className="text-xs text-slate-500 max-w-sm mx-auto">
-            {searchQuery
-              ? `No matches for "${searchQuery}". Try adjusting your search query or company filters.`
-              : "No employees registered under this filter yet."}
-          </p>
-          <button
-            type="button"
-            onClick={() => {
-              setSearchQuery("");
-              setSelectedFilter("all");
-              setSelectedSubsidiary("all");
-              setSelectedHRFilter("all");
-              setSelectedBranchFilter("all");
-            }}
-            className="text-xs font-bold text-emerald-600 hover:underline cursor-pointer"
-          >
-            Clear all filters
-          </button>
-        </div>
+        ) : (
+          <div className="bg-white border border-slate-200 rounded-3xl p-12 text-center space-y-3">
+            <div className="w-12 h-12 rounded-2xl bg-slate-100 text-slate-400 mx-auto flex items-center justify-center">
+              <Users size={24} />
+            </div>
+            <h4 className="text-base font-bold text-slate-800">No personnel found</h4>
+            <p className="text-xs text-slate-500 max-w-sm mx-auto">
+              {searchQuery
+                ? `No matches for "${searchQuery}". Try adjusting your search query or company filters.`
+                : "No employees registered under this filter yet."}
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                setSearchQuery("");
+                setSelectedFilter("all");
+                setSelectedSubsidiary("all");
+                setSelectedBranchFilter("all");
+              }}
+              className="text-xs font-bold text-emerald-600 hover:underline cursor-pointer"
+            >
+              Clear all filters
+            </button>
+          </div>
+        )
       ) : viewMode === "grid" ? (
         /* Executive Card Grid View */
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -1025,17 +1036,17 @@ export default function EmployeeDirectoryPanel({
             const email = prof.email?.toLowerCase() || "";
             const isCurrentUser = Boolean(currentEmail && email === currentEmail);
             const isOnline = isCurrentUser || onlineEmails.has(email);
+            const showOnlineIndicator = isHRMD && isOnline;
             const initials = prof.email ? prof.email.slice(0, 2).toUpperCase() : "HR";
             const displayName = prof.name || (prof.email ? prof.email.split("@")[0].replace(/[._]/g, " ").replace(/\b\w/g, (l) => l.toUpperCase()) : "Employee");
             const company = prof.company || "Simpal Group of Companies";
             const role = prof.role || "Team Member";
             const branch = prof.branch || DEFAULT_BRANCH_MAP[company] || "Head Office";
-            const assignedHR = prof.assigned_hr || "Unassigned";
 
             return (
               <div
                 key={prof.id || prof.email}
-                className={`bg-white rounded-2xl border transition shadow-xs flex flex-col justify-between overflow-hidden ${isOnline
+                className={`bg-white rounded-2xl border transition shadow-xs flex flex-col justify-between overflow-hidden ${showOnlineIndicator
                     ? "border-slate-200 hover:border-emerald-300 hover:shadow-sm"
                     : "border-slate-200/80 hover:border-slate-300 hover:shadow-sm"
                   }`}
@@ -1046,17 +1057,15 @@ export default function EmployeeDirectoryPanel({
                     <div className="flex items-center gap-3">
                       {/* Avatar */}
                       <div className="relative">
-                        <div className={`w-11 h-11 rounded-xl font-extrabold text-xs flex items-center justify-center shadow-2xs ${isOnline ? "bg-slate-900 text-emerald-400" : "bg-slate-800 text-slate-300"
+                        <div className={`w-11 h-11 rounded-xl font-extrabold text-xs flex items-center justify-center shadow-2xs ${showOnlineIndicator ? "bg-slate-900 text-emerald-400" : "bg-slate-800 text-slate-300"
                           }`}>
                           {initials}
                         </div>
-                        {isOnline ? (
+                        {showOnlineIndicator && (
                           <span className="absolute -bottom-1 -right-1 flex h-3 w-3">
                             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                             <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500 ring-2 ring-white"></span>
                           </span>
-                        ) : (
-                          <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full ring-2 ring-white bg-slate-300"></span>
                         )}
                       </div>
 
@@ -1105,15 +1114,6 @@ export default function EmployeeDirectoryPanel({
                     <p className="text-slate-600 truncate flex items-center gap-2">
                       <MapPin size={13} className="text-emerald-600 shrink-0" />
                       <span className="truncate">{branch}</span>
-                    </p>
-                    <p className="text-slate-600 truncate flex items-center gap-2">
-                      <UserCheck size={13} className="text-slate-400 shrink-0" />
-                      <span className="text-[11px] truncate">
-                        HR Handler:{" "}
-                        <strong className={assignedHR.toLowerCase().includes("unassigned") ? "text-amber-600 font-semibold" : "text-slate-800 font-bold"}>
-                          {assignedHR.toLowerCase().includes("unassigned") ? "Unassigned" : assignedHR}
-                        </strong>
-                      </span>
                     </p>
                   </div>
                 </div>
@@ -1200,7 +1200,6 @@ export default function EmployeeDirectoryPanel({
                   <th className="py-3 px-4">Employee</th>
                   <th className="py-3 px-4">Organization & Branch</th>
                   <th className="py-3 px-4">Role</th>
-                  <th className="py-3 px-4">Assigned HR</th>
                   <th className="py-3 px-4">Status</th>
                   <th className="py-3 px-4 text-right">Actions</th>
                 </tr>
@@ -1210,16 +1209,16 @@ export default function EmployeeDirectoryPanel({
                   const email = prof.email?.toLowerCase() || "";
                   const isCurrentUser = Boolean(currentEmail && email === currentEmail);
                   const isOnline = isCurrentUser || onlineEmails.has(email);
+                  const showOnlineIndicator = isHRMD && isOnline;
                   const initials = prof.email ? prof.email.slice(0, 2).toUpperCase() : "HR";
                   const displayName = prof.name || (prof.email ? prof.email.split("@")[0].replace(/[._]/g, " ").replace(/\b\w/g, (l) => l.toUpperCase()) : "Employee");
                   const branch = prof.branch || DEFAULT_BRANCH_MAP[prof.company] || "Head Office";
-                  const assignedHR = prof.assigned_hr || "Unassigned";
 
                   return (
                     <tr key={prof.id || prof.email} className="hover:bg-slate-50/70 transition">
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-3">
-                          <div className={`w-8 h-8 rounded-xl font-bold text-xs flex items-center justify-center shrink-0 ${isOnline ? "bg-slate-900 text-emerald-400" : "bg-slate-700 text-slate-200"
+                          <div className={`w-8 h-8 rounded-xl font-bold text-xs flex items-center justify-center shrink-0 ${showOnlineIndicator ? "bg-slate-900 text-emerald-400" : "bg-slate-700 text-slate-200"
                             }`}>
                             {initials}
                           </div>
@@ -1245,23 +1244,20 @@ export default function EmployeeDirectoryPanel({
                       <td className="py-3 px-4 text-slate-500">
                         {prof.role || "Team Member"}
                       </td>
-                      <td className="py-3 px-4 text-slate-600 font-medium">
-                        <span className="inline-flex items-center gap-1 bg-slate-100 px-2 py-0.5 rounded-lg text-[10px]">
-                          <UserCheck size={11} className="text-slate-500" /> {assignedHR}
-                        </span>
-                      </td>
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-1">
-                          {isOnline ? (
-                            <span className="inline-flex items-center gap-1 text-[9px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
-                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                              Active
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 text-[9px] font-medium text-slate-500 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-full">
-                              <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
-                              Offline
-                            </span>
+                          {isHRMD && (
+                            isOnline ? (
+                              <span className="inline-flex items-center gap-1 text-[9px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                                Active
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 text-[9px] font-medium text-slate-500 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-full">
+                                <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
+                                Offline
+                              </span>
+                            )
                           )}
 
                           {prof.is_approved ? (
@@ -1453,40 +1449,6 @@ export default function EmployeeDirectoryPanel({
                 </div>
               </div>
 
-              {/* Assigned HR Handler (Diversification) */}
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                    <UserCheck size={13} className="text-emerald-600" />
-                    Assigned HR Handler (Direct Responsibility)
-                  </label>
-                  {currentProfile?.name && (
-                    <button
-                      type="button"
-                      onClick={() => setEditingEmployee({ ...editingEmployee, assigned_hr: currentProfile.name })}
-                      className="text-[10px] font-bold text-emerald-600 hover:text-emerald-700 hover:underline cursor-pointer"
-                    >
-                      Assign to Me ({currentProfile.name})
-                    </button>
-                  )}
-                </div>
-                <div className="flex gap-2">
-                  <select
-                    value={editingEmployee.assigned_hr || ""}
-                    onChange={(e) => setEditingEmployee({ ...editingEmployee, assigned_hr: e.target.value })}
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs text-slate-800 focus:border-emerald-500 focus:bg-white focus:outline-none cursor-pointer font-medium"
-                  >
-                    <option value="">-- Select Assigned HR Officer / Unit --</option>
-                    {availableHRHandlers.map((hr) => (
-                      <option key={hr} value={hr}>{hr}</option>
-                    ))}
-                  </select>
-                </div>
-                <p className="text-[10px] text-slate-400">
-                  This employee will be under the direct management and monitoring of the selected HR handler.
-                </p>
-              </div>
-
               {/* Approval Checkbox */}
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 flex items-start gap-2.5">
                 <input
@@ -1617,33 +1579,18 @@ export default function EmployeeDirectoryPanel({
                 </div>
               </div>
 
-              {/* Branch & Assigned HR seamlessly pre-filled */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-700">Branch / Location</label>
-                  <select
-                    value={newEmployee.branch || DEFAULT_BRANCH_MAP[newEmployee.company] || "Head Office (Mandaue)"}
-                    onChange={(e) => setNewEmployee({ ...newEmployee, branch: e.target.value })}
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs text-slate-800 focus:border-emerald-500 focus:bg-white focus:outline-none cursor-pointer"
-                  >
-                    {BRANCH_PRESETS.map((br) => (
-                      <option key={br} value={br}>{br}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-700">Assigned HR</label>
-                  <select
-                    value={newEmployee.assigned_hr || currentProfile?.name || currentEmail || "H R M D (Head Office)"}
-                    onChange={(e) => setNewEmployee({ ...newEmployee, assigned_hr: e.target.value })}
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs text-slate-800 focus:border-emerald-500 focus:bg-white focus:outline-none cursor-pointer"
-                  >
-                    {availableHRHandlers.map((hr) => (
-                      <option key={hr} value={hr}>{hr}</option>
-                    ))}
-                  </select>
-                </div>
+              {/* Branch / Location */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-700">Branch / Location</label>
+                <select
+                  value={newEmployee.branch || DEFAULT_BRANCH_MAP[newEmployee.company] || "Head Office (Mandaue)"}
+                  onChange={(e) => setNewEmployee({ ...newEmployee, branch: e.target.value })}
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs text-slate-800 focus:border-emerald-500 focus:bg-white focus:outline-none cursor-pointer"
+                >
+                  {BRANCH_PRESETS.map((br) => (
+                    <option key={br} value={br}>{br}</option>
+                  ))}
+                </select>
               </div>
 
               <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-3 flex items-start gap-2.5">

@@ -7,7 +7,7 @@
  * stored and synchronized directly with the dedicated Supabase database table ('employees').
  */
 
-import { supabase } from "./supabase";
+import { supabase } from "./supabase.js";
 
 export const EMPLOYEES_TABLE = "employees";
 export const BACKUP_STORE_KEY = "company_employee_directory";
@@ -119,15 +119,19 @@ export async function fetchEmployeesFromDatabase() {
       employeesData.forEach((emp) => {
         if (emp?.email) {
           const emailKey = emp.email.trim().toLowerCase();
+          const meta = emp.metadata && typeof emp.metadata === "object" ? emp.metadata : {};
+          const createdBy = (emp.created_by || meta.created_by || meta.created_by_email || "").trim().toLowerCase();
           mergedMap.set(emailKey, {
             id: emp.id || `emp-${Date.now()}`,
             email: emp.email.trim(),
             name: emp.name || emailKey.split("@")[0].replace(/[._]/g, " ").replace(/\b\w/g, (l) => l.toUpperCase()),
             company: emp.company || "Simpal Group of Companies",
             role: emp.role || "Team Member",
-            branch: emp.branch || "",
-            assigned_hr: emp.assigned_hr || "",
-            phone: emp.phone || "",
+            branch: emp.branch || meta.branch || "",
+            phone: emp.phone || meta.phone || "",
+            created_by: createdBy,
+            created_by_email: createdBy,
+            metadata: meta,
             is_approved: typeof emp.is_approved === "boolean" ? emp.is_approved : true,
             created_at: emp.created_at || new Date().toISOString()
           });
@@ -145,12 +149,19 @@ export async function fetchEmployeesFromDatabase() {
         cloudBackup.settings_json.employees.forEach((emp) => {
           if (emp?.email) {
             const emailKey = emp.email.trim().toLowerCase();
+            const meta = emp.metadata && typeof emp.metadata === "object" ? emp.metadata : {};
+            const createdBy = (emp.created_by || emp.created_by_email || meta.created_by || meta.created_by_email || "").trim().toLowerCase();
             mergedMap.set(emailKey, {
               ...emp,
               email: emp.email.trim(),
               name: emp.name || emailKey.split("@")[0].replace(/[._]/g, " ").replace(/\b\w/g, (l) => l.toUpperCase()),
               company: emp.company || "Simpal Group of Companies",
               role: emp.role || "Team Member",
+              branch: emp.branch || meta.branch || "",
+              phone: emp.phone || meta.phone || "",
+              created_by: createdBy,
+              created_by_email: createdBy,
+              metadata: meta,
               is_approved: typeof emp.is_approved === "boolean" ? emp.is_approved : true
             });
           }
@@ -169,6 +180,8 @@ export async function fetchEmployeesFromDatabase() {
           if (!prof?.email) return;
           const emailKey = prof.email.trim().toLowerCase();
           const existing = mergedMap.get(emailKey) || {};
+          const meta = existing.metadata || {};
+          const createdBy = existing.created_by || meta.created_by || "";
           mergedMap.set(emailKey, {
             ...existing,
             id: prof.id || existing.id || `db-${Date.now()}`,
@@ -176,6 +189,9 @@ export async function fetchEmployeesFromDatabase() {
             name: existing.name || prof.email.split("@")[0].replace(/[._]/g, " ").replace(/\b\w/g, (l) => l.toUpperCase()),
             company: existing.company || "Simpal Group of Companies",
             role: existing.role || "Team Member",
+            created_by: createdBy,
+            created_by_email: createdBy,
+            metadata: meta,
             is_approved: typeof existing.is_approved === "boolean" ? existing.is_approved : (typeof prof.is_approved === "boolean" ? prof.is_approved : true),
             created_at: prof.created_at || existing.created_at || new Date().toISOString()
           });
@@ -244,6 +260,14 @@ export async function saveStoredEmployee(employee) {
 
   const targetEmail = employee.email.trim().toLowerCase();
   const existing = memoryEmployeeStore.get(targetEmail) || {};
+  const meta = {
+    ...(existing.metadata || {}),
+    ...(employee.metadata || {}),
+    created_by: employee.created_by || existing.created_by || employee.metadata?.created_by || existing.metadata?.created_by || "",
+    branch: employee.branch || existing.branch || "",
+    phone: employee.phone || existing.phone || ""
+  };
+  const createdBy = meta.created_by || "";
 
   const updatedRecord = {
     ...existing,
@@ -253,9 +277,11 @@ export async function saveStoredEmployee(employee) {
     name: employee.name || existing.name || targetEmail.split("@")[0].replace(/[._]/g, " ").replace(/\b\w/g, (l) => l.toUpperCase()),
     company: employee.company || existing.company || "Simpal Group of Companies",
     role: employee.role || existing.role || "Team Member",
-    branch: employee.branch || existing.branch || "",
-    assigned_hr: employee.assigned_hr || existing.assigned_hr || "",
-    phone: employee.phone || existing.phone || "",
+    branch: employee.branch || existing.branch || meta.branch || "",
+    phone: employee.phone || existing.phone || meta.phone || "",
+    created_by: createdBy,
+    created_by_email: createdBy,
+    metadata: meta,
     is_approved: typeof employee.is_approved === "boolean" ? employee.is_approved : true,
     created_at: existing.created_at || employee.created_at || new Date().toISOString(),
     updated_at: new Date().toISOString()
@@ -276,6 +302,7 @@ export async function saveStoredEmployee(employee) {
         company: updatedRecord.company,
         role: updatedRecord.role,
         is_approved: updatedRecord.is_approved,
+        metadata: updatedRecord.metadata,
         updated_at: updatedRecord.updated_at
       }, { onConflict: "email" });
 
@@ -299,7 +326,9 @@ export async function saveStoredEmployee(employee) {
         .from("profiles")
         .update({ is_approved: updatedRecord.is_approved })
         .ilike("email", targetEmail);
-    } catch {}
+    } catch (profErr) {
+      console.warn("Profiles update notice:", profErr);
+    }
   } catch (err) {
     console.error("Error saving employee to Supabase database:", err);
   }
@@ -436,6 +465,8 @@ export function mergeProfilesWithStored(supabaseProfiles = []) {
     if (!sp?.email) return;
     const emailKey = sp.email.trim().toLowerCase();
     const existing = mergedMap.get(emailKey);
+    const meta = existing?.metadata || {};
+    const createdBy = (existing?.created_by || meta.created_by || meta.created_by_email || "").trim().toLowerCase();
 
     let isApproved = true;
     if (existing && typeof existing.is_approved === "boolean") {
@@ -450,9 +481,11 @@ export function mergeProfilesWithStored(supabaseProfiles = []) {
       name: existing?.name || sp.name || sp.email.split("@")[0].replace(/[._]/g, " ").replace(/\b\w/g, (l) => l.toUpperCase()),
       company: existing?.company || sp.company || "Simpal Group of Companies",
       role: existing?.role || sp.role || "Team Member",
-      branch: sp.branch || existing?.branch || "",
-      assigned_hr: sp.assigned_hr || existing?.assigned_hr || "",
-      phone: sp.phone || existing?.phone || "",
+      branch: sp.branch || existing?.branch || meta.branch || "",
+      phone: sp.phone || existing?.phone || meta.phone || "",
+      created_by: createdBy,
+      created_by_email: createdBy,
+      metadata: meta,
       is_approved: isApproved,
       created_at: sp.created_at || existing?.created_at || new Date().toISOString()
     });
@@ -634,7 +667,9 @@ export async function verifyActivatedPassword(email, password) {
           return parsed[normEmail] === normPass;
         }
       }
-    } catch (e) {}
+    } catch {
+      // LocalStorage access not available
+    }
   }
 
   // 4. Cloud Fallback: Check Supabase user_settings
