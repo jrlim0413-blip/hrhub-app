@@ -153,7 +153,8 @@ export default function MondayStyleSidebar({
   openTabs = [],
   onOpenAiBuddy,
   isCollapsed,
-  setIsCollapsed
+  setIsCollapsed,
+  isHRMD = false
 }) {
   // Selected active icon category on the primary rail ('home' | 'operations' | 'finance' | 'hr' | 'analytics' | 'tools')
   const [selectedCategory, setSelectedCategory] = useState("home");
@@ -411,26 +412,34 @@ export default function MondayStyleSidebar({
     tools: {
       title: "Tools",
       items: [
-        {
-          id: "permission_matrix",
-          label: "Role Permission Matrix",
-          icon: ShieldCheck,
-          tag: "RBAC Matrix",
-          tabId: "permission_matrix"
-        },
+        ...(isHRMD
+          ? [
+              {
+                id: "permission_matrix",
+                label: "Role Permission Matrix",
+                icon: ShieldCheck,
+                tag: "RBAC Matrix",
+                tabId: "permission_matrix"
+              }
+            ]
+          : []),
         {
           id: "email_webhook",
           label: "Mass Email & Webhook Dispatch",
           icon: MailCheck,
           tag: "Dispatch"
         },
-        {
-          id: "api_health",
-          label: "System Health & API Configuration",
-          icon: Wrench,
-          tag: "System",
-          tabId: "api_health"
-        }
+        ...(isHRMD
+          ? [
+              {
+                id: "api_health",
+                label: "System Health & API Configuration",
+                icon: Wrench,
+                tag: "System",
+                tabId: "api_health"
+              }
+            ]
+          : [])
       ]
     }
   };

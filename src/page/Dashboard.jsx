@@ -593,6 +593,10 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
   const handleOpenWorkspaceTab = (tabId) => {
     const targetId = tabId === "betting_ratio" ? "revenue_trends" : tabId;
     if (!targetId || !WORKSPACE_TAB_DEFS[targetId]) return;
+    // Strict HRMD gate for Role Permission Matrix & System Health API Config
+    if (!isHRMD && (targetId === "permission_matrix" || targetId === "api_health")) {
+      return;
+    }
     setOpenTabs((prev) => {
       const withoutTab = prev.filter((id) => id !== targetId);
       return [...withoutTab, targetId];
@@ -722,6 +726,20 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
       }
     }
   }, [activeView, isCommWorkspaceAllowed, communicationTab, canViewBulletin, canViewDirectory, canViewAttendance, canViewPolicies, isHRMD]);
+
+  // Strict HRMD Access Enforcement:
+  // Non-HRMD accounts can never keep permission_matrix or api_health open in workspace tabs
+  useEffect(() => {
+    if (!isHRMD) {
+      setOpenTabs((prev) => {
+        const filtered = prev.filter((id) => id !== "permission_matrix" && id !== "api_health");
+        return filtered.length !== prev.length ? filtered : prev;
+      });
+      if (workspaceTab === "permission_matrix" || workspaceTab === "api_health") {
+        setWorkspaceTab("home");
+      }
+    }
+  }, [isHRMD, workspaceTab]);
 
   // Direct Team Chat State
   const [activeDirectChatUser, setActiveDirectChatUser] = useState(null);
@@ -1559,7 +1577,13 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
   // Compute frequently used tabs sorted by 10-day usage count
   const frequentTabs = useMemo(() => {
     const counts = frequentStats?.counts || {};
-    const allTabs = Object.values(WORKSPACE_TAB_DEFS);
+    // Non-HRMD accounts can never see permission_matrix or api_health
+    const allTabs = Object.values(WORKSPACE_TAB_DEFS).filter((tab) => {
+      if (!isHRMD && (tab.id === "permission_matrix" || tab.id === "api_health")) {
+        return false;
+      }
+      return true;
+    });
 
     // Filter tabs with at least 1 click in this 10-day cycle, sorted descending
     const openedTabs = allTabs
@@ -1571,6 +1595,9 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
     if (openedTabs.length < 4) {
       const existingIds = new Set(openedTabs.map((t) => t.id));
       for (const defId of DEFAULT_POPULAR_TAB_IDS) {
+        if (!isHRMD && (defId === "permission_matrix" || defId === "api_health")) {
+          continue;
+        }
         if (!existingIds.has(defId) && WORKSPACE_TAB_DEFS[defId]) {
           openedTabs.push(WORKSPACE_TAB_DEFS[defId]);
           existingIds.add(defId);
@@ -1580,7 +1607,7 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
     }
 
     return openedTabs.slice(0, 6);
-  }, [frequentStats]);
+  }, [frequentStats, isHRMD]);
 
   const displayedWorkspaceTabs = frequentTabs;
 
@@ -2096,6 +2123,7 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
             onOpenAiBuddy={() => setAiDrawerOpen(true)}
             isCollapsed={isSidebarCollapsed}
             setIsCollapsed={setIsSidebarCollapsed}
+            isHRMD={isHRMD}
           />
           <div className="flex-1 min-w-0 p-4 md:p-6 transition-all duration-300 overflow-x-hidden">
           {/* WORKSPACE CENTRAL OPERATIONS HUB */}
@@ -2348,15 +2376,57 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
 
           {/* TAB 6: ROLE & ACCOUNT CAPABILITIES MATRIX */}
           {workspaceTab === "permission_matrix" && (
-            <RolePermissionMatrixPanel
-              currentUser={currentUser}
-              onClose={() => handleCloseWorkspaceTab(null, "permission_matrix")}
-            />
+            isHRMD ? (
+              <RolePermissionMatrixPanel
+                currentUser={currentUser}
+                onClose={() => handleCloseWorkspaceTab(null, "permission_matrix")}
+              />
+            ) : (
+              <div className="bg-white border border-rose-200 rounded-3xl p-8 text-center space-y-3 max-w-lg mx-auto my-12 shadow-sm">
+                <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mx-auto">
+                  <Lock size={24} />
+                </div>
+                <h3 className="font-extrabold text-slate-800 text-lg">HRMD Master Account Access Required</h3>
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  The Enterprise Role Permission Matrix is exclusively restricted to Head Office HRMD Master Accounts.
+                </p>
+                <div className="pt-2">
+                  <button
+                    type="button"
+                    onClick={() => handleCloseWorkspaceTab(null, "permission_matrix")}
+                    className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition cursor-pointer"
+                  >
+                    Close Tab
+                  </button>
+                </div>
+              </div>
+            )
           )}
 
           {/* TAB 7: SYSTEM HEALTH & API CONFIGURATION */}
           {workspaceTab === "api_health" && (
-            <ApiHealthConfigurationPanel />
+            isHRMD ? (
+              <ApiHealthConfigurationPanel />
+            ) : (
+              <div className="bg-white border border-rose-200 rounded-3xl p-8 text-center space-y-3 max-w-lg mx-auto my-12 shadow-sm">
+                <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mx-auto">
+                  <Lock size={24} />
+                </div>
+                <h3 className="font-extrabold text-slate-800 text-lg">HRMD Master Account Access Required</h3>
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  System Health and API Configuration is exclusively managed by Head Office HRMD.
+                </p>
+                <div className="pt-2">
+                  <button
+                    type="button"
+                    onClick={() => handleCloseWorkspaceTab(null, "api_health")}
+                    className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition cursor-pointer"
+                  >
+                    Close Tab
+                  </button>
+                </div>
+              </div>
+            )
           )}
 
           {/* TAB 8: DOLE LEGAL GUIDELINES & STATUTORY SUITE */}

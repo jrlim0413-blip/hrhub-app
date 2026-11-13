@@ -855,6 +855,109 @@ export default function IncidentReportPanel({
     setIsCreateModalOpen(true);
   };
 
+  // Open Create IR Modal pre-populated with a specific employee profile
+  const handleOpenCreateModalWithEmployee = async (emp) => {
+    if (!emp) return;
+    const targetComp = emp.company || effectiveRole.company || "5A Royal Gaming OPC";
+    const assigned = lookupAssignedHrForCompany(targetComp, profiles);
+    const sgcHr = lookupSgcCentralHr(profiles);
+
+    let defs = defaultSignatories;
+    if (!defs) {
+      try {
+        defs = await loadDefaultIrSignatories();
+        if (defs) setDefaultSignatories(defs);
+      } catch (err) {
+        console.debug("Could not fetch default signatories:", err);
+      }
+    }
+    const d = defs || {};
+
+    setIrForm({
+      senderCompany: targetComp,
+      company: targetComp,
+      reportingHrName: currentUser?.name || assigned.name,
+      reportingHrTitle: currentUser?.role || assigned.title,
+      reportingHrEmail: currentUser?.email || assigned.email,
+      receiverCompany: "Simpal Group of Companies",
+      assignedCentralHrName: sgcHr.name,
+      assignedCentralHrTitle: sgcHr.title,
+      assignedCentralHrCompany: "Simpal Group of Companies",
+      reportReceivedBy: `${sgcHr.name} (${sgcHr.title} - SGC)`,
+      reportReceivedDate: new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }),
+      employeeName: emp.name || emp.displayName || "",
+      employeeId: emp.id || "",
+      employeePosition: emp.role || emp.position || "Employee",
+      department: emp.department || emp.metadata?.department || "Operations",
+      phoneNumber: emp.phone || emp.phoneNumber || emp.metadata?.emergency_contact_phone || "+63 917 842 9102",
+      branch: emp.branch || emp.location || "Tacurong Branch",
+      location: emp.branch || emp.location || "Tacurong Branch",
+      dateOfIncident: new Date().toISOString().slice(0, 10),
+      dateReported: new Date().toISOString().slice(0, 10),
+      typeOfIncident: "Cash Shortage & Non-observance of SOPs",
+      incidentTime: "16:30 PM",
+      factualDescription: "Incident report filed for standard operating procedures audit or performance documentation.",
+      witnesses: "",
+      violations: ["Company Policies and Procedures"],
+      otherViolation: "",
+      violationRemarks: "",
+      attachments: ["Reports / Logs"],
+      otherAttachments: "",
+      policeNotified: "NO",
+      incidentCategory: "Cash Shortage & Non-observance of SOPs",
+      auditDates: new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }),
+      auditedBy: "Internal Audit / HR Department",
+      cashShortageAmount: "",
+      specificFindings: "",
+      fullIncidentNarrative: "",
+      incidentCauses: "",
+      followUpRecommendations: "Submission to Simpal Group of Companies Head Office HRMD for Notice to Explain (NTE) evaluation.",
+      additionalNotes: "",
+      evidenceNotes: "",
+      preparerSignature: d.preparerSignature || "",
+      preparerSignatureScale: d.preparerSignatureScale || 1.25,
+      preparerName: d.preparerName || currentUser?.name || assigned.name,
+      preparerTitle: d.preparerTitle || currentUser?.role || assigned.title,
+      operationsManagerSignature: d.operationsManagerSignature || "",
+      operationsManagerSignatureScale: d.operationsManagerSignatureScale || 1.25,
+      operationsManagerName: d.operationsManagerName || "Operations Manager",
+      operationsManagerTitle: d.operationsManagerTitle || "Operations Manager",
+      approvedByName: d.approvedByName || sgcHr.name,
+      approvedByTitle: d.approvedByTitle || `${sgcHr.title} (Head Office)`,
+      approvedBySignature: d.approvedBySignature || ""
+    });
+    setIsCreateModalOpen(true);
+  };
+
+  // Automatically check for target employee to file IR on mount or custom event
+  useEffect(() => {
+    const checkTargetEmployee = () => {
+      try {
+        const stored = localStorage.getItem("hrhub_incident_target_employee");
+        if (stored) {
+          localStorage.removeItem("hrhub_incident_target_employee");
+          const emp = JSON.parse(stored);
+          if (emp && (emp.name || emp.email)) {
+            handleOpenCreateModalWithEmployee(emp);
+          }
+        }
+      } catch (e) {
+        console.error("Target employee check error:", e);
+      }
+    };
+
+    checkTargetEmployee();
+
+    const handleFileIrEvent = (e) => {
+      if (e.detail?.employee) {
+        handleOpenCreateModalWithEmployee(e.detail.employee);
+      }
+    };
+
+    window.addEventListener("hrhub_file_incident_report", handleFileIrEvent);
+    return () => window.removeEventListener("hrhub_file_incident_report", handleFileIrEvent);
+  }, []);
+
   // Submit IR from Subsidiary Company HR -> Simpal Group of Companies (SGC HRMD)
   const handleSubmitIrToCentralHr = async (e) => {
     e.preventDefault();

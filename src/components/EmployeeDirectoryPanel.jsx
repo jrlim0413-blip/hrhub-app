@@ -4,10 +4,12 @@ import {
   RefreshCw, UserPlus, Mail, Building2,
   Copy, Check, Trash2, ShieldAlert,
   Sparkles, X, Edit3, MapPin,
-  Sliders, LayoutGrid, List, User, UserCog, Send
+  Sliders, LayoutGrid, List, User, UserCog, Send,
+  FileText, Paperclip
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import PreRegisterInviteModal from "./PreRegisterInviteModal";
+import AddEmployeeProfileModal from "./AddEmployeeProfileModal";
 import {
   copyRichInviteToClipboard,
   getPortalInviteUrl
@@ -99,18 +101,8 @@ export default function EmployeeDirectoryPanel({
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isSubmittingAdd, setIsSubmittingAdd] = useState(false);
 
-  // Entity Employee Profiling Modal State (For Branch / Entity Accounts)
+  // Professional Add Employee Profile Modal State
   const [isEntityModalOpen, setIsEntityModalOpen] = useState(false);
-  const [isSubmittingEntity, setIsSubmittingEntity] = useState(false);
-  const [newEntityEmployee, setNewEntityEmployee] = useState({
-    name: "",
-    email: "",
-    company: "",
-    role: "Team Member",
-    branch: "",
-    phone: "",
-    isApproved: true
-  });
 
   // Edit Profile Modal State
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -571,94 +563,71 @@ export default function EmployeeDirectoryPanel({
     }
   };
 
-  // Open Entity Employee Profiling Modal (Dedicated for Per-Entity / Company Accounts)
+  // Open Professional Add Employee Profile Modal
   const handleOpenEntityModal = () => {
-    const defaultBranch = DEFAULT_BRANCH_MAP[userEntityCompany] || "Head Office (Mandaue)";
-    setNewEntityEmployee({
-      name: "",
-      email: "",
-      company: userEntityCompany,
-      role: "Team Member",
-      branch: defaultBranch,
-      phone: "",
-      isApproved: true
-    });
     setIsEntityModalOpen(true);
   };
 
-  // Submit Handler for Entity Employee Profiling
-  const handleAddEntityEmployeeSubmit = async (e) => {
-    e.preventDefault();
-    const trimmedName = newEntityEmployee.name.trim();
-    if (!trimmedName) {
-      setNotice({
-        type: "warning",
-        message: "Please enter the employee's full name."
-      });
-      return;
-    }
-
-    let cleanEmail = (newEntityEmployee.email || "").trim().toLowerCase();
-    if (!cleanEmail) {
-      const slug = trimmedName.toLowerCase().replace(/[^a-z0-9]/g, ".");
-      const compSlug = (newEntityEmployee.company || userEntityCompany).toLowerCase().replace(/[^a-z0-9]/g, "");
-      cleanEmail = `${slug}@${compSlug || "company"}.internal`;
-    }
-
-    setIsSubmittingEntity(true);
+  // Submit Handler for Professional Employee Profile
+  const handleSaveAddEmployeeProfile = async (record) => {
     try {
-      const assignedBranch = newEntityEmployee.branch || DEFAULT_BRANCH_MAP[newEntityEmployee.company] || "Branch Office";
       const creatorEmail = (currentEmail || "").trim().toLowerCase();
-
-      const newRecord = {
-        id: `emp-entity-${Date.now()}`,
-        email: cleanEmail,
-        is_approved: true,
-        name: trimmedName,
-        company: newEntityEmployee.company || userEntityCompany,
-        role: newEntityEmployee.role || "Team Member",
-        branch: assignedBranch,
-        phone: newEntityEmployee.phone || "",
+      const fullRecord = {
+        ...record,
+        id: `emp-prof-${Date.now()}`,
         created_by: creatorEmail,
         created_by_email: creatorEmail,
         metadata: {
+          ...(record.metadata || {}),
           created_by: creatorEmail,
           created_by_email: creatorEmail,
           added_at: new Date().toISOString()
-        },
-        created_at: new Date().toISOString()
+        }
       };
 
-      await saveStoredEmployee(newRecord);
+      await saveStoredEmployee(fullRecord);
 
       if (onUpdateProfile) {
-        onUpdateProfile(null, newRecord);
+        onUpdateProfile(null, fullRecord);
       }
 
       setNotice({
         type: "success",
-        message: `Successfully registered ${trimmedName} under ${newRecord.company}!`
+        message: `Successfully registered profile for ${fullRecord.name} under ${fullRecord.company}!`
       });
       setIsEntityModalOpen(false);
-      setNewEntityEmployee({
-        name: "",
-        email: "",
-        company: "",
-        role: "Team Member",
-        branch: "",
-        phone: "",
-        isApproved: true
-      });
       if (onRefresh) onRefresh();
     } catch (err) {
-      console.error("Error adding entity employee:", err);
+      console.error("Error saving employee profile:", err);
       setNotice({
         type: "warning",
         message: "Failed to save employee profile. Please check connection and try again."
       });
-    } finally {
-      setIsSubmittingEntity(false);
-      setTimeout(() => setNotice(null), 5000);
+      throw err;
+    }
+  };
+
+  // Direct Incident Report Filing Trigger
+  const handleFileIncidentReportForEmployee = (employee) => {
+    try {
+      localStorage.setItem("hrhub_incident_target_employee", JSON.stringify(employee));
+      window.dispatchEvent(
+        new CustomEvent("hrhub_switch_workspace_tab", {
+          detail: { tabId: "incident_reports", employee }
+        })
+      );
+      window.dispatchEvent(
+        new CustomEvent("hrhub_file_incident_report", {
+          detail: { employee }
+        })
+      );
+      setNotice({
+        type: "success",
+        message: `Opening Incident Report generator for ${employee.name || employee.email}...`
+      });
+      setTimeout(() => setNotice(null), 3500);
+    } catch (err) {
+      console.error("Error switching to incident report:", err);
     }
   };
 
@@ -753,17 +722,15 @@ export default function EmployeeDirectoryPanel({
             </button>
           )}
 
-          {/* Per-Entity / Company Account: Add Employee Profile for their Entity */}
-          {canAddEntityEmployee && (
-            <button
-              type="button"
-              onClick={handleOpenEntityModal}
-              className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2.5 rounded-xl font-bold text-xs shadow-sm shadow-emerald-600/20 transition cursor-pointer"
-            >
-              <UserPlus size={15} />
-              <span>Add Employee Profile</span>
-            </button>
-          )}
+          {/* Add Employee Profile: Available for both HRMD & Branch/Entity Accounts */}
+          <button
+            type="button"
+            onClick={handleOpenEntityModal}
+            className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2.5 rounded-xl font-bold text-xs shadow-sm shadow-emerald-600/20 transition cursor-pointer"
+          >
+            <UserPlus size={15} />
+            <span>Add Employee Profile</span>
+          </button>
         </div>
       </div>
 
@@ -1043,6 +1010,19 @@ export default function EmployeeDirectoryPanel({
             const role = prof.role || "Team Member";
             const branch = prof.branch || DEFAULT_BRANCH_MAP[company] || "Head Office";
 
+            const avatarUrl = prof.metadata?.avatar_url || prof.avatar_url;
+            const coverPresetId = prof.metadata?.cover_preset_id;
+            const customCoverUrl = prof.metadata?.custom_cover_url;
+            const requirementsCount = prof.metadata?.requirements_files?.length || 0;
+            const coverPresetGradients = {
+              preset_emerald: "from-emerald-950 via-teal-900 to-slate-900",
+              preset_sapphire: "from-blue-950 via-indigo-900 to-slate-950",
+              preset_obsidian: "from-slate-950 via-amber-950 to-stone-900",
+              preset_crimson: "from-rose-950 via-red-950 to-stone-950",
+              preset_slate: "from-slate-900 via-zinc-800 to-slate-950"
+            };
+            const hasCover = Boolean(customCoverUrl || coverPresetId);
+
             return (
               <div
                 key={prof.id || prof.email}
@@ -1051,16 +1031,38 @@ export default function EmployeeDirectoryPanel({
                     : "border-slate-200/80 hover:border-slate-300 hover:shadow-sm"
                   }`}
               >
+                {/* Optional Executive Cover Banner */}
+                {hasCover && (
+                  customCoverUrl ? (
+                    <div
+                      className="h-14 w-full bg-cover bg-center border-b border-slate-100"
+                      style={{ backgroundImage: `url(${customCoverUrl})` }}
+                    />
+                  ) : (
+                    <div
+                      className={`h-14 w-full bg-gradient-to-r ${coverPresetGradients[coverPresetId] || "from-slate-900 to-slate-800"} border-b border-slate-100`}
+                    />
+                  )
+                )}
+
                 {/* Card Header & Identity */}
-                <div className="p-5 pb-4 space-y-3">
+                <div className={`p-5 pb-4 space-y-3 ${hasCover ? "-mt-7" : ""}`}>
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-center gap-3">
                       {/* Avatar */}
-                      <div className="relative">
-                        <div className={`w-11 h-11 rounded-xl font-extrabold text-xs flex items-center justify-center shadow-2xs ${showOnlineIndicator ? "bg-slate-900 text-emerald-400" : "bg-slate-800 text-slate-300"
-                          }`}>
-                          {initials}
-                        </div>
+                      <div className="relative shrink-0">
+                        {avatarUrl ? (
+                          <img
+                            src={avatarUrl}
+                            alt={displayName}
+                            className={`w-11 h-11 rounded-xl object-cover border-2 shadow-sm ${hasCover ? "border-white bg-slate-900" : "border-slate-200 bg-slate-100"}`}
+                          />
+                        ) : (
+                          <div className={`w-11 h-11 rounded-xl font-extrabold text-xs flex items-center justify-center shadow-2xs ${hasCover ? "border-2 border-white ring-1 ring-slate-200/50" : ""} ${showOnlineIndicator ? "bg-slate-900 text-emerald-400" : "bg-slate-800 text-slate-300"
+                            }`}>
+                            {initials}
+                          </div>
+                        )}
                         {showOnlineIndicator && (
                           <span className="absolute -bottom-1 -right-1 flex h-3 w-3">
                             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
@@ -1115,6 +1117,14 @@ export default function EmployeeDirectoryPanel({
                       <MapPin size={13} className="text-emerald-600 shrink-0" />
                       <span className="truncate">{branch}</span>
                     </p>
+                    {requirementsCount > 0 && (
+                      <div className="pt-1 flex items-center gap-1.5">
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                          <Paperclip size={10} className="text-emerald-600" />
+                          <span>{requirementsCount} 201 File(s) Attached</span>
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -1144,6 +1154,17 @@ export default function EmployeeDirectoryPanel({
                   ) : <div />}
 
                   <div className="flex items-center gap-1.5">
+                    {/* Direct Link to File Incident Report */}
+                    <button
+                      type="button"
+                      onClick={() => handleFileIncidentReportForEmployee(prof)}
+                      title="File Incident Report (IR) / NTE for this employee"
+                      className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-600 hover:text-white text-[10px] font-bold transition cursor-pointer shadow-2xs"
+                    >
+                      <ShieldAlert size={12} />
+                      <span className="hidden sm:inline">File IR</span>
+                    </button>
+
                     {canManageProfiles && (
                       <button
                         type="button"
@@ -1214,14 +1235,24 @@ export default function EmployeeDirectoryPanel({
                   const displayName = prof.name || (prof.email ? prof.email.split("@")[0].replace(/[._]/g, " ").replace(/\b\w/g, (l) => l.toUpperCase()) : "Employee");
                   const branch = prof.branch || DEFAULT_BRANCH_MAP[prof.company] || "Head Office";
 
+                  const avatarUrl = prof.metadata?.avatar_url || prof.avatar_url;
+
                   return (
                     <tr key={prof.id || prof.email} className="hover:bg-slate-50/70 transition">
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-3">
-                          <div className={`w-8 h-8 rounded-xl font-bold text-xs flex items-center justify-center shrink-0 ${showOnlineIndicator ? "bg-slate-900 text-emerald-400" : "bg-slate-700 text-slate-200"
-                            }`}>
-                            {initials}
-                          </div>
+                          {avatarUrl ? (
+                            <img
+                              src={avatarUrl}
+                              alt={displayName}
+                              className="w-8 h-8 rounded-xl object-cover shrink-0 border border-slate-200 bg-slate-100"
+                            />
+                          ) : (
+                            <div className={`w-8 h-8 rounded-xl font-bold text-xs flex items-center justify-center shrink-0 ${showOnlineIndicator ? "bg-slate-900 text-emerald-400" : "bg-slate-700 text-slate-200"
+                              }`}>
+                              {initials}
+                            </div>
+                          )}
                           <div>
                             <p className="font-bold text-slate-900 flex items-center gap-1.5">
                               {displayName}
@@ -1273,6 +1304,16 @@ export default function EmployeeDirectoryPanel({
                       </td>
                       <td className="py-3 px-4 text-right">
                         <div className="flex items-center justify-end gap-1.5">
+                          {/* Direct Incident Report Trigger */}
+                          <button
+                            type="button"
+                            onClick={() => handleFileIncidentReportForEmployee(prof)}
+                            title="File Incident Report (IR) / NTE for this employee"
+                            className="p-1 rounded-lg border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-600 hover:text-white transition cursor-pointer"
+                          >
+                            <ShieldAlert size={13} />
+                          </button>
+
                           {canManageProfiles && (
                             <button
                               type="button"
@@ -1636,147 +1677,17 @@ export default function EmployeeDirectoryPanel({
         </div>
       )}
 
-      {/* Entity Employee Profiling Modal (Dedicated for Per-Entity / Company Accounts) */}
-      {isEntityModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto animate-in fade-in zoom-in-95">
-            <div className="p-6 border-b border-slate-100 flex items-center justify-between">
-              <div>
-                <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-emerald-600">
-                  <UserPlus size={13} /> Entity Employee Profiling
-                </div>
-                <h3 className="text-xl font-black text-slate-900 mt-0.5">Add Employee Profile</h3>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Register employee profile under <span className="font-bold text-slate-700">{userEntityCompany}</span>
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsEntityModalOpen(false)}
-                className="p-2 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-700 cursor-pointer"
-              >
-                <X size={16} />
-              </button>
-            </div>
-
-            <form onSubmit={handleAddEntityEmployeeSubmit} className="p-6 space-y-4">
-              {/* Full Name */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-700">Full Name *</label>
-                <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-xs focus-within:border-emerald-500 focus-within:bg-white focus-within:ring-2 focus-within:ring-emerald-100 transition">
-                  <User size={15} className="text-slate-400 shrink-0" />
-                  <input
-                    type="text"
-                    required
-                    value={newEntityEmployee.name}
-                    onChange={(e) => setNewEntityEmployee({ ...newEntityEmployee, name: e.target.value })}
-                    placeholder="e.g. Maria Santos"
-                    className="w-full border-0 bg-transparent text-slate-800 placeholder:text-slate-400 focus:outline-none font-medium"
-                  />
-                </div>
-              </div>
-
-              {/* Company & Role */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-700">Company Entity</label>
-                  <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-100/80 px-3 py-2.5 text-xs text-slate-700 font-semibold">
-                    <Building2 size={14} className="text-emerald-600 shrink-0" />
-                    <span className="truncate">{userEntityCompany}</span>
-                  </div>
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-700">Role / Designation *</label>
-                  <select
-                    value={newEntityEmployee.role}
-                    onChange={(e) => setNewEntityEmployee({ ...newEntityEmployee, role: e.target.value })}
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs text-slate-800 focus:border-emerald-500 focus:bg-white focus:outline-none cursor-pointer"
-                  >
-                    {ROLES.map((r) => (
-                      <option key={r} value={r}>{r}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              {/* Branch / Location */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-700">Branch / Work Location</label>
-                <select
-                  value={newEntityEmployee.branch || DEFAULT_BRANCH_MAP[userEntityCompany] || "Branch Office"}
-                  onChange={(e) => setNewEntityEmployee({ ...newEntityEmployee, branch: e.target.value })}
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs text-slate-800 focus:border-emerald-500 focus:bg-white focus:outline-none cursor-pointer"
-                >
-                  {BRANCH_PRESETS.map((br) => (
-                    <option key={br} value={br}>{br}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Optional Email & Contact Phone */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-700 flex items-center justify-between">
-                    <span>Work Email</span>
-                    <span className="text-[10px] text-slate-400 font-normal">Optional</span>
-                  </label>
-                  <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs focus-within:border-emerald-500 focus-within:bg-white transition">
-                    <Mail size={14} className="text-slate-400 shrink-0" />
-                    <input
-                      type="email"
-                      value={newEntityEmployee.email}
-                      onChange={(e) => setNewEntityEmployee({ ...newEntityEmployee, email: e.target.value })}
-                      placeholder="e.g. maria@company.com"
-                      className="w-full border-0 bg-transparent text-slate-800 placeholder:text-slate-400 focus:outline-none"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-700 flex items-center justify-between">
-                    <span>Contact Phone</span>
-                    <span className="text-[10px] text-slate-400 font-normal">Optional</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={newEntityEmployee.phone}
-                    onChange={(e) => setNewEntityEmployee({ ...newEntityEmployee, phone: e.target.value })}
-                    placeholder="e.g. 0917-123-4567"
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs text-slate-800 placeholder:text-slate-400 focus:border-emerald-500 focus:bg-white focus:outline-none transition"
-                  />
-                </div>
-              </div>
-
-              {/* Action buttons */}
-              <div className="pt-2 flex items-center justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setIsEntityModalOpen(false)}
-                  className="px-4 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50 transition cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSubmittingEntity}
-                  className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-md shadow-emerald-600/20 transition cursor-pointer flex items-center gap-2"
-                >
-                  {isSubmittingEntity ? (
-                    <>
-                      <RefreshCw size={14} className="animate-spin" /> Saving Profile...
-                    </>
-                  ) : (
-                    <>
-                      <CheckCircle2 size={14} /> Save Employee Profile
-                    </>
-                  )}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      {/* Professional Add Employee Profile Modal */}
+      <AddEmployeeProfileModal
+        isOpen={isEntityModalOpen}
+        onClose={() => setIsEntityModalOpen(false)}
+        onSave={handleSaveAddEmployeeProfile}
+        userEntityCompany={userEntityCompany}
+        roles={ROLES}
+        branches={BRANCH_PRESETS}
+        defaultBranchMap={DEFAULT_BRANCH_MAP}
+        onFileIncidentReport={handleFileIncidentReportForEmployee}
+      />
 
       {/* Pre-Registered Account Branded Invite Studio (w/ HRHub Logo) */}
       <PreRegisterInviteModal
