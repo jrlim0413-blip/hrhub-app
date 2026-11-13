@@ -3252,7 +3252,7 @@ export default function DocumentStudioPanel({
     try {
       const res = await saveDocumentRecordToDb(currentUser, docRecord);
       if (res.syncedToSupabase) {
-        triggerToast(`✓ Document '${cleanRef}' saved to Supabase!`, "success");
+        triggerToast(`✓ Document '${cleanRef}' saved to Database!`, "success");
       } else {
         triggerToast(`✓ Saved '${cleanRef}' to local system archive`, "info");
       }

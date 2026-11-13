@@ -1682,6 +1682,15 @@ export default function MemoGeneratorPanel({
       approverOffsetX,
       approverOffsetY,
       approverSize,
+      watermark: {
+        size: watermarkSize,
+        opacity: watermarkOpacity,
+        showDiagonalStamp,
+        diagonalStampText
+      },
+      letterheadOverrides: {
+        [targetComp.id]: letterheadOverrides[targetComp.id] || savedLetterheadDefaults[targetComp.id]
+      },
       savedAt: new Date().toISOString()
     };
 
@@ -1699,7 +1708,7 @@ export default function MemoGeneratorPanel({
       if (res.syncedToSupabase) {
         setImageCopyToast({
           type: "success",
-          message: `✓ Memo '${actualRef}' for ${targetComp.name} saved to Supabase!`
+          message: `✓ Memo '${actualRef}' for ${targetComp.name} saved to Database!`
         });
       }
     } catch (e) {
@@ -1722,6 +1731,7 @@ export default function MemoGeneratorPanel({
 
   // Load saved memo into current editor
   const handleLoadSavedMemo = (m) => {
+    if (!m) return;
     const cleanRef = sanitizeMemoRef(m.ref);
     // 1. Resolve matching company entity strictly based on the memorandum reference!
     const memoCompany = resolveCompanyFromMemoRef(cleanRef, { ...m, ref: cleanRef }, companies);
@@ -1744,23 +1754,71 @@ export default function MemoGeneratorPanel({
     if (m.subject) setMemoSubject(m.subject);
     if (m.category) setMemoCategory(m.category);
     if (m.content) setMemoContent(m.content);
-    if (m.signatoryLabel) setSignatoryLabel(m.signatoryLabel);
+
+    // Directives Styling
+    if (m.directivesFontFamily) setDirectivesFontFamily(m.directivesFontFamily);
+    if (m.directivesFontSize) setDirectivesFontSize(Number(m.directivesFontSize) || 14.6);
+
+    // Signatory setup & placement
+    const sigLabel = m.signatoryLabel || m.metadata?.signatoryLabel || "ISSUED BY:";
+    setSignatoryLabel(sigLabel);
     if (m.signatoryName) setSignatoryName(m.signatoryName);
     if (m.signatoryTitle) setSignatoryTitle(m.signatoryTitle);
-    setSignatoryCompany(resolveSignatoryAffiliation(memoCompany, m.signatoryCompany));
-    if (m.approverLabel) setApproverLabel(m.approverLabel);
+    setSignatoryCompany(resolveSignatoryAffiliation(memoCompany, m.signatoryCompany || m.metadata?.signatoryCompany));
+
+    const appLabel = m.approverLabel || m.metadata?.approverLabel || "NOTED & APPROVED BY:";
+    setApproverLabel(appLabel);
     if (m.approverName) setApproverName(m.approverName);
     if (m.approverTitle) setApproverTitle(m.approverTitle);
     if (m.signatoryLayout) setSignatoryLayout(m.signatoryLayout);
 
-    if (m.directivesFontFamily) setDirectivesFontFamily(m.directivesFontFamily);
-    if (m.directivesFontSize) setDirectivesFontSize(m.directivesFontSize);
-    if (m.signatorySignature) setSignatorySignature(m.signatorySignature);
-    if (m.approverSignature) setApproverSignature(m.approverSignature);
+    // Signatures (from top-level mapped fields or metadata)
+    const sigSignature = m.signatorySignature ?? m.metadata?.signatorySignature ?? null;
+    setSignatorySignature(sigSignature);
+    const appSignature = m.approverSignature ?? m.metadata?.approverSignature ?? null;
+    setApproverSignature(appSignature);
+
+    // Precise signature sizing & alignment offsets
+    const sigSize = m.signatorySize ?? m.metadata?.signatorySize;
+    if (sigSize !== undefined && sigSize !== null && sigSize !== "") setSignatorySize(Number(sigSize));
+    const sigOffX = m.signatoryOffsetX ?? m.metadata?.signatoryOffsetX;
+    if (sigOffX !== undefined && sigOffX !== null && sigOffX !== "") setSignatoryOffsetX(Number(sigOffX));
+    const sigOffY = m.signatoryOffsetY ?? m.metadata?.signatoryOffsetY;
+    if (sigOffY !== undefined && sigOffY !== null && sigOffY !== "") setSignatoryOffsetY(Number(sigOffY));
+
+    const appSize = m.approverSize ?? m.metadata?.approverSize;
+    if (appSize !== undefined && appSize !== null && appSize !== "") setApproverSize(Number(appSize));
+    const appOffX = m.approverOffsetX ?? m.metadata?.approverOffsetX;
+    if (appOffX !== undefined && appOffX !== null && appOffX !== "") setApproverOffsetX(Number(appOffX));
+    const appOffY = m.approverOffsetY ?? m.metadata?.approverOffsetY;
+    if (appOffY !== undefined && appOffY !== null && appOffY !== "") setApproverOffsetY(Number(appOffY));
+
+    // Watermark configuration
+    const wm = m.watermark || m.metadata?.watermark;
+    if (wm) {
+      if (wm.size !== undefined && wm.size !== null && wm.size !== "") setWatermarkSize(Number(wm.size));
+      if (wm.opacity !== undefined && wm.opacity !== null && wm.opacity !== "") setWatermarkOpacity(Number(wm.opacity));
+      if (wm.showDiagonalStamp !== undefined && wm.showDiagonalStamp !== null) setShowDiagonalStamp(Boolean(wm.showDiagonalStamp));
+      if (wm.diagonalStampText) setDiagonalStampText(wm.diagonalStampText);
+    }
+
+    // Letterhead overrides
+    const lhOverrides = m.letterheadOverrides || m.metadata?.letterheadOverrides;
+    if (lhOverrides && typeof lhOverrides === "object") {
+      setLetterheadOverrides((prev) => ({ ...prev, ...lhOverrides }));
+    }
+
+    // Reset dirty state & clear notices
+    setDirtyLetterheadCompanyIds([]);
+    setLetterheadStatus(null);
 
     // 6. Close archive modal and jump to Step 4 to immediately preview ONLY this authentic letterhead!
     setArchiveModalOpen(false);
     setCurrentStep(4);
+    setImageCopyToast({
+      type: "success",
+      message: `✓ Loaded memo '${cleanRef}' with authentic ${memoCompany.name} letterhead!`
+    });
   };
 
   // Copy plain formatted memo text for clipboard
@@ -6458,14 +6516,36 @@ function doGet(e) {
                   </div>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => setArchiveModalOpen(false)}
-                  className="rounded-xl p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 cursor-pointer transition"
-                  title="Close Archive"
-                >
-                  <X size={20} />
-                </button>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        setIsLoadingSavedMemos(true);
+                        const { memos } = await getSavedMemosFromDb(currentUser);
+                        setSavedMemos((memos || []).map((m) => ({ ...m, ref: sanitizeMemoRef(m.ref) })));
+                      } catch (e) {
+                        console.warn("Failed to refresh saved memos:", e);
+                      } finally {
+                        setIsLoadingSavedMemos(false);
+                      }
+                    }}
+                    disabled={isLoadingSavedMemos}
+                    className="rounded-xl p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 cursor-pointer transition disabled:opacity-50"
+                    title="Refresh Records Archive"
+                  >
+                    <RefreshCw size={18} className={isLoadingSavedMemos ? "animate-spin text-emerald-600" : ""} />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setArchiveModalOpen(false)}
+                    className="rounded-xl p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 cursor-pointer transition"
+                    title="Close Archive"
+                  >
+                    <X size={20} />
+                  </button>
+                </div>
               </div>
 
               {/* Search and Company Filter Controls */}
@@ -6570,6 +6650,12 @@ function doGet(e) {
                                 <Calendar size={12} className="text-slate-400" />
                                 {m.date}
                               </span>
+                              {(m.signatorySignature || m.metadata?.signatorySignature) && (
+                                <span className="text-[10px] font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200 inline-flex items-center gap-1 shadow-2xs">
+                                  <CheckCircle2 size={11} className="text-emerald-600" />
+                                  Official Signed
+                                </span>
+                              )}
                             </div>
 
                             <h5 className="text-sm font-black text-slate-900 leading-snug group-hover:text-emerald-800 transition-colors">

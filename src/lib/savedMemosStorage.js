@@ -4,8 +4,8 @@
  * eliminating localStorage.
  */
 
-import { supabase } from "./supabase";
-import { getUserAccountKey } from "./userSettingsStorage";
+import { supabase } from "./supabase.js";
+import { getUserAccountKey } from "./userSettingsStorage.js";
 
 export const SAVED_MEMOS_TABLE = "saved_memos";
 
@@ -13,59 +13,67 @@ export const SAVED_MEMOS_TABLE = "saved_memos";
 const memoryMemosStore = new Map();
 
 /**
- * Fetch all saved memorandums for a user account from Supabase ('saved_memos' table)
+ * Fetch all saved memorandums for a user account from Supabase ('saved_memos' table).
+ * All accounts access the company-wide corporate archive so memorandums saved by HRMD
+ * or other authorized personnel are visible and loadable across the organization.
  */
 export async function getSavedMemosFromDb(currentUser = null) {
   const accountKey = getUserAccountKey(currentUser);
 
   try {
-        let targetRows = [];
     const { data, error } = await supabase
       .from(SAVED_MEMOS_TABLE)
       .select("*")
-      .eq("user_id", accountKey)
       .order("created_at", { ascending: false });
 
-    if (!error && Array.isArray(data) && data.length > 0) {
-      targetRows = data;
-    } else {
-      // Fallback: If no records match the logged-in email (e.g. data imported under admin@hrhub.com),
-      // fetch all official saved memorandums so the company archive is never empty.
-      const { data: allData, error: allErr } = await supabase
-        .from(SAVED_MEMOS_TABLE)
-        .select("*")
-        .order("created_at", { ascending: false });
+    if (!error && Array.isArray(data)) {
+      // Exclude Document Studio items if stored in fallback_memos_table
+      const targetRows = data.filter((row) => !String(row.category || "").startsWith("DOC_STUDIO:"));
 
-      if (!allErr && Array.isArray(allData)) {
-        targetRows = allData;
-      }
-    }
+      // Map database row columns to Memo object format and unpack metadata
+      const mapped = targetRows.map((row) => {
+        const meta = row.metadata && typeof row.metadata === "object" ? row.metadata : {};
+        return {
+          id: row.id,
+          ref: (row.ref_no || "").replace(/-SARG-/gi, "-5ARG-").replace(/\bSARG\b/gi, "5ARG"),
+          date: row.date,
+          to: row.to_field,
+          from: row.from_field,
+          subject: row.subject,
+          content: row.content,
+          category: row.category,
+          companyId: row.company_id,
+          directivesFontFamily: row.directives_font_family,
+          directivesFontSize: row.directives_font_size,
+          signatoryLayout: row.signatory_layout,
+          signatoryName: row.signatory_name,
+          signatoryTitle: row.signatory_title,
+          signatoryCompany: meta.signatoryCompany,
+          approverName: row.approver_name,
+          approverTitle: row.approver_title,
+          // Flatten metadata fields so they are directly accessible when loading the memo
+          signatoryLabel: meta.signatoryLabel || "ISSUED BY:",
+          approverLabel: meta.approverLabel || "NOTED & APPROVED BY:",
+          signatorySignature: meta.signatorySignature || null,
+          approverSignature: meta.approverSignature || null,
+          signatorySize: meta.signatorySize,
+          signatoryOffsetX: meta.signatoryOffsetX,
+          signatoryOffsetY: meta.signatoryOffsetY,
+          approverSize: meta.approverSize,
+          approverOffsetX: meta.approverOffsetX,
+          approverOffsetY: meta.approverOffsetY,
+          watermark: meta.watermark,
+          includedCompanyIds: meta.includedCompanyIds,
+          letterheadOverrides: meta.letterheadOverrides,
+          savedByUserId: row.user_id,
+          metadata: meta,
+          createdAt: row.created_at,
+          updatedAt: row.updated_at
+        };
+      });
 
-    if (Array.isArray(targetRows)) {
-      // Map database row columns to Memo object format
-      const mapped = targetRows.map((row) => ({
-        id: row.id,
-        ref: (row.ref_no || "").replace(/-SARG-/gi, "-5ARG-").replace(/\bSARG\b/gi, "5ARG"),
-        date: row.date,
-        to: row.to_field,
-        from: row.from_field,
-        subject: row.subject,
-        content: row.content,
-        category: row.category,
-        companyId: row.company_id,
-        directivesFontFamily: row.directives_font_family,
-        directivesFontSize: row.directives_font_size,
-        signatoryLayout: row.signatory_layout,
-        signatoryName: row.signatory_name,
-        signatoryTitle: row.signatory_title,
-        approverName: row.approver_name,
-        approverTitle: row.approver_title,
-        metadata: row.metadata || {},
-        createdAt: row.created_at,
-        updatedAt: row.updated_at
-      }));
-
-      // Update in-memory session cache
+      // Update in-memory session cache (global and per-account)
+      memoryMemosStore.set("__global__", mapped);
       memoryMemosStore.set(accountKey, mapped);
       return { memos: mapped, source: "supabase" };
     }
@@ -73,7 +81,7 @@ export async function getSavedMemosFromDb(currentUser = null) {
     console.warn("Supabase saved_memos fetch notice, checking in-memory session:", err);
   }
 
-  const inMem = memoryMemosStore.get(accountKey) || [];
+  const inMem = memoryMemosStore.get("__global__") || memoryMemosStore.get(accountKey) || [];
   return { memos: inMem, source: "memory" };
 }
 
@@ -141,19 +149,21 @@ export async function saveMemoRecordToDb(currentUser = null, memoRecord = {}) {
     approver_name: memoRecord.approverName || "",
     approver_title: memoRecord.approverTitle || "",
     metadata: {
-      signatoryLabel: memoRecord.signatoryLabel,
-      approverLabel: memoRecord.approverLabel,
-      signatorySignature: memoRecord.signatorySignature,
-      approverSignature: memoRecord.approverSignature,
-      signatorySize: memoRecord.signatorySize,
-      signatoryOffsetX: memoRecord.signatoryOffsetX,
-      signatoryOffsetY: memoRecord.signatoryOffsetY,
-      approverSize: memoRecord.approverSize,
-      approverOffsetX: memoRecord.approverOffsetX,
-      approverOffsetY: memoRecord.approverOffsetY,
-      includedCompanyIds: memoRecord.includedCompanyIds,
-      letterheadOverrides: memoRecord.letterheadOverrides,
-      watermark: memoRecord.watermark
+      ...(memoRecord.metadata || {}),
+      signatoryLabel: memoRecord.signatoryLabel || memoRecord.metadata?.signatoryLabel,
+      approverLabel: memoRecord.approverLabel || memoRecord.metadata?.approverLabel,
+      signatoryCompany: memoRecord.signatoryCompany || memoRecord.metadata?.signatoryCompany,
+      signatorySignature: memoRecord.signatorySignature !== undefined ? memoRecord.signatorySignature : memoRecord.metadata?.signatorySignature,
+      approverSignature: memoRecord.approverSignature !== undefined ? memoRecord.approverSignature : memoRecord.metadata?.approverSignature,
+      signatorySize: memoRecord.signatorySize !== undefined ? memoRecord.signatorySize : memoRecord.metadata?.signatorySize,
+      signatoryOffsetX: memoRecord.signatoryOffsetX !== undefined ? memoRecord.signatoryOffsetX : memoRecord.metadata?.signatoryOffsetX,
+      signatoryOffsetY: memoRecord.signatoryOffsetY !== undefined ? memoRecord.signatoryOffsetY : memoRecord.metadata?.signatoryOffsetY,
+      approverSize: memoRecord.approverSize !== undefined ? memoRecord.approverSize : memoRecord.metadata?.approverSize,
+      approverOffsetX: memoRecord.approverOffsetX !== undefined ? memoRecord.approverOffsetX : memoRecord.metadata?.approverOffsetX,
+      approverOffsetY: memoRecord.approverOffsetY !== undefined ? memoRecord.approverOffsetY : memoRecord.metadata?.approverOffsetY,
+      includedCompanyIds: memoRecord.includedCompanyIds !== undefined ? memoRecord.includedCompanyIds : memoRecord.metadata?.includedCompanyIds,
+      letterheadOverrides: memoRecord.letterheadOverrides !== undefined ? memoRecord.letterheadOverrides : memoRecord.metadata?.letterheadOverrides,
+      watermark: memoRecord.watermark !== undefined ? memoRecord.watermark : memoRecord.metadata?.watermark
     },
     created_at: memoRecord.createdAt || now,
     updated_at: now
@@ -178,9 +188,7 @@ export async function saveMemoRecordToDb(currentUser = null, memoRecord = {}) {
     console.warn("Supabase saved_memos network notice:", err);
   }
 
-  // Update in-memory session cache
-  const existing = memoryMemosStore.get(accountKey) || [];
-  const filtered = existing.filter((m) => m.id !== id);
+  // Update in-memory session cache across all active stores
   const formattedMemo = {
     id,
     ref: payload.ref_no,
@@ -196,13 +204,40 @@ export async function saveMemoRecordToDb(currentUser = null, memoRecord = {}) {
     signatoryLayout: payload.signatory_layout,
     signatoryName: payload.signatory_name,
     signatoryTitle: payload.signatory_title,
+    signatoryCompany: payload.metadata?.signatoryCompany,
     approverName: payload.approver_name,
     approverTitle: payload.approver_title,
+    signatoryLabel: payload.metadata?.signatoryLabel || "ISSUED BY:",
+    approverLabel: payload.metadata?.approverLabel || "NOTED & APPROVED BY:",
+    signatorySignature: payload.metadata?.signatorySignature || null,
+    approverSignature: payload.metadata?.approverSignature || null,
+    signatorySize: payload.metadata?.signatorySize,
+    signatoryOffsetX: payload.metadata?.signatoryOffsetX,
+    signatoryOffsetY: payload.metadata?.signatoryOffsetY,
+    approverSize: payload.metadata?.approverSize,
+    approverOffsetX: payload.metadata?.approverOffsetX,
+    approverOffsetY: payload.metadata?.approverOffsetY,
+    watermark: payload.metadata?.watermark,
+    includedCompanyIds: payload.metadata?.includedCompanyIds,
+    letterheadOverrides: payload.metadata?.letterheadOverrides,
+    savedByUserId: payload.user_id,
     metadata: payload.metadata,
     createdAt: payload.created_at,
     updatedAt: payload.updated_at
   };
-  memoryMemosStore.set(accountKey, [formattedMemo, ...filtered]);
+
+  memoryMemosStore.forEach((existingList, key) => {
+    if (Array.isArray(existingList)) {
+      const filtered = existingList.filter((m) => m.id !== id);
+      memoryMemosStore.set(key, [formattedMemo, ...filtered]);
+    }
+  });
+  if (!memoryMemosStore.has("__global__")) {
+    memoryMemosStore.set("__global__", [formattedMemo]);
+  }
+  if (!memoryMemosStore.has(accountKey)) {
+    memoryMemosStore.set(accountKey, [formattedMemo]);
+  }
 
   return {
     success: true,
@@ -227,8 +262,7 @@ export async function deleteMemoRecordFromDb(currentUser = null, memoId) {
     const { error } = await supabase
       .from(SAVED_MEMOS_TABLE)
       .delete()
-      .eq("id", memoId)
-      .eq("user_id", accountKey);
+      .eq("id", memoId);
 
     if (!error) {
       syncedToSupabase = true;
@@ -239,10 +273,13 @@ export async function deleteMemoRecordFromDb(currentUser = null, memoId) {
     dbError = err?.message || String(err);
   }
 
-  // Update in-memory session cache
-  const existing = memoryMemosStore.get(accountKey) || [];
-  const updated = existing.filter((m) => m.id !== memoId);
-  memoryMemosStore.set(accountKey, updated);
+  // Update in-memory session cache across all memory stores
+  memoryMemosStore.forEach((memoList, key) => {
+    if (Array.isArray(memoList)) {
+      memoryMemosStore.set(key, memoList.filter((m) => m.id !== memoId));
+    }
+  });
 
+  const updated = (memoryMemosStore.get("__global__") || memoryMemosStore.get(accountKey) || []);
   return { success: true, syncedToSupabase, error: dbError, remaining: updated };
 }

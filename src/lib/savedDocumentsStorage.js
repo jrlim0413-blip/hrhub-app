@@ -4,8 +4,8 @@
  * with cloud synchronization to Supabase and resilient multi-tier fallback (localStorage & memory).
  */
 
-import { supabase } from "./supabase";
-import { getUserAccountKey } from "./userSettingsStorage";
+import { supabase } from "./supabase.js";
+import { getUserAccountKey } from "./userSettingsStorage.js";
 
 export const SAVED_DOCS_TABLE = "saved_documents";
 export const FALLBACK_MEMOS_TABLE = "saved_memos";
@@ -116,34 +116,19 @@ export async function getSavedDocumentsFromDb(currentUser = null) {
   const localList = getLocalCachedDocs(accountKey);
 
   try {
-    // 1. Primary check: check records in 'saved_memos' with category like 'DOC_STUDIO:%' (table exists in Supabase)
+    // 1. Primary check: check records in 'saved_memos' with category like 'DOC_STUDIO:%' across all company accounts
     const { data: memoDocs, error: memoErr } = await supabase
       .from(FALLBACK_MEMOS_TABLE)
       .select("*")
-      .eq("user_id", accountKey)
       .ilike("category", "DOC_STUDIO:%")
       .order("created_at", { ascending: false });
 
-    if (!memoErr && Array.isArray(memoDocs) && memoDocs.length > 0) {
+    if (!memoErr && Array.isArray(memoDocs)) {
       const mapped = memoDocs.map(mapMemoDocRowToModel);
+      memoryDocsStore.set("__global__", mapped);
       memoryDocsStore.set(accountKey, mapped);
       setLocalCachedDocs(accountKey, mapped);
       return { documents: mapped, source: "supabase_memos" };
-    }
-
-    // Fallback: check global in saved_memos in case user_id is admin or records are shared
-    const { data: allMemoDocs, error: allMemoErr } = await supabase
-      .from(FALLBACK_MEMOS_TABLE)
-      .select("*")
-      .ilike("category", "DOC_STUDIO:%")
-      .order("created_at", { ascending: false })
-      .limit(50);
-
-    if (!allMemoErr && Array.isArray(allMemoDocs) && allMemoDocs.length > 0) {
-      const mapped = allMemoDocs.map(mapMemoDocRowToModel);
-      memoryDocsStore.set(accountKey, mapped);
-      setLocalCachedDocs(accountKey, mapped);
-      return { documents: mapped, source: "supabase_memos_global" };
     }
 
     // 2. Only if saved_documents is explicitly deployed and available, query it
@@ -151,11 +136,11 @@ export async function getSavedDocumentsFromDb(currentUser = null) {
       const { data, error } = await supabase
         .from(SAVED_DOCS_TABLE)
         .select("*")
-        .eq("user_id", accountKey)
         .order("created_at", { ascending: false });
 
       if (!error && Array.isArray(data) && data.length > 0) {
         const mapped = data.map(mapDocRowToModel);
+        memoryDocsStore.set("__global__", mapped);
         memoryDocsStore.set(accountKey, mapped);
         setLocalCachedDocs(accountKey, mapped);
         return { documents: mapped, source: "supabase_docs" };

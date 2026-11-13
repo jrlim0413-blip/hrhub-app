@@ -104,11 +104,11 @@ export default function EmployeeDirectoryPanel({
   const [selectedHRFilter, setSelectedHRFilter] = useState("all"); // 'all' | 'unassigned' | specific HR
   const [selectedBranchFilter, setSelectedBranchFilter] = useState("all");
   const [viewMode, setViewMode] = useState("grid"); // 'grid' | 'table'
-  
+
   // Pre-Registration Modal State (Kept completely intact)
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isSubmittingAdd, setIsSubmittingAdd] = useState(false);
-  
+
   // Entity Employee Profiling Modal State (For Per-Entity / Company Accounts)
   const [isEntityModalOpen, setIsEntityModalOpen] = useState(false);
   const [isSubmittingEntity, setIsSubmittingEntity] = useState(false);
@@ -121,7 +121,7 @@ export default function EmployeeDirectoryPanel({
     phone: "",
     isApproved: true
   });
-  
+
   // Edit Profile / Diversify HR Assignment Modal State
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isSubmittingEdit, setIsSubmittingEdit] = useState(false);
@@ -704,11 +704,10 @@ export default function EmployeeDirectoryPanel({
     <div className="space-y-6">
       {/* Top Banner Notice */}
       {notice && (
-        <div className={`p-3.5 rounded-2xl border text-xs font-semibold flex items-center justify-between gap-3 shadow-xs animate-in fade-in slide-in-from-top-2 ${
-          notice.type === "success"
+        <div className={`p-3.5 rounded-2xl border text-xs font-semibold flex items-center justify-between gap-3 shadow-xs animate-in fade-in slide-in-from-top-2 ${notice.type === "success"
             ? "bg-emerald-50 border-emerald-200 text-emerald-900"
             : "bg-amber-50 border-amber-200 text-amber-900"
-        }`}>
+          }`}>
           <div className="flex items-center gap-2">
             <CheckCircle2 size={16} className="text-emerald-600 shrink-0" />
             <span>{notice.message}</span>
@@ -816,26 +815,22 @@ export default function EmployeeDirectoryPanel({
         </div>
 
         {/* Card 3: Pending Review */}
-        <div className={`border rounded-2xl p-4.5 shadow-xs transition ${
-          stats.pendingCount > 0
+        <div className={`border rounded-2xl p-4.5 shadow-xs transition ${stats.pendingCount > 0
             ? "bg-amber-50/60 border-amber-200"
             : "bg-white border-slate-200/90"
-        }`}>
+          }`}>
           <div className="flex items-center justify-between">
-            <span className={`text-[11px] font-bold uppercase tracking-wider ${
-              stats.pendingCount > 0 ? "text-amber-900" : "text-slate-500"
-            }`}>
+            <span className={`text-[11px] font-bold uppercase tracking-wider ${stats.pendingCount > 0 ? "text-amber-900" : "text-slate-500"
+              }`}>
               Pending Review
             </span>
-            <span className={`p-2 rounded-xl ${
-              stats.pendingCount > 0 ? "bg-amber-100 text-amber-800" : "bg-slate-100 text-slate-600"
-            }`}>
+            <span className={`p-2 rounded-xl ${stats.pendingCount > 0 ? "bg-amber-100 text-amber-800" : "bg-slate-100 text-slate-600"
+              }`}>
               <Clock size={16} />
             </span>
           </div>
-          <p className={`mt-3 text-2xl font-black tracking-tight ${
-            stats.pendingCount > 0 ? "text-amber-700" : "text-slate-900"
-          }`}>
+          <p className={`mt-3 text-2xl font-black tracking-tight ${stats.pendingCount > 0 ? "text-amber-700" : "text-slate-900"
+            }`}>
             {stats.pendingCount}
           </p>
           <p className="text-[11px] text-slate-400 mt-0.5">
@@ -861,24 +856,22 @@ export default function EmployeeDirectoryPanel({
                   key={tab.id}
                   type="button"
                   onClick={() => setSelectedFilter(tab.id)}
-                  className={`group flex items-center gap-2 py-3 px-3.5 border-b-2 text-xs font-semibold whitespace-nowrap transition cursor-pointer ${
-                    isActive
+                  className={`group flex items-center gap-2 py-3 px-3.5 border-b-2 text-xs font-semibold whitespace-nowrap transition cursor-pointer ${isActive
                       ? "border-emerald-600 text-emerald-950 font-bold"
                       : "border-transparent text-slate-500 hover:text-slate-900 hover:border-slate-300"
-                  }`}
+                    }`}
                 >
                   {tab.isOnlineTab && (
                     <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                   )}
                   <span>{tab.label}</span>
                   <span
-                    className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full transition ${
-                      isActive
+                    className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full transition ${isActive
                         ? "bg-emerald-100 text-emerald-800"
                         : tab.isPendingTab && tab.count > 0
-                        ? "bg-amber-100 text-amber-800"
-                        : "bg-slate-200/70 text-slate-600 group-hover:bg-slate-200"
-                    }`}
+                          ? "bg-amber-100 text-amber-800"
+                          : "bg-slate-200/70 text-slate-600 group-hover:bg-slate-200"
+                      }`}
                   >
                     {tab.count}
                   </span>
@@ -933,11 +926,10 @@ export default function EmployeeDirectoryPanel({
               <select
                 value={selectedHRFilter}
                 onChange={(e) => setSelectedHRFilter(e.target.value)}
-                className={`h-9 text-xs font-medium border rounded-xl px-3 py-1.5 focus:outline-none focus:border-emerald-500 cursor-pointer transition ${
-                  selectedHRFilter !== "all"
+                className={`h-9 text-xs font-medium border rounded-xl px-3 py-1.5 focus:outline-none focus:border-emerald-500 cursor-pointer transition ${selectedHRFilter !== "all"
                     ? "bg-emerald-50 border-emerald-300 text-emerald-900 font-bold"
                     : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100"
-                }`}
+                  }`}
               >
                 <option value="all">👥 HR: All Handlers</option>
                 <option value="unassigned">⚠️ Unassigned</option>
@@ -979,9 +971,8 @@ export default function EmployeeDirectoryPanel({
                 type="button"
                 onClick={() => setViewMode("grid")}
                 title="Grid View"
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
-                  viewMode === "grid" ? "bg-white text-slate-900 shadow-xs" : "text-slate-500 hover:text-slate-800"
-                }`}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${viewMode === "grid" ? "bg-white text-slate-900 shadow-xs" : "text-slate-500 hover:text-slate-800"
+                  }`}
               >
                 <LayoutGrid size={13} />
                 <span>Cards</span>
@@ -990,9 +981,8 @@ export default function EmployeeDirectoryPanel({
                 type="button"
                 onClick={() => setViewMode("table")}
                 title="Table View"
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
-                  viewMode === "table" ? "bg-white text-slate-900 shadow-xs" : "text-slate-500 hover:text-slate-800"
-                }`}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${viewMode === "table" ? "bg-white text-slate-900 shadow-xs" : "text-slate-500 hover:text-slate-800"
+                  }`}
               >
                 <List size={13} />
                 <span>Table</span>
@@ -1045,11 +1035,10 @@ export default function EmployeeDirectoryPanel({
             return (
               <div
                 key={prof.id || prof.email}
-                className={`bg-white rounded-2xl border transition shadow-xs flex flex-col justify-between overflow-hidden ${
-                  isOnline
+                className={`bg-white rounded-2xl border transition shadow-xs flex flex-col justify-between overflow-hidden ${isOnline
                     ? "border-slate-200 hover:border-emerald-300 hover:shadow-sm"
                     : "border-slate-200/80 hover:border-slate-300 hover:shadow-sm"
-                }`}
+                  }`}
               >
                 {/* Card Header & Identity */}
                 <div className="p-5 pb-4 space-y-3">
@@ -1057,9 +1046,8 @@ export default function EmployeeDirectoryPanel({
                     <div className="flex items-center gap-3">
                       {/* Avatar */}
                       <div className="relative">
-                        <div className={`w-11 h-11 rounded-xl font-extrabold text-xs flex items-center justify-center shadow-2xs ${
-                          isOnline ? "bg-slate-900 text-emerald-400" : "bg-slate-800 text-slate-300"
-                        }`}>
+                        <div className={`w-11 h-11 rounded-xl font-extrabold text-xs flex items-center justify-center shadow-2xs ${isOnline ? "bg-slate-900 text-emerald-400" : "bg-slate-800 text-slate-300"
+                          }`}>
                           {initials}
                         </div>
                         {isOnline ? (
@@ -1136,11 +1124,10 @@ export default function EmployeeDirectoryPanel({
                     <button
                       type="button"
                       onClick={() => handleToggleApproval(prof)}
-                      className={`py-1.5 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs ${
-                        prof.is_approved
+                      className={`py-1.5 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs ${prof.is_approved
                           ? "bg-white border border-slate-200 text-slate-600 hover:text-rose-600 hover:border-rose-200 hover:bg-rose-50"
                           : "bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/20"
-                      }`}
+                        }`}
                     >
                       {prof.is_approved ? (
                         <>
@@ -1232,9 +1219,8 @@ export default function EmployeeDirectoryPanel({
                     <tr key={prof.id || prof.email} className="hover:bg-slate-50/70 transition">
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-3">
-                          <div className={`w-8 h-8 rounded-xl font-bold text-xs flex items-center justify-center shrink-0 ${
-                            isOnline ? "bg-slate-900 text-emerald-400" : "bg-slate-700 text-slate-200"
-                          }`}>
+                          <div className={`w-8 h-8 rounded-xl font-bold text-xs flex items-center justify-center shrink-0 ${isOnline ? "bg-slate-900 text-emerald-400" : "bg-slate-700 text-slate-200"
+                            }`}>
                             {initials}
                           </div>
                           <div>
@@ -1295,11 +1281,10 @@ export default function EmployeeDirectoryPanel({
                             <button
                               type="button"
                               onClick={() => handleToggleApproval(prof)}
-                              className={`px-2.5 py-1 rounded-xl text-[11px] font-bold transition cursor-pointer ${
-                                prof.is_approved
+                              className={`px-2.5 py-1 rounded-xl text-[11px] font-bold transition cursor-pointer ${prof.is_approved
                                   ? "bg-slate-100 hover:bg-slate-200 text-slate-700"
                                   : "bg-emerald-600 hover:bg-emerald-500 text-white"
-                              }`}
+                                }`}
                             >
                               {prof.is_approved ? "Revoke" : "Approve"}
                             </button>
@@ -1384,11 +1369,10 @@ export default function EmployeeDirectoryPanel({
                   <span className="text-xs font-bold text-slate-800 block truncate">{editingEmployee.name || editingEmployee.email}</span>
                   <span className="text-[11px] text-slate-400 block truncate">{editingEmployee.email}</span>
                 </div>
-                <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full border ${
-                  editingEmployee.is_approved
+                <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full border ${editingEmployee.is_approved
                     ? "bg-emerald-50 text-emerald-700 border-emerald-200"
                     : "bg-amber-50 text-amber-700 border-amber-200"
-                }`}>
+                  }`}>
                   {editingEmployee.is_approved ? "Approved" : "Pending"}
                 </span>
               </div>
