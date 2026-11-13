@@ -18,6 +18,7 @@ import MultiAreaBettingRatioView from "../components/MultiAreaBettingRatioView";
 import EmployeeDirectoryPanel from "../components/EmployeeDirectoryPanel";
 import ShiftAttendanceOverviewPanel from "../components/ShiftAttendanceOverviewPanel";
 import CompanyBulletinFeed from "../components/CompanyBulletinFeed";
+import QuickInfoCard from "../components/QuickInfoCard";
 import PoliciesHandbooksPanel from "../components/PoliciesHandbooksPanel";
 import WeatherWidget from "../components/WeatherWidget";
 import MemoGeneratorPanel from "../components/MemoGeneratorPanel";
@@ -709,7 +710,7 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
       const tabs = [
         { id: "bulletin", allowed: canViewBulletin },
         { id: "directory", allowed: canViewDirectory },
-        ...(isHRMD ? [{ id: "attendance", allowed: canViewAttendance }] : []),
+        { id: "attendance", allowed: true },
         { id: "policies", allowed: canViewPolicies }
       ];
       const currentAllowed = tabs.find((t) => t.id === communicationTab)?.allowed;
@@ -1936,7 +1937,7 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
                   {[
                     { id: "bulletin", icon: Megaphone, label: "Company Bulletin", allowed: canViewBulletin },
                     { id: "directory", icon: Users, label: "Employee Directory", badge: supabaseProfiles.filter(p => !p.is_approved).length, allowed: canViewDirectory },
-                    ...(isHRMD ? [{ id: "attendance", icon: Calendar, label: "Shift & Attendance", allowed: canViewAttendance }] : []),
+                    { id: "attendance", icon: Calendar, label: "Shift & Attendance", allowed: true },
                     { id: "policies", icon: ShieldCheck, label: "Policies & Handbooks", allowed: canViewPolicies }
                   ].map(({ id, icon: Icon, label, badge, allowed }) => (
                     <button
@@ -1973,10 +1974,18 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
                 </nav>
               </div>
 
-              <div className="bg-[#101d2d] text-white rounded-2xl p-4 shadow-md space-y-2 text-xs">
-                <span className="text-[10px] uppercase font-bold text-emerald-400 tracking-wider">Quick Info</span>
-                <p className="text-slate-300 font-medium">Consolidated multi-entity payroll schedule set for <strong className="text-white">August 15, 2026</strong>.</p>
-              </div>
+              {/* Dynamic Real-Time Quick Info Card */}
+              <QuickInfoCard
+                isHRMD={isHRMD}
+                profileName={profileName}
+                onNavigateTab={(targetTab) => {
+                  if (targetTab === "bulletin" || targetTab === "directory" || targetTab === "attendance" || targetTab === "policies") {
+                    setCommunicationTab(targetTab);
+                  } else {
+                    handleOpenWorkspaceTab(targetTab);
+                  }
+                }}
+              />
 
               {communicationTab === "directory" && canViewDirectory && renderColleaguesDirectoryWidget()}
             </aside>
@@ -2007,7 +2016,7 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
                   </div>
                 )
               ) : communicationTab === "attendance" ? (
-                canViewAttendance ? (
+                isHRMD ? (
                   <ShiftAttendanceOverviewPanel
                     profiles={supabaseProfiles}
                     presenceMap={presenceMap}
@@ -2015,12 +2024,16 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
                     onOpenWorkspaceTab={handleOpenWorkspaceTab}
                   />
                 ) : (
-                  <div className="bg-white rounded-3xl border border-slate-200/90 p-8 text-center space-y-3">
-                    <Lock size={28} className="mx-auto text-amber-500" />
-                    <h3 className="text-base font-extrabold text-slate-900">Shift & Attendance Overview Restricted</h3>
-                    <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
-                      Shift schedules and live attendance records are exclusively reserved for Head Office HRMD administrators.
-                    </p>
+                  <div className="bg-white rounded-3xl border border-slate-200/90 p-12 text-center space-y-4">
+                    <div className="w-16 h-16 rounded-2xl bg-emerald-50 border border-emerald-200/80 text-emerald-600 flex items-center justify-center mx-auto shadow-xs">
+                      <Calendar size={32} />
+                    </div>
+                    <div className="space-y-1">
+                      <h3 className="text-base font-extrabold text-slate-900">Shift & Attendance Schedule</h3>
+                      <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
+                        Work shifts and roster allocations are currently being coordinated. Official shift schedules will be published here once finalized by Head Office HRMD.
+                      </p>
+                    </div>
                   </div>
                 )
               ) : communicationTab === "policies" ? (

@@ -285,3 +285,49 @@ export async function deleteCommentFromBulletinPostInDb(postId, commentId) {
   return { success: true, allPosts: updatedFeed };
 }
 
+/**
+ * Fetch custom quick broadcast from cloud database
+ */
+export async function getQuickInfoBroadcastFromDb() {
+  try {
+    const { data, error } = await supabase
+      .from("user_settings")
+      .select("settings_json")
+      .eq("user_id", "hrhub_quick_info_broadcast")
+      .maybeSingle();
+
+    if (!error && data?.settings_json?.text) {
+      return data.settings_json;
+    }
+  } catch (err) {
+    console.warn("Notice loading quick info broadcast:", err);
+  }
+  return null;
+}
+
+/**
+ * Save custom quick broadcast to cloud database
+ */
+export async function saveQuickInfoBroadcastToDb(broadcastData) {
+  try {
+    const payload = {
+      text: broadcastData.text || "",
+      tag: broadcastData.tag || "URGENT NOTICE",
+      authorName: broadcastData.authorName || "HRMD",
+      updatedAt: new Date().toISOString()
+    };
+    await supabase
+      .from("user_settings")
+      .upsert({
+        user_id: "hrhub_quick_info_broadcast",
+        settings_json: payload,
+        updated_at: new Date().toISOString()
+      }, { onConflict: "user_id" });
+    return { success: true, broadcast: payload };
+  } catch (err) {
+    console.warn("Error saving quick info broadcast:", err);
+    return { success: false, error: err.message };
+  }
+}
+
+
