@@ -177,9 +177,11 @@ export const HR_PRE_REGISTRATION_ROLES = [
   "HR Admin V",
   "HR Admin VI",
   "HR-Onsite",
-  "System Administrator",
+  "Site Supervisor",
   "Team Member"
 ];
+
+export const CENTRAL_HRMD_ROLES = HR_PRE_REGISTRATION_ROLES;
 
 // ============================================================================
 // 3. CATEGORIZED OPERATIONAL DESIGNATIONS FOR OTHER ACCOUNTS / SUBSIDIARIES

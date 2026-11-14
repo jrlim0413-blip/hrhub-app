@@ -16,6 +16,7 @@ import {
   ALL_BRANCH_PRESETS,
   OPERATIONAL_DESIGNATION_GROUPS,
   ALL_OPERATIONAL_ROLES,
+  CENTRAL_HRMD_ROLES,
   isStlEntity,
   isNonStlEntity,
   isHeadOffice
@@ -812,13 +813,17 @@ export default function AddEmployeeProfileModal({
                         let newRole = formData.role;
                         let newDept = formData.department;
 
-                        if (newComp === "MC POWER GAS") {
+                        if (isHeadOffice(newComp) || newComp === HEAD_OFFICE) {
+                          newRole = "Team Member";
+                          newDept = "Corporate Administration & HRMD";
+                        } else if (newComp === "MC POWER GAS") {
                           newRole = "PUMP ATTENDANT";
                           newDept = "Fuel & Station Operations (MC Power Gas)";
-                        } else if (isStlEntity(newComp) && (newRole === "PUMP ATTENDANT" || newRole === "Team Member")) {
+                        } else if (isStlEntity(newComp) && (newRole === "PUMP ATTENDANT" || newRole === "Team Member" || CENTRAL_HRMD_ROLES.includes(newRole))) {
                           newRole = "CASHIER";
                           newDept = "Operations & Field Terminals";
                         } else if (newComp === "Simpal Construction (SIMCON)") {
+                          newRole = "MAINTENACE STAFF";
                           newDept = "Site Construction (SIMCON)";
                         }
 
@@ -866,8 +871,14 @@ export default function AddEmployeeProfileModal({
                   <div className="space-y-1">
                     <div className="flex items-center justify-between">
                       <label className="text-xs font-bold text-slate-700">Designation / Role *</label>
-                      <span className="text-[10px] text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                        {formData.role || "Required"}
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
+                        (initialData?.is_preregistered || initialData?.status === "pre_registered" || isHeadOffice(formData.company) || formData.company === HEAD_OFFICE)
+                          ? "bg-teal-50 text-teal-800 border-teal-200"
+                          : "bg-emerald-50 text-emerald-700 border-emerald-200"
+                      }`}>
+                        {(initialData?.is_preregistered || initialData?.status === "pre_registered" || isHeadOffice(formData.company) || formData.company === HEAD_OFFICE)
+                          ? "Central HRMD Only"
+                          : (formData.role || "Required")}
                       </span>
                     </div>
 
@@ -877,13 +888,23 @@ export default function AddEmployeeProfileModal({
                         onChange={(e) => setFormData({ ...formData, role: e.target.value })}
                         className="w-full appearance-none rounded-xl border border-slate-200 bg-white pl-3.5 pr-9 py-2.5 text-xs text-slate-900 font-bold hover:border-slate-300 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 focus:outline-none transition cursor-pointer shadow-2xs"
                       >
-                        {OPERATIONAL_DESIGNATION_GROUPS.map((group) => (
-                          <optgroup key={group.category} label={group.category}>
-                            {group.roles.map((r) => (
+                        {(initialData?.is_preregistered || initialData?.status === "pre_registered" || isHeadOffice(formData.company) || formData.company === HEAD_OFFICE) ? (
+                          <optgroup label="Central HRMD (Head Office)">
+                            {CENTRAL_HRMD_ROLES.map((r) => (
                               <option key={r} value={r}>{r}</option>
                             ))}
                           </optgroup>
-                        ))}
+                        ) : (
+                          OPERATIONAL_DESIGNATION_GROUPS
+                            .filter((group) => group.category !== "Central HRMD")
+                            .map((group) => (
+                              <optgroup key={group.category} label={group.category}>
+                                {group.roles.map((r) => (
+                                  <option key={r} value={r}>{r}</option>
+                                ))}
+                              </optgroup>
+                            ))
+                        )}
                       </select>
                       <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400">
                         <ChevronDown size={14} />

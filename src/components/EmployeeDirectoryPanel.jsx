@@ -1346,15 +1346,15 @@ export default function EmployeeDirectoryPanel({
                     }}
                     className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs text-slate-800 focus:border-emerald-500 focus:bg-white focus:outline-none cursor-pointer"
                   >
-                    <optgroup label="🏛️ Corporate Head Office">
+                    <optgroup label="Head Office">
                       <option value="Simpal Group of Companies">Simpal Group of Companies</option>
                     </optgroup>
-                    <optgroup label="🎰 STL Subsidiaries (PCSO Authorized)">
+                    <optgroup label="STL Subsidiaries">
                       {STL_SUBSIDIARIES.map((sub) => (
                         <option key={sub} value={sub}>{sub}</option>
                       ))}
                     </optgroup>
-                    <optgroup label="⛽ Non-STL Subsidiaries (Retail, Fuel & Construction)">
+                    <optgroup label="Non-STL Subsidiaries">
                       {NON_STL_SUBSIDIARIES.map((sub) => (
                         <option key={sub} value={sub}>{sub}</option>
                       ))}
@@ -1363,15 +1363,22 @@ export default function EmployeeDirectoryPanel({
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-700">Role / Designation</label>
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-slate-700">Role / Designation *</label>
+                    <span className="text-[10px] text-teal-700 font-bold bg-teal-50 px-2 py-0.5 rounded border border-teal-200">
+                      Central HRMD Only
+                    </span>
+                  </div>
                   <select
                     value={newEmployee.role}
                     onChange={(e) => setNewEmployee({ ...newEmployee, role: e.target.value })}
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs text-slate-800 focus:border-emerald-500 focus:bg-white focus:outline-none cursor-pointer"
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs text-slate-800 font-bold focus:border-emerald-500 focus:bg-white focus:outline-none cursor-pointer"
                   >
-                    {ROLES.map((r) => (
-                      <option key={r} value={r}>{r}</option>
-                    ))}
+                    <optgroup label="Central HRMD (Head Office)">
+                      {ROLES.map((r) => (
+                        <option key={r} value={r}>{r}</option>
+                      ))}
+                    </optgroup>
                   </select>
                 </div>
               </div>

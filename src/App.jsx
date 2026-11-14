@@ -975,40 +975,6 @@ const App = () => {
                     </div>
                   ))}
                 </div>
-
-                {/* Official Managed Group Entities Showcase */}
-                <div className="pt-5 border-t border-slate-700/60 mt-4 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-extrabold uppercase tracking-widest text-emerald-300">
-                      Simpal Group • Managed Entities
-                    </span>
-                    <span className="text-[10px] font-bold text-slate-400">7 Active</span>
-                  </div>
-                  <div className="grid grid-cols-4 sm:grid-cols-7 gap-2 pt-1">
-                    {[
-                      { name: "Simpal Group of Companies", short: "SGC", logo: "/logos/SGC.png" },
-                      { name: "MC POWER GAS", short: "MCPG", logo: "/logos/mc_power_gas.png" },
-                      { name: "Simpal Construction", short: "SIMCON", logo: "/logos/SIM.png" },
-                      { name: "Lucky Betplay", short: "Betplay", logo: "/logos/LB.png" },
-                      { name: "5A Royal Gaming", short: "5A Royal", logo: "/logos/5A.png" },
-                      { name: "Glowing Fortune", short: "Fortune", logo: "/logos/GLOW.png" },
-                      { name: "Imperial Gaming", short: "Imperial", logo: "/logos/IMP.png" }
-                    ].map((item) => (
-                      <div
-                        key={item.name}
-                        title={item.name}
-                        className="flex flex-col items-center justify-center p-1.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/10 transition"
-                      >
-                        <div className="w-8 h-8 rounded-lg bg-white p-1 flex items-center justify-center shadow-xs overflow-hidden">
-                          <img src={item.logo} alt={item.short} className="max-h-full max-w-full object-contain" />
-                        </div>
-                        <span className="text-[9px] font-bold text-slate-300 mt-1 truncate max-w-full text-center">
-                          {item.short}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
               </div>
 
               <div className="p-6 sm:p-8 lg:p-10">
@@ -1026,23 +992,6 @@ const App = () => {
                   >
                     <X size={16} />
                   </button>
-                </div>
-
-                {/* Mobile Subsidiary Logos Strip */}
-                <div className="md:hidden mt-3 flex items-center gap-2 overflow-x-auto py-1.5 px-0.5">
-                  {[
-                    { name: "Simpal Group", logo: "/logos/SGC.png" },
-                    { name: "MC POWER GAS", logo: "/logos/mc_power_gas.png" },
-                    { name: "SIMCON", logo: "/logos/SIM.png" },
-                    { name: "Lucky Betplay", logo: "/logos/LB.png" },
-                    { name: "5A Royal", logo: "/logos/5A.png" },
-                    { name: "Glowing Fortune", logo: "/logos/GLOW.png" },
-                    { name: "Imperial Gaming", logo: "/logos/IMP.png" }
-                  ].map((ent) => (
-                    <div key={ent.name} title={ent.name} className="w-8 h-8 rounded-lg bg-slate-100 p-1 border border-slate-200 shrink-0 flex items-center justify-center">
-                      <img src={ent.logo} alt={ent.name} className="max-h-full max-w-full object-contain" />
-                    </div>
-                  ))}
                 </div>
 
                 {/* Tab Switcher */}
