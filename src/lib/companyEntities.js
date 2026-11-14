@@ -43,7 +43,7 @@ export const ENTITY_METADATA = {
     type: "head_office",
     category: "Corporate Head Office",
     badgeColor: "bg-emerald-100 text-emerald-800 border-emerald-300",
-    defaultBranch: "Head Office (Mandaue)",
+    defaultBranch: "Head Office (SGC)",
     description: "Central corporate holding & executive administrative governance.",
     logoUrl: "/logos/SGC.png"
   },
@@ -122,7 +122,7 @@ export const ENTITY_METADATA = {
 };
 
 export const DEFAULT_BRANCH_MAP = {
-  [HEAD_OFFICE]: "Head Office (Mandaue)",
+  [HEAD_OFFICE]: "Head Office (SGC)",
   "Lucky Betplay Corporation": "Mandaue City Branch",
   "5A Royal Gaming OPC": "Maguindanao Branch",
   "Glowing Fortune": "Iligan City Branch",
@@ -132,7 +132,7 @@ export const DEFAULT_BRANCH_MAP = {
 };
 
 export const ALL_BRANCH_PRESETS = [
-  "Head Office (Mandaue)",
+  "Head Office (SGC)",
   "Mandaue City Branch",
   "Maguindanao Branch",
   "Cotabato City Branch",
@@ -144,6 +144,16 @@ export const ALL_BRANCH_PRESETS = [
   "SIMCON Field Site",
   "Regional Draw & Operations"
 ];
+
+// Helper to normalize branch display based on company governance
+export function normalizeBranchForCompany(company, branch) {
+  if (matchesCompanyEntity(company, HEAD_OFFICE)) {
+    if (!branch || branch === "Head Office (Mandaue)" || branch.toLowerCase().includes("mandaue")) {
+      return "Head Office (SGC)";
+    }
+  }
+  return branch || DEFAULT_BRANCH_MAP[company] || "Head Office (SGC)";
+}
 
 // Helper to check entity type
 export function isStlEntity(companyName) {

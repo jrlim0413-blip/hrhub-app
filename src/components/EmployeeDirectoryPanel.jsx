@@ -38,7 +38,8 @@ import {
   ENTITY_METADATA,
   isStlEntity,
   isNonStlEntity,
-  isHeadOffice
+  isHeadOffice,
+  normalizeBranchForCompany
 } from "../lib/companyEntities";
 
 const SUBSIDIARIES = ALL_SUBSIDIARIES;
@@ -607,8 +608,8 @@ export default function EmployeeDirectoryPanel({
 
   // Open Add / Pre-Registration Modal (HRMD Only)
   const handleOpenAddModal = () => {
-    const defBranch = currentProfile?.branch || DEFAULT_BRANCH_MAP[currentProfile?.company] || "Head Office (Mandaue)";
     const defComp = currentProfile?.company || "Simpal Group of Companies";
+    const defBranch = normalizeBranchForCompany(defComp, currentProfile?.branch || DEFAULT_BRANCH_MAP[defComp]);
 
     setNewEmployee({
       email: "",
@@ -675,7 +676,7 @@ export default function EmployeeDirectoryPanel({
     setIsSubmittingAdd(true);
 
     try {
-      const assignedBranch = newEmployee.branch || DEFAULT_BRANCH_MAP[newEmployee.company] || "Head Office (Mandaue)";
+      const assignedBranch = normalizeBranchForCompany(newEmployee.company, newEmployee.branch || DEFAULT_BRANCH_MAP[newEmployee.company]);
 
       const newRecord = {
         id: `prof-${Date.now()}`,
@@ -1351,7 +1352,7 @@ export default function EmployeeDirectoryPanel({
             const displayName = prof.name || (prof.email ? prof.email.split("@")[0].replace(/[._]/g, " ").replace(/\b\w/g, (l) => l.toUpperCase()) : "Employee");
             const company = prof.company || "Simpal Group of Companies";
             const role = prof.role || "Team Member";
-            const branch = prof.branch || DEFAULT_BRANCH_MAP[company] || "Head Office";
+            const branch = normalizeBranchForCompany(company, prof.branch);
 
             const isProfAssignedHr = Boolean(
               assignedHrForOpenedEntity?.email &&
@@ -1623,7 +1624,7 @@ export default function EmployeeDirectoryPanel({
                   const showOnlineIndicator = isHRMD && isOnline;
                   const initials = prof.email ? prof.email.slice(0, 2).toUpperCase() : "HR";
                   const displayName = prof.name || (prof.email ? prof.email.split("@")[0].replace(/[._]/g, " ").replace(/\b\w/g, (l) => l.toUpperCase()) : "Employee");
-                  const branch = prof.branch || DEFAULT_BRANCH_MAP[prof.company] || "Head Office";
+                  const branch = normalizeBranchForCompany(prof.company, prof.branch);
                   const isLoginEnabled = isEmployeeLoginEnabled(prof);
 
                   const isProfAssignedHr = Boolean(
@@ -1909,7 +1910,7 @@ export default function EmployeeDirectoryPanel({
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-slate-700">Branch / Location</label>
                 <select
-                  value={newEmployee.branch || DEFAULT_BRANCH_MAP[newEmployee.company] || "Head Office (Mandaue)"}
+                  value={newEmployee.branch || normalizeBranchForCompany(newEmployee.company, DEFAULT_BRANCH_MAP[newEmployee.company])}
                   onChange={(e) => setNewEmployee({ ...newEmployee, branch: e.target.value })}
                   className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs text-slate-800 focus:border-emerald-500 focus:bg-white focus:outline-none cursor-pointer"
                 >

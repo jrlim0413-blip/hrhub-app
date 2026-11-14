@@ -19,7 +19,8 @@ import {
   CENTRAL_HRMD_ROLES,
   isStlEntity,
   isNonStlEntity,
-  isHeadOffice
+  isHeadOffice,
+  normalizeBranchForCompany
 } from "../lib/companyEntities";
 import {
   uploadEmployeeRequirementToBucket,
@@ -119,7 +120,7 @@ export default function AddEmployeeProfileModal({
     email: "",
     company: userEntityCompany,
     role: "Team Member",
-    branch: defaultBranchMap[userEntityCompany] || "Head Office (Mandaue)",
+    branch: normalizeBranchForCompany(userEntityCompany, defaultBranchMap[userEntityCompany]),
     department: "Operations & Field Terminals",
     phone: "",
     employmentStatus: "Regular Full-Time",
@@ -154,7 +155,7 @@ export default function AddEmployeeProfileModal({
     if (initialData) {
       const meta = initialData.metadata || {};
       const targetCompany = initialData.company || userEntityCompany;
-      const targetBranch = initialData.branch || meta.branch || defaultBranchMap[targetCompany] || "Head Office (Mandaue)";
+      const targetBranch = normalizeBranchForCompany(targetCompany, initialData.branch || meta.branch || defaultBranchMap[targetCompany]);
 
       setFormData({
         id: initialData.id || "",
@@ -189,7 +190,7 @@ export default function AddEmployeeProfileModal({
       setHasSaved(true); // Existing profile is already saved
       setNotice(null);
     } else {
-      const defBranch = defaultBranchMap[userEntityCompany] || "Head Office (Mandaue)";
+      const defBranch = normalizeBranchForCompany(userEntityCompany, defaultBranchMap[userEntityCompany]);
       setFormData({
         id: "",
         name: "",
@@ -1475,7 +1476,7 @@ export default function AddEmployeeProfileModal({
                       email: "",
                       company: userEntityCompany,
                       role: userEntityCompany === "MC POWER GAS" ? "PUMP ATTENDANT" : "CASHIER",
-                      branch: DEFAULT_BRANCH_MAP[userEntityCompany] || "Head Office (Mandaue)",
+                      branch: normalizeBranchForCompany(userEntityCompany, DEFAULT_BRANCH_MAP[userEntityCompany]),
                       department: userEntityCompany === "MC POWER GAS" ? "Fuel & Station Operations (MC Power Gas)" : "Operations & Field Terminals",
                       phone: "",
                       employmentStatus: "Regular Full-Time",
