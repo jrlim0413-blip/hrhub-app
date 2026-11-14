@@ -54,15 +54,16 @@ const BRANCH_PRESETS = ALL_BRANCH_PRESETS;
 
 /**
  * Identify the assigned HR Administrator for a given company/subsidiary.
- * Direct match: HR profile belonging to that company.
- * Fallback: Corporate Head Office HR (caquennie6@gmail.com / admin@hrhub.com).
+ * Strict match ONLY: An HR profile whose registered company strictly matches targetCompany.
+ * Profiles from other companies (e.g. Quennie Lim who belongs to Simpal Group of Companies)
+ * will NEVER be assigned to another entity.
  */
 export function getAssignedHrForCompany(targetCompany, allProfiles = []) {
   if (!targetCompany || targetCompany === "all" || targetCompany === "All Entities") {
     return null;
   }
 
-  // 1. Direct match: An HR profile whose registered company matches targetCompany
+  // Strict match: An HR profile whose registered company matches targetCompany
   const direct = (allProfiles || []).find((p) => {
     if (!matchesCompanyEntity(p.company, targetCompany)) return false;
     const role = (p.role || "").toLowerCase().trim();
@@ -77,18 +78,7 @@ export function getAssignedHrForCompany(targetCompany, allProfiles = []) {
     );
   });
 
-  if (direct) return direct;
-
-  // 2. Fallback: Corporate Head Office HR Administrator (Quennie Lim caquennie6@gmail.com, or Central HRMD admin@hrhub.com)
-  const corporateQuennie = (allProfiles || []).find(
-    (p) => (p.email || "").toLowerCase().trim() === "caquennie6@gmail.com"
-  );
-  if (corporateQuennie) return corporateQuennie;
-
-  const corporateMaster = (allProfiles || []).find(
-    (p) => (p.email || "").toLowerCase().trim() === "admin@hrhub.com"
-  );
-  return corporateMaster || null;
+  return direct || null;
 }
 
 
@@ -398,18 +388,7 @@ export default function EmployeeDirectoryPanel({
       ? (profiles || []).filter((p) => (p.email || "").trim().toLowerCase() !== "admin@hrhub.com")
       : managedProfiles;
 
-    // If an assigned HR exists for the opened entity and is not yet in sourceProfiles, include them!
-    let effectiveProfiles = [...sourceProfiles];
-    if (assignedHrForOpenedEntity && assignedEmail) {
-      const alreadyIncluded = effectiveProfiles.some(
-        (p) => (p.email || "").toLowerCase().trim() === assignedEmail || (p.id && p.id === assignedHrForOpenedEntity.id)
-      );
-      if (!alreadyIncluded) {
-        effectiveProfiles.push(assignedHrForOpenedEntity);
-      }
-    }
-
-    return effectiveProfiles.filter((p) => {
+    return sourceProfiles.filter((p) => {
       const email = p.email?.toLowerCase() || "";
       const name = (p.name || email.split("@")[0].replace(/[._]/g, " ")).toLowerCase();
       const company = (p.company || "Simpal Group of Companies").toLowerCase();
@@ -433,7 +412,7 @@ export default function EmployeeDirectoryPanel({
       else if (selectedFilter === "approved") matchesFilter = Boolean(p.is_approved);
       else if (selectedFilter === "pending") matchesFilter = !p.is_approved;
 
-      // Subsidiary & Entity Type filter
+      // Subsidiary & Entity Type filter: STRICTLY match the selected entity's company
       let matchesSubsidiary = true;
       if (selectedSubsidiary === "all") {
         matchesSubsidiary = true;
@@ -445,9 +424,7 @@ export default function EmployeeDirectoryPanel({
         matchesSubsidiary = isHeadOffice(p.company);
       } else {
         // Specific entity selected (e.g. "Lucky Betplay Corporation", "5A Royal Gaming OPC", "MC POWER GAS")
-        const isCompMatch = matchesCompanyEntity(p.company, selectedSubsidiary);
-        const isAssignedHr = assignedEmail && email === assignedEmail;
-        matchesSubsidiary = isCompMatch || Boolean(isAssignedHr);
+        matchesSubsidiary = matchesCompanyEntity(p.company, selectedSubsidiary);
       }
 
       // Branch filter
@@ -1027,11 +1004,11 @@ export default function EmployeeDirectoryPanel({
                 <ShieldCheck size={16} />
               </span>
             </div>
-            <p className="mt-3 text-base font-black text-slate-900 tracking-tight truncate" title={assignedHrForOpenedEntity?.name || assignedHrForOpenedEntity?.email || "Corporate HR"}>
-              {assignedHrForOpenedEntity?.name || (assignedHrForOpenedEntity?.email ? assignedHrForOpenedEntity.email.split("@")[0] : "Central Corporate HR")}
+            <p className="mt-3 text-base font-black text-slate-900 tracking-tight truncate" title={assignedHrForOpenedEntity?.name || assignedHrForOpenedEntity?.email || "No On-Site HR Assigned"}>
+              {assignedHrForOpenedEntity?.name || (assignedHrForOpenedEntity?.email ? assignedHrForOpenedEntity.email.split("@")[0] : "No On-Site HR Assigned")}
             </p>
             <p className="text-[11px] text-emerald-700 font-semibold mt-0.5 truncate flex items-center gap-1.5">
-              <span>{assignedHrForOpenedEntity?.role || "HR Administrator"}</span>
+              <span>{assignedHrForOpenedEntity?.role || "Supervised by Central HRMD"}</span>
               {assignedHrForOpenedEntity?.email && (
                 <span className="text-slate-400 font-normal">({assignedHrForOpenedEntity.email})</span>
               )}
@@ -1066,11 +1043,10 @@ export default function EmployeeDirectoryPanel({
                   key={tab.id}
                   type="button"
                   onClick={() => setSelectedSubsidiary(tab.id)}
-                  className={`group flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shadow-2xs shrink-0 ${
-                    isSelected
+                  className={`group flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shadow-2xs shrink-0 ${isSelected
                       ? "bg-slate-900 text-white shadow-sm ring-2 ring-emerald-500/40"
                       : "bg-white border border-slate-200/90 text-slate-700 hover:bg-slate-100 hover:text-slate-900"
-                  }`}
+                    }`}
                 >
                   {tab.logoUrl ? (
                     <img
@@ -1083,19 +1059,17 @@ export default function EmployeeDirectoryPanel({
                   )}
                   <span>{tab.shortName}</span>
                   <span
-                    className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
-                      isSelected
+                    className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${isSelected
                         ? "bg-emerald-500/20 text-emerald-300 border border-emerald-400/30"
                         : "bg-slate-100 text-slate-600 border border-slate-200/70"
-                    }`}
+                      }`}
                   >
                     {tab.count}
                   </span>
                   {tab.type === "non_stl" && (
                     <span
-                      className={`text-[8px] uppercase px-1 py-0.2 rounded font-black tracking-wider ${
-                        isSelected ? "bg-amber-400/20 text-amber-300 border border-amber-400/30" : "bg-amber-100 text-amber-900"
-                      }`}
+                      className={`text-[8px] uppercase px-1 py-0.2 rounded font-black tracking-wider ${isSelected ? "bg-amber-400/20 text-amber-300 border border-amber-400/30" : "bg-amber-100 text-amber-900"
+                        }`}
                     >
                       Non-STL
                     </span>
@@ -1120,11 +1094,10 @@ export default function EmployeeDirectoryPanel({
             type="button"
             onClick={() => setShowNonStl((prev) => !prev)}
             title="Toggle Non-STL Subsidiaries (MC Power Gas & Simcon)"
-            className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[11px] font-bold border transition cursor-pointer shrink-0 shadow-2xs ${
-              showNonStl
+            className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[11px] font-bold border transition cursor-pointer shrink-0 shadow-2xs ${showNonStl
                 ? "bg-amber-600 text-white border-amber-600 shadow-sm"
                 : "bg-amber-50 text-amber-900 border-amber-200 hover:bg-amber-100"
-            }`}
+              }`}
           >
             <Fuel size={12} className={showNonStl ? "text-white" : "text-amber-700"} />
             <span className="hidden sm:inline">{showNonStl ? "Hide Non-STL" : "+ Non-STL (2)"}</span>
@@ -1206,9 +1179,8 @@ export default function EmployeeDirectoryPanel({
                 type="button"
                 onClick={() => setViewMode("grid")}
                 title="Cards View"
-                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
-                  viewMode === "grid" ? "bg-white text-slate-900 shadow-xs" : "text-slate-500 hover:text-slate-800"
-                }`}
+                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${viewMode === "grid" ? "bg-white text-slate-900 shadow-xs" : "text-slate-500 hover:text-slate-800"
+                  }`}
               >
                 <LayoutGrid size={13} />
                 <span>Cards</span>
@@ -1217,9 +1189,8 @@ export default function EmployeeDirectoryPanel({
                 type="button"
                 onClick={() => setViewMode("table")}
                 title="Table View"
-                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
-                  viewMode === "table" ? "bg-white text-slate-900 shadow-xs" : "text-slate-500 hover:text-slate-800"
-                }`}
+                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${viewMode === "table" ? "bg-white text-slate-900 shadow-xs" : "text-slate-500 hover:text-slate-800"
+                  }`}
               >
                 <List size={13} />
                 <span>Table</span>
@@ -1360,13 +1331,12 @@ export default function EmployeeDirectoryPanel({
             return (
               <div
                 key={prof.id || prof.email}
-                className={`bg-white rounded-2xl border transition shadow-xs flex flex-col justify-between overflow-hidden ${
-                  isProfAssignedHr
+                className={`bg-white rounded-2xl border transition shadow-xs flex flex-col justify-between overflow-hidden ${isProfAssignedHr
                     ? "ring-2 ring-emerald-500/30 border-emerald-300 shadow-sm"
                     : showOnlineIndicator
                       ? "border-slate-200 hover:border-emerald-300 hover:shadow-sm"
                       : "border-slate-200/80 hover:border-slate-300 hover:shadow-sm"
-                }`}
+                  }`}
               >
                 {/* Optional Executive Cover Banner */}
                 {hasCover && (
@@ -1483,15 +1453,13 @@ export default function EmployeeDirectoryPanel({
 
                 {/* Portal Login Authorization Switch (Exclusive for Central HRMD Administrator when reviewing entity-enrolled profiles) */}
                 {isHRMD && !isProfAssignedHr && (selectedFilter === "entity_enrolled" || isEntityEnrolledEmployee(prof)) && (
-                  <div className={`px-4.5 py-2.5 border-t flex items-center justify-between text-xs transition ${
-                    isLoginEnabled ? "bg-emerald-50/60 border-emerald-100" : "bg-slate-50 border-slate-100"
-                  }`}>
+                  <div className={`px-4.5 py-2.5 border-t flex items-center justify-between text-xs transition ${isLoginEnabled ? "bg-emerald-50/60 border-emerald-100" : "bg-slate-50 border-slate-100"
+                    }`}>
                     <div className="flex items-center gap-1.5">
                       <KeyRound size={13} className={isLoginEnabled ? "text-emerald-600" : "text-slate-400"} />
                       <span className="font-bold text-slate-700 text-[11px]">Portal Login</span>
-                      <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded-full ${
-                        isLoginEnabled ? "bg-emerald-100 text-emerald-800" : "bg-slate-200 text-slate-600"
-                      }`}>
+                      <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded-full ${isLoginEnabled ? "bg-emerald-100 text-emerald-800" : "bg-slate-200 text-slate-600"
+                        }`}>
                         {isLoginEnabled ? "Login Enabled" : "Profiling Only"}
                       </span>
                     </div>
@@ -1499,15 +1467,13 @@ export default function EmployeeDirectoryPanel({
                       type="button"
                       onClick={() => handleToggleEmployeeLogin(prof)}
                       disabled={isTogglingLoginId === (prof.id || prof.email)}
-                      className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                        isLoginEnabled ? "bg-emerald-600" : "bg-slate-300"
-                      }`}
+                      className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${isLoginEnabled ? "bg-emerald-600" : "bg-slate-300"
+                        }`}
                       title={isLoginEnabled ? "Click to restrict to HR Profiling Only" : "Click to authorize Portal Login & Account Activation"}
                     >
                       <span
-                        className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                          isLoginEnabled ? "translate-x-4" : "translate-x-0"
-                        }`}
+                        className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${isLoginEnabled ? "translate-x-4" : "translate-x-0"
+                          }`}
                       />
                     </button>
                   </div>
@@ -1697,15 +1663,13 @@ export default function EmployeeDirectoryPanel({
                               type="button"
                               onClick={() => handleToggleEmployeeLogin(prof)}
                               disabled={isTogglingLoginId === (prof.id || prof.email)}
-                              className={`relative inline-flex h-4.5 w-8 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                                isLoginEnabled ? "bg-emerald-600" : "bg-slate-300"
-                              }`}
+                              className={`relative inline-flex h-4.5 w-8 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${isLoginEnabled ? "bg-emerald-600" : "bg-slate-300"
+                                }`}
                               title={isLoginEnabled ? "Click to restrict to HR Profiling Only" : "Click to authorize Portal Login & Account Activation"}
                             >
                               <span
-                                className={`pointer-events-none inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                                  isLoginEnabled ? "translate-x-3.5" : "translate-x-0"
-                                }`}
+                                className={`pointer-events-none inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${isLoginEnabled ? "translate-x-3.5" : "translate-x-0"
+                                  }`}
                               />
                             </button>
                             <span className={`text-[10px] font-bold ${isLoginEnabled ? "text-emerald-700" : "text-slate-500"}`}>
@@ -1713,11 +1677,10 @@ export default function EmployeeDirectoryPanel({
                             </span>
                           </div>
                         ) : (
-                          <span className={`inline-flex items-center gap-1 text-[9px] font-bold px-2 py-0.5 rounded-full border ${
-                            isLoginEnabled
+                          <span className={`inline-flex items-center gap-1 text-[9px] font-bold px-2 py-0.5 rounded-full border ${isLoginEnabled
                               ? "bg-emerald-50 text-emerald-800 border-emerald-200"
                               : "bg-slate-100 text-slate-600 border-slate-200"
-                          }`}>
+                            }`}>
                             {isLoginEnabled ? <KeyRound size={9} className="text-emerald-600" /> : <Lock size={9} className="text-slate-400" />}
                             <span>{isLoginEnabled ? "Login Access" : "Profiling Only"}</span>
                           </span>
@@ -1735,11 +1698,10 @@ export default function EmployeeDirectoryPanel({
                               type="button"
                               onClick={() => handleToggleApproval(prof)}
                               title={prof.is_approved ? "Revoke Approval" : "Approve Employee"}
-                              className={`px-2 py-1 rounded-lg text-[10px] font-bold transition cursor-pointer shadow-2xs ${
-                                prof.is_approved
+                              className={`px-2 py-1 rounded-lg text-[10px] font-bold transition cursor-pointer shadow-2xs ${prof.is_approved
                                   ? "bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200"
                                   : "bg-emerald-600 hover:bg-emerald-500 text-white"
-                              }`}
+                                }`}
                             >
                               {prof.is_approved ? "Revoke" : "Approve"}
                             </button>
