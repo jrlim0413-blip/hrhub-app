@@ -5,7 +5,7 @@ import {
   AlertCircle, Sparkles, ShieldAlert, Trash2, Calendar,
   Briefcase, Heart, Plus, ExternalLink, RefreshCw, Eye, Paperclip,
   Check, Download, Cloud, Fuel, Coins, Search, CheckCheck,
-  ArrowRight, Shield
+  ArrowRight, Shield, ChevronDown
 } from "lucide-react";
 import {
   HEAD_OFFICE,
