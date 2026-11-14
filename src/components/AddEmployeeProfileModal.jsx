@@ -523,6 +523,26 @@ export default function AddEmployeeProfileModal({
               </div>
             </div>
 
+            {/* Cover Presets Selector Pills: integrated smoothly into bottom-right of Cover */}
+            {!customCoverUrl && (
+              <div className="absolute bottom-3 right-4 hidden sm:flex items-center gap-1 bg-black/40 backdrop-blur-md border border-white/20 rounded-xl p-1 shadow-md z-20">
+                {COVER_PRESETS.map((preset) => (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    onClick={() => setSelectedPresetId(preset.id)}
+                    className={`px-2 py-0.5 rounded-lg text-[9px] font-bold transition cursor-pointer ${
+                      selectedPresetId === preset.id
+                        ? "bg-white text-slate-900 shadow-xs"
+                        : "text-white/85 hover:text-white hover:bg-white/10"
+                    }`}
+                  >
+                    {preset.name}
+                  </button>
+                ))}
+              </div>
+            )}
+
             <input
               ref={coverInputRef}
               type="file"
@@ -532,10 +552,11 @@ export default function AddEmployeeProfileModal({
             />
           </div>
 
-          {/* Overlapping Avatar Profile Photo & Identity Strip */}
-          <div className="px-6 pb-3 relative flex flex-col sm:flex-row sm:items-end justify-between -mt-14 sm:-mt-16 z-30 gap-4">
-            <div className="flex items-end gap-4">
-              <div className="relative group/avatar shrink-0">
+          {/* Profile Identity & Avatar Strip */}
+          <div className="px-6 sm:px-8 pb-3 pt-0 bg-white relative flex flex-col sm:flex-row sm:items-end justify-between gap-4 border-b border-slate-100">
+            <div className="flex flex-col sm:flex-row sm:items-end gap-4">
+              {/* Overlapping Avatar Profile Photo: ONLY the avatar has negative margin! */}
+              <div className="-mt-12 sm:-mt-14 relative group/avatar shrink-0 z-30">
                 <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-2xl ring-4 ring-white bg-slate-900 text-emerald-400 font-black text-2xl flex items-center justify-center shadow-xl overflow-hidden relative">
                   {avatarUrl ? (
                     <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
@@ -573,8 +594,8 @@ export default function AddEmployeeProfileModal({
                 />
               </div>
 
-              {/* Identity summary */}
-              <div className="min-w-0 pb-1">
+              {/* Identity summary: completely on white background, ZERO negative margin, ZERO overlap! */}
+              <div className="min-w-0 pt-2 sm:pt-0 pb-1">
                 <h3 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight truncate">
                   {formData.name || (mode === "edit" ? "Employee Record" : "New Employee Profile")}
                 </h3>
@@ -593,25 +614,34 @@ export default function AddEmployeeProfileModal({
               </div>
             </div>
 
-            {/* Default Cover Presets Selector Pills */}
-            {!customCoverUrl && (
-              <div className="hidden md:flex items-center gap-1 bg-slate-100/90 border border-slate-200/80 rounded-xl p-1 shadow-2xs self-end">
-                {COVER_PRESETS.map((preset) => (
-                  <button
-                    key={preset.id}
-                    type="button"
-                    onClick={() => setSelectedPresetId(preset.id)}
-                    className={`px-2 py-0.5 rounded-lg text-[9px] font-bold transition cursor-pointer ${
-                      selectedPresetId === preset.id
-                        ? "bg-slate-900 text-white shadow-xs"
-                        : "text-slate-600 hover:text-slate-900"
-                    }`}
-                  >
-                    {preset.name}
-                  </button>
-                ))}
-              </div>
-            )}
+            {/* Status & mobile preset selector */}
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 self-start sm:self-end pb-1">
+              {!customCoverUrl && (
+                <div className="flex sm:hidden items-center gap-1 bg-slate-100 border border-slate-200 rounded-xl p-1 shadow-2xs overflow-x-auto max-w-full">
+                  {COVER_PRESETS.map((preset) => (
+                    <button
+                      key={preset.id}
+                      type="button"
+                      onClick={() => setSelectedPresetId(preset.id)}
+                      className={`px-2 py-0.5 rounded-lg text-[9px] font-bold shrink-0 transition cursor-pointer ${
+                        selectedPresetId === preset.id
+                          ? "bg-slate-900 text-white shadow-xs"
+                          : "text-slate-600 hover:text-slate-900"
+                      }`}
+                    >
+                      {preset.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+              <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold border ${
+                formData.is_approved
+                  ? "bg-emerald-50 text-emerald-800 border-emerald-300"
+                  : "bg-amber-50 text-amber-800 border-amber-300"
+              }`}>
+                {formData.is_approved ? "Approved Active" : "Pending Review"}
+              </span>
+            </div>
           </div>
         </div>
 

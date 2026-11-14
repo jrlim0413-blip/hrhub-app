@@ -11,11 +11,35 @@ import { supabase } from "./supabase.js";
 
 export const EMPLOYEES_TABLE = "employees";
 export const BACKUP_STORE_KEY = "company_employee_directory";
+export const DELETED_STORE_KEY = "company_deleted_employees";
+export const LOCAL_DELETED_KEY = "hrhub_deleted_employee_emails";
+
+// Persistent tombstone blacklist: once deleted, an employee will NEVER return on refresh
+const deletedEmailsSet = new Set();
+// Pre-seed efilfonimda to prevent resurrection across sessions
+deletedEmailsSet.add("efilfonimda@gmail.com");
+
+// Synchronously load deleted emails from localStorage on module startup
+if (typeof window !== "undefined" && window.localStorage) {
+  try {
+    const rawDel = window.localStorage.getItem(LOCAL_DELETED_KEY);
+    if (rawDel) {
+      const parsedDel = JSON.parse(rawDel);
+      if (Array.isArray(parsedDel)) {
+        parsedDel.forEach((item) => {
+          if (item) deletedEmailsSet.add(String(item).trim().toLowerCase());
+        });
+      }
+    }
+  } catch (err) {
+    console.warn("Notice loading local deleted employees:", err);
+  }
+}
 
 // In-memory cache for fast synchronous renders
 const memoryEmployeeStore = new Map();
 
-// Base seed accounts to guarantee instant availability
+// Base seed accounts to guarantee instant availability (excluding deleted accounts)
 const INITIAL_DIRECTORY = [
   {
     id: "emp-remark-joy",
@@ -36,15 +60,6 @@ const INITIAL_DIRECTORY = [
     created_at: "2026-10-09T13:45:51.365Z"
   },
   {
-    id: "43eb7f87-a4e5-4e38-8c00-dcbdabd7b66b",
-    email: "efilfonimda@gmail.com",
-    name: "Efilfonimda",
-    company: "Simpal Group of Companies",
-    role: "Team Member",
-    is_approved: true,
-    created_at: "2026-08-12T00:33:27.743Z"
-  },
-  {
     id: "admin-hrmd-master",
     email: "admin@hrhub.com",
     name: "H R M D",
@@ -55,10 +70,57 @@ const INITIAL_DIRECTORY = [
   }
 ];
 
-// Initialize in-memory cache with base records
+// Initialize in-memory cache with base records excluding any deleted accounts
 INITIAL_DIRECTORY.forEach((emp) => {
-  memoryEmployeeStore.set(emp.email.trim().toLowerCase(), emp);
+  const emailKey = emp.email.trim().toLowerCase();
+  const idKey = String(emp.id || "").toLowerCase();
+  if (!deletedEmailsSet.has(emailKey) && !deletedEmailsSet.has(idKey)) {
+    memoryEmployeeStore.set(emailKey, emp);
+  }
 });
+
+/**
+ * Check if an email or ID has been permanently deleted
+ */
+export function isEmployeeDeleted(emailOrId) {
+  if (!emailOrId) return false;
+  const q = String(emailOrId).trim().toLowerCase();
+  return deletedEmailsSet.has(q);
+}
+
+/**
+ * Get all permanently deleted email and ID tombstones
+ */
+export function getDeletedEmails() {
+  return Array.from(deletedEmailsSet);
+}
+
+/**
+ * Fetch and synchronize deleted emails tombstone blacklist from Supabase database
+ */
+export async function syncDeletedEmailsFromCloud() {
+  try {
+    const { data, error } = await supabase
+      .from("user_settings")
+      .select("settings_json")
+      .eq("user_id", DELETED_STORE_KEY)
+      .maybeSingle();
+
+    if (!error && data?.settings_json?.deleted_emails && Array.isArray(data.settings_json.deleted_emails)) {
+      data.settings_json.deleted_emails.forEach((item) => {
+        if (item) deletedEmailsSet.add(String(item).trim().toLowerCase());
+      });
+      if (typeof window !== "undefined" && window.localStorage) {
+        window.localStorage.setItem(LOCAL_DELETED_KEY, JSON.stringify(Array.from(deletedEmailsSet)));
+      }
+    }
+  } catch (err) {
+    console.warn("Notice syncing deleted emails from cloud:", err);
+  }
+}
+
+// Kick off cloud tombstone sync immediately
+syncDeletedEmailsFromCloud();
 
 /**
  * Migration & Purge:
@@ -106,7 +168,24 @@ purgeLegacyLocalStorage();
  * 'user_settings' (company_employee_directory) and 'profiles'.
  */
 export async function fetchEmployeesFromDatabase() {
-  const mergedMap = new Map(memoryEmployeeStore);
+  await syncDeletedEmailsFromCloud();
+
+  // Purge any deleted emails from memoryEmployeeStore
+  for (const del of deletedEmailsSet) {
+    memoryEmployeeStore.delete(del);
+  }
+  for (const [k, v] of memoryEmployeeStore.entries()) {
+    if (deletedEmailsSet.has(String(v.id).toLowerCase()) || deletedEmailsSet.has(k)) {
+      memoryEmployeeStore.delete(k);
+    }
+  }
+
+  const mergedMap = new Map();
+  memoryEmployeeStore.forEach((val, key) => {
+    if (!deletedEmailsSet.has(key) && !deletedEmailsSet.has(String(val.id).toLowerCase())) {
+      mergedMap.set(key, val);
+    }
+  });
 
   try {
     // 1. Query dedicated Supabase 'employees' table
@@ -119,6 +198,10 @@ export async function fetchEmployeesFromDatabase() {
       employeesData.forEach((emp) => {
         if (emp?.email) {
           const emailKey = emp.email.trim().toLowerCase();
+          const idKey = String(emp.id || "").toLowerCase();
+          if (deletedEmailsSet.has(emailKey) || deletedEmailsSet.has(idKey)) {
+            return; // Skip permanently deleted account
+          }
           const meta = emp.metadata && typeof emp.metadata === "object" ? emp.metadata : {};
           const createdBy = (emp.created_by || meta.created_by || meta.created_by_email || "").trim().toLowerCase();
           mergedMap.set(emailKey, {
@@ -149,6 +232,10 @@ export async function fetchEmployeesFromDatabase() {
         cloudBackup.settings_json.employees.forEach((emp) => {
           if (emp?.email) {
             const emailKey = emp.email.trim().toLowerCase();
+            const idKey = String(emp.id || "").toLowerCase();
+            if (deletedEmailsSet.has(emailKey) || deletedEmailsSet.has(idKey)) {
+              return; // Skip permanently deleted account
+            }
             const meta = emp.metadata && typeof emp.metadata === "object" ? emp.metadata : {};
             const createdBy = (emp.created_by || emp.created_by_email || meta.created_by || meta.created_by_email || "").trim().toLowerCase();
             mergedMap.set(emailKey, {
@@ -179,6 +266,10 @@ export async function fetchEmployeesFromDatabase() {
         profilesData.forEach((prof) => {
           if (!prof?.email) return;
           const emailKey = prof.email.trim().toLowerCase();
+          const idKey = String(prof.id || "").toLowerCase();
+          if (deletedEmailsSet.has(emailKey) || deletedEmailsSet.has(idKey)) {
+            return; // Skip permanently deleted account
+          }
           const existing = mergedMap.get(emailKey) || {};
           const meta = existing.metadata || {};
           const createdBy = existing.created_by || meta.created_by || "";
@@ -203,15 +294,27 @@ export async function fetchEmployeesFromDatabase() {
 
     // Update in-memory store
     memoryEmployeeStore.clear();
-    mergedMap.forEach((val, key) => memoryEmployeeStore.set(key, val));
+    mergedMap.forEach((val, key) => {
+      if (!deletedEmailsSet.has(key) && !deletedEmailsSet.has(String(val.id).toLowerCase())) {
+        memoryEmployeeStore.set(key, val);
+      }
+    });
 
     // Ensure HRMD master admin is consistent
     ensureHrmdAdmin(memoryEmployeeStore);
 
-    return Array.from(memoryEmployeeStore.values());
+    return Array.from(memoryEmployeeStore.values()).filter((emp) => {
+      const eKey = (emp.email || "").trim().toLowerCase();
+      const iKey = String(emp.id || "").toLowerCase();
+      return !deletedEmailsSet.has(eKey) && !deletedEmailsSet.has(iKey);
+    });
   } catch (err) {
     console.warn("Error fetching employees from database:", err);
-    return Array.from(memoryEmployeeStore.values());
+    return Array.from(memoryEmployeeStore.values()).filter((emp) => {
+      const eKey = (emp.email || "").trim().toLowerCase();
+      const iKey = String(emp.id || "").toLowerCase();
+      return !deletedEmailsSet.has(eKey) && !deletedEmailsSet.has(iKey);
+    });
   }
 }
 
@@ -259,6 +362,28 @@ export async function saveStoredEmployee(employee) {
   if (!employee || !employee.email) return getStoredEmployees();
 
   const targetEmail = employee.email.trim().toLowerCase();
+  const targetId = employee.id ? String(employee.id).toLowerCase() : null;
+
+  // If this email or ID was previously deleted, remove it from tombstone blacklist
+  if (deletedEmailsSet.has(targetEmail) || (targetId && deletedEmailsSet.has(targetId))) {
+    deletedEmailsSet.delete(targetEmail);
+    if (targetId) deletedEmailsSet.delete(targetId);
+    if (typeof window !== "undefined" && window.localStorage) {
+      try {
+        window.localStorage.setItem(LOCAL_DELETED_KEY, JSON.stringify(Array.from(deletedEmailsSet)));
+      } catch (e) {}
+    }
+    // Update cloud tombstone
+    supabase
+      .from("user_settings")
+      .upsert({
+        user_id: DELETED_STORE_KEY,
+        settings_json: { deleted_emails: Array.from(deletedEmailsSet) },
+        updated_at: new Date().toISOString()
+      }, { onConflict: "user_id" })
+      .catch(() => {});
+  }
+
   const existing = memoryEmployeeStore.get(targetEmail) || {};
   const meta = {
     ...(existing.metadata || {}),
@@ -311,7 +436,9 @@ export async function saveStoredEmployee(employee) {
     }
 
     // B. Also sync to cloud backup in 'user_settings'
-    const allEmployees = Array.from(memoryEmployeeStore.values());
+    const allEmployees = Array.from(memoryEmployeeStore.values()).filter(
+      (emp) => !deletedEmailsSet.has((emp.email || "").trim().toLowerCase())
+    );
     await supabase
       .from("user_settings")
       .upsert({
@@ -374,7 +501,9 @@ export async function updateStoredEmployeeApproval(emailOrId, isApproved) {
       .or(`email.ilike.${targetRecord.email},id.eq.${targetRecord.id}`);
 
     // 2. Cloud backup
-    const allEmployees = Array.from(memoryEmployeeStore.values());
+    const allEmployees = Array.from(memoryEmployeeStore.values()).filter(
+      (emp) => !deletedEmailsSet.has((emp.email || "").trim().toLowerCase())
+    );
     await supabase
       .from("user_settings")
       .upsert({
@@ -396,7 +525,8 @@ export async function updateStoredEmployeeApproval(emailOrId, isApproved) {
 }
 
 /**
- * Delete an employee from Supabase Database by email or id.
+ * Delete an employee permanently from Supabase Database and local cache.
+ * Records target in persistent tombstone blacklist to guarantee it NEVER returns upon page refresh.
  */
 export async function deleteStoredEmployee(emailOrId) {
   if (!emailOrId) return getStoredEmployees();
@@ -414,26 +544,68 @@ export async function deleteStoredEmployee(emailOrId) {
     }
   }
 
-  // Persist deletion to Supabase
+  if (!targetEmail && query.includes("@")) {
+    targetEmail = query;
+  }
+  if (!targetId && !query.includes("@")) {
+    targetId = query;
+  }
+
+  // 1. Add to persistent tombstone blacklist
+  if (targetEmail) deletedEmailsSet.add(targetEmail);
+  if (targetId) deletedEmailsSet.add(String(targetId).toLowerCase());
+
+  // Save to localStorage immediately for instant offline/initialization protection
+  if (typeof window !== "undefined" && window.localStorage) {
+    try {
+      window.localStorage.setItem(LOCAL_DELETED_KEY, JSON.stringify(Array.from(deletedEmailsSet)));
+    } catch (err) {
+      console.warn("Notice saving deleted employee tombstone:", err);
+    }
+  }
+
+  // 2. Persist tombstone blacklist to Supabase 'user_settings'
   try {
-    // 1. Delete from 'employees' table
+    await supabase
+      .from("user_settings")
+      .upsert({
+        user_id: DELETED_STORE_KEY,
+        settings_json: { deleted_emails: Array.from(deletedEmailsSet) },
+        updated_at: new Date().toISOString()
+      }, { onConflict: "user_id" });
+  } catch (cloudErr) {
+    console.warn("Notice updating cloud tombstone:", cloudErr);
+  }
+
+  // 3. Delete from 'employees' table
+  try {
     if (targetEmail) {
       await supabase.from(EMPLOYEES_TABLE).delete().ilike("email", targetEmail);
     }
     if (targetId && !String(targetId).startsWith("emp-")) {
       await supabase.from(EMPLOYEES_TABLE).delete().eq("id", targetId);
     }
+  } catch (err) {
+    console.warn("Delete from employees table notice:", err);
+  }
 
-    // 2. Delete from 'profiles' table
+  // 4. Delete from 'profiles' table
+  try {
     if (targetEmail) {
       await supabase.from("profiles").delete().ilike("email", targetEmail);
     }
     if (targetId && !String(targetId).startsWith("emp-") && !String(targetId).startsWith("prof-")) {
       await supabase.from("profiles").delete().eq("id", targetId);
     }
+  } catch (err) {
+    console.warn("Delete from profiles table notice:", err);
+  }
 
-    // 3. Update cloud backup
-    const allEmployees = Array.from(memoryEmployeeStore.values());
+  // 5. Update cloud backup
+  try {
+    const allEmployees = Array.from(memoryEmployeeStore.values()).filter(
+      (emp) => !deletedEmailsSet.has((emp.email || "").trim().toLowerCase())
+    );
     await supabase
       .from("user_settings")
       .upsert({
@@ -442,28 +614,48 @@ export async function deleteStoredEmployee(emailOrId) {
         updated_at: new Date().toISOString()
       }, { onConflict: "user_id" });
   } catch (err) {
-    console.warn("Error deleting employee from Supabase:", err);
+    console.warn("Error updating backup store:", err);
   }
 
-  return Array.from(memoryEmployeeStore.values());
+  // 6. Dispatch custom window event
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(
+      new CustomEvent("hrhub_employee_deleted", {
+        detail: { email: targetEmail, id: targetId }
+      })
+    );
+  }
+
+  return Array.from(memoryEmployeeStore.values()).filter(
+    (emp) => !deletedEmailsSet.has((emp.email || "").trim().toLowerCase())
+  );
 }
 
 /**
  * Merge Supabase database profiles with database-backed employees directory.
  * Authoritative source of truth is the Supabase database.
+ * Strictly excludes any permanently deleted account.
  */
 export function mergeProfilesWithStored(supabaseProfiles = []) {
   const mergedMap = new Map();
 
-  // 1. First populate with our database-backed employee records
+  // 1. First populate with our database-backed employee records, excluding tombstones
   memoryEmployeeStore.forEach((item, emailKey) => {
-    mergedMap.set(emailKey, { ...item });
+    const idKey = String(item.id || "").toLowerCase();
+    if (!deletedEmailsSet.has(emailKey) && !deletedEmailsSet.has(idKey)) {
+      mergedMap.set(emailKey, { ...item });
+    }
   });
 
-  // 2. Overlay / synchronize with any Supabase Auth profiles
+  // 2. Overlay / synchronize with any Supabase Auth profiles, excluding tombstones
   (supabaseProfiles || []).forEach((sp) => {
     if (!sp?.email) return;
     const emailKey = sp.email.trim().toLowerCase();
+    const idKey = String(sp.id || "").toLowerCase();
+    if (deletedEmailsSet.has(emailKey) || deletedEmailsSet.has(idKey)) {
+      return; // Skip permanently deleted account
+    }
+
     const existing = mergedMap.get(emailKey);
     const meta = existing?.metadata || {};
     const createdBy = (existing?.created_by || meta.created_by || meta.created_by_email || "").trim().toLowerCase();
@@ -491,30 +683,36 @@ export function mergeProfilesWithStored(supabaseProfiles = []) {
     });
   });
 
-  // 3. Ensure Remark Joy Gaviola is always properly configured
+  // 3. Ensure Remark Joy Gaviola only if NOT deleted
   const REMARK_EMAIL = "remarkjoymark@gmail.com";
-  if (!mergedMap.has(REMARK_EMAIL)) {
-    mergedMap.set(REMARK_EMAIL, {
-      id: "emp-remark-joy",
-      email: REMARK_EMAIL,
-      name: "Remark Joy Gaviola",
-      company: "Lucky Betplay Corporation",
-      role: "Team Member",
-      is_approved: true,
-      created_at: "2026-10-15T00:00:00.000Z"
-    });
-  } else {
-    const remark = mergedMap.get(REMARK_EMAIL);
-    if (!remark.name || remark.name === "Remarkjoymark") remark.name = "Remark Joy Gaviola";
-    if (!remark.company) remark.company = "Lucky Betplay Corporation";
-    if (!remark.role) remark.role = "Team Member";
-    remark.is_approved = true;
+  if (!deletedEmailsSet.has(REMARK_EMAIL)) {
+    if (!mergedMap.has(REMARK_EMAIL)) {
+      mergedMap.set(REMARK_EMAIL, {
+        id: "emp-remark-joy",
+        email: REMARK_EMAIL,
+        name: "Remark Joy Gaviola",
+        company: "Lucky Betplay Corporation",
+        role: "Team Member",
+        is_approved: true,
+        created_at: "2026-10-15T00:00:00.000Z"
+      });
+    } else {
+      const remark = mergedMap.get(REMARK_EMAIL);
+      if (!remark.name || remark.name === "Remarkjoymark") remark.name = "Remark Joy Gaviola";
+      if (!remark.company) remark.company = "Lucky Betplay Corporation";
+      if (!remark.role) remark.role = "Team Member";
+      remark.is_approved = true;
+    }
   }
 
   // 4. Ensure HR Administrator account is always present
   ensureHrmdAdmin(mergedMap);
 
-  return Array.from(mergedMap.values());
+  return Array.from(mergedMap.values()).filter((emp) => {
+    const eKey = (emp.email || "").trim().toLowerCase();
+    const iKey = String(emp.id || "").toLowerCase();
+    return !deletedEmailsSet.has(eKey) && !deletedEmailsSet.has(iKey);
+  });
 }
 
 export const CREDENTIALS_STORE_KEY = "company_activated_credentials";

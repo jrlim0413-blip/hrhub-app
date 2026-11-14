@@ -355,13 +355,13 @@ export default function EmployeeDirectoryPanel({
     );
     if (!confirmDelete) return;
 
-    // 1. Delete from local persistent storage
-    if (profile.email) deleteStoredEmployee(profile.email);
-    if (profile.id) deleteStoredEmployee(profile.id);
+    // 1. Delete from local persistent storage & cloud tombstone
+    if (profile.email) await deleteStoredEmployee(profile.email);
+    if (profile.id) await deleteStoredEmployee(profile.id);
 
     // 2. Notify parent dashboard
     if (onDeleteProfile) {
-      onDeleteProfile(profile.id, profile.email);
+      await onDeleteProfile(profile.id, profile.email);
     }
 
     // 3. Delete from Supabase

@@ -646,8 +646,19 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
         handleOpenWorkspaceTab(e.detail.tabId);
       }
     };
+    const handleEmployeeDeleted = (e) => {
+      const { email, id } = e.detail || {};
+      setSupabaseProfiles((prev) =>
+        prev.filter((p) => {
+          const matchId = id && String(p.id) === String(id);
+          const matchEmail = email && (p.email || "").toLowerCase() === (email || "").toLowerCase();
+          return !matchId && !matchEmail;
+        })
+      );
+    };
     window.addEventListener("hrhub_rbac_updated", handleRbacUpdate);
     window.addEventListener("hrhub_switch_workspace_tab", handleSwitchWorkspaceTab);
+    window.addEventListener("hrhub_employee_deleted", handleEmployeeDeleted);
 
     // 3. Listen to Supabase Realtime for instant multi-device matrix synchronization
     let channel = null;
@@ -670,6 +681,7 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
     return () => {
       window.removeEventListener("hrhub_rbac_updated", handleRbacUpdate);
       window.removeEventListener("hrhub_switch_workspace_tab", handleSwitchWorkspaceTab);
+      window.removeEventListener("hrhub_employee_deleted", handleEmployeeDeleted);
       if (channel && supabase) {
         supabase.removeChannel(channel);
       }
@@ -939,9 +951,9 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
   };
 
   const handleDeleteProfile = async (id, email) => {
-    // 1. Remove from local storage
-    if (email) deleteStoredEmployee(email);
-    if (id) deleteStoredEmployee(id);
+    // 1. Remove from local & cloud persistent storage
+    if (email) await deleteStoredEmployee(email);
+    if (id) await deleteStoredEmployee(id);
 
     // 2. Remove from Supabase
     try {
