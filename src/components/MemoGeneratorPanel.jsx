@@ -5220,17 +5220,15 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                           : prev.filter((id) => id !== HEAD_OFFICE_ID)
                       );
                     }}
-                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-bold border transition cursor-pointer ${
-                      showSimpalGroup
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-bold border transition cursor-pointer ${showSimpalGroup
                         ? "bg-slate-900 text-emerald-400 border-slate-900 shadow-sm"
                         : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
-                    }`}
+                      }`}
                   >
                     <Building2 size={13} className={showSimpalGroup ? "text-emerald-400" : "text-slate-500"} />
                     <span>{showSimpalGroup ? "Hide Simpal Group" : "+ Show Simpal Group (Holding)"}</span>
-                    <span className={`text-[9px] px-1.5 py-0.2 rounded-full font-black ${
-                      showSimpalGroup ? "bg-emerald-500/20 text-emerald-300" : "bg-slate-200 text-slate-600"
-                    }`}>
+                    <span className={`text-[9px] px-1.5 py-0.2 rounded-full font-black ${showSimpalGroup ? "bg-emerald-500/20 text-emerald-300" : "bg-slate-200 text-slate-600"
+                      }`}>
                       {showSimpalGroup ? "ON" : "OFF"}
                     </span>
                   </button>
@@ -5247,17 +5245,15 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                           : prev.filter((id) => !NON_STL_COMPANY_IDS.includes(id))
                       );
                     }}
-                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-bold border transition cursor-pointer ${
-                      showNonStl
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-bold border transition cursor-pointer ${showNonStl
                         ? "bg-amber-600 text-white border-amber-600 shadow-sm"
                         : "bg-amber-50 text-amber-900 border-amber-200 hover:bg-amber-100"
-                    }`}
+                      }`}
                   >
                     <Fuel size={13} className={showNonStl ? "text-white" : "text-amber-700"} />
                     <span>{showNonStl ? "Hide Non-STL (2)" : "+ Show Non-STL Entities (2)"}</span>
-                    <span className={`text-[9px] px-1.5 py-0.2 rounded-full font-black ${
-                      showNonStl ? "bg-white/20 text-white" : "bg-amber-200 text-amber-900"
-                    }`}>
+                    <span className={`text-[9px] px-1.5 py-0.2 rounded-full font-black ${showNonStl ? "bg-white/20 text-white" : "bg-amber-200 text-amber-900"
+                      }`}>
                       {showNonStl ? "ON" : "OFF"}
                     </span>
                   </button>
@@ -5297,11 +5293,10 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                           key={comp.id}
                           type="button"
                           onClick={() => toggleCompanyInclusion(comp.id)}
-                          className={`relative flex flex-col items-center text-center p-3 rounded-xl border-2 transition cursor-pointer ${
-                            isIncluded
+                          className={`relative flex flex-col items-center text-center p-3 rounded-xl border-2 transition cursor-pointer ${isIncluded
                               ? "bg-emerald-50/70 border-emerald-500 shadow-2xs"
                               : "bg-slate-50/80 border-slate-200 opacity-60 hover:opacity-90"
-                          }`}
+                            }`}
                         >
                           <div className="absolute top-2 right-2">
                             {isIncluded ? (
@@ -5323,11 +5318,10 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                           </span>
 
                           <span
-                            className={`mt-2 text-[9px] font-black uppercase px-2 py-0.5 rounded-full border ${
-                              isIncluded
+                            className={`mt-2 text-[9px] font-black uppercase px-2 py-0.5 rounded-full border ${isIncluded
                                 ? "bg-emerald-100 text-emerald-800 border-emerald-300"
                                 : "bg-rose-50 text-rose-700 border-rose-200"
-                            }`}
+                              }`}
                           >
                             {isIncluded ? "✓ Included" : "✕ Excluded"}
                           </span>
@@ -5361,11 +5355,10 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                             key={comp.id}
                             type="button"
                             onClick={() => toggleCompanyInclusion(comp.id)}
-                            className={`relative flex flex-col items-center text-center p-3 rounded-xl border-2 transition cursor-pointer ${
-                              isIncluded
+                            className={`relative flex flex-col items-center text-center p-3 rounded-xl border-2 transition cursor-pointer ${isIncluded
                                 ? "bg-slate-900/5 border-slate-900 shadow-2xs"
                                 : "bg-slate-50/80 border-slate-200 opacity-60 hover:opacity-90"
-                            }`}
+                              }`}
                           >
                             <div className="absolute top-2 right-2">
                               {isIncluded ? (
@@ -5387,11 +5380,10 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                             </span>
 
                             <span
-                              className={`mt-2 text-[9px] font-black uppercase px-2 py-0.5 rounded-full border ${
-                                isIncluded
+                              className={`mt-2 text-[9px] font-black uppercase px-2 py-0.5 rounded-full border ${isIncluded
                                   ? "bg-slate-900 text-emerald-400 border-slate-900"
                                   : "bg-rose-50 text-rose-700 border-rose-200"
-                              }`}
+                                }`}
                             >
                               {isIncluded ? "✓ Included" : "✕ Excluded"}
                             </span>
@@ -5426,11 +5418,10 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                             key={comp.id}
                             type="button"
                             onClick={() => toggleCompanyInclusion(comp.id)}
-                            className={`relative flex flex-col items-center text-center p-3 rounded-xl border-2 transition cursor-pointer ${
-                              isIncluded
+                            className={`relative flex flex-col items-center text-center p-3 rounded-xl border-2 transition cursor-pointer ${isIncluded
                                 ? "bg-amber-50/70 border-amber-500 shadow-2xs"
                                 : "bg-slate-50/80 border-slate-200 opacity-60 hover:opacity-90"
-                            }`}
+                              }`}
                           >
                             <div className="absolute top-2 right-2">
                               {isIncluded ? (
@@ -5452,11 +5443,10 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                             </span>
 
                             <span
-                              className={`mt-2 text-[9px] font-black uppercase px-2 py-0.5 rounded-full border ${
-                                isIncluded
+                              className={`mt-2 text-[9px] font-black uppercase px-2 py-0.5 rounded-full border ${isIncluded
                                   ? "bg-amber-100 text-amber-800 border-amber-300"
                                   : "bg-rose-50 text-rose-700 border-rose-200"
-                              }`}
+                                }`}
                             >
                               {isIncluded ? "✓ Included" : "✕ Excluded"}
                             </span>
