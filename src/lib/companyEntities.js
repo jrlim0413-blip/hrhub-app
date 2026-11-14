@@ -44,7 +44,8 @@ export const ENTITY_METADATA = {
     category: "Corporate Head Office",
     badgeColor: "bg-emerald-100 text-emerald-800 border-emerald-300",
     defaultBranch: "Head Office (Mandaue)",
-    description: "Central corporate holding & executive administrative governance."
+    description: "Central corporate holding & executive administrative governance.",
+    logoUrl: "/logos/SGC.png"
   },
   "Lucky Betplay Corporation": {
     id: "lucky_betplay",
@@ -55,7 +56,8 @@ export const ENTITY_METADATA = {
     category: "STL Subsidiary (PCSO Authorized)",
     badgeColor: "bg-blue-100 text-blue-800 border-blue-300",
     defaultBranch: "Mandaue City Branch",
-    description: "PCSO STL Authorized Agent Corporation (Mandaue City, Cebu)."
+    description: "PCSO STL Authorized Agent Corporation (Mandaue City, Cebu).",
+    logoUrl: "/logos/LB.png"
   },
   "5A Royal Gaming OPC": {
     id: "5a_royal",
@@ -66,7 +68,8 @@ export const ENTITY_METADATA = {
     category: "STL Subsidiary (PCSO Authorized)",
     badgeColor: "bg-indigo-100 text-indigo-800 border-indigo-300",
     defaultBranch: "Maguindanao Branch",
-    description: "PCSO STL Authorized Agent Corporation (Province of Maguindanao)."
+    description: "PCSO STL Authorized Agent Corporation (Province of Maguindanao).",
+    logoUrl: "/logos/5A.png"
   },
   "Glowing Fortune": {
     id: "glowing_fortune",
@@ -77,7 +80,8 @@ export const ENTITY_METADATA = {
     category: "STL Subsidiary (PCSO Authorized)",
     badgeColor: "bg-purple-100 text-purple-800 border-purple-300",
     defaultBranch: "Iligan City Branch",
-    description: "PCSO STL Authorized Agent Corporation (Lanao del Norte & Lanao del Sur)."
+    description: "PCSO STL Authorized Agent Corporation (Lanao del Norte & Lanao del Sur).",
+    logoUrl: "/logos/GLOW.png"
   },
   "Imperial Gaming OPC": {
     id: "imperial_gaming",
@@ -88,7 +92,8 @@ export const ENTITY_METADATA = {
     category: "STL Subsidiary (PCSO Authorized)",
     badgeColor: "bg-violet-100 text-violet-800 border-violet-300",
     defaultBranch: "Cotabato City Branch",
-    description: "PCSO STL Authorized Agent Corporation (City of Cotabato)."
+    description: "PCSO STL Authorized Agent Corporation (City of Cotabato).",
+    logoUrl: "/logos/IMP.png"
   },
   "MC POWER GAS": {
     id: "mc_power_gas",
@@ -99,7 +104,8 @@ export const ENTITY_METADATA = {
     category: "Non-STL Subsidiary (Petroleum & Fuel Retail)",
     badgeColor: "bg-amber-100 text-amber-800 border-amber-300",
     defaultBranch: "MC Power Gas Station (Mandaue)",
-    description: "Commercial petroleum, fuel retail, and energy distribution station network."
+    description: "Commercial petroleum, fuel retail, and energy distribution station network.",
+    logoUrl: "/logos/mc_power_gas.png"
   },
   "Simpal Construction (SIMCON)": {
     id: "simcon",
@@ -110,7 +116,8 @@ export const ENTITY_METADATA = {
     category: "Non-STL Subsidiary (Construction & Engineering)",
     badgeColor: "bg-orange-100 text-orange-800 border-orange-300",
     defaultBranch: "SIMCON Field Site",
-    description: "Civil engineering, heavy infrastructure, and building operations."
+    description: "Civil engineering, heavy infrastructure, and building operations.",
+    logoUrl: "/logos/SIM.png"
   }
 };
 
@@ -180,12 +187,12 @@ export const HR_PRE_REGISTRATION_ROLES = [
 // Full list provided by management categorized for instant search and selection:
 export const OPERATIONAL_DESIGNATION_GROUPS = [
   {
-    category: "Corporate & Finance Administration",
+    category: "Admin & Finance",
     badgeColor: "bg-blue-50 text-blue-700 border-blue-200",
     roles: [
+      "IT ADMIN STAFF",
       "CFO ADMIN STAFF",
       "ACCOUNTING ADMIN STAFF",
-      "IT ADMIN STAFF",
       "HR ON-SITE",
       "LIAISON OFFICER",
       "OFFICE STAFF",
@@ -193,7 +200,7 @@ export const OPERATIONAL_DESIGNATION_GROUPS = [
     ]
   },
   {
-    category: "STL & Branch Cashiering Operations",
+    category: "STL Operations",
     badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-200",
     roles: [
       "CLUSTER IN CHARGE",
@@ -207,15 +214,7 @@ export const OPERATIONAL_DESIGNATION_GROUPS = [
     ]
   },
   {
-    category: "Customer Service & Technical Support",
-    badgeColor: "bg-purple-50 text-purple-700 border-purple-200",
-    roles: [
-      "CUSTOMER SERVICE REPRESENTATIVE",
-      "TECH SUPPORT"
-    ]
-  },
-  {
-    category: "Fuel & Gas Station Operations (MC POWER GAS / Non-STL)",
+    category: "MC Power Gas",
     badgeColor: "bg-amber-50 text-amber-700 border-amber-200",
     roles: [
       "OFFICER IN CHARGE",
@@ -225,7 +224,15 @@ export const OPERATIONAL_DESIGNATION_GROUPS = [
     ]
   },
   {
-    category: "General Services, Logistics & Facilities",
+    category: "Customer & Tech",
+    badgeColor: "bg-purple-50 text-purple-700 border-purple-200",
+    roles: [
+      "CUSTOMER SERVICE REPRESENTATIVE",
+      "TECH SUPPORT"
+    ]
+  },
+  {
+    category: "General Services",
     badgeColor: "bg-slate-100 text-slate-700 border-slate-200",
     roles: [
       "SECURITY",
@@ -236,7 +243,7 @@ export const OPERATIONAL_DESIGNATION_GROUPS = [
     ]
   },
   {
-    category: "Central HRMD & Executive (Head Office)",
+    category: "Central HRMD",
     badgeColor: "bg-teal-50 text-teal-800 border-teal-200",
     roles: [
       "HR Administrator",
@@ -255,3 +262,4 @@ export const OPERATIONAL_DESIGNATION_GROUPS = [
 
 // Flat array of all designations for validation and lookups
 export const ALL_OPERATIONAL_ROLES = OPERATIONAL_DESIGNATION_GROUPS.flatMap((g) => g.roles);
+

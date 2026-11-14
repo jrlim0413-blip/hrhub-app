@@ -241,7 +241,7 @@ export const COMPANIES = [
     legalName: "MC POWER GAS PETROLEUM RETAIL",
     tagline: "Commercial Petroleum & Energy Distribution",
     category: "Non-STL Enterprise (Petroleum & Fuel Retail)",
-    logoUrl: "/logos/SGC.png",
+    logoUrl: "/logos/mc_power_gas.png",
     rightLogoUrl: CORPORATE_GROUP_EMBLEM,
     code: "MCPG",
     address: "MC Power Gas Station Central Terminal, Highway Depot, Mandaue City, Cebu",

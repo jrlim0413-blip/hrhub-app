@@ -27,11 +27,12 @@ const PARENT_COMPANY = {
 };
 
 const SUBSIDIARY_COMPANIES = [
+  ["MC POWER GAS", "Petroleum Retail & Energy Distribution", "Commercial fuel distribution, gas station refilling networks, and energy operations under Simpal Group.", "/logos/mc_power_gas.png", "Fuel & Energy"],
   ["Simpal Construction (SIMCON)", "Construction & Infrastructure", "Building with Vision, Quality, and Pride. Heavy construction and field operations.", "/logos/SIM.png", "Construction"],
-  ["Lucky Betplay Corporation", "Gaming & Entertainment", "Gaming operations and entertainment services across regional branches.", "/logos/LB.png", "Gaming"],
-  ["5A Royal Gaming OPC", "Gaming & Entertainment", "One Person Corporation gaming venture under group executive oversight.", "/logos/5A.png", "Gaming"],
-  ["Glowing Fortune", "Gaming & Entertainment", "Fortune, hospitality, and entertainment gaming enterprise.", "/logos/GLOW.png", "Gaming"],
-  ["Imperial Gaming OPC", "Gaming & Entertainment", "One Person Corporation specialized in leisure and gaming operations within the group.", "/logos/IMP.png", "Gaming"]
+  ["Lucky Betplay Corporation", "Gaming & Entertainment (STL)", "PCSO Small Town Lottery gaming operations and entertainment services across regional branches.", "/logos/LB.png", "STL Gaming"],
+  ["5A Royal Gaming OPC", "Gaming & Entertainment (STL)", "One Person Corporation gaming venture under group executive oversight.", "/logos/5A.png", "STL Gaming"],
+  ["Glowing Fortune", "Gaming & Entertainment (STL)", "Fortune, hospitality, and entertainment gaming enterprise.", "/logos/GLOW.png", "STL Gaming"],
+  ["Imperial Gaming OPC", "Gaming & Entertainment (STL)", "One Person Corporation specialized in leisure and gaming operations within the group.", "/logos/IMP.png", "STL Gaming"]
 ].map(([name, category, desc, logoUrl, tag]) => ({ name, category, desc, logoUrl, tag }));
 
 const Feature = ({ icon: Icon, children, emerald = false }) => (
@@ -739,7 +740,7 @@ const App = () => {
           </span>
           <h1 className="text-4xl lg:text-5xl font-black text-slate-900 leading-tight tracking-tight">Unifying Multi-Company HR Operations</h1>
           <p className="text-lg text-slate-600 leading-relaxed max-w-xl">
-            HRHub delivers centralized payroll, attendance, and employee management across <strong className="text-slate-900">Simpal Group of Companies</strong> and its diverse subsidiaries in construction and gaming.
+            HRHub delivers centralized payroll, attendance, and employee management across <strong className="text-slate-900">Simpal Group of Companies</strong>, MC Power Gas, SIMCON, and authorized gaming subsidiaries.
           </p>
           <div className="pt-2 flex flex-col sm:flex-row gap-3">
             <button onClick={() => openLogin("signin")} className="inline-flex items-center justify-center gap-2 bg-slate-900 hover:bg-slate-800 text-white font-bold px-6 py-3.5 rounded-xl transition shadow-lg shadow-slate-900/20 text-sm cursor-pointer">
@@ -791,7 +792,7 @@ const App = () => {
                   <div className="w-8 h-8 rounded-full bg-slate-900 text-emerald-400 font-bold text-xs flex items-center justify-center shrink-0">HR</div>
                   <div><div className="text-xs font-bold text-slate-800">HR Administrator</div><div className="text-[10px] text-slate-500">Simpal Group Executive</div></div>
                 </div>
-                <span className="text-[10px] bg-slate-900 text-emerald-400 font-bold px-2.5 py-0.5 rounded-full shrink-0">Parent + 5 Subsidiaries</span>
+                <span className="text-[10px] bg-slate-900 text-emerald-400 font-bold px-2.5 py-0.5 rounded-full shrink-0">Parent + 6 Subsidiaries</span>
               </div>
             </div>
           </div>
@@ -882,7 +883,7 @@ const App = () => {
           iconBg
           visual={<div className="bg-white p-6 rounded-2xl shadow-xl w-full max-w-sm space-y-3 border border-slate-200">
             <div className="text-xs font-bold text-slate-400 uppercase tracking-wider">Simpal Group Structure</div>
-            {["Construction Division|SIMCON", "Gaming Operations|Lucky Betplay / Imperial"].map(x => {
+            {["Fuel & Energy Retail|MC POWER GAS", "Construction Division|SIMCON", "Gaming Operations|Lucky Betplay / Imperial"].map(x => {
               const [a, b] = x.split("|");
               return <div key={a} className="p-2.5 bg-slate-50 rounded-lg border border-slate-200 text-xs font-semibold flex justify-between"><span>{a}</span><span className="text-emerald-600">{b}</span></div>;
             })}
@@ -926,9 +927,9 @@ const App = () => {
         <div className="max-w-7xl mx-auto px-6 grid grid-cols-2 md:grid-cols-5 gap-8 text-xs">
           <div className="col-span-2 space-y-3">
             <div className="flex items-center gap-2"><div className="w-8 h-8 rounded-lg bg-emerald-500 flex items-center justify-center text-slate-950 font-bold text-base">H</div><span className="text-xl font-extrabold text-white tracking-tight">HR<span className="text-emerald-400">Hub</span></span></div>
-            <p className="text-slate-400 max-w-sm leading-relaxed">Integrated HR platform for Simpal Group of Companies and its construction and gaming enterprises.</p>
+            <p className="text-slate-400 max-w-sm leading-relaxed">Integrated HR platform for Simpal Group of Companies, MC POWER GAS, SIMCON, and gaming subsidiaries.</p>
           </div>
-          <FooterColumn title="Entities" items={["Simpal Group (Parent)", "SIMCON", "Lucky Betplay", "5A Royal Gaming", "Imperial Gaming OPC"]} boldFirst />
+          <FooterColumn title="Entities" items={["Simpal Group (Parent)", "MC POWER GAS", "SIMCON", "Lucky Betplay", "5A Royal Gaming", "Glowing Fortune", "Imperial Gaming OPC"]} boldFirst />
           <FooterColumn title="Resources" items={["Documentation", "HR Guides", "API Access", "Help Center"]} />
           <FooterColumn title="Company" items={["About Us", "Contact", "Privacy Policy", "Terms of Service"]} />
         </div>
@@ -974,6 +975,40 @@ const App = () => {
                     </div>
                   ))}
                 </div>
+
+                {/* Official Managed Group Entities Showcase */}
+                <div className="pt-5 border-t border-slate-700/60 mt-4 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-extrabold uppercase tracking-widest text-emerald-300">
+                      Simpal Group • Managed Entities
+                    </span>
+                    <span className="text-[10px] font-bold text-slate-400">7 Active</span>
+                  </div>
+                  <div className="grid grid-cols-4 sm:grid-cols-7 gap-2 pt-1">
+                    {[
+                      { name: "Simpal Group of Companies", short: "SGC", logo: "/logos/SGC.png" },
+                      { name: "MC POWER GAS", short: "MCPG", logo: "/logos/mc_power_gas.png" },
+                      { name: "Simpal Construction", short: "SIMCON", logo: "/logos/SIM.png" },
+                      { name: "Lucky Betplay", short: "Betplay", logo: "/logos/LB.png" },
+                      { name: "5A Royal Gaming", short: "5A Royal", logo: "/logos/5A.png" },
+                      { name: "Glowing Fortune", short: "Fortune", logo: "/logos/GLOW.png" },
+                      { name: "Imperial Gaming", short: "Imperial", logo: "/logos/IMP.png" }
+                    ].map((item) => (
+                      <div
+                        key={item.name}
+                        title={item.name}
+                        className="flex flex-col items-center justify-center p-1.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/10 transition"
+                      >
+                        <div className="w-8 h-8 rounded-lg bg-white p-1 flex items-center justify-center shadow-xs overflow-hidden">
+                          <img src={item.logo} alt={item.short} className="max-h-full max-w-full object-contain" />
+                        </div>
+                        <span className="text-[9px] font-bold text-slate-300 mt-1 truncate max-w-full text-center">
+                          {item.short}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
 
               <div className="p-6 sm:p-8 lg:p-10">
@@ -991,6 +1026,23 @@ const App = () => {
                   >
                     <X size={16} />
                   </button>
+                </div>
+
+                {/* Mobile Subsidiary Logos Strip */}
+                <div className="md:hidden mt-3 flex items-center gap-2 overflow-x-auto py-1.5 px-0.5">
+                  {[
+                    { name: "Simpal Group", logo: "/logos/SGC.png" },
+                    { name: "MC POWER GAS", logo: "/logos/mc_power_gas.png" },
+                    { name: "SIMCON", logo: "/logos/SIM.png" },
+                    { name: "Lucky Betplay", logo: "/logos/LB.png" },
+                    { name: "5A Royal", logo: "/logos/5A.png" },
+                    { name: "Glowing Fortune", logo: "/logos/GLOW.png" },
+                    { name: "Imperial Gaming", logo: "/logos/IMP.png" }
+                  ].map((ent) => (
+                    <div key={ent.name} title={ent.name} className="w-8 h-8 rounded-lg bg-slate-100 p-1 border border-slate-200 shrink-0 flex items-center justify-center">
+                      <img src={ent.logo} alt={ent.name} className="max-h-full max-w-full object-contain" />
+                    </div>
+                  ))}
                 </div>
 
                 {/* Tab Switcher */}

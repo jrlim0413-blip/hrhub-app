@@ -165,12 +165,14 @@ export const COMPANY_LOGO_MAP = {
   "Glowing Fortune": "/logos/GLOW.png",
   "Imperial Gaming OPC": "/logos/IMP.png",
   "Lucky Betplay Corporation": "/logos/LB.png",
+  "MC POWER GAS": "/logos/mc_power_gas.png",
   "Simpal Group of Companies": "/logos/SGC.png",
   "Simpal Construction (SIMCON)": "/logos/SIM.png"
 };
 
 export function resolveEntityLogo(companyName, fallback = "/logos/5A.png") {
   const norm = String(companyName || "").toLowerCase().trim();
+  if (norm.includes("mc") || norm.includes("power gas") || norm.includes("mcpg")) return "/logos/mc_power_gas.png";
   if (norm.includes("5a") || norm.includes("royal gaming")) return "/logos/5A.png";
   if (norm.includes("glow") || norm.includes("glowing fortune")) return "/logos/GLOW.png";
   if (norm.includes("imp") || norm.includes("imperial")) return "/logos/IMP.png";

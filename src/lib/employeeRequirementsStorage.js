@@ -179,3 +179,4 @@ CREATE POLICY "Allow delete of employee requirements"
 ON storage.objects FOR DELETE
 USING (bucket_id = 'employee-requirements');
 `;
+

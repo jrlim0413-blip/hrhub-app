@@ -109,8 +109,6 @@ export default function AddEmployeeProfileModal({
   const [uploadProgress, setUploadProgress] = useState(null);
   const [saveStepOverlay, setSaveStepOverlay] = useState(null);
   const [saveConfirmation, setSaveConfirmation] = useState(null);
-  const [selectedRoleCategory, setSelectedRoleCategory] = useState("all");
-  const [roleSearchQuery, setRoleSearchQuery] = useState("");
 
   // Form State
   const [formData, setFormData] = useState({
@@ -834,15 +832,15 @@ export default function AddEmployeeProfileModal({
                       }}
                       className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs text-slate-800 font-bold focus:border-emerald-500 focus:outline-none cursor-pointer shadow-2xs"
                     >
-                      <optgroup label="🏛️ Corporate Head Office">
+                      <optgroup label="Head Office">
                         <option value="Simpal Group of Companies">Simpal Group of Companies</option>
                       </optgroup>
-                      <optgroup label="🎰 STL Subsidiaries (PCSO Authorized Gaming)">
+                      <optgroup label="STL Subsidiaries">
                         {STL_SUBSIDIARIES.map((sub) => (
                           <option key={sub} value={sub}>{sub}</option>
                         ))}
                       </optgroup>
-                      <optgroup label="⛽ Non-STL Subsidiaries (Commercial, Fuel & Construction)">
+                      <optgroup label="Non-STL Subsidiaries">
                         {NON_STL_SUBSIDIARIES.map((sub) => (
                           <option key={sub} value={sub}>{sub}</option>
                         ))}
@@ -864,84 +862,33 @@ export default function AddEmployeeProfileModal({
                     </select>
                   </div>
 
-                  {/* Designation / Role (Categorized for Instant Search & Finding) */}
-                  <div className="space-y-1 sm:col-span-2">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 pb-1">
+                  {/* Designation / Role */}
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between">
                       <label className="text-xs font-bold text-slate-700">Designation / Role *</label>
-                      
-                      {/* Quick Category Filter Pills */}
-                      <div className="flex items-center gap-1 overflow-x-auto pb-0.5 text-[10px]">
-                        {[
-                          { id: "all", label: "All Roles" },
-                          { id: "admin", label: "Admin & Finance" },
-                          { id: "cashier", label: "STL Cashiering" },
-                          { id: "gas", label: "MC Power Gas" },
-                          { id: "support", label: "Tech Support" },
-                          { id: "facilities", label: "Facilities & Drivers" }
-                        ].map((cat) => (
-                          <button
-                            key={cat.id}
-                            type="button"
-                            onClick={() => setSelectedRoleCategory(cat.id)}
-                            className={`px-2 py-0.5 rounded-md font-bold transition cursor-pointer whitespace-nowrap ${
-                              selectedRoleCategory === cat.id
-                                ? "bg-slate-900 text-white shadow-2xs"
-                                : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                            }`}
-                          >
-                            {cat.label}
-                          </button>
-                        ))}
-                      </div>
+                      <span className="text-[10px] text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                        {formData.role || "Required"}
+                      </span>
                     </div>
 
-                    <select
-                      value={formData.role}
-                      onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-                      className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs text-slate-900 font-bold focus:border-emerald-500 focus:outline-none cursor-pointer shadow-2xs"
-                    >
-                      {/* If MC POWER GAS is selected, show Gas category at top */}
-                      {formData.company === "MC POWER GAS" && selectedRoleCategory === "all" && (
-                        <optgroup label="⛽ MC Power Gas Fuel & Station Operations">
-                          <option value="OFFICER IN CHARGE">OFFICER IN CHARGE</option>
-                          <option value="CASHIER I">CASHIER I</option>
-                          <option value="CASHIER II">CASHIER II</option>
-                          <option value="PUMP ATTENDANT">PUMP ATTENDANT</option>
-                        </optgroup>
-                      )}
-
-                      {/* If STL entity is selected, show STL Cashiering category at top */}
-                      {isStlEntity(formData.company) && selectedRoleCategory === "all" && (
-                        <optgroup label="🎰 STL Branch & Cashiering Operations">
-                          <option value="CLUSTER IN CHARGE">CLUSTER IN CHARGE</option>
-                          <option value="DRAW COURT OFFICER">DRAW COURT OFFICER</option>
-                          <option value="HEAD CASHIER">HEAD CASHIER</option>
-                          <option value="ASSISTANT CASHIER">ASSISTANT CASHIER</option>
-                          <option value="CASHIER & SUPERVISOR">CASHIER & SUPERVISOR</option>
-                          <option value="CASHIER">CASHIER</option>
-                          <option value="RECEIVER">RECEIVER</option>
-                          <option value="UNCLAIMED SPECIALIST">UNCLAIMED SPECIALIST</option>
-                        </optgroup>
-                      )}
-
-                      {/* Categorized Operational Designations */}
-                      {OPERATIONAL_DESIGNATION_GROUPS
-                        .filter((group) => {
-                          if (selectedRoleCategory === "admin") return group.category.includes("Corporate");
-                          if (selectedRoleCategory === "cashier") return group.category.includes("STL");
-                          if (selectedRoleCategory === "gas") return group.category.includes("MC POWER GAS");
-                          if (selectedRoleCategory === "support") return group.category.includes("Customer");
-                          if (selectedRoleCategory === "facilities") return group.category.includes("General Services");
-                          return true;
-                        })
-                        .map((group) => (
-                          <optgroup key={group.category} label={`📁 ${group.category}`}>
+                    <div className="relative">
+                      <select
+                        value={formData.role}
+                        onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+                        className="w-full appearance-none rounded-xl border border-slate-200 bg-white pl-3.5 pr-9 py-2.5 text-xs text-slate-900 font-bold hover:border-slate-300 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 focus:outline-none transition cursor-pointer shadow-2xs"
+                      >
+                        {OPERATIONAL_DESIGNATION_GROUPS.map((group) => (
+                          <optgroup key={group.category} label={group.category}>
                             {group.roles.map((r) => (
                               <option key={r} value={r}>{r}</option>
                             ))}
                           </optgroup>
                         ))}
-                    </select>
+                      </select>
+                      <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400">
+                        <ChevronDown size={14} />
+                      </div>
+                    </div>
                   </div>
 
                   {/* Department */}
