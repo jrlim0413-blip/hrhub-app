@@ -11,7 +11,7 @@ import {
   Upload, Image, CheckSquare, Square, XCircle, Code, ShieldCheck, Key,
   Camera, Download, Bold, Italic, Underline, Strikethrough, Highlighter,
   List, ListOrdered, Shapes, Minus, Palette, Heading, Type, Eraser,
-  ALargeSmall, CaseUpper, Undo2, Redo2, Search, Award
+  ALargeSmall, CaseUpper, Undo2, Redo2, Search, Award, Fuel
 } from "lucide-react";
 import { processSignatureToTransparentPng } from "../lib/signatureImageProcessor";
 import { mergeProfilesWithStored } from "../lib/employeeStorage";
@@ -261,21 +261,28 @@ export const COMPANIES = [
   }
 ];
 
-export const STL_AND_HQ_COMPANY_IDS = [
+export const STL_SUBSIDIARY_IDS = [
   "lucky_betplay",
-  "sgc",
   "5a_royal",
   "glowing_fortune",
   "imperial_gaming"
 ];
+
+export const HEAD_OFFICE_ID = "sgc";
 
 export const NON_STL_COMPANY_IDS = [
   "mc_power_gas",
   "simcon"
 ];
 
+export const STL_AND_HQ_COMPANY_IDS = [
+  ...STL_SUBSIDIARY_IDS,
+  HEAD_OFFICE_ID
+];
+
 export const ALL_MEMO_COMPANY_IDS = [
-  ...STL_AND_HQ_COMPANY_IDS,
+  ...STL_SUBSIDIARY_IDS,
+  HEAD_OFFICE_ID,
   ...NON_STL_COMPANY_IDS
 ];
 
@@ -1090,14 +1097,25 @@ export default function MemoGeneratorPanel({
     return initialUserSettings.watermark?.diagonalStampText || "OFFICIAL MEMORANDUM";
   });
 
-  // Multi-Company Distribution Inclusion State (Default: strictly Head Office & STL entities, Non-STL excluded by default)
+  // Visibility toggles for Simpal Group of Companies (Parent Holding) and Non-STL Subsidiaries
+  // Default: hidden unless the active selected entity is SGC or Non-STL
+  const [showSimpalGroup, setShowSimpalGroup] = useState(() => selectedCompanyId === HEAD_OFFICE_ID);
+  const [showNonStl, setShowNonStl] = useState(() => NON_STL_COMPANY_IDS.includes(selectedCompanyId));
+
+  // Multi-Company Distribution Inclusion State (Default: strictly 4 STL Gaming Subsidiaries)
   const [includedCompanyIds, setIncludedCompanyIds] = useState(() => {
     if (Array.isArray(initialUserSettings.includedCompanyIds) && initialUserSettings.includedCompanyIds.length > 0) {
-      // Exclude Non-STL from initial default scope
-      const stlOnly = initialUserSettings.includedCompanyIds.filter((id) => !NON_STL_COMPANY_IDS.includes(id));
-      return stlOnly.length > 0 ? stlOnly : STL_AND_HQ_COMPANY_IDS;
+      const stlOnly = initialUserSettings.includedCompanyIds.filter((id) => STL_SUBSIDIARY_IDS.includes(id));
+      if (stlOnly.length > 0) {
+        if (selectedCompanyId === HEAD_OFFICE_ID) return [...stlOnly, HEAD_OFFICE_ID];
+        if (NON_STL_COMPANY_IDS.includes(selectedCompanyId)) return [...stlOnly, selectedCompanyId];
+        return stlOnly;
+      }
     }
-    return STL_AND_HQ_COMPANY_IDS;
+    const base = [...STL_SUBSIDIARY_IDS];
+    if (selectedCompanyId === HEAD_OFFICE_ID) base.push(HEAD_OFFICE_ID);
+    if (NON_STL_COMPANY_IDS.includes(selectedCompanyId)) base.push(selectedCompanyId);
+    return base;
   });
 
   const activeCompanies = useMemo(() => {
@@ -1150,15 +1168,21 @@ export default function MemoGeneratorPanel({
   };
 
   const selectStlCompanies = () => {
-    setIncludedCompanyIds(STL_AND_HQ_COMPANY_IDS);
+    setIncludedCompanyIds(STL_SUBSIDIARY_IDS);
+    setShowSimpalGroup(false);
+    setShowNonStl(false);
   };
 
   const selectAllCompanies = () => {
     setIncludedCompanyIds(COMPANIES.map((c) => c.id));
+    setShowSimpalGroup(true);
+    setShowNonStl(true);
   };
 
   const selectOnlyCompany = (companyId) => {
     setIncludedCompanyIds([companyId]);
+    if (companyId === HEAD_OFFICE_ID) setShowSimpalGroup(true);
+    if (NON_STL_COMPANY_IDS.includes(companyId)) setShowNonStl(true);
   };
 
   // Saved Memos Archive State (Loaded from and saved to Supabase 'saved_memos' table per account)
@@ -5168,9 +5192,9 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
               </span>
             </div>
 
-            {/* COMPANY DISTRIBUTION SCOPE SELECTOR (SEPARATED STL & NON-STL) */}
+            {/* COMPANY DISTRIBUTION SCOPE SELECTOR (4 STL DEFAULT, TOGGLES FOR SGC & NON-STL) */}
             <div className="rounded-2xl border border-emerald-200 bg-white p-4 shadow-sm space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pb-2 border-b border-slate-100">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-3 border-b border-slate-100">
                 <div>
                   <div className="flex items-center gap-2">
                     <CheckSquare size={16} className="text-emerald-600" />
@@ -5179,52 +5203,93 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                     </h4>
                   </div>
                   <p className="text-[11px] text-slate-500 font-medium mt-0.5">
-                    Select an entity to include or exclude it. <strong>Non-STL entities are separated & excluded by default.</strong> Excluded entities will not appear in the final memo, PDF, or email dispatch.
+                    Default scope: <strong>4 STL Gaming Subsidiaries</strong>. Non-STL & Parent Holding are hidden by default. Use the toggles to display them.
                   </p>
                 </div>
 
-                <div className="flex items-center gap-1.5 flex-wrap shrink-0">
+                <div className="flex items-center gap-2 flex-wrap shrink-0">
+                  {/* Toggle: Simpal Group of Companies (Parent Holding) */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const next = !showSimpalGroup;
+                      setShowSimpalGroup(next);
+                      setIncludedCompanyIds((prev) =>
+                        next
+                          ? (prev.includes(HEAD_OFFICE_ID) ? prev : [...prev, HEAD_OFFICE_ID])
+                          : prev.filter((id) => id !== HEAD_OFFICE_ID)
+                      );
+                    }}
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-bold border transition cursor-pointer ${
+                      showSimpalGroup
+                        ? "bg-slate-900 text-emerald-400 border-slate-900 shadow-sm"
+                        : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
+                    }`}
+                  >
+                    <Building2 size={13} className={showSimpalGroup ? "text-emerald-400" : "text-slate-500"} />
+                    <span>{showSimpalGroup ? "Hide Simpal Group" : "+ Show Simpal Group (Holding)"}</span>
+                    <span className={`text-[9px] px-1.5 py-0.2 rounded-full font-black ${
+                      showSimpalGroup ? "bg-emerald-500/20 text-emerald-300" : "bg-slate-200 text-slate-600"
+                    }`}>
+                      {showSimpalGroup ? "ON" : "OFF"}
+                    </span>
+                  </button>
+
+                  {/* Toggle: Non-STL Entities */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const next = !showNonStl;
+                      setShowNonStl(next);
+                      setIncludedCompanyIds((prev) =>
+                        next
+                          ? Array.from(new Set([...prev, ...NON_STL_COMPANY_IDS]))
+                          : prev.filter((id) => !NON_STL_COMPANY_IDS.includes(id))
+                      );
+                    }}
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-bold border transition cursor-pointer ${
+                      showNonStl
+                        ? "bg-amber-600 text-white border-amber-600 shadow-sm"
+                        : "bg-amber-50 text-amber-900 border-amber-200 hover:bg-amber-100"
+                    }`}
+                  >
+                    <Fuel size={13} className={showNonStl ? "text-white" : "text-amber-700"} />
+                    <span>{showNonStl ? "Hide Non-STL (2)" : "+ Show Non-STL Entities (2)"}</span>
+                    <span className={`text-[9px] px-1.5 py-0.2 rounded-full font-black ${
+                      showNonStl ? "bg-white/20 text-white" : "bg-amber-200 text-amber-900"
+                    }`}>
+                      {showNonStl ? "ON" : "OFF"}
+                    </span>
+                  </button>
+
+                  {/* Reset to STL Only */}
                   <button
                     type="button"
                     onClick={selectStlCompanies}
-                    className="text-[11px] font-bold text-emerald-800 bg-emerald-100/80 hover:bg-emerald-200 border border-emerald-300 px-2.5 py-1 rounded-lg transition cursor-pointer"
-                    title="Select only Corporate Head Office & STL Gaming entities"
+                    className="text-[11px] font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-2.5 py-1.5 rounded-xl transition cursor-pointer"
+                    title="Reset to 4 STL Gaming Subsidiaries"
                   >
-                    STL & HQ Only ({STL_AND_HQ_COMPANY_IDS.length})
-                  </button>
-                  <button
-                    type="button"
-                    onClick={selectAllCompanies}
-                    className="text-[11px] font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-200 px-2.5 py-1 rounded-lg transition cursor-pointer"
-                  >
-                    All Entities ({COMPANIES.length})
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => selectOnlyCompany(selectedCompanyId)}
-                    className="text-[11px] font-bold text-slate-600 bg-slate-50 hover:bg-slate-100 border border-slate-200 px-2.5 py-1 rounded-lg transition cursor-pointer"
-                  >
-                    Only Active ({selectedCompany.code})
+                    Reset to STL (4)
                   </button>
                 </div>
               </div>
 
-              {/* Section 1: Head Office & STL Subsidiaries */}
+              {/* Section 1: 🎰 STL Gaming Subsidiaries (Default Display: 4 entities) */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1.5">
                     <span className="text-[11px] font-black uppercase tracking-wider text-slate-800">
-                      🏢 Corporate Head Office & 🎰 STL Gaming Subsidiaries
+                      🎰 STL Gaming Subsidiaries (PCSO Authorized)
                     </span>
                     <span className="text-[10px] text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                      Default Scope ({companies.filter((c) => STL_AND_HQ_COMPANY_IDS.includes(c.id) && includedCompanyIds.includes(c.id)).length} / {STL_AND_HQ_COMPANY_IDS.length})
+                      Default Scope ({companies.filter((c) => STL_SUBSIDIARY_IDS.includes(c.id) && includedCompanyIds.includes(c.id)).length} / {STL_SUBSIDIARY_IDS.length})
                     </span>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                   {companies
-                    .filter((comp) => STL_AND_HQ_COMPANY_IDS.includes(comp.id))
+                    .filter((comp) => STL_SUBSIDIARY_IDS.includes(comp.id))
                     .map((comp) => {
                       const isIncluded = includedCompanyIds.includes(comp.id);
                       return (
@@ -5232,10 +5297,11 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                           key={comp.id}
                           type="button"
                           onClick={() => toggleCompanyInclusion(comp.id)}
-                          className={`relative flex flex-col items-center text-center p-3 rounded-xl border-2 transition cursor-pointer ${isIncluded
-                            ? "bg-emerald-50/70 border-emerald-500 shadow-2xs"
-                            : "bg-slate-50/80 border-slate-200 opacity-60 hover:opacity-90"
-                            }`}
+                          className={`relative flex flex-col items-center text-center p-3 rounded-xl border-2 transition cursor-pointer ${
+                            isIncluded
+                              ? "bg-emerald-50/70 border-emerald-500 shadow-2xs"
+                              : "bg-slate-50/80 border-slate-200 opacity-60 hover:opacity-90"
+                          }`}
                         >
                           <div className="absolute top-2 right-2">
                             {isIncluded ? (
@@ -5257,10 +5323,11 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                           </span>
 
                           <span
-                            className={`mt-2 text-[9px] font-black uppercase px-2 py-0.5 rounded-full border ${isIncluded
-                              ? "bg-emerald-100 text-emerald-800 border-emerald-300"
-                              : "bg-rose-50 text-rose-700 border-rose-200"
-                              }`}
+                            className={`mt-2 text-[9px] font-black uppercase px-2 py-0.5 rounded-full border ${
+                              isIncluded
+                                ? "bg-emerald-100 text-emerald-800 border-emerald-300"
+                                : "bg-rose-50 text-rose-700 border-rose-200"
+                            }`}
                           >
                             {isIncluded ? "✓ Included" : "✕ Excluded"}
                           </span>
@@ -5270,66 +5337,135 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                 </div>
               </div>
 
-              {/* Section 2: Non-STL Subsidiaries (Separated & Excluded by Default) */}
-              <div className="space-y-2 pt-3 border-t border-slate-200">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[11px] font-black uppercase tracking-wider text-amber-900">
-                      ⛽ Non-STL Subsidiaries (MC POWER GAS & SIMCON)
-                    </span>
-                    <span className="text-[10px] text-amber-800 font-bold bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
-                      Separate Entity Scope • Excluded by Default
-                    </span>
+              {/* Section 2: Simpal Group of Companies (Parent Holding) - Hidden by default, toggled via button */}
+              {showSimpalGroup && (
+                <div className="space-y-2 pt-3 border-t border-slate-200 animate-in fade-in slide-in-from-top-2 duration-150">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[11px] font-black uppercase tracking-wider text-slate-900">
+                        🏢 Corporate Head Office & Holding Entity
+                      </span>
+                      <span className="text-[10px] text-slate-700 font-bold bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200">
+                        Parent Holding Group • Toggled Display
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                    {companies
+                      .filter((comp) => comp.id === HEAD_OFFICE_ID)
+                      .map((comp) => {
+                        const isIncluded = includedCompanyIds.includes(comp.id);
+                        return (
+                          <button
+                            key={comp.id}
+                            type="button"
+                            onClick={() => toggleCompanyInclusion(comp.id)}
+                            className={`relative flex flex-col items-center text-center p-3 rounded-xl border-2 transition cursor-pointer ${
+                              isIncluded
+                                ? "bg-slate-900/5 border-slate-900 shadow-2xs"
+                                : "bg-slate-50/80 border-slate-200 opacity-60 hover:opacity-90"
+                            }`}
+                          >
+                            <div className="absolute top-2 right-2">
+                              {isIncluded ? (
+                                <CheckCircle2 size={16} className="text-slate-900 fill-slate-200" />
+                              ) : (
+                                <XCircle size={16} className="text-slate-400" />
+                              )}
+                            </div>
+
+                            <div className="h-10 w-10 flex items-center justify-center p-1 mb-1">
+                              <img src={comp.logoUrl} alt={comp.name} className="max-h-full max-w-full object-contain" />
+                            </div>
+
+                            <span className="text-[11px] font-black text-slate-900 leading-tight">
+                              {comp.code}
+                            </span>
+                            <span className="text-[9.5px] font-medium text-slate-600 truncate max-w-full mt-0.5">
+                              {comp.name}
+                            </span>
+
+                            <span
+                              className={`mt-2 text-[9px] font-black uppercase px-2 py-0.5 rounded-full border ${
+                                isIncluded
+                                  ? "bg-slate-900 text-emerald-400 border-slate-900"
+                                  : "bg-rose-50 text-rose-700 border-rose-200"
+                              }`}
+                            >
+                              {isIncluded ? "✓ Included" : "✕ Excluded"}
+                            </span>
+                          </button>
+                        );
+                      })}
                   </div>
                 </div>
+              )}
 
-                <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
-                  {companies
-                    .filter((comp) => NON_STL_COMPANY_IDS.includes(comp.id))
-                    .map((comp) => {
-                      const isIncluded = includedCompanyIds.includes(comp.id);
-                      return (
-                        <button
-                          key={comp.id}
-                          type="button"
-                          onClick={() => toggleCompanyInclusion(comp.id)}
-                          className={`relative flex flex-col items-center text-center p-3 rounded-xl border-2 transition cursor-pointer ${isIncluded
-                            ? "bg-amber-50/70 border-amber-500 shadow-2xs"
-                            : "bg-slate-50/80 border-slate-200 opacity-60 hover:opacity-90"
+              {/* Section 3: Non-STL Subsidiaries (MC POWER GAS & SIMCON) - Hidden by default, toggled via button */}
+              {showNonStl && (
+                <div className="space-y-2 pt-3 border-t border-slate-200 animate-in fade-in slide-in-from-top-2 duration-150">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[11px] font-black uppercase tracking-wider text-amber-900">
+                        ⛽ Non-STL Subsidiaries (MC POWER GAS & SIMCON)
+                      </span>
+                      <span className="text-[10px] text-amber-800 font-bold bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
+                        Separate Scope • Toggled Display
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+                    {companies
+                      .filter((comp) => NON_STL_COMPANY_IDS.includes(comp.id))
+                      .map((comp) => {
+                        const isIncluded = includedCompanyIds.includes(comp.id);
+                        return (
+                          <button
+                            key={comp.id}
+                            type="button"
+                            onClick={() => toggleCompanyInclusion(comp.id)}
+                            className={`relative flex flex-col items-center text-center p-3 rounded-xl border-2 transition cursor-pointer ${
+                              isIncluded
+                                ? "bg-amber-50/70 border-amber-500 shadow-2xs"
+                                : "bg-slate-50/80 border-slate-200 opacity-60 hover:opacity-90"
                             }`}
-                        >
-                          <div className="absolute top-2 right-2">
-                            {isIncluded ? (
-                              <CheckCircle2 size={16} className="text-amber-600 fill-amber-100" />
-                            ) : (
-                              <XCircle size={16} className="text-slate-400" />
-                            )}
-                          </div>
-
-                          <div className="h-10 w-10 flex items-center justify-center p-1 mb-1">
-                            <img src={comp.logoUrl} alt={comp.name} className="max-h-full max-w-full object-contain" />
-                          </div>
-
-                          <span className="text-[11px] font-black text-slate-900 leading-tight">
-                            {comp.code}
-                          </span>
-                          <span className="text-[9.5px] font-medium text-slate-600 truncate max-w-full mt-0.5">
-                            {comp.name}
-                          </span>
-
-                          <span
-                            className={`mt-2 text-[9px] font-black uppercase px-2 py-0.5 rounded-full border ${isIncluded
-                              ? "bg-amber-100 text-amber-800 border-amber-300"
-                              : "bg-rose-50 text-rose-700 border-rose-200"
-                              }`}
                           >
-                            {isIncluded ? "✓ Included" : "✕ Excluded by Default"}
-                          </span>
-                        </button>
-                      );
-                    })}
+                            <div className="absolute top-2 right-2">
+                              {isIncluded ? (
+                                <CheckCircle2 size={16} className="text-amber-600 fill-amber-100" />
+                              ) : (
+                                <XCircle size={16} className="text-slate-400" />
+                              )}
+                            </div>
+
+                            <div className="h-10 w-10 flex items-center justify-center p-1 mb-1">
+                              <img src={comp.logoUrl} alt={comp.name} className="max-h-full max-w-full object-contain" />
+                            </div>
+
+                            <span className="text-[11px] font-black text-slate-900 leading-tight">
+                              {comp.code}
+                            </span>
+                            <span className="text-[9.5px] font-medium text-slate-600 truncate max-w-full mt-0.5">
+                              {comp.name}
+                            </span>
+
+                            <span
+                              className={`mt-2 text-[9px] font-black uppercase px-2 py-0.5 rounded-full border ${
+                                isIncluded
+                                  ? "bg-amber-100 text-amber-800 border-amber-300"
+                                  : "bg-rose-50 text-rose-700 border-rose-200"
+                              }`}
+                            >
+                              {isIncluded ? "✓ Included" : "✕ Excluded"}
+                            </span>
+                          </button>
+                        );
+                      })}
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
 
             {/* Quick Entity Jumper Navigation */}
