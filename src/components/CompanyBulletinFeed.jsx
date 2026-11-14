@@ -809,7 +809,7 @@ export default function CompanyBulletinFeed({
       {/* ============================================================ */}
       {/* 3. POSTS FEED LIST                                           */}
       {/* ============================================================ */}
-      <div key={selectedCategory} className="space-y-4">
+      <div key={activeFilter} className="space-y-4">
         {loading && posts.length === 0 ? (
           <div className="space-y-4 animate-tab-fade-in">
             <div className="bg-white rounded-2xl border border-slate-200/90 p-6 space-y-4 shadow-xs">
