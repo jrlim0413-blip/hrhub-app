@@ -94,6 +94,7 @@ export default function AddEmployeeProfileModal({
   onClose,
   onSave,
   userEntityCompany = "Simpal Group of Companies",
+  isHRMD = false,
   roles = [],
   branches = [],
   defaultBranchMap = {},
@@ -1102,41 +1103,43 @@ export default function AddEmployeeProfileModal({
                 </label>
               </div>
 
-              {/* Section E: HRHub Portal Login Access (Restricted to Profiling by Default) */}
-              <div className={`rounded-2xl border p-3.5 flex items-start justify-between gap-3 transition ${formData.login_enabled ? "bg-emerald-50/70 border-emerald-200" : "bg-slate-50 border-slate-200"}`}>
-                <div className="flex items-start gap-2.5">
-                  <div className={`p-1.5 rounded-xl mt-0.5 ${formData.login_enabled ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-500"}`}>
-                    {formData.login_enabled ? <KeyRound size={15} /> : <Lock size={15} />}
-                  </div>
-                  <div className="space-y-0.5">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-slate-900">Portal Login Access</span>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${formData.login_enabled ? "bg-emerald-100 text-emerald-800" : "bg-slate-200 text-slate-600"}`}>
-                        {formData.login_enabled ? "Login Enabled" : "HR Profiling Only (Default)"}
-                      </span>
+              {/* Section E: HRHub Portal Login Access (Restricted exclusively to Central HRMD Administrator) */}
+              {isHRMD && (
+                <div className={`rounded-2xl border p-3.5 flex items-start justify-between gap-3 transition ${formData.login_enabled ? "bg-emerald-50/70 border-emerald-200" : "bg-slate-50 border-slate-200"}`}>
+                  <div className="flex items-start gap-2.5">
+                    <div className={`p-1.5 rounded-xl mt-0.5 ${formData.login_enabled ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-500"}`}>
+                      {formData.login_enabled ? <KeyRound size={15} /> : <Lock size={15} />}
                     </div>
-                    <p className="text-[11px] text-slate-500 leading-relaxed">
-                      {formData.login_enabled
-                        ? "Employee is permitted to activate an account and log in to HRHub. Can receive portal invitations."
-                        : "Strictly restricted to personnel profiling (201 records & IR tracking). Employee cannot log in or activate an account."}
-                    </p>
+                    <div className="space-y-0.5">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-slate-900">Portal Login Access</span>
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${formData.login_enabled ? "bg-emerald-100 text-emerald-800" : "bg-slate-200 text-slate-600"}`}>
+                          {formData.login_enabled ? "Login Enabled" : "HR Profiling Only (Default)"}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-500 leading-relaxed">
+                        {formData.login_enabled
+                          ? "Employee is permitted to activate an account and log in to HRHub. Can receive portal invitations."
+                          : "Strictly restricted to personnel profiling (201 records & IR tracking). Employee cannot log in or activate an account."}
+                      </p>
+                    </div>
                   </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setFormData({ ...formData, login_enabled: !formData.login_enabled })}
-                  className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                    formData.login_enabled ? "bg-emerald-600" : "bg-slate-300"
-                  }`}
-                  title={formData.login_enabled ? "Click to set to HR Profiling Only" : "Click to enable Portal Login"}
-                >
-                  <span
-                    className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                      formData.login_enabled ? "translate-x-4" : "translate-x-0"
+                  <button
+                    type="button"
+                    onClick={() => setFormData({ ...formData, login_enabled: !formData.login_enabled })}
+                    className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                      formData.login_enabled ? "bg-emerald-600" : "bg-slate-300"
                     }`}
-                  />
-                </button>
-              </div>
+                    title={formData.login_enabled ? "Click to set to HR Profiling Only" : "Click to enable Portal Login"}
+                  >
+                    <span
+                      className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                        formData.login_enabled ? "translate-x-4" : "translate-x-0"
+                      }`}
+                    />
+                  </button>
+                </div>
+              )}
             </div>
           )}
 

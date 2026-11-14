@@ -598,6 +598,7 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
     if (!isHRMD && (targetId === "permission_matrix" || targetId === "api_health")) {
       return;
     }
+    setActiveView("workspace");
     setOpenTabs((prev) => {
       const withoutTab = prev.filter((id) => id !== targetId);
       return [...withoutTab, targetId];
@@ -644,7 +645,22 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
     };
     const handleSwitchWorkspaceTab = (e) => {
       if (e.detail?.tabId) {
+        setActiveView("workspace");
         handleOpenWorkspaceTab(e.detail.tabId);
+        if (e.detail.employee) {
+          try {
+            localStorage.setItem("hrhub_incident_target_employee", JSON.stringify(e.detail.employee));
+          } catch (err) {
+            console.warn("Target emp storage notice:", err);
+          }
+          setTimeout(() => {
+            window.dispatchEvent(
+              new CustomEvent("hrhub_file_incident_report", {
+                detail: { employee: e.detail.employee }
+              })
+            );
+          }, 80);
+        }
       }
     };
     const handleEmployeeDeleted = (e) => {
@@ -2044,6 +2060,24 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
                     onOpenPermissions={() => {
                       setActiveView("workspace");
                       setWorkspaceTab("permission_matrix");
+                    }}
+                    onNavigateToIr={(employee) => {
+                      if (employee) {
+                        try {
+                          localStorage.setItem("hrhub_incident_target_employee", JSON.stringify(employee));
+                        } catch (err) {
+                          console.warn("Target emp storage notice:", err);
+                        }
+                      }
+                      setActiveView("workspace");
+                      handleOpenWorkspaceTab("incident_reports");
+                      setTimeout(() => {
+                        window.dispatchEvent(
+                          new CustomEvent("hrhub_file_incident_report", {
+                            detail: { employee }
+                          })
+                        );
+                      }, 80);
                     }}
                   />
                 ) : (

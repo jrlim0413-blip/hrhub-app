@@ -18,6 +18,7 @@ import {
   saveStoredEmployee,
   updateStoredEmployeeApproval,
   deleteStoredEmployee,
+  updateStoredEmployeeLoginAccess,
   isEmployeeLoginEnabled
 } from "../lib/employeeStorage";
 import {
@@ -55,7 +56,8 @@ export default function EmployeeDirectoryPanel({
   onRefresh,
   onUpdateProfile,
   onDeleteProfile,
-  onOpenPermissions
+  onOpenPermissions,
+  onNavigateToIr
 }) {
   const [matrixData, setMatrixData] = useState(() => getRbacMatrixData());
 
@@ -80,7 +82,7 @@ export default function EmployeeDirectoryPanel({
   }, [onRefresh]);
 
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedFilter, setSelectedFilter] = useState("all"); // 'all' | 'online' | 'pending' | 'approved'
+  const [selectedFilter, setSelectedFilter] = useState("all"); // 'all' | 'entity_enrolled' | 'online' | 'pending' | 'approved'
   const [selectedSubsidiary, setSelectedSubsidiary] = useState("all");
   const [selectedBranchFilter, setSelectedBranchFilter] = useState("all");
   const [viewMode, setViewMode] = useState("grid"); // 'grid' | 'table'
@@ -88,6 +90,9 @@ export default function EmployeeDirectoryPanel({
   // Pre-Registration Modal State (Exclusively for HRMD)
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isSubmittingAdd, setIsSubmittingAdd] = useState(false);
+
+  // Portal Login Authorization Toggle State (Exclusively for HRMD / Head Office)
+  const [isTogglingLoginId, setIsTogglingLoginId] = useState(null);
 
   // Unified Enhanced Employee Profiling Modal State (For Add & Edit across all accounts)
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
@@ -164,12 +169,24 @@ export default function EmployeeDirectoryPanel({
     });
   }, [profiles, isHRMD, currentEmail]);
 
+  // Helper to determine if an employee profile was enrolled by an operating entity / subsidiary
+  const isEntityEnrolledEmployee = (p) => {
+    if (!p) return false;
+    const email = (p.email || "").trim().toLowerCase();
+    if (email === "admin@hrhub.com" || email === "caquennie6@gmail.com") return false;
+    if (p.is_preregistered || p.metadata?.is_preregistered || p.metadata?.pre_registered) return false;
+    const role = (p.role || "").trim().toLowerCase();
+    if (role.startsWith("hr admin") || role === "super administrator" || role === "hr manager") return false;
+    return true;
+  };
+
   // Calculate statistics for managed personnel
   const stats = useMemo(() => {
     let total = managedProfiles.length;
     let onlineCount = 0;
     let approvedCount = 0;
     let pendingCount = 0;
+    let entityEnrolledCount = 0;
 
     managedProfiles.forEach((p) => {
       const email = p.email?.toLowerCase() || "";
@@ -177,9 +194,10 @@ export default function EmployeeDirectoryPanel({
       if (isOnline) onlineCount++;
       if (p.is_approved) approvedCount++;
       else pendingCount++;
+      if (isEntityEnrolledEmployee(p)) entityEnrolledCount++;
     });
 
-    return { total, onlineCount, approvedCount, pendingCount };
+    return { total, onlineCount, approvedCount, pendingCount, entityEnrolledCount };
   }, [managedProfiles, onlineEmails, currentEmail]);
 
   // Pre-Registration: Exclusively for Head Office HR Administrator
@@ -226,7 +244,8 @@ export default function EmployeeDirectoryPanel({
 
       // Tab filter
       let matchesFilter = true;
-      if (selectedFilter === "online") matchesFilter = isHRMD && isOnline;
+      if (selectedFilter === "entity_enrolled") matchesFilter = isEntityEnrolledEmployee(p);
+      else if (selectedFilter === "online") matchesFilter = isHRMD && isOnline;
       else if (selectedFilter === "approved") matchesFilter = Boolean(p.is_approved);
       else if (selectedFilter === "pending") matchesFilter = !p.is_approved;
 
@@ -314,6 +333,51 @@ export default function EmployeeDirectoryPanel({
       message: `${targetEmail} is now ${newApprovedState ? "APPROVED" : "SUSPENDED"}.`
     });
     setTimeout(() => setNotice(null), 4000);
+  };
+
+  // Toggle employee portal login authorization (Exclusively for Central HRMD / Head Office)
+  const handleToggleEmployeeLogin = async (profile) => {
+    if (!profile) return;
+    const targetEmail = (profile.email || "").trim().toLowerCase();
+    const targetId = profile.id;
+    if (!targetEmail && !targetId) return;
+
+    if (targetEmail === "admin@hrhub.com") {
+      setNotice({ type: "warning", message: "Master HRMD Administrator login access cannot be modified." });
+      setTimeout(() => setNotice(null), 3500);
+      return;
+    }
+
+    const currentEnabled = isEmployeeLoginEnabled(profile);
+    const nextState = !currentEnabled;
+    setIsTogglingLoginId(targetId || targetEmail);
+
+    try {
+      await updateStoredEmployeeLoginAccess(targetEmail || targetId, nextState);
+      const updatedProf = {
+        ...profile,
+        login_enabled: nextState,
+        metadata: { ...(profile.metadata || {}), login_enabled: nextState }
+      };
+
+      if (onUpdateProfile) {
+        onUpdateProfile(profile.id, { login_enabled: nextState, metadata: updatedProf.metadata });
+      }
+
+      setNotice({
+        type: nextState ? "success" : "info",
+        message: nextState
+          ? `Portal login ENABLED for ${profile.name || targetEmail}. Employee can now activate their account and receive login invitations.`
+          : `Portal login restricted to HR PROFILING ONLY for ${profile.name || targetEmail}.`
+      });
+      setTimeout(() => setNotice(null), 4500);
+    } catch (err) {
+      console.warn("Toggle login notice:", err);
+      setNotice({ type: "error", message: "Failed to update login access. Please try again." });
+      setTimeout(() => setNotice(null), 3500);
+    } finally {
+      setIsTogglingLoginId(null);
+    }
   };
 
   // Open Enhanced Employee Profiling Modal in Edit Mode (Available for all accounts)
@@ -537,23 +601,30 @@ export default function EmployeeDirectoryPanel({
     }
   };
 
-  // Direct Incident Report Filing Trigger
+  // Direct Incident Report Filing Trigger - Links directly to Workspace and automatically opens IR process
   const handleFileIncidentReportForEmployee = (employee) => {
+    if (!employee) return;
     try {
       localStorage.setItem("hrhub_incident_target_employee", JSON.stringify(employee));
-      window.dispatchEvent(
-        new CustomEvent("hrhub_switch_workspace_tab", {
-          detail: { tabId: "incident_reports", employee }
-        })
-      );
-      window.dispatchEvent(
-        new CustomEvent("hrhub_file_incident_report", {
-          detail: { employee }
-        })
-      );
+      if (typeof onNavigateToIr === "function") {
+        onNavigateToIr(employee);
+      } else {
+        window.dispatchEvent(
+          new CustomEvent("hrhub_switch_workspace_tab", {
+            detail: { tabId: "incident_reports", employee }
+          })
+        );
+        setTimeout(() => {
+          window.dispatchEvent(
+            new CustomEvent("hrhub_file_incident_report", {
+              detail: { employee }
+            })
+          );
+        }, 80);
+      }
       setNotice({
         type: "success",
-        message: `Opening Incident Report generator for ${employee.name || employee.email}...`
+        message: `Opening Incident Report (IR) & NTE workflow for ${employee.name || employee.email}...`
       });
       setTimeout(() => setNotice(null), 3500);
     } catch (err) {
@@ -758,6 +829,14 @@ export default function EmployeeDirectoryPanel({
           <div className="flex items-center gap-1 sm:gap-2 -mb-px">
             {[
               { id: "all", label: isHRMD ? "All Personnel" : "All Employees", count: stats.total },
+              ...(isHRMD ? [
+                {
+                  id: "entity_enrolled",
+                  label: "Entity-Enrolled",
+                  count: stats.entityEnrolledCount,
+                  isEntityTab: true
+                }
+              ] : []),
               ...(isHRMD ? [{ id: "online", label: "Online Now", count: stats.onlineCount, isOnlineTab: true }] : []),
               { id: "approved", label: "Approved", count: stats.approvedCount },
               { id: "pending", label: "Pending Review", count: stats.pendingCount, isPendingTab: true }
@@ -775,6 +854,9 @@ export default function EmployeeDirectoryPanel({
                 >
                   {tab.isOnlineTab && (
                     <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                  )}
+                  {tab.isEntityTab && (
+                    <Building2 size={12} className={isActive ? "text-emerald-800" : "text-slate-400 group-hover:text-slate-700"} />
                   )}
                   <span>{tab.label}</span>
                   <span
@@ -898,6 +980,26 @@ export default function EmployeeDirectoryPanel({
           </div>
         </div>
       </div>
+
+      {/* Entity-Enrolled Focus Notice (For Central HRMD) */}
+      {isHRMD && selectedFilter === "entity_enrolled" && (
+        <div className="p-4 rounded-2xl bg-emerald-50/70 border border-emerald-200 text-xs text-emerald-950 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-in fade-in shadow-2xs">
+          <div className="flex items-start sm:items-center gap-3">
+            <span className="p-2 rounded-xl bg-emerald-100 text-emerald-800 shrink-0">
+              <Building2 size={16} />
+            </span>
+            <div>
+              <span className="font-extrabold text-slate-900">Personnel Enrolled by Operating Entities & Subsidiaries</span>
+              <p className="text-[11px] text-emerald-900/80 mt-0.5 leading-relaxed">
+                These profiles were registered by branch & subsidiary accounts. As HR Administrator, you can toggle <strong>Portal Login</strong> on any employee to authorize them to activate their account and sign in to HRHub.
+              </p>
+            </div>
+          </div>
+          <span className="text-[10px] font-black uppercase tracking-wider text-emerald-800 bg-emerald-100/90 px-2.5 py-1 rounded-full shrink-0 border border-emerald-200">
+            {stats.entityEnrolledCount} Records
+          </span>
+        </div>
+      )}
 
       {/* Directory Content */}
       {filteredProfiles.length === 0 ? (
@@ -1086,6 +1188,38 @@ export default function EmployeeDirectoryPanel({
                   </div>
                 </div>
 
+                {/* Portal Login Authorization Switch (Exclusive for Central HRMD Administrator) */}
+                {isHRMD && (
+                  <div className={`px-4.5 py-2.5 border-t flex items-center justify-between text-xs transition ${
+                    isLoginEnabled ? "bg-emerald-50/60 border-emerald-100" : "bg-slate-50 border-slate-100"
+                  }`}>
+                    <div className="flex items-center gap-1.5">
+                      <KeyRound size={13} className={isLoginEnabled ? "text-emerald-600" : "text-slate-400"} />
+                      <span className="font-bold text-slate-700 text-[11px]">Portal Login</span>
+                      <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded-full ${
+                        isLoginEnabled ? "bg-emerald-100 text-emerald-800" : "bg-slate-200 text-slate-600"
+                      }`}>
+                        {isLoginEnabled ? "Login Enabled" : "Profiling Only"}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleToggleEmployeeLogin(prof)}
+                      disabled={isTogglingLoginId === (prof.id || prof.email)}
+                      className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                        isLoginEnabled ? "bg-emerald-600" : "bg-slate-300"
+                      }`}
+                      title={isLoginEnabled ? "Click to restrict to HR Profiling Only" : "Click to authorize Portal Login & Account Activation"}
+                    >
+                      <span
+                        className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                          isLoginEnabled ? "translate-x-4" : "translate-x-0"
+                        }`}
+                      />
+                    </button>
+                  </div>
+                )}
+
                 {/* Card Action Footer */}
                 <div className="px-4.5 py-3 bg-white border-t border-slate-100 flex items-center justify-between gap-2">
                   {canManageProfiles ? (
@@ -1112,6 +1246,17 @@ export default function EmployeeDirectoryPanel({
                   ) : <div />}
 
                   <div className="flex items-center gap-1.5">
+                    {/* File Incident Report (IR) Button - Automatically launches IR process in Workspace */}
+                    <button
+                      type="button"
+                      onClick={() => handleFileIncidentReportForEmployee(prof)}
+                      title={`File Incident Report (IR) / NTE for ${displayName}`}
+                      className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-600 hover:text-white text-[11px] font-bold transition cursor-pointer shadow-2xs"
+                    >
+                      <ShieldAlert size={12} />
+                      <span>File IR</span>
+                    </button>
+
                     {canManageProfiles && (
                       <button
                         type="button"
@@ -1257,17 +1402,50 @@ export default function EmployeeDirectoryPanel({
                         </div>
                       </td>
                       <td className="py-3 px-4">
-                        <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-0.5 rounded-full border ${
-                          isLoginEnabled
-                            ? "bg-emerald-50 text-emerald-800 border-emerald-200"
-                            : "bg-slate-100 text-slate-600 border-slate-200"
-                        }`}>
-                          {isLoginEnabled ? <KeyRound size={10} className="text-emerald-600" /> : <Lock size={10} className="text-slate-500" />}
-                          <span>{isLoginEnabled ? "Login Access" : "Profiling Only"}</span>
-                        </span>
+                        {isHRMD ? (
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleToggleEmployeeLogin(prof)}
+                              disabled={isTogglingLoginId === (prof.id || prof.email)}
+                              className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                                isLoginEnabled ? "bg-emerald-600" : "bg-slate-300"
+                              }`}
+                              title={isLoginEnabled ? "Click to restrict to HR Profiling Only" : "Click to authorize Portal Login & Account Activation"}
+                            >
+                              <span
+                                className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                                  isLoginEnabled ? "translate-x-4" : "translate-x-0"
+                                }`}
+                              />
+                            </button>
+                            <span className={`text-[10px] font-bold ${isLoginEnabled ? "text-emerald-700" : "text-slate-500"}`}>
+                              {isLoginEnabled ? "Login Enabled" : "Profiling"}
+                            </span>
+                          </div>
+                        ) : (
+                          <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-0.5 rounded-full border ${
+                            isLoginEnabled
+                              ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                              : "bg-slate-100 text-slate-600 border-slate-200"
+                          }`}>
+                            {isLoginEnabled ? <KeyRound size={10} className="text-emerald-600" /> : <Lock size={10} className="text-slate-500" />}
+                            <span>{isLoginEnabled ? "Login Access" : "Profiling Only"}</span>
+                          </span>
+                        )}
                       </td>
                       <td className="py-3 px-4 text-right">
                         <div className="flex items-center justify-end gap-1.5">
+                          {/* File Incident Report (IR) Button */}
+                          <button
+                            type="button"
+                            onClick={() => handleFileIncidentReportForEmployee(prof)}
+                            title={`File Incident Report (IR) / NTE for ${displayName}`}
+                            className="p-1 rounded-lg border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-600 hover:text-white transition cursor-pointer"
+                          >
+                            <ShieldAlert size={13} />
+                          </button>
+
                           {canManageProfiles && (
                             <button
                               type="button"
@@ -1498,6 +1676,7 @@ export default function EmployeeDirectoryPanel({
         }}
         onSave={handleSaveProfileModal}
         userEntityCompany={userEntityCompany}
+        isHRMD={isHRMD}
         roles={ALL_OPERATIONAL_ROLES}
         branches={BRANCH_PRESETS}
         defaultBranchMap={DEFAULT_BRANCH_MAP}

@@ -102,7 +102,11 @@ export function isEmployeeLoginEnabled(emp) {
   const email = (emp.email || "").trim().toLowerCase();
   if (email === "admin@hrhub.com" || email === "caquennie6@gmail.com") return true;
 
-  // 1. Pre-registered accounts automatically have portal login access
+  // 1. Explicit login_enabled flags if present take precedence (allows HR Administrator to toggle authorization)
+  if (typeof emp.login_enabled === "boolean") return emp.login_enabled;
+  if (emp.metadata && typeof emp.metadata.login_enabled === "boolean") return emp.metadata.login_enabled;
+
+  // 2. Pre-registered accounts automatically have portal login access
   if (
     emp.is_preregistered ||
     emp.metadata?.is_preregistered ||
@@ -112,7 +116,7 @@ export function isEmployeeLoginEnabled(emp) {
     return true;
   }
 
-  // 2. HR administrator accounts automatically have portal login access
+  // 3. HR administrator accounts automatically have portal login access
   const role = (emp.role || "").trim().toLowerCase();
   if (
     role.startsWith("hr admin") ||
@@ -122,10 +126,6 @@ export function isEmployeeLoginEnabled(emp) {
   ) {
     return true;
   }
-
-  // 3. Explicit login_enabled flags if present
-  if (typeof emp.login_enabled === "boolean") return emp.login_enabled;
-  if (emp.metadata && typeof emp.metadata.login_enabled === "boolean") return emp.metadata.login_enabled;
 
   return false;
 }
