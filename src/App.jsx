@@ -330,10 +330,10 @@ const App = () => {
         let effectiveCompany = "Simpal Group of Companies";
         let effectiveRole = isDefaultAdmin ? "HR Administrator" : "Team Member";
         let effectiveId = `act-${Date.now()}`;
+        let dbProf = null;
 
         try {
           // Check dedicated employees table first, then profiles
-          let dbProf = null;
           try {
             const { data: emp } = await supabase
               .from("employees")
