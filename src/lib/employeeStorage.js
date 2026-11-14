@@ -628,24 +628,23 @@ export async function updateStoredEmployeeLoginAccess(emailOrId, loginEnabled) {
 
   // Persist update to Supabase Database
   try {
-    // 1. Dedicated 'employees' table
-    try {
-      await supabase
-        .from(EMPLOYEES_TABLE)
-        .update({
-          login_enabled: targetRecord.login_enabled,
-          metadata: targetRecord.metadata,
-          updated_at: now
-        })
-        .or(`email.ilike.${targetRecord.email},id.eq.${targetRecord.id}`);
-    } catch {
-      await supabase
-        .from(EMPLOYEES_TABLE)
-        .update({
-          metadata: targetRecord.metadata,
-          updated_at: now
-        })
-        .or(`email.ilike.${targetRecord.email},id.eq.${targetRecord.id}`);
+    // 1. Dedicated 'employees' table: update metadata (where login_enabled is stored)
+    let queryBuilder = supabase.from(EMPLOYEES_TABLE).update({
+      metadata: targetRecord.metadata,
+      updated_at: now
+    });
+
+    if (targetRecord.id && targetRecord.email) {
+      queryBuilder = queryBuilder.or(`email.ilike.${targetRecord.email},id.eq.${targetRecord.id}`);
+    } else if (targetRecord.email) {
+      queryBuilder = queryBuilder.ilike("email", targetRecord.email);
+    } else if (targetRecord.id) {
+      queryBuilder = queryBuilder.eq("id", targetRecord.id);
+    }
+
+    const { error: patchErr } = await queryBuilder;
+    if (patchErr) {
+      console.warn("Notice updating employee metadata:", patchErr.message || patchErr);
     }
 
     // 2. Cloud backup in 'user_settings'
