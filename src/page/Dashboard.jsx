@@ -2090,26 +2090,21 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
                   </div>
                 )
               ) : communicationTab === "attendance" ? (
-                isHRMD ? (
-                  <ShiftAttendanceOverviewPanel
-                    profiles={supabaseProfiles}
-                    presenceMap={presenceMap}
-                    onOpenChat={handleOpenDirectChat}
-                    onOpenWorkspaceTab={handleOpenWorkspaceTab}
-                  />
-                ) : (
-                  <div className="bg-white rounded-3xl border border-slate-200/90 p-12 text-center space-y-4">
-                    <div className="w-16 h-16 rounded-2xl bg-emerald-50 border border-emerald-200/80 text-emerald-600 flex items-center justify-center mx-auto shadow-xs">
-                      <Calendar size={32} />
-                    </div>
-                    <div className="space-y-1">
-                      <h3 className="text-base font-extrabold text-slate-900">Shift & Attendance Schedule</h3>
-                      <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
-                        Work shifts and roster allocations are currently being coordinated. Official shift schedules will be published here once finalized by Head Office HRMD.
-                      </p>
-                    </div>
-                  </div>
-                )
+                <ShiftAttendanceOverviewPanel
+                  profiles={supabaseProfiles}
+                  presenceMap={presenceMap}
+                  currentProfile={{
+                    name: profileName,
+                    role: profileRole,
+                    email: profileEmail,
+                    company: profileCompany,
+                    branch: currentUser?.branch || "Head Office (SGC)"
+                  }}
+                  currentUser={currentUser}
+                  isHRMD={isHRMD}
+                  onOpenChat={handleOpenDirectChat}
+                  onOpenWorkspaceTab={handleOpenWorkspaceTab}
+                />
               ) : communicationTab === "policies" ? (
                 canViewPolicies ? (
                   <PoliciesHandbooksPanel />
