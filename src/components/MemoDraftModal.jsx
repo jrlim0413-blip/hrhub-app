@@ -89,6 +89,19 @@ const COMPANIES = [
     defaultSignatoryTitle: "HRMD Manager",
     defaultApprover: "CHARMIE JEAN M. SIMPAL",
     defaultApproverTitle: "President & CEO"
+  },
+  {
+    id: "mc_power_gas",
+    code: "MCPG",
+    name: "MC POWER GAS",
+    logoUrl: "/logos/SGC.png",
+    address: "MC Power Gas Station Central Terminal, Highway Depot, Mandaue City, Cebu",
+    defaultTo: "ALL STATION MANAGERS, CASHIERS & PUMP ATTENDANTS",
+    defaultFrom: "HUMAN RESOURCES DEPARTMENT",
+    defaultSignatory: "JEVINCE JAYE S. JUBAY, CHRP",
+    defaultSignatoryTitle: "HRMD Manager",
+    defaultApprover: "CHARMIE JEAN M. SIMPAL",
+    defaultApproverTitle: "President & CEO"
   }
 ];
 

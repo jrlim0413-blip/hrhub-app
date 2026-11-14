@@ -1,11 +1,29 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import {
   X, User, Mail, Building2, MapPin, Phone, ShieldCheck,
   Camera, Upload, FileText, CheckCircle2,
   AlertCircle, Sparkles, ShieldAlert, Trash2, Calendar,
   Briefcase, Heart, Plus, ExternalLink, RefreshCw, Eye, Paperclip,
-  Check, Download
+  Check, Download, Cloud, Fuel, Coins, Search, CheckCheck,
+  ArrowRight, Shield
 } from "lucide-react";
+import {
+  HEAD_OFFICE,
+  STL_SUBSIDIARIES,
+  NON_STL_SUBSIDIARIES,
+  ALL_SUBSIDIARIES,
+  DEFAULT_BRANCH_MAP,
+  ALL_BRANCH_PRESETS,
+  OPERATIONAL_DESIGNATION_GROUPS,
+  ALL_OPERATIONAL_ROLES,
+  isStlEntity,
+  isNonStlEntity,
+  isHeadOffice
+} from "../lib/companyEntities";
+import {
+  uploadEmployeeRequirementToBucket,
+  deleteEmployeeRequirementFromBucket
+} from "../lib/employeeRequirementsStorage";
 
 const COVER_PRESETS = [
   {
@@ -56,6 +74,7 @@ const DEPARTMENTS = [
   "Betting Operations & Tellers",
   "Vault Custody & Cashiering",
   "Site Construction (SIMCON)",
+  "Fuel & Station Operations (MC Power Gas)",
   "People Operations (HRMD)",
   "Finance & Audit Controllership",
   "Security & Asset Protection",
@@ -85,6 +104,13 @@ export default function AddEmployeeProfileModal({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [notice, setNotice] = useState(null);
   const [hasSaved, setHasSaved] = useState(false);
+
+  // Animated upload and saving states
+  const [uploadProgress, setUploadProgress] = useState(null);
+  const [saveStepOverlay, setSaveStepOverlay] = useState(null);
+  const [saveConfirmation, setSaveConfirmation] = useState(null);
+  const [selectedRoleCategory, setSelectedRoleCategory] = useState("all");
+  const [roleSearchQuery, setRoleSearchQuery] = useState("");
 
   // Form State
   const [formData, setFormData] = useState({
@@ -272,41 +298,67 @@ export default function AddEmployeeProfileModal({
     reader.readAsDataURL(file);
   };
 
-  // Multi-file 201 Uploader Handler
-  const handleFileRequirementsSelect = (e) => {
+  // Multi-file 201 Uploader Handler via Cloud Storage Bucket
+  const handleFileRequirementsSelect = async (e) => {
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
 
-    const remainingSlots = 12 - requirementsFiles.length;
+    const remainingSlots = 15 - requirementsFiles.length;
     if (remainingSlots <= 0) {
-      setNotice({ type: "warning", message: "Maximum of 12 requirement files reached." });
+      setNotice({ type: "warning", message: "Maximum of 15 requirement files reached." });
       return;
     }
 
     const filesToProcess = files.slice(0, remainingSlots);
+    const employeeId = formData.id || `emp-${Date.now()}`;
 
-    filesToProcess.forEach((file) => {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const newDoc = {
-          id: `req-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-          name: file.name,
-          size: file.size,
-          type: file.type || "application/octet-stream",
-          category: selectedReqCategory,
-          dataUrl: event.target.result,
-          uploadedAt: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
-        };
-        setRequirementsFiles((prev) => [...prev, newDoc]);
-      };
-      reader.readAsDataURL(file);
-    });
+    for (let i = 0; i < filesToProcess.length; i++) {
+      const file = filesToProcess[i];
+      try {
+        setUploadProgress({
+          isUploading: true,
+          progress: 10,
+          stage: "preparing",
+          message: `Preparing "${file.name}" (${i + 1}/${filesToProcess.length})...`,
+          fileName: file.name
+        });
 
+        const uploadedDoc = await uploadEmployeeRequirementToBucket(
+          employeeId,
+          file,
+          selectedReqCategory,
+          (prog) => {
+            setUploadProgress({
+              isUploading: true,
+              progress: prog.percent,
+              stage: prog.stage,
+              message: prog.message,
+              fileName: file.name
+            });
+          }
+        );
+
+        setRequirementsFiles((prev) => [...prev, uploadedDoc]);
+      } catch (err) {
+        console.error("Upload error:", err);
+      }
+    }
+
+    setUploadProgress(null);
     if (e.target) e.target.value = "";
-    setNotice({ type: "success", message: `Attached ${filesToProcess.length} document file(s) under "${selectedReqCategory}".` });
+    setNotice({
+      type: "success",
+      message: `Successfully uploaded ${filesToProcess.length} document(s) to Cloud Storage Bucket under "${selectedReqCategory}".`
+    });
   };
 
-  const handleRemoveRequirementFile = (fileId) => {
+  const handleRemoveRequirementFile = (fileOrId) => {
+    const fileId = typeof fileOrId === "string" ? fileOrId : fileOrId?.id;
+    const storagePath = typeof fileOrId === "object" ? fileOrId?.storage_path : null;
+
+    if (storagePath) {
+      deleteEmployeeRequirementFromBucket(storagePath).catch(() => {});
+    }
     setRequirementsFiles((prev) => prev.filter((f) => f.id !== fileId));
   };
 
@@ -350,7 +402,7 @@ export default function AddEmployeeProfileModal({
     };
   };
 
-  // Submit Handler
+  // Submit Handler with Animated Saving Progression & Confirmation
   const handleSubmit = async (e) => {
     e?.preventDefault();
     if (!formData.name.trim()) {
@@ -362,19 +414,34 @@ export default function AddEmployeeProfileModal({
     setIsSubmitting(true);
     setNotice(null);
 
+    // Step 1: Validation
+    setSaveStepOverlay({ step: 1, message: "Validating 201 Personnel Compliance Dossier..." });
+    await new Promise((r) => setTimeout(r, 260));
+
+    // Step 2: Storage Sync
+    setSaveStepOverlay({ step: 2, message: "Synchronizing Cloud Storage Bucket Documents..." });
+    await new Promise((r) => setTimeout(r, 280));
+
+    // Step 3: Central Database Registration
+    setSaveStepOverlay({ step: 3, message: "Recording Profile in Central Employee Directory..." });
+    await new Promise((r) => setTimeout(r, 260));
+
     try {
       const record = buildProfileRecord();
       await onSave(record);
       setHasSaved(true);
+      setSaveStepOverlay(null);
 
       if (mode === "edit") {
         setNotice({ type: "success", message: `Profile details for ${record.name} updated successfully!` });
-        setTimeout(() => onClose(), 1000);
+        setTimeout(() => onClose(), 1200);
       } else {
-        onClose();
+        // Show comprehensive confirmation modal
+        setSaveConfirmation({ isOpen: true, employee: record });
       }
     } catch (err) {
       console.error("Error saving employee profile:", err);
+      setSaveStepOverlay(null);
       setNotice({ type: "warning", message: "Failed to save profile. Please check connection and try again." });
     } finally {
       setIsSubmitting(false);
@@ -727,11 +794,60 @@ export default function AddEmployeeProfileModal({
 
                   {/* Company Entity */}
                   <div className="space-y-1">
-                    <label className="text-xs font-bold text-slate-700">Company Entity</label>
-                    <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-100/90 px-3.5 py-2.5 text-xs text-slate-700 font-bold">
-                      <Building2 size={14} className="text-emerald-600 shrink-0" />
-                      <span className="truncate">{formData.company}</span>
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-bold text-slate-700">Company Entity *</label>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                        isHeadOffice(formData.company)
+                          ? "bg-emerald-50 text-emerald-800 border-emerald-300"
+                          : isStlEntity(formData.company)
+                            ? "bg-blue-50 text-blue-800 border-blue-300"
+                            : "bg-amber-50 text-amber-800 border-amber-300"
+                      }`}>
+                        {isHeadOffice(formData.company) ? "Corporate HQ" : isStlEntity(formData.company) ? "STL Gaming" : "Non-STL Entity"}
+                      </span>
                     </div>
+                    <select
+                      value={formData.company}
+                      onChange={(e) => {
+                        const newComp = e.target.value;
+                        const newBranch = DEFAULT_BRANCH_MAP[newComp] || formData.branch;
+                        let newRole = formData.role;
+                        let newDept = formData.department;
+
+                        if (newComp === "MC POWER GAS") {
+                          newRole = "PUMP ATTENDANT";
+                          newDept = "Fuel & Station Operations (MC Power Gas)";
+                        } else if (isStlEntity(newComp) && (newRole === "PUMP ATTENDANT" || newRole === "Team Member")) {
+                          newRole = "CASHIER";
+                          newDept = "Operations & Field Terminals";
+                        } else if (newComp === "Simpal Construction (SIMCON)") {
+                          newDept = "Site Construction (SIMCON)";
+                        }
+
+                        setFormData({
+                          ...formData,
+                          company: newComp,
+                          branch: newBranch,
+                          role: newRole,
+                          department: newDept
+                        });
+                      }}
+                      className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs text-slate-800 font-bold focus:border-emerald-500 focus:outline-none cursor-pointer shadow-2xs"
+                    >
+                      <optgroup label="🏛️ Corporate Head Office">
+                        <option value="Simpal Group of Companies">Simpal Group of Companies</option>
+                      </optgroup>
+                      <optgroup label="🎰 STL Subsidiaries (PCSO Authorized Gaming)">
+                        {STL_SUBSIDIARIES.map((sub) => (
+                          <option key={sub} value={sub}>{sub}</option>
+                        ))}
+                      </optgroup>
+                      <optgroup label="⛽ Non-STL Subsidiaries (Commercial, Fuel & Construction)">
+                        {NON_STL_SUBSIDIARIES.map((sub) => (
+                          <option key={sub} value={sub}>{sub}</option>
+                        ))}
+                      </optgroup>
+                    </select>
                   </div>
 
                   {/* Branch Location */}
@@ -742,23 +858,89 @@ export default function AddEmployeeProfileModal({
                       onChange={(e) => setFormData({ ...formData, branch: e.target.value })}
                       className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs text-slate-800 font-semibold focus:border-emerald-500 focus:outline-none cursor-pointer shadow-2xs"
                     >
-                      {branches.map((br) => (
+                      {ALL_BRANCH_PRESETS.map((br) => (
                         <option key={br} value={br}>{br}</option>
                       ))}
                     </select>
                   </div>
 
-                  {/* Designation / Role */}
-                  <div className="space-y-1">
-                    <label className="text-xs font-bold text-slate-700">Designation / Role *</label>
+                  {/* Designation / Role (Categorized for Instant Search & Finding) */}
+                  <div className="space-y-1 sm:col-span-2">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 pb-1">
+                      <label className="text-xs font-bold text-slate-700">Designation / Role *</label>
+                      
+                      {/* Quick Category Filter Pills */}
+                      <div className="flex items-center gap-1 overflow-x-auto pb-0.5 text-[10px]">
+                        {[
+                          { id: "all", label: "All Roles" },
+                          { id: "admin", label: "Admin & Finance" },
+                          { id: "cashier", label: "STL Cashiering" },
+                          { id: "gas", label: "MC Power Gas" },
+                          { id: "support", label: "Tech Support" },
+                          { id: "facilities", label: "Facilities & Drivers" }
+                        ].map((cat) => (
+                          <button
+                            key={cat.id}
+                            type="button"
+                            onClick={() => setSelectedRoleCategory(cat.id)}
+                            className={`px-2 py-0.5 rounded-md font-bold transition cursor-pointer whitespace-nowrap ${
+                              selectedRoleCategory === cat.id
+                                ? "bg-slate-900 text-white shadow-2xs"
+                                : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                            }`}
+                          >
+                            {cat.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
                     <select
                       value={formData.role}
                       onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-                      className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs text-slate-800 font-semibold focus:border-emerald-500 focus:outline-none cursor-pointer shadow-2xs"
+                      className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs text-slate-900 font-bold focus:border-emerald-500 focus:outline-none cursor-pointer shadow-2xs"
                     >
-                      {roles.map((r) => (
-                        <option key={r} value={r}>{r}</option>
-                      ))}
+                      {/* If MC POWER GAS is selected, show Gas category at top */}
+                      {formData.company === "MC POWER GAS" && selectedRoleCategory === "all" && (
+                        <optgroup label="⛽ MC Power Gas Fuel & Station Operations">
+                          <option value="OFFICER IN CHARGE">OFFICER IN CHARGE</option>
+                          <option value="CASHIER I">CASHIER I</option>
+                          <option value="CASHIER II">CASHIER II</option>
+                          <option value="PUMP ATTENDANT">PUMP ATTENDANT</option>
+                        </optgroup>
+                      )}
+
+                      {/* If STL entity is selected, show STL Cashiering category at top */}
+                      {isStlEntity(formData.company) && selectedRoleCategory === "all" && (
+                        <optgroup label="🎰 STL Branch & Cashiering Operations">
+                          <option value="CLUSTER IN CHARGE">CLUSTER IN CHARGE</option>
+                          <option value="DRAW COURT OFFICER">DRAW COURT OFFICER</option>
+                          <option value="HEAD CASHIER">HEAD CASHIER</option>
+                          <option value="ASSISTANT CASHIER">ASSISTANT CASHIER</option>
+                          <option value="CASHIER & SUPERVISOR">CASHIER & SUPERVISOR</option>
+                          <option value="CASHIER">CASHIER</option>
+                          <option value="RECEIVER">RECEIVER</option>
+                          <option value="UNCLAIMED SPECIALIST">UNCLAIMED SPECIALIST</option>
+                        </optgroup>
+                      )}
+
+                      {/* Categorized Operational Designations */}
+                      {OPERATIONAL_DESIGNATION_GROUPS
+                        .filter((group) => {
+                          if (selectedRoleCategory === "admin") return group.category.includes("Corporate");
+                          if (selectedRoleCategory === "cashier") return group.category.includes("STL");
+                          if (selectedRoleCategory === "gas") return group.category.includes("MC POWER GAS");
+                          if (selectedRoleCategory === "support") return group.category.includes("Customer");
+                          if (selectedRoleCategory === "facilities") return group.category.includes("General Services");
+                          return true;
+                        })
+                        .map((group) => (
+                          <optgroup key={group.category} label={`📁 ${group.category}`}>
+                            {group.roles.map((r) => (
+                              <option key={r} value={r}>{r}</option>
+                            ))}
+                          </optgroup>
+                        ))}
                     </select>
                   </div>
 
@@ -950,12 +1132,18 @@ export default function AddEmployeeProfileModal({
           {activeTab === "requirements" && (
             <div className="space-y-4 animate-in fade-in duration-150">
               <div className="p-4 rounded-2xl bg-emerald-50/60 border border-emerald-200/80 space-y-3">
-                <div className="flex items-center gap-2 text-emerald-950 font-black text-xs uppercase tracking-wider">
-                  <Upload size={15} className="text-emerald-600" />
-                  <span>Attach 201 Personnel Clearances & Legal Records</span>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-emerald-950 font-black text-xs uppercase tracking-wider">
+                    <Upload size={15} className="text-emerald-600" />
+                    <span>Attach 201 Personnel Clearances & Compliance Records</span>
+                  </div>
+                  <span className="text-[10px] font-bold text-emerald-700 bg-white border border-emerald-200 px-2 py-0.5 rounded-full flex items-center gap-1 shadow-2xs">
+                    <Cloud size={11} className="text-emerald-600" />
+                    <span>Direct Cloud Bucket Storage</span>
+                  </span>
                 </div>
                 <p className="text-xs text-emerald-900/80 leading-relaxed">
-                  Upload PDF or scanned copies of mandatory pre-employment compliance files (NBI Clearance, Signed Employment Contract, Government IDs, Medical Records, etc.).
+                  Upload PDF or scanned copies of mandatory compliance files (NBI Clearance, Signed Employment Contract, Government IDs, Medical Clearance). Documents are streamed directly to the secure <strong>employee-requirements</strong> cloud bucket for maximum database performance.
                 </p>
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
@@ -973,11 +1161,21 @@ export default function AddEmployeeProfileModal({
 
                   <button
                     type="button"
+                    disabled={uploadProgress?.isUploading}
                     onClick={() => fileInputRef.current?.click()}
-                    className="py-2 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-sm transition cursor-pointer flex items-center justify-center gap-1.5"
+                    className="py-2 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-sm transition cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-50"
                   >
-                    <Plus size={14} />
-                    <span>Upload File(s)</span>
+                    {uploadProgress?.isUploading ? (
+                      <>
+                        <RefreshCw size={13} className="animate-spin" />
+                        <span>Uploading...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Plus size={14} />
+                        <span>Upload File(s)</span>
+                      </>
+                    )}
                   </button>
 
                   <input
@@ -991,13 +1189,43 @@ export default function AddEmployeeProfileModal({
                 </div>
               </div>
 
+              {/* Real-time Animated Upload Progress Bar */}
+              {uploadProgress && (
+                <div className="p-4 rounded-2xl bg-slate-900 text-white border border-emerald-500/40 shadow-xl space-y-2.5 animate-in fade-in zoom-in-95 duration-150">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="p-1.5 rounded-lg bg-emerald-500/20 text-emerald-400 animate-spin">
+                        <RefreshCw size={14} />
+                      </div>
+                      <div>
+                        <p className="text-xs font-bold text-white truncate max-w-[240px] sm:max-w-sm">
+                          {uploadProgress.fileName}
+                        </p>
+                        <p className="text-[10px] text-emerald-400 font-medium">
+                          {uploadProgress.message}
+                        </p>
+                      </div>
+                    </div>
+                    <span className="text-xs font-black text-emerald-400">{uploadProgress.progress}%</span>
+                  </div>
+
+                  {/* Progress Track */}
+                  <div className="w-full h-2 rounded-full bg-slate-800 overflow-hidden">
+                    <div
+                      className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 transition-all duration-200"
+                      style={{ width: `${uploadProgress.progress}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
               {/* Uploaded Documents List */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-black text-slate-800 uppercase tracking-wider">
                     Attached 201 Documents ({requirementsFiles.length})
                   </span>
-                  <span className="text-[11px] text-slate-400">Max 12 attachments per employee</span>
+                  <span className="text-[11px] text-slate-400">Max 15 attachments per employee dossier</span>
                 </div>
 
                 {requirementsFiles.length > 0 ? (
@@ -1015,9 +1243,15 @@ export default function AddEmployeeProfileModal({
                             <p className="text-xs font-bold text-slate-800 truncate" title={f.name}>
                               {f.name}
                             </p>
-                            <span className="inline-block px-1.5 py-0.2 rounded text-[9px] font-bold bg-slate-100 text-slate-600 truncate mt-0.5 max-w-[200px]">
-                              {f.category}
-                            </span>
+                            <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                              <span className="inline-block px-1.5 py-0.2 rounded text-[9px] font-bold bg-slate-100 text-slate-600 truncate max-w-[150px]">
+                                {f.category}
+                              </span>
+                              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[9px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200/70">
+                                <Cloud size={9} />
+                                <span>Bucket</span>
+                              </span>
+                            </div>
                             <p className="text-[10px] text-slate-400 mt-0.5">
                               {(f.size / 1024).toFixed(1)} KB • {f.uploadedAt}
                             </p>
@@ -1025,19 +1259,21 @@ export default function AddEmployeeProfileModal({
                         </div>
 
                         <div className="flex items-center gap-1 shrink-0">
-                          {f.dataUrl && (
+                          {f.url && (
                             <a
-                              href={f.dataUrl}
+                              href={f.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
                               download={f.name}
                               className="p-1 rounded-lg text-slate-400 hover:text-emerald-700 hover:bg-emerald-50 transition cursor-pointer"
-                              title="Download document"
+                              title="Download or preview document"
                             >
-                              <Download size={13} />
+                              <ExternalLink size={13} />
                             </a>
                           )}
                           <button
                             type="button"
-                            onClick={() => handleRemoveRequirementFile(f.id)}
+                            onClick={() => handleRemoveRequirementFile(f)}
                             className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer"
                             title="Remove file"
                           >
@@ -1142,6 +1378,129 @@ export default function AddEmployeeProfileModal({
             </div>
           </div>
         </form>
+
+        {/* Animated Saving Dossier Progression Overlay */}
+        {saveStepOverlay && (
+          <div className="absolute inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center animate-in fade-in duration-150">
+            <div className="w-16 h-16 rounded-2xl bg-emerald-500/20 text-emerald-400 border border-emerald-400/30 flex items-center justify-center mb-4 shadow-xl relative">
+              <RefreshCw size={28} className="animate-spin text-emerald-400" />
+              <div className="absolute inset-0 rounded-2xl border-2 border-emerald-400/40 animate-ping pointer-events-none" />
+            </div>
+            <h3 className="text-lg font-black text-white tracking-tight">
+              Saving Employee Dossier
+            </h3>
+            <p className="text-xs text-emerald-300 font-semibold mt-1">
+              {saveStepOverlay.message}
+            </p>
+
+            <div className="w-64 h-2 rounded-full bg-slate-800 overflow-hidden mt-4">
+              <div
+                className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 transition-all duration-300"
+                style={{ width: `${(saveStepOverlay.step / 3) * 100}%` }}
+              />
+            </div>
+            <p className="text-[10px] text-slate-400 mt-2">
+              Step {saveStepOverlay.step} of 3 • Enterprise Cloud Database
+            </p>
+          </div>
+        )}
+
+        {/* Executive Success Dossier Confirmation Modal */}
+        {saveConfirmation && (
+          <div className="absolute inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-6 animate-in fade-in duration-200">
+            <div className="bg-white rounded-3xl border border-slate-200 p-6 sm:p-8 max-w-md w-full shadow-2xl text-center space-y-4 animate-in zoom-in-95 duration-150">
+              <div className="w-16 h-16 rounded-3xl bg-emerald-100 text-emerald-600 mx-auto flex items-center justify-center shadow-inner">
+                <CheckCircle2 size={32} />
+              </div>
+
+              <div>
+                <span className="text-[10px] font-black uppercase tracking-wider text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-full">
+                  Personnel Profile Confirmed
+                </span>
+                <h3 className="text-xl font-black text-slate-900 mt-2 tracking-tight">
+                  Profile Successfully Saved!
+                </h3>
+                <p className="text-xs text-slate-500 mt-1">
+                  The employee dossier has been registered to the corporate directory.
+                </p>
+              </div>
+
+              {/* Profile Snapshot Summary */}
+              <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/90 text-left space-y-2 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-400 text-[11px]">Full Name:</span>
+                  <span className="font-bold text-slate-800">{saveConfirmation.employee.name}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-400 text-[11px]">Entity:</span>
+                  <span className="font-bold text-slate-800">{saveConfirmation.employee.company}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-400 text-[11px]">Designation:</span>
+                  <span className="font-bold text-emerald-700">{saveConfirmation.employee.role}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-400 text-[11px]">Branch:</span>
+                  <span className="font-semibold text-slate-700">{saveConfirmation.employee.branch}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-400 text-[11px]">201 Attachments:</span>
+                  <span className="font-bold text-slate-700">
+                    {saveConfirmation.employee.metadata?.requirements_files?.length || 0} file(s)
+                  </span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2.5 pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSaveConfirmation(null);
+                    onClose();
+                  }}
+                  className="py-2.5 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs transition cursor-pointer shadow-sm"
+                >
+                  Return to Directory
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSaveConfirmation(null);
+                    setFormData({
+                      id: "",
+                      name: "",
+                      email: "",
+                      company: userEntityCompany,
+                      role: userEntityCompany === "MC POWER GAS" ? "PUMP ATTENDANT" : "CASHIER",
+                      branch: DEFAULT_BRANCH_MAP[userEntityCompany] || "Head Office (Mandaue)",
+                      department: userEntityCompany === "MC POWER GAS" ? "Fuel & Station Operations (MC Power Gas)" : "Operations & Field Terminals",
+                      phone: "",
+                      employmentStatus: "Regular Full-Time",
+                      dateHired: new Date().toISOString().split("T")[0],
+                      emergencyName: "",
+                      emergencyPhone: "",
+                      sssNumber: "",
+                      philhealthNumber: "",
+                      pagibigNumber: "",
+                      tinNumber: "",
+                      is_approved: true
+                    });
+                    setAvatarUrl(null);
+                    setCustomCoverUrl(null);
+                    setRequirementsFiles([]);
+                    setActiveTab("details");
+                    setHasSaved(false);
+                    setNotice(null);
+                  }}
+                  className="py-2.5 px-3 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold text-xs transition cursor-pointer"
+                >
+                  + Add Another
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

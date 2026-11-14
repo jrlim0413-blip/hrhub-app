@@ -7,12 +7,23 @@
 export const HR_ENTITIES = {
   HEAD_OFFICE: "Simpal Group of Companies",
   HEAD_OFFICE_ACRONYM: "SGC",
-  SUBSIDIARIES: [
-    "5A Royal Gaming OPC",
+  STL_SUBSIDIARIES: [
     "Lucky Betplay Corporation",
-    "Simpal Construction (SIMCON)",
+    "5A Royal Gaming OPC",
+    "Glowing Fortune",
+    "Imperial Gaming OPC"
+  ],
+  NON_STL_SUBSIDIARIES: [
+    "MC POWER GAS",
+    "Simpal Construction (SIMCON)"
+  ],
+  SUBSIDIARIES: [
+    "Lucky Betplay Corporation",
+    "5A Royal Gaming OPC",
+    "Glowing Fortune",
     "Imperial Gaming OPC",
-    "Glowing Fortune"
+    "MC POWER GAS",
+    "Simpal Construction (SIMCON)"
   ]
 };
 

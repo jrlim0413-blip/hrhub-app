@@ -23,50 +23,26 @@ import {
   isUserFeatureAllowed,
   getRbacMatrixData
 } from "../lib/rbacStorage";
+import {
+  HEAD_OFFICE,
+  STL_SUBSIDIARIES,
+  NON_STL_SUBSIDIARIES,
+  ALL_SUBSIDIARIES,
+  DEFAULT_BRANCH_MAP,
+  ALL_BRANCH_PRESETS,
+  HR_PRE_REGISTRATION_ROLES,
+  ALL_OPERATIONAL_ROLES,
+  isStlEntity,
+  isNonStlEntity,
+  isHeadOffice
+} from "../lib/companyEntities";
 
-const SUBSIDIARIES = [
-  "Simpal Group of Companies",
-  "Simpal Construction (SIMCON)",
-  "Lucky Betplay Corporation",
-  "5A Royal Gaming OPC",
-  "Glowing Fortune",
-  "Imperial Gaming OPC"
-];
+const SUBSIDIARIES = ALL_SUBSIDIARIES;
 
-const ROLES = [
-  "HR Administrator",
-  "HR Manager",
-  "HR Admin I",
-  "HR Admin II",
-  "HR Admin III",
-  "HR Admin IV",
-  "HR Admin V",
-  "HR Admin VI",
-  "HR-Onsite",
-  "Site Supervisor",
-  "Team Member"
-];
+// As instructed: In Pre-Registration, only HR account roles appear
+const ROLES = HR_PRE_REGISTRATION_ROLES;
 
-const BRANCH_PRESETS = [
-  "Head Office (Mandaue)",
-  "Mandaue City, Cebu",
-  "Maguindanao Branch",
-  "Cotabato City Branch",
-  "Iligan City Branch",
-  "Baloi, Lanao Branch",
-  "Lanao del Norte Branch",
-  "SIMCON Field Site (Cebu)",
-  "Regional Draw & Operations"
-];
-
-const DEFAULT_BRANCH_MAP = {
-  "Simpal Group of Companies": "Head Office (Mandaue)",
-  "Simpal Construction (SIMCON)": "SIMCON Field Site (Cebu)",
-  "Lucky Betplay Corporation": "Mandaue City, Cebu",
-  "5A Royal Gaming OPC": "Maguindanao Branch",
-  "Glowing Fortune": "Iligan City Branch",
-  "Imperial Gaming OPC": "Cotabato City Branch"
-};
+const BRANCH_PRESETS = ALL_BRANCH_PRESETS;
 
 
 
@@ -242,8 +218,19 @@ export default function EmployeeDirectoryPanel({
       else if (selectedFilter === "approved") matchesFilter = Boolean(p.is_approved);
       else if (selectedFilter === "pending") matchesFilter = !p.is_approved;
 
-      // Subsidiary filter
-      const matchesSubsidiary = selectedSubsidiary === "all" || p.company === selectedSubsidiary;
+      // Subsidiary & Entity Type filter
+      let matchesSubsidiary = true;
+      if (selectedSubsidiary === "all") {
+        matchesSubsidiary = true;
+      } else if (selectedSubsidiary === "stl_all") {
+        matchesSubsidiary = isStlEntity(p.company);
+      } else if (selectedSubsidiary === "non_stl_all") {
+        matchesSubsidiary = isNonStlEntity(p.company);
+      } else if (selectedSubsidiary === "head_office_all") {
+        matchesSubsidiary = isHeadOffice(p.company);
+      } else {
+        matchesSubsidiary = p.company === selectedSubsidiary;
+      }
 
       // Branch filter
       const matchesBranch = selectedBranchFilter === "all" || (p.branch || "").trim().toLowerCase() === selectedBranchFilter.toLowerCase().trim();
@@ -586,8 +573,8 @@ export default function EmployeeDirectoryPanel({
       {/* Top Banner Notice */}
       {notice && (
         <div className={`p-3.5 rounded-2xl border text-xs font-semibold flex items-center justify-between gap-3 shadow-xs animate-in fade-in slide-in-from-top-2 ${notice.type === "success"
-            ? "bg-emerald-50 border-emerald-200 text-emerald-900"
-            : "bg-amber-50 border-amber-200 text-amber-900"
+          ? "bg-emerald-50 border-emerald-200 text-emerald-900"
+          : "bg-amber-50 border-amber-200 text-amber-900"
           }`}>
           <div className="flex items-center gap-2">
             <CheckCircle2 size={16} className="text-emerald-600 shrink-0" />
@@ -696,8 +683,8 @@ export default function EmployeeDirectoryPanel({
 
           {/* Card 3: Pending Review */}
           <div className={`border rounded-2xl p-4.5 shadow-xs transition ${stats.pendingCount > 0
-              ? "bg-amber-50/60 border-amber-200"
-              : "bg-white border-slate-200/90"
+            ? "bg-amber-50/60 border-amber-200"
+            : "bg-white border-slate-200/90"
             }`}>
             <div className="flex items-center justify-between">
               <span className={`text-[11px] font-bold uppercase tracking-wider ${stats.pendingCount > 0 ? "text-amber-900" : "text-slate-500"
@@ -764,8 +751,8 @@ export default function EmployeeDirectoryPanel({
                   type="button"
                   onClick={() => setSelectedFilter(tab.id)}
                   className={`group flex items-center gap-2 py-3 px-3.5 border-b-2 text-xs font-semibold whitespace-nowrap transition cursor-pointer ${isActive
-                      ? "border-emerald-600 text-emerald-950 font-bold"
-                      : "border-transparent text-slate-500 hover:text-slate-900 hover:border-slate-300"
+                    ? "border-emerald-600 text-emerald-950 font-bold"
+                    : "border-transparent text-slate-500 hover:text-slate-900 hover:border-slate-300"
                     }`}
                 >
                   {tab.isOnlineTab && (
@@ -774,10 +761,10 @@ export default function EmployeeDirectoryPanel({
                   <span>{tab.label}</span>
                   <span
                     className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full transition ${isActive
-                        ? "bg-emerald-100 text-emerald-800"
-                        : tab.isPendingTab && tab.count > 0
-                          ? "bg-amber-100 text-amber-800"
-                          : "bg-slate-200/70 text-slate-600 group-hover:bg-slate-200"
+                      ? "bg-emerald-100 text-emerald-800"
+                      : tab.isPendingTab && tab.count > 0
+                        ? "bg-amber-100 text-amber-800"
+                        : "bg-slate-200/70 text-slate-600 group-hover:bg-slate-200"
                       }`}
                   >
                     {tab.count}
@@ -831,12 +818,28 @@ export default function EmployeeDirectoryPanel({
             <select
               value={selectedSubsidiary}
               onChange={(e) => setSelectedSubsidiary(e.target.value)}
-              className="h-9 text-xs font-medium bg-slate-50 border border-slate-200 text-slate-700 hover:bg-slate-100 rounded-xl px-3 py-1.5 focus:outline-none focus:border-emerald-500 cursor-pointer"
+              className="h-9 text-xs font-semibold bg-slate-50 border border-slate-200 text-slate-700 hover:bg-slate-100 rounded-xl px-3 py-1.5 focus:outline-none focus:border-emerald-500 cursor-pointer shadow-2xs"
             >
-              <option value="all">🏢 Company: All</option>
-              {SUBSIDIARIES.map((sub) => (
-                <option key={sub} value={sub}>{sub}</option>
-              ))}
+              <option value="all">🏢 Company: All Entities</option>
+              <option value="stl_all">🎰 All STL Entities (Gaming)</option>
+              <option value="non_stl_all">⛽ All Non-STL Entities (MC Power Gas & SIMCON)</option>
+              <option value="head_office_all">🏛️ Head Office (Simpal Group)</option>
+
+              <optgroup label="🏛️ Corporate Head Office">
+                <option value="Simpal Group of Companies">Simpal Group of Companies</option>
+              </optgroup>
+
+              <optgroup label="🎰 STL Subsidiaries (PCSO Authorized)">
+                {STL_SUBSIDIARIES.map((sub) => (
+                  <option key={sub} value={sub}>{sub}</option>
+                ))}
+              </optgroup>
+
+              <optgroup label="⛽ Non-STL Subsidiaries (Retail, Fuel & Construction)">
+                {NON_STL_SUBSIDIARIES.map((sub) => (
+                  <option key={sub} value={sub}>{sub}</option>
+                ))}
+              </optgroup>
             </select>
 
             {/* Branch Select */}
@@ -954,8 +957,8 @@ export default function EmployeeDirectoryPanel({
               <div
                 key={prof.id || prof.email}
                 className={`bg-white rounded-2xl border transition shadow-xs flex flex-col justify-between overflow-hidden ${showOnlineIndicator
-                    ? "border-slate-200 hover:border-emerald-300 hover:shadow-sm"
-                    : "border-slate-200/80 hover:border-slate-300 hover:shadow-sm"
+                  ? "border-slate-200 hover:border-emerald-300 hover:shadow-sm"
+                  : "border-slate-200/80 hover:border-slate-300 hover:shadow-sm"
                   }`}
               >
                 {/* Optional Executive Cover Banner */}
@@ -1062,8 +1065,8 @@ export default function EmployeeDirectoryPanel({
                       type="button"
                       onClick={() => handleToggleApproval(prof)}
                       className={`py-1.5 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs ${prof.is_approved
-                          ? "bg-white border border-slate-200 text-slate-600 hover:text-rose-600 hover:border-rose-200 hover:bg-rose-50"
-                          : "bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/20"
+                        ? "bg-white border border-slate-200 text-slate-600 hover:text-rose-600 hover:border-rose-200 hover:bg-rose-50"
+                        : "bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/20"
                         }`}
                     >
                       {prof.is_approved ? (
@@ -1225,8 +1228,8 @@ export default function EmployeeDirectoryPanel({
                               type="button"
                               onClick={() => handleToggleApproval(prof)}
                               className={`px-2.5 py-1 rounded-xl text-[11px] font-bold transition cursor-pointer ${prof.is_approved
-                                  ? "bg-slate-100 hover:bg-slate-200 text-slate-700"
-                                  : "bg-emerald-600 hover:bg-emerald-500 text-white"
+                                ? "bg-slate-100 hover:bg-slate-200 text-slate-700"
+                                : "bg-emerald-600 hover:bg-emerald-500 text-white"
                                 }`}
                             >
                               {prof.is_approved ? "Revoke" : "Approve"}
@@ -1343,9 +1346,19 @@ export default function EmployeeDirectoryPanel({
                     }}
                     className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs text-slate-800 focus:border-emerald-500 focus:bg-white focus:outline-none cursor-pointer"
                   >
-                    {SUBSIDIARIES.map((sub) => (
-                      <option key={sub} value={sub}>{sub}</option>
-                    ))}
+                    <optgroup label="🏛️ Corporate Head Office">
+                      <option value="Simpal Group of Companies">Simpal Group of Companies</option>
+                    </optgroup>
+                    <optgroup label="🎰 STL Subsidiaries (PCSO Authorized)">
+                      {STL_SUBSIDIARIES.map((sub) => (
+                        <option key={sub} value={sub}>{sub}</option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="⛽ Non-STL Subsidiaries (Retail, Fuel & Construction)">
+                      {NON_STL_SUBSIDIARIES.map((sub) => (
+                        <option key={sub} value={sub}>{sub}</option>
+                      ))}
+                    </optgroup>
                   </select>
                 </div>
 
@@ -1429,7 +1442,7 @@ export default function EmployeeDirectoryPanel({
         }}
         onSave={handleSaveProfileModal}
         userEntityCompany={userEntityCompany}
-        roles={ROLES}
+        roles={ALL_OPERATIONAL_ROLES}
         branches={BRANCH_PRESETS}
         defaultBranchMap={DEFAULT_BRANCH_MAP}
         onFileIncidentReport={handleFileIncidentReportForEmployee}

@@ -234,6 +234,30 @@ export const COMPANIES = [
     defaultFrom: "HUMAN RESOURCES DEPARTMENT",
     approverName: "CHARMIE JEAN M. SIMPAL",
     approverTitle: "President & CEO"
+  },
+  {
+    id: "mc_power_gas",
+    name: "MC POWER GAS",
+    legalName: "MC POWER GAS PETROLEUM RETAIL",
+    tagline: "Commercial Petroleum & Energy Distribution",
+    category: "Non-STL Enterprise (Petroleum & Fuel Retail)",
+    logoUrl: "/logos/SGC.png",
+    rightLogoUrl: CORPORATE_GROUP_EMBLEM,
+    code: "MCPG",
+    address: "MC Power Gas Station Central Terminal, Highway Depot, Mandaue City, Cebu",
+    contact: "operations@mcpowergas.ph | Tel: (+63 32) 345-8890",
+    accentColor: "#d97706",
+    accentBg: "bg-amber-600",
+    accentText: "text-amber-600",
+    accentBorder: "border-amber-600",
+    badgeBg: "bg-amber-100 text-amber-800 border-amber-300",
+    defaultSignatory: "JEVINCE JAYE S. JUBAY, CHRP",
+    defaultSignatoryTitle: "HRMD Manager",
+    defaultSignatoryCompany: "MC POWER GAS",
+    defaultTo: "ALL STATION MANAGERS, CASHIERS & PUMP ATTENDANTS",
+    defaultFrom: "HUMAN RESOURCES DEPARTMENT",
+    approverName: "CHARMIE JEAN M. SIMPAL",
+    approverTitle: "President & CEO"
   }
 ];
 

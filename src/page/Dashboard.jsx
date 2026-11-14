@@ -97,6 +97,7 @@ function getCategoryBadgeColor(category) {
 function formatShortCompany(companyName) {
   if (!companyName) return "Simpal Group";
   const c = companyName.toLowerCase();
+  if (c.includes("mc power") || c.includes("mcpower") || c.includes("mcpg")) return "MC Power Gas";
   if (c.includes("simcon") || c.includes("construction")) return "SIMCON";
   if (c.includes("lucky") || c.includes("betplay") || c.includes("lbc")) return "Lucky Betplay";
   if (c.includes("5a") || c.includes("royal")) return "5A Royal Gaming";
