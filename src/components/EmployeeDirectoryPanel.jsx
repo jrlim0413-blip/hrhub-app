@@ -34,6 +34,7 @@ import {
   ALL_BRANCH_PRESETS,
   HR_PRE_REGISTRATION_ROLES,
   ALL_OPERATIONAL_ROLES,
+  ENTITY_METADATA,
   isStlEntity,
   isNonStlEntity,
   isHeadOffice
@@ -45,6 +46,65 @@ const SUBSIDIARIES = ALL_SUBSIDIARIES;
 const ROLES = HR_PRE_REGISTRATION_ROLES;
 
 const BRANCH_PRESETS = ALL_BRANCH_PRESETS;
+
+/**
+ * Flexible company matcher to handle database variations (e.g. Glowing Fortune vs Glowing Fortune OPC, SIMCON vs Simpal Construction)
+ */
+export function matchesCompanyEntity(profileCompany, targetCompany) {
+  if (!profileCompany || !targetCompany) return false;
+  const pComp = String(profileCompany).toLowerCase().trim();
+  const tComp = String(targetCompany).toLowerCase().trim();
+
+  if (pComp === tComp) return true;
+
+  if (tComp.includes("glowing fortune") && pComp.includes("glowing fortune")) return true;
+  if ((tComp.includes("simcon") || tComp.includes("construction")) && (pComp.includes("simcon") || pComp.includes("construction"))) return true;
+  if (tComp.includes("mc power") && pComp.includes("mc power")) return true;
+  if (tComp.includes("5a royal") && pComp.includes("5a royal")) return true;
+  if (tComp.includes("lucky betplay") && pComp.includes("lucky betplay")) return true;
+  if (tComp.includes("simpal group") && pComp.includes("simpal group")) return true;
+
+  return false;
+}
+
+/**
+ * Identify the assigned HR Administrator for a given company/subsidiary.
+ * Direct match: HR profile belonging to that company.
+ * Fallback: Corporate Head Office HR (caquennie6@gmail.com / admin@hrhub.com).
+ */
+export function getAssignedHrForCompany(targetCompany, allProfiles = []) {
+  if (!targetCompany || targetCompany === "all" || targetCompany === "All Entities") {
+    return null;
+  }
+
+  // 1. Direct match: An HR profile whose registered company matches targetCompany
+  const direct = (allProfiles || []).find((p) => {
+    if (!matchesCompanyEntity(p.company, targetCompany)) return false;
+    const role = (p.role || "").toLowerCase().trim();
+    return (
+      role.includes("hr admin") ||
+      role === "hr administrator" ||
+      role === "hr manager" ||
+      role.includes("hr-onsite") ||
+      role.includes("hr onsite") ||
+      role.includes("hr on-site") ||
+      role.includes("central hrmd")
+    );
+  });
+
+  if (direct) return direct;
+
+  // 2. Fallback: Corporate Head Office HR Administrator (Quennie Lim caquennie6@gmail.com, or Central HRMD admin@hrhub.com)
+  const corporateQuennie = (allProfiles || []).find(
+    (p) => (p.email || "").toLowerCase().trim() === "caquennie6@gmail.com"
+  );
+  if (corporateQuennie) return corporateQuennie;
+
+  const corporateMaster = (allProfiles || []).find(
+    (p) => (p.email || "").toLowerCase().trim() === "admin@hrhub.com"
+  );
+  return corporateMaster || null;
+}
 
 
 
@@ -141,9 +201,100 @@ export default function EmployeeDirectoryPanel({
   const isEntityAccount = !isHRMD;
   const userEntityCompany = currentProfile?.company || "Lucky Betplay Corporation";
 
+  // When a per-entity account logs in, automatically select their entity company tab
+  useEffect(() => {
+    if (!isHRMD && currentProfile?.company) {
+      setSelectedSubsidiary(currentProfile.company);
+    }
+  }, [isHRMD, currentProfile?.company]);
+
+  // Identify the opened company and its assigned HR Administrator
+  const currentOpenedCompany = useMemo(() => {
+    if (selectedSubsidiary && selectedSubsidiary !== "all" && selectedSubsidiary !== "stl_all" && selectedSubsidiary !== "non_stl_all" && selectedSubsidiary !== "head_office_all") {
+      return selectedSubsidiary;
+    }
+    if (!isHRMD && userEntityCompany) {
+      return userEntityCompany;
+    }
+    return null;
+  }, [selectedSubsidiary, isHRMD, userEntityCompany]);
+
+  const assignedHrForOpenedEntity = useMemo(() => {
+    if (!currentOpenedCompany) return null;
+    return getAssignedHrForCompany(currentOpenedCompany, profiles || []);
+  }, [currentOpenedCompany, profiles]);
+
+  const assignedHrForUserCompany = useMemo(() => {
+    if (!userEntityCompany) return null;
+    return getAssignedHrForCompany(userEntityCompany, profiles || []);
+  }, [userEntityCompany, profiles]);
+
+  // Dedicated Entity Navigation Tabs with live counts per entity
+  const entityTabs = useMemo(() => {
+    const countMap = {};
+    (profiles || []).forEach((p) => {
+      const comp = p.company || HEAD_OFFICE;
+      if (matchesCompanyEntity(comp, HEAD_OFFICE)) {
+        countMap[HEAD_OFFICE] = (countMap[HEAD_OFFICE] || 0) + 1;
+      }
+      STL_SUBSIDIARIES.forEach((sub) => {
+        if (matchesCompanyEntity(comp, sub)) {
+          countMap[sub] = (countMap[sub] || 0) + 1;
+        }
+      });
+      NON_STL_SUBSIDIARIES.forEach((sub) => {
+        if (matchesCompanyEntity(comp, sub)) {
+          countMap[sub] = (countMap[sub] || 0) + 1;
+        }
+      });
+    });
+
+    const totalAll = (profiles || []).filter((p) => (p.email || "").toLowerCase() !== "admin@hrhub.com").length;
+
+    return [
+      {
+        id: "all",
+        name: "All Entities",
+        shortName: "All Entities",
+        code: "ALL",
+        type: "all",
+        count: totalAll,
+        logoUrl: null
+      },
+      {
+        id: HEAD_OFFICE,
+        name: HEAD_OFFICE,
+        shortName: ENTITY_METADATA[HEAD_OFFICE]?.shortName || "Simpal Group",
+        code: ENTITY_METADATA[HEAD_OFFICE]?.code || "SGC",
+        type: "head_office",
+        count: countMap[HEAD_OFFICE] || 0,
+        logoUrl: ENTITY_METADATA[HEAD_OFFICE]?.logoUrl || "/logos/SGC.png"
+      },
+      ...STL_SUBSIDIARIES.map((sub) => ({
+        id: sub,
+        name: sub,
+        shortName: ENTITY_METADATA[sub]?.shortName || sub,
+        code: ENTITY_METADATA[sub]?.code || sub.slice(0, 3).toUpperCase(),
+        type: "stl",
+        count: countMap[sub] || 0,
+        logoUrl: ENTITY_METADATA[sub]?.logoUrl
+      })),
+      ...NON_STL_SUBSIDIARIES.map((sub) => ({
+        id: sub,
+        name: sub,
+        shortName: ENTITY_METADATA[sub]?.shortName || sub,
+        code: ENTITY_METADATA[sub]?.code || sub.slice(0, 4).toUpperCase(),
+        type: "non_stl",
+        count: countMap[sub] || 0,
+        logoUrl: ENTITY_METADATA[sub]?.logoUrl
+      }))
+    ];
+  }, [profiles]);
+
   // Managed Personnel Profiles:
   // - If HRMD: Full corporate personnel directory across all subsidiaries (excludes master superadmin from deletion)
-  // - If Non-HRMD Branch/Entity Account: ONLY the employee profiles that they themselves added!
+  // - If Non-HRMD Branch/Entity Account: Personnel belonging to their entity (based on company column),
+  //   plus the assigned HR administrator for their company, plus any profiles created by this user:
   const managedProfiles = useMemo(() => {
     const curEmail = (currentEmail || "").trim().toLowerCase();
 
@@ -151,11 +302,22 @@ export default function EmployeeDirectoryPanel({
       return (profiles || []).filter((p) => (p.email || "").trim().toLowerCase() !== "admin@hrhub.com");
     }
 
-    // For all other accounts: strictly filter to employees created/added by this user
+    // For operating entity / subsidiary accounts:
+    const myComp = (userEntityCompany || "").trim();
+    const assignedHr = getAssignedHrForCompany(myComp, profiles || []);
+    const assignedHrEmail = (assignedHr?.email || "").toLowerCase().trim();
+
     return (profiles || []).filter((p) => {
       const email = (p.email || "").trim().toLowerCase();
-      if (email === "admin@hrhub.com") return false;
+      if (email === "admin@hrhub.com" && assignedHrEmail !== "admin@hrhub.com") return false;
 
+      // 1. Is this profile the assigned HR for their company?
+      if (assignedHrEmail && email === assignedHrEmail) return true;
+
+      // 2. Does this employee belong to the same company? (db column `company`)
+      if (myComp && matchesCompanyEntity(p.company, myComp)) return true;
+
+      // 3. Or created by this user
       const createdBy = (
         p.created_by ||
         p.created_by_email ||
@@ -164,10 +326,11 @@ export default function EmployeeDirectoryPanel({
         p.added_by ||
         ""
       ).trim().toLowerCase();
+      if (curEmail && createdBy === curEmail) return true;
 
-      return Boolean(curEmail && createdBy === curEmail);
+      return false;
     });
-  }, [profiles, isHRMD, currentEmail]);
+  }, [profiles, isHRMD, currentEmail, userEntityCompany]);
 
   // Helper to determine if an employee profile was enrolled by an operating entity / subsidiary
   const isEntityEnrolledEmployee = (p) => {
@@ -225,7 +388,25 @@ export default function EmployeeDirectoryPanel({
 
   // Filtered & Sorted profiles
   const filteredProfiles = useMemo(() => {
-    return managedProfiles.filter((p) => {
+    const assignedEmail = (assignedHrForOpenedEntity?.email || "").toLowerCase().trim();
+
+    // Source list to filter
+    const sourceProfiles = isHRMD
+      ? (profiles || []).filter((p) => (p.email || "").trim().toLowerCase() !== "admin@hrhub.com")
+      : managedProfiles;
+
+    // If an assigned HR exists for the opened entity and is not yet in sourceProfiles, include them!
+    let effectiveProfiles = [...sourceProfiles];
+    if (assignedHrForOpenedEntity && assignedEmail) {
+      const alreadyIncluded = effectiveProfiles.some(
+        (p) => (p.email || "").toLowerCase().trim() === assignedEmail || (p.id && p.id === assignedHrForOpenedEntity.id)
+      );
+      if (!alreadyIncluded) {
+        effectiveProfiles.push(assignedHrForOpenedEntity);
+      }
+    }
+
+    return effectiveProfiles.filter((p) => {
       const email = p.email?.toLowerCase() || "";
       const name = (p.name || email.split("@")[0].replace(/[._]/g, " ")).toLowerCase();
       const company = (p.company || "Simpal Group of Companies").toLowerCase();
@@ -260,7 +441,10 @@ export default function EmployeeDirectoryPanel({
       } else if (selectedSubsidiary === "head_office_all") {
         matchesSubsidiary = isHeadOffice(p.company);
       } else {
-        matchesSubsidiary = p.company === selectedSubsidiary;
+        // Specific entity selected (e.g. "Lucky Betplay Corporation", "5A Royal Gaming OPC", "MC POWER GAS")
+        const isCompMatch = matchesCompanyEntity(p.company, selectedSubsidiary);
+        const isAssignedHr = assignedEmail && email === assignedEmail;
+        matchesSubsidiary = isCompMatch || Boolean(isAssignedHr);
       }
 
       // Branch filter
@@ -272,6 +456,14 @@ export default function EmployeeDirectoryPanel({
       const bEmail = b.email?.toLowerCase() || "";
       const aOnline = (currentEmail && aEmail === currentEmail) || onlineEmails.has(aEmail);
       const bOnline = (currentEmail && bEmail === currentEmail) || onlineEmails.has(bEmail);
+
+      // 0. Pin assigned HR of currently selected entity to the top!
+      if (assignedEmail) {
+        const aIsHr = aEmail === assignedEmail;
+        const bIsHr = bEmail === assignedEmail;
+        if (aIsHr && !bIsHr) return -1;
+        if (!aIsHr && bIsHr) return 1;
+      }
 
       // 1. Pending profiles first if in pending view
       if (selectedFilter === "pending") {
@@ -285,7 +477,7 @@ export default function EmployeeDirectoryPanel({
       // 3. Alphabetical by email or name
       return (a.name || aEmail).localeCompare(b.name || bEmail);
     });
-  }, [managedProfiles, searchQuery, selectedFilter, selectedSubsidiary, selectedBranchFilter, onlineEmails, currentEmail, isHRMD]);
+  }, [managedProfiles, profiles, assignedHrForOpenedEntity, searchQuery, selectedFilter, selectedSubsidiary, selectedBranchFilter, onlineEmails, currentEmail, isHRMD]);
 
   // Toggle approval status
   const handleToggleApproval = async (profile) => {
@@ -795,17 +987,19 @@ export default function EmployeeDirectoryPanel({
           </div>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {/* Card 1: My Registered Employees */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {/* Card 1: Entity Personnel */}
           <div className="bg-white border border-slate-200/90 rounded-2xl p-4.5 shadow-xs">
             <div className="flex items-center justify-between">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">My Registered Employees</span>
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                {currentOpenedCompany || userEntityCompany} Personnel
+              </span>
               <span className="p-2 rounded-xl bg-slate-100 text-slate-600">
                 <Users size={16} />
               </span>
             </div>
             <p className="mt-3 text-2xl font-black text-slate-900 tracking-tight">{stats.total}</p>
-            <p className="text-[11px] text-slate-400 mt-0.5">Employees added under your branch/account</p>
+            <p className="text-[11px] text-slate-400 mt-0.5">Enrolled under {currentOpenedCompany || userEntityCompany}</p>
           </div>
 
           {/* Card 2: Active Profiles */}
@@ -818,6 +1012,27 @@ export default function EmployeeDirectoryPanel({
             </div>
             <p className="mt-3 text-2xl font-black text-emerald-700 tracking-tight">{stats.approvedCount}</p>
             <p className="text-[11px] text-slate-400 mt-0.5">Approved in system registry</p>
+          </div>
+
+          {/* Card 3: Assigned Entity HR */}
+          <div className="bg-white border border-emerald-200/90 rounded-2xl p-4.5 shadow-xs bg-linear-to-br from-emerald-50/40 to-teal-50/20">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-900">
+                Assigned Entity HR
+              </span>
+              <span className="p-2 rounded-xl bg-emerald-100 text-emerald-800">
+                <ShieldCheck size={16} />
+              </span>
+            </div>
+            <p className="mt-3 text-base font-black text-slate-900 tracking-tight truncate" title={assignedHrForOpenedEntity?.name || assignedHrForOpenedEntity?.email || "Corporate HR"}>
+              {assignedHrForOpenedEntity?.name || (assignedHrForOpenedEntity?.email ? assignedHrForOpenedEntity.email.split("@")[0] : "Central Corporate HR")}
+            </p>
+            <p className="text-[11px] text-emerald-700 font-semibold mt-0.5 truncate flex items-center gap-1.5">
+              <span>{assignedHrForOpenedEntity?.role || "HR Administrator"}</span>
+              {assignedHrForOpenedEntity?.email && (
+                <span className="text-slate-400 font-normal">({assignedHrForOpenedEntity.email})</span>
+              )}
+            </p>
           </div>
         </div>
       )}
@@ -881,7 +1096,7 @@ export default function EmployeeDirectoryPanel({
               onClick={() => {
                 setSearchQuery("");
                 setSelectedFilter("all");
-                setSelectedSubsidiary("all");
+                setSelectedSubsidiary(isHRMD ? "all" : (currentProfile?.company || "all"));
                 setSelectedBranchFilter("all");
               }}
               className="text-xs font-semibold text-rose-600 hover:text-rose-700 hover:underline px-2 py-1 shrink-0 cursor-pointer"
@@ -889,6 +1104,60 @@ export default function EmployeeDirectoryPanel({
               Clear filters
             </button>
           )}
+        </div>
+
+        {/* Tier 1.5: Dedicated Entity Navigation Tabs Bar */}
+        <div className="px-4 py-2 bg-slate-50/70 border-b border-slate-100 flex items-center gap-2 overflow-x-auto scrollbar-thin">
+          <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 shrink-0 flex items-center gap-1 mr-1">
+            <Building2 size={12} className="text-emerald-600" />
+            <span>Entities:</span>
+          </span>
+          <div className="flex items-center gap-1.5 shrink-0">
+            {entityTabs.map((tab) => {
+              const isSelected = selectedSubsidiary === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setSelectedSubsidiary(tab.id)}
+                  className={`group flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer whitespace-nowrap shadow-2xs ${
+                    isSelected
+                      ? "bg-emerald-600 text-white shadow-emerald-600/20 ring-2 ring-emerald-600/30"
+                      : "bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 hover:text-slate-900"
+                  }`}
+                >
+                  {tab.logoUrl ? (
+                    <img
+                      src={tab.logoUrl}
+                      alt={tab.shortName}
+                      className={`w-4 h-4 rounded object-contain shrink-0 ${isSelected ? "brightness-110 drop-shadow-xs" : ""}`}
+                    />
+                  ) : (
+                    <Building2 size={13} className={isSelected ? "text-white" : "text-slate-400"} />
+                  )}
+                  <span>{tab.shortName}</span>
+                  <span
+                    className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                      isSelected
+                        ? "bg-white/20 text-white"
+                        : "bg-slate-100 text-slate-600 border border-slate-200/60"
+                    }`}
+                  >
+                    {tab.count}
+                  </span>
+                  {tab.type === "non_stl" && (
+                    <span
+                      className={`text-[9px] uppercase px-1 py-0.2 rounded font-extrabold ${
+                        isSelected ? "bg-amber-400/30 text-amber-100" : "bg-amber-100 text-amber-800"
+                      }`}
+                    >
+                      Non-STL
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         {/* Tier 2: Search & Dropdown Filters Bar */}
@@ -1001,6 +1270,35 @@ export default function EmployeeDirectoryPanel({
         </div>
       )}
 
+      {/* Assigned HR Administrator for Opened Entity Banner */}
+      {currentOpenedCompany && assignedHrForOpenedEntity && (
+        <div className="bg-slate-900 text-white rounded-2xl p-4 border border-emerald-500/20 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-in fade-in">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-11 h-11 rounded-xl bg-emerald-500/20 border border-emerald-400/30 flex items-center justify-center font-black text-sm text-emerald-300 shrink-0">
+              {assignedHrForOpenedEntity.name ? assignedHrForOpenedEntity.name.slice(0, 2).toUpperCase() : "HR"}
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-[10px] font-black uppercase tracking-wider text-emerald-300 bg-emerald-950/80 px-2 py-0.5 rounded-full border border-emerald-500/30">
+                  🏛️ Assigned Entity HR Administrator
+                </span>
+                <span className="text-xs text-slate-400 truncate">• {currentOpenedCompany}</span>
+              </div>
+              <h4 className="text-sm font-bold text-white mt-0.5 truncate flex items-center gap-2">
+                <span>{assignedHrForOpenedEntity.name || assignedHrForOpenedEntity.email}</span>
+                <span className="text-xs font-semibold text-emerald-300/90">
+                  ({assignedHrForOpenedEntity.role || "HR Administrator"})
+                </span>
+              </h4>
+            </div>
+          </div>
+          <div className="text-xs text-slate-300 flex items-center gap-2 shrink-0 bg-slate-800/80 px-3 py-1.5 rounded-xl border border-slate-700/60">
+            <Mail size={13} className="text-emerald-400 shrink-0" />
+            <span className="font-mono text-[11px] text-slate-200">{assignedHrForOpenedEntity.email}</span>
+          </div>
+        </div>
+      )}
+
       {/* Directory Content */}
       {filteredProfiles.length === 0 ? (
         !isHRMD && managedProfiles.length === 0 ? (
@@ -1060,6 +1358,12 @@ export default function EmployeeDirectoryPanel({
             const role = prof.role || "Team Member";
             const branch = prof.branch || DEFAULT_BRANCH_MAP[company] || "Head Office";
 
+            const isProfAssignedHr = Boolean(
+              assignedHrForOpenedEntity?.email &&
+              email &&
+              email === (assignedHrForOpenedEntity.email || "").toLowerCase().trim()
+            );
+
             const avatarUrl = prof.metadata?.avatar_url || prof.avatar_url;
             const coverPresetId = prof.metadata?.cover_preset_id;
             const customCoverUrl = prof.metadata?.custom_cover_url;
@@ -1077,10 +1381,13 @@ export default function EmployeeDirectoryPanel({
             return (
               <div
                 key={prof.id || prof.email}
-                className={`bg-white rounded-2xl border transition shadow-xs flex flex-col justify-between overflow-hidden ${showOnlineIndicator
-                  ? "border-slate-200 hover:border-emerald-300 hover:shadow-sm"
-                  : "border-slate-200/80 hover:border-slate-300 hover:shadow-sm"
-                  }`}
+                className={`bg-white rounded-2xl border transition shadow-xs flex flex-col justify-between overflow-hidden ${
+                  isProfAssignedHr
+                    ? "ring-2 ring-emerald-500/30 border-emerald-300 shadow-sm"
+                    : showOnlineIndicator
+                      ? "border-slate-200 hover:border-emerald-300 hover:shadow-sm"
+                      : "border-slate-200/80 hover:border-slate-300 hover:shadow-sm"
+                }`}
               >
                 {/* Optional Executive Cover Banner */}
                 {hasCover && (
@@ -1123,6 +1430,12 @@ export default function EmployeeDirectoryPanel({
 
                     {/* Status Badges */}
                     <div className="flex flex-col items-end gap-1 shrink-0 pb-0.5">
+                      {isProfAssignedHr && (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-black text-teal-900 bg-teal-100/90 px-2 py-0.5 rounded-full border border-teal-300 shadow-2xs" title="Assigned HR Administrator for this Entity">
+                          🏛️ Assigned Entity HR
+                        </span>
+                      )}
+
                       {prof.is_approved ? (
                         <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200/70 shadow-2xs">
                           <ShieldCheck size={10} className="text-emerald-600" /> Approved
@@ -1222,7 +1535,12 @@ export default function EmployeeDirectoryPanel({
 
                 {/* Card Action Footer */}
                 <div className="px-4.5 py-3 bg-white border-t border-slate-100 flex items-center justify-between gap-2">
-                  {canManageProfiles ? (
+                  {isProfAssignedHr ? (
+                    <span className="inline-flex items-center gap-1.5 py-1.5 px-3 rounded-xl text-xs font-bold text-teal-800 bg-teal-50 border border-teal-200/80 shadow-2xs">
+                      <ShieldCheck size={13} className="text-teal-600" />
+                      <span>Assigned HR</span>
+                    </span>
+                  ) : canManageProfiles ? (
                     <button
                       type="button"
                       onClick={() => handleToggleApproval(prof)}
@@ -1246,18 +1564,7 @@ export default function EmployeeDirectoryPanel({
                   ) : <div />}
 
                   <div className="flex items-center gap-1.5">
-                    {/* File Incident Report (IR) Button - Automatically launches IR process in Workspace */}
-                    <button
-                      type="button"
-                      onClick={() => handleFileIncidentReportForEmployee(prof)}
-                      title={`File Incident Report (IR) / NTE for ${displayName}`}
-                      className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-600 hover:text-white text-[11px] font-bold transition cursor-pointer shadow-2xs"
-                    >
-                      <ShieldAlert size={12} />
-                      <span>File IR</span>
-                    </button>
-
-                    {canManageProfiles && (
+                    {canManageProfiles && !isProfAssignedHr && (
                       <button
                         type="button"
                         onClick={() => handleOpenEdit(prof)}
@@ -1292,7 +1599,7 @@ export default function EmployeeDirectoryPanel({
                       </>
                     )}
 
-                    {canManageProfiles && (
+                    {canManageProfiles && !isProfAssignedHr && (
                       <button
                         type="button"
                         onClick={() => handleDeleteEmployee(prof)}
@@ -1334,10 +1641,16 @@ export default function EmployeeDirectoryPanel({
                   const branch = prof.branch || DEFAULT_BRANCH_MAP[prof.company] || "Head Office";
                   const isLoginEnabled = isEmployeeLoginEnabled(prof);
 
+                  const isProfAssignedHr = Boolean(
+                    assignedHrForOpenedEntity?.email &&
+                    email &&
+                    email === (assignedHrForOpenedEntity.email || "").toLowerCase().trim()
+                  );
+
                   const avatarUrl = prof.metadata?.avatar_url || prof.avatar_url;
 
                   return (
-                    <tr key={prof.id || prof.email} className="hover:bg-slate-50/70 transition">
+                    <tr key={prof.id || prof.email} className={`hover:bg-slate-50/70 transition ${isProfAssignedHr ? "bg-emerald-50/20" : ""}`}>
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-3">
                           {avatarUrl ? (
@@ -1372,7 +1685,14 @@ export default function EmployeeDirectoryPanel({
                         </span>
                       </td>
                       <td className="py-3 px-4 text-slate-500">
-                        {prof.role || "Team Member"}
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span>{prof.role || "Team Member"}</span>
+                          {isProfAssignedHr && (
+                            <span className="inline-flex items-center gap-0.5 text-[9px] font-black text-teal-800 bg-teal-100/90 px-1.5 py-0.2 rounded-full border border-teal-300">
+                              🏛️ Assigned HR
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-1">
@@ -1436,17 +1756,11 @@ export default function EmployeeDirectoryPanel({
                       </td>
                       <td className="py-3 px-4 text-right">
                         <div className="flex items-center justify-end gap-1.5">
-                          {/* File Incident Report (IR) Button */}
-                          <button
-                            type="button"
-                            onClick={() => handleFileIncidentReportForEmployee(prof)}
-                            title={`File Incident Report (IR) / NTE for ${displayName}`}
-                            className="p-1 rounded-lg border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-600 hover:text-white transition cursor-pointer"
-                          >
-                            <ShieldAlert size={13} />
-                          </button>
-
-                          {canManageProfiles && (
+                          {isProfAssignedHr ? (
+                            <span className="px-2 py-0.5 rounded-lg text-[10px] font-bold text-teal-800 bg-teal-50 border border-teal-200">
+                              Assigned HR
+                            </span>
+                          ) : canManageProfiles ? (
                             <button
                               type="button"
                               onClick={() => handleToggleApproval(prof)}
@@ -1457,8 +1771,8 @@ export default function EmployeeDirectoryPanel({
                             >
                               {prof.is_approved ? "Revoke" : "Approve"}
                             </button>
-                          )}
-                          {canManageProfiles && (
+                          ) : null}
+                          {canManageProfiles && !isProfAssignedHr && (
                             <button
                               type="button"
                               onClick={() => handleOpenEdit(prof)}
@@ -1488,7 +1802,7 @@ export default function EmployeeDirectoryPanel({
                               </button>
                             </>
                           )}
-                          {canManageProfiles && (
+                          {canManageProfiles && !isProfAssignedHr && (
                             <button
                               type="button"
                               onClick={() => handleDeleteEmployee(prof)}

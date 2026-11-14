@@ -1360,19 +1360,6 @@ export default function AddEmployeeProfileModal({
             </button>
 
             <div className="flex items-center gap-2">
-              {/* Only show IR button if editing an existing employee or after information is updated */}
-              {isEditOrSaved && (
-                <button
-                  type="button"
-                  onClick={handleFileIncidentReportDirectly}
-                  className="px-4 py-2.5 rounded-xl border border-rose-200 bg-rose-50 hover:bg-rose-600 hover:text-white text-rose-700 text-xs font-extrabold shadow-sm transition cursor-pointer flex items-center gap-1.5"
-                  title="File Incident Report (IR) / NTE for this employee"
-                >
-                  <ShieldAlert size={14} />
-                  <span>File Incident Report (IR)</span>
-                </button>
-              )}
-
               <button
                 type="submit"
                 disabled={isSubmitting}
