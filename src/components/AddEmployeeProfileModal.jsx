@@ -73,7 +73,7 @@ const REQUIREMENT_CATEGORIES = [
 
 const DEPARTMENTS = [
   "Operations & Field Terminals",
-  "Betting Operations & Tellers",
+  "Information Technology & Data Security",
   "Vault Custody & Cashiering",
   "Site Construction (SIMCON)",
   "Fuel & Station Operations (MC Power Gas)",
@@ -364,7 +364,7 @@ export default function AddEmployeeProfileModal({
     const storagePath = typeof fileOrId === "object" ? fileOrId?.storage_path : null;
 
     if (storagePath) {
-      deleteEmployeeRequirementFromBucket(storagePath).catch(() => {});
+      deleteEmployeeRequirementFromBucket(storagePath).catch(() => { });
     }
     setRequirementsFiles((prev) => prev.filter((f) => f.id !== fileId));
   };
@@ -516,7 +516,7 @@ export default function AddEmployeeProfileModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 backdrop-blur-md p-2 sm:p-4 md:p-6 overflow-y-auto animate-in fade-in duration-150">
       {/* BOND PAPER FORMATTED DOSSIER CONTAINER (max-w-4xl, min-h-[720px], official executive aesthetic) */}
       <div className="bg-white rounded-3xl border border-slate-300 shadow-2xl w-full max-w-4xl min-h-[720px] max-h-[92vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-150 relative ring-1 ring-slate-900/5">
-        
+
         {/* ============================================================ */}
         {/* 1. OFFICIAL EXECUTIVE BOND PAPER HEADER                      */}
         {/* ============================================================ */}
@@ -555,9 +555,8 @@ export default function AddEmployeeProfileModal({
         <div className="relative shrink-0">
           {/* Cover Banner */}
           <div
-            className={`w-full h-36 sm:h-44 relative overflow-hidden transition-all duration-300 ${
-              customCoverUrl ? "bg-slate-950" : `bg-gradient-to-r ${activePreset.gradient}`
-            }`}
+            className={`w-full h-36 sm:h-44 relative overflow-hidden transition-all duration-300 ${customCoverUrl ? "bg-slate-950" : `bg-gradient-to-r ${activePreset.gradient}`
+              }`}
           >
             {customCoverUrl && (
               <img src={customCoverUrl} alt="Cover" className="w-full h-full object-cover opacity-90" />
@@ -607,11 +606,10 @@ export default function AddEmployeeProfileModal({
                     key={preset.id}
                     type="button"
                     onClick={() => setSelectedPresetId(preset.id)}
-                    className={`px-2 py-0.5 rounded-lg text-[9px] font-bold transition cursor-pointer ${
-                      selectedPresetId === preset.id
+                    className={`px-2 py-0.5 rounded-lg text-[9px] font-bold transition cursor-pointer ${selectedPresetId === preset.id
                         ? "bg-white text-slate-900 shadow-xs"
                         : "text-white/85 hover:text-white hover:bg-white/10"
-                    }`}
+                      }`}
                   >
                     {preset.name}
                   </button>
@@ -699,22 +697,20 @@ export default function AddEmployeeProfileModal({
                       key={preset.id}
                       type="button"
                       onClick={() => setSelectedPresetId(preset.id)}
-                      className={`px-2 py-0.5 rounded-lg text-[9px] font-bold shrink-0 transition cursor-pointer ${
-                        selectedPresetId === preset.id
+                      className={`px-2 py-0.5 rounded-lg text-[9px] font-bold shrink-0 transition cursor-pointer ${selectedPresetId === preset.id
                           ? "bg-slate-900 text-white shadow-xs"
                           : "text-slate-600 hover:text-slate-900"
-                      }`}
+                        }`}
                     >
                       {preset.name}
                     </button>
                   ))}
                 </div>
               )}
-              <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold border ${
-                formData.is_approved
+              <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold border ${formData.is_approved
                   ? "bg-emerald-50 text-emerald-800 border-emerald-300"
                   : "bg-amber-50 text-amber-800 border-amber-300"
-              }`}>
+                }`}>
                 {formData.is_approved ? "Approved Active" : "Pending Review"}
               </span>
             </div>
@@ -734,11 +730,10 @@ export default function AddEmployeeProfileModal({
                   key={tab.id}
                   type="button"
                   onClick={() => setActiveTab(tab.id)}
-                  className={`py-3 px-3.5 text-xs font-bold border-b-2 flex items-center gap-1.5 transition cursor-pointer ${
-                    isActive
+                  className={`py-3 px-3.5 text-xs font-bold border-b-2 flex items-center gap-1.5 transition cursor-pointer ${isActive
                       ? "border-emerald-600 text-emerald-800 bg-white"
                       : "border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-100/60"
-                  }`}
+                    }`}
                 >
                   <Icon size={14} className={isActive ? "text-emerald-600" : "text-slate-400"} />
                   <span>{tab.label}</span>
@@ -754,11 +749,10 @@ export default function AddEmployeeProfileModal({
 
         {/* Validation Notice Banner */}
         {notice && (
-          <div className={`mx-6 mt-3 p-3 rounded-2xl text-xs flex items-center gap-2 border shrink-0 ${
-            notice.type === "success"
+          <div className={`mx-6 mt-3 p-3 rounded-2xl text-xs flex items-center gap-2 border shrink-0 ${notice.type === "success"
               ? "bg-emerald-50 text-emerald-900 border-emerald-200"
               : "bg-amber-50 text-amber-900 border-amber-200"
-          }`}>
+            }`}>
             {notice.type === "success" ? (
               <CheckCircle2 size={15} className="text-emerald-600 shrink-0" />
             ) : (
@@ -772,11 +766,11 @@ export default function AddEmployeeProfileModal({
         {/* 4. BOND PAPER BODY / FORM SECTIONS                           */}
         {/* ============================================================ */}
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-5 custom-scrollbar bg-white">
-          
+
           {/* TAB 1: PERSONAL & EMPLOYMENT DETAILS */}
           {activeTab === "details" && (
             <div className="space-y-5 animate-in fade-in duration-150">
-              
+
               {/* Section A: Primary Employment Assignment */}
               <div className="p-4 rounded-2xl border border-slate-200/90 bg-slate-50/50 space-y-3">
                 <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-slate-700">
@@ -805,13 +799,12 @@ export default function AddEmployeeProfileModal({
                   <div className="space-y-1">
                     <div className="flex items-center justify-between">
                       <label className="text-xs font-bold text-slate-700">Company Entity *</label>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                        isHeadOffice(formData.company)
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${isHeadOffice(formData.company)
                           ? "bg-emerald-50 text-emerald-800 border-emerald-300"
                           : isStlEntity(formData.company)
                             ? "bg-blue-50 text-blue-800 border-blue-300"
                             : "bg-amber-50 text-amber-800 border-amber-300"
-                      }`}>
+                        }`}>
                         {isHeadOffice(formData.company) ? "Corporate HQ" : isStlEntity(formData.company) ? "STL Gaming" : "Non-STL Entity"}
                       </span>
                     </div>
@@ -881,11 +874,10 @@ export default function AddEmployeeProfileModal({
                   <div className="space-y-1">
                     <div className="flex items-center justify-between">
                       <label className="text-xs font-bold text-slate-700">Designation / Role *</label>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
-                        (initialData?.is_preregistered || initialData?.status === "pre_registered" || isHeadOffice(formData.company) || formData.company === HEAD_OFFICE)
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${(initialData?.is_preregistered || initialData?.status === "pre_registered" || isHeadOffice(formData.company) || formData.company === HEAD_OFFICE)
                           ? "bg-teal-50 text-teal-800 border-teal-200"
                           : "bg-emerald-50 text-emerald-700 border-emerald-200"
-                      }`}>
+                        }`}>
                         {(initialData?.is_preregistered || initialData?.status === "pre_registered" || isHeadOffice(formData.company) || formData.company === HEAD_OFFICE)
                           ? "Central HRMD Only"
                           : (formData.role || "Required")}
@@ -1128,15 +1120,13 @@ export default function AddEmployeeProfileModal({
                   <button
                     type="button"
                     onClick={() => setFormData({ ...formData, login_enabled: !formData.login_enabled })}
-                    className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                      formData.login_enabled ? "bg-emerald-600" : "bg-slate-300"
-                    }`}
+                    className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${formData.login_enabled ? "bg-emerald-600" : "bg-slate-300"
+                      }`}
                     title={formData.login_enabled ? "Click to set to HR Profiling Only" : "Click to enable Portal Login"}
                   >
                     <span
-                      className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                        formData.login_enabled ? "translate-x-4" : "translate-x-0"
-                      }`}
+                      className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${formData.login_enabled ? "translate-x-4" : "translate-x-0"
+                        }`}
                     />
                   </button>
                 </div>

@@ -1019,107 +1019,109 @@ export default function EmployeeDirectoryPanel({
 
       {/* Unified Corporate Toolbar: Entity Navigation & Controls */}
       <div className="bg-white border border-slate-200/90 rounded-2xl shadow-xs overflow-hidden">
-        {/* Tier 1: Dedicated Entity Tabs Bar with Interactive Navigation Controls */}
-        <div className="px-2.5 sm:px-3.5 py-2 bg-slate-50/80 border-b border-slate-200/70 flex items-center justify-between gap-1.5 sm:gap-2 overflow-hidden">
-          {/* Scroll Left Button */}
-          <button
-            type="button"
-            onClick={() => scrollTabs("left")}
-            title="Scroll entities left"
-            className="p-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 text-slate-500 hover:text-slate-800 transition cursor-pointer shadow-2xs shrink-0"
-          >
-            <ChevronLeft size={13} />
-          </button>
-
-          {/* Scrollable Tabs Container */}
-          <div
-            ref={tabsScrollRef}
-            className="flex-1 flex items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden py-0.5 scroll-smooth"
-          >
-            {entityTabs.map((tab) => {
-              const isSelected = selectedSubsidiary === tab.id;
-              return (
-                <button
-                  key={tab.id}
-                  type="button"
-                  onClick={() => setSelectedSubsidiary(tab.id)}
-                  className={`group flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shadow-2xs shrink-0 ${isSelected
-                      ? "bg-slate-900 text-white shadow-sm ring-2 ring-emerald-500/40"
-                      : "bg-white border border-slate-200/90 text-slate-700 hover:bg-slate-100 hover:text-slate-900"
-                    }`}
-                >
-                  {tab.logoUrl ? (
-                    <img
-                      src={tab.logoUrl}
-                      alt={tab.shortName}
-                      className={`w-3.5 h-3.5 rounded object-contain shrink-0 ${isSelected ? "brightness-110 drop-shadow-xs" : ""}`}
-                    />
-                  ) : (
-                    <Building2 size={12} className={isSelected ? "text-emerald-400" : "text-slate-400"} />
-                  )}
-                  <span>{tab.shortName}</span>
-                  <span
-                    className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${isSelected
-                        ? "bg-emerald-500/20 text-emerald-300 border border-emerald-400/30"
-                        : "bg-slate-100 text-slate-600 border border-slate-200/70"
-                      }`}
-                  >
-                    {tab.count}
-                  </span>
-                  {tab.type === "non_stl" && (
-                    <span
-                      className={`text-[8px] uppercase px-1 py-0.2 rounded font-black tracking-wider ${isSelected ? "bg-amber-400/20 text-amber-300 border border-amber-400/30" : "bg-amber-100 text-amber-900"
-                        }`}
-                    >
-                      Non-STL
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Scroll Right Button */}
-          <button
-            type="button"
-            onClick={() => scrollTabs("right")}
-            title="Scroll entities right"
-            className="p-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 text-slate-500 hover:text-slate-800 transition cursor-pointer shadow-2xs shrink-0"
-          >
-            <ChevronRight size={13} />
-          </button>
-
-          {/* Non-STL Interactive Toggle */}
-          <button
-            type="button"
-            onClick={() => setShowNonStl((prev) => !prev)}
-            title="Toggle Non-STL Subsidiaries (MC Power Gas & Simcon)"
-            className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[11px] font-bold border transition cursor-pointer shrink-0 shadow-2xs ${showNonStl
-                ? "bg-amber-600 text-white border-amber-600 shadow-sm"
-                : "bg-amber-50 text-amber-900 border-amber-200 hover:bg-amber-100"
-              }`}
-          >
-            <Fuel size={12} className={showNonStl ? "text-white" : "text-amber-700"} />
-            <span className="hidden sm:inline">{showNonStl ? "Hide Non-STL" : "+ Non-STL (2)"}</span>
-            <span className="sm:hidden">{showNonStl ? "STL" : "+2"}</span>
-          </button>
-
-          {/* Quick Reset if filters active */}
-          {(selectedSubsidiary !== "all" || selectedBranchFilter !== "all" || searchQuery || selectedFilter !== "all") && (
+        {/* Tier 1: Dedicated Entity Tabs Bar with Interactive Navigation Controls - Exclusively for Central HR Administrator (HRMD) */}
+        {isHRMD && (
+          <div className="px-2.5 sm:px-3.5 py-2 bg-slate-50/80 border-b border-slate-200/70 flex items-center justify-between gap-1.5 sm:gap-2 overflow-hidden">
+            {/* Scroll Left Button */}
             <button
               type="button"
-              onClick={() => {
-                setSearchQuery("");
-                setSelectedFilter("all");
-                setSelectedSubsidiary(isHRMD ? "all" : (currentProfile?.company || "all"));
-                setSelectedBranchFilter("all");
-              }}
-              className="text-xs font-semibold text-rose-600 hover:text-rose-700 hover:underline px-2 py-1 shrink-0 cursor-pointer hidden xl:inline"
+              onClick={() => scrollTabs("left")}
+              title="Scroll entities left"
+              className="p-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 text-slate-500 hover:text-slate-800 transition cursor-pointer shadow-2xs shrink-0"
             >
-              Reset
+              <ChevronLeft size={13} />
             </button>
-          )}
-        </div>
+
+            {/* Scrollable Tabs Container */}
+            <div
+              ref={tabsScrollRef}
+              className="flex-1 flex items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden py-0.5 scroll-smooth"
+            >
+              {entityTabs.map((tab) => {
+                const isSelected = selectedSubsidiary === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setSelectedSubsidiary(tab.id)}
+                    className={`group flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shadow-2xs shrink-0 ${isSelected
+                        ? "bg-slate-900 text-white shadow-sm ring-2 ring-emerald-500/40"
+                        : "bg-white border border-slate-200/90 text-slate-700 hover:bg-slate-100 hover:text-slate-900"
+                      }`}
+                  >
+                    {tab.logoUrl ? (
+                      <img
+                        src={tab.logoUrl}
+                        alt={tab.shortName}
+                        className={`w-3.5 h-3.5 rounded object-contain shrink-0 ${isSelected ? "brightness-110 drop-shadow-xs" : ""}`}
+                      />
+                    ) : (
+                      <Building2 size={12} className={isSelected ? "text-emerald-400" : "text-slate-400"} />
+                    )}
+                    <span>{tab.shortName}</span>
+                    <span
+                      className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${isSelected
+                          ? "bg-emerald-500/20 text-emerald-300 border border-emerald-400/30"
+                          : "bg-slate-100 text-slate-600 border border-slate-200/70"
+                        }`}
+                    >
+                      {tab.count}
+                    </span>
+                    {tab.type === "non_stl" && (
+                      <span
+                        className={`text-[8px] uppercase px-1 py-0.2 rounded font-black tracking-wider ${isSelected ? "bg-amber-400/20 text-amber-300 border border-amber-400/30" : "bg-amber-100 text-amber-900"
+                          }`}
+                      >
+                        Non-STL
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Scroll Right Button */}
+            <button
+              type="button"
+              onClick={() => scrollTabs("right")}
+              title="Scroll entities right"
+              className="p-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 text-slate-500 hover:text-slate-800 transition cursor-pointer shadow-2xs shrink-0"
+            >
+              <ChevronRight size={13} />
+            </button>
+
+            {/* Non-STL Interactive Toggle */}
+            <button
+              type="button"
+              onClick={() => setShowNonStl((prev) => !prev)}
+              title="Toggle Non-STL Subsidiaries (MC Power Gas & Simcon)"
+              className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[11px] font-bold border transition cursor-pointer shrink-0 shadow-2xs ${showNonStl
+                  ? "bg-amber-600 text-white border-amber-600 shadow-sm"
+                  : "bg-amber-50 text-amber-900 border-amber-200 hover:bg-amber-100"
+                }`}
+            >
+              <Fuel size={12} className={showNonStl ? "text-white" : "text-amber-700"} />
+              <span className="hidden sm:inline">{showNonStl ? "Hide Non-STL" : "+ Non-STL (2)"}</span>
+              <span className="sm:hidden">{showNonStl ? "STL" : "+2"}</span>
+            </button>
+
+            {/* Quick Reset if filters active */}
+            {(selectedSubsidiary !== "all" || selectedBranchFilter !== "all" || searchQuery || selectedFilter !== "all") && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchQuery("");
+                  setSelectedFilter("all");
+                  setSelectedSubsidiary(isHRMD ? "all" : (currentProfile?.company || "all"));
+                  setSelectedBranchFilter("all");
+                }}
+                className="text-xs font-semibold text-rose-600 hover:text-rose-700 hover:underline px-2 py-1 shrink-0 cursor-pointer hidden xl:inline"
+              >
+                Reset
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Tier 2: Search Bar, Status Filter, Branch Filter, and View Mode */}
         <div className="p-2.5 sm:p-3 bg-white flex flex-col md:flex-row items-stretch md:items-center justify-between gap-2">
@@ -1285,7 +1287,7 @@ export default function EmployeeDirectoryPanel({
               onClick={() => {
                 setSearchQuery("");
                 setSelectedFilter("all");
-                setSelectedSubsidiary("all");
+                setSelectedSubsidiary(isHRMD ? "all" : (currentProfile?.company || "all"));
                 setSelectedBranchFilter("all");
               }}
               className="text-xs font-bold text-emerald-600 hover:underline cursor-pointer"
