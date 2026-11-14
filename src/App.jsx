@@ -174,6 +174,17 @@ const App = () => {
     };
     initSuperAdminAccount();
 
+    // Clean up Supabase auth hash from URL if returning from verification link
+    if (typeof window !== "undefined" && window.location.hash) {
+      if (window.location.hash.includes("access_token") || window.location.hash.includes("error")) {
+        setTimeout(() => {
+          try {
+            window.history.replaceState(null, document.title, window.location.pathname);
+          } catch {}
+        }, 600);
+      }
+    }
+
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) {
         const email = session.user.email || "admin@hrhub.com";
@@ -523,9 +534,16 @@ const App = () => {
       // 3. Attempt Supabase Auth registration in background
       let authUserId = null;
       try {
+        const liveOrigin = typeof window !== "undefined" && window.location.origin && !/localhost:3000/i.test(window.location.origin)
+          ? window.location.origin
+          : "https://hrhub-app.vercel.app";
+
         const { data: signUpData } = await supabase.auth.signUp({
           email: trimmedEmail,
-          password: trimmedPassword
+          password: trimmedPassword,
+          options: {
+            emailRedirectTo: liveOrigin
+          }
         });
         if (signUpData?.user?.id) {
           authUserId = signUpData.user.id;
