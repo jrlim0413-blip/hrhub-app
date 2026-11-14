@@ -7,7 +7,8 @@ import {
   getStoredEmployees,
   saveActivatedPassword,
   verifyActivatedPassword,
-  saveStoredEmployee
+  saveStoredEmployee,
+  isEmployeeLoginEnabled
 } from "./lib/employeeStorage";
 import {
   Users, ChevronDown, Globe, ArrowRight, LayoutDashboard, MessageSquare,
@@ -271,6 +272,7 @@ const App = () => {
         let empRole = trimmedEmail.toLowerCase() === "admin@hrhub.com" ? "HR Administrator" : "Team Member";
         let empCompany = "Simpal Group of Companies";
         let empName = name;
+        let empRecord = null;
         try {
           const { data: empInfo } = await supabase
             .from("employees")
@@ -278,11 +280,23 @@ const App = () => {
             .ilike("email", trimmedEmail)
             .maybeSingle();
           if (empInfo) {
+            empRecord = empInfo;
             if (empInfo.role) empRole = empInfo.role;
             if (empInfo.company) empCompany = empInfo.company;
             if (empInfo.name) empName = empInfo.name;
           }
         } catch {}
+
+        if (!empRecord) {
+          const stored = getStoredEmployees();
+          empRecord = stored.find((e) => (e.email || "").toLowerCase() === trimmedEmail.toLowerCase());
+        }
+
+        if (trimmedEmail.toLowerCase() !== "admin@hrhub.com" && empRecord && !isEmployeeLoginEnabled(empRecord)) {
+          setLoginError("Login access is not enabled for this employee profile. This account is currently configured for HR profiling only. Please contact Central HRMD or Head Office to grant portal access.");
+          setIsSubmittingAuth(false);
+          return;
+        }
 
         const userObj = {
           id: authData.user.id,
@@ -348,6 +362,7 @@ const App = () => {
             const stored = getStoredEmployees();
             const effective = stored.find((e) => (e.email || "").toLowerCase() === trimmedEmail.toLowerCase());
             if (effective) {
+              dbProf = effective;
               if (typeof effective.is_approved === "boolean") isApprovedStatus = effective.is_approved;
               if (effective.name && effective.name !== "Admin" && effective.name !== "Super Administrator") effectiveName = effective.name;
               if (effective.company) effectiveCompany = effective.company;
@@ -357,6 +372,12 @@ const App = () => {
           }
         } catch (err) {
           console.warn("User profile check notice:", err);
+        }
+
+        if (!isDefaultAdmin && dbProf && !isEmployeeLoginEnabled(dbProf)) {
+          setLoginError("Login access is not enabled for this employee profile. This account is currently configured for HR profiling only. Please contact Central HRMD or Head Office to grant portal access.");
+          setIsSubmittingAuth(false);
+          return;
         }
 
         if (isApprovedStatus === false) {
@@ -479,6 +500,13 @@ const App = () => {
 
       if (!effectiveProfile) {
         setLoginError("This email address is not registered in the HR directory. Please contact your HR Manager to pre-register your account.");
+        setIsSubmittingAuth(false);
+        return;
+      }
+
+      const isDefaultAdmin = trimmedEmail.toLowerCase() === "admin@hrhub.com";
+      if (!isDefaultAdmin && !isEmployeeLoginEnabled(effectiveProfile)) {
+        setLoginError("Account activation is disabled for this personnel profile. This account is currently configured for HR profiling only. Please contact Central HRMD or Head Office to grant portal access.");
         setIsSubmittingAuth(false);
         return;
       }

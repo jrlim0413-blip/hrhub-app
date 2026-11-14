@@ -48,6 +48,7 @@ const INITIAL_DIRECTORY = [
     company: "Lucky Betplay Corporation",
     role: "Team Member",
     is_approved: true,
+    login_enabled: false,
     created_at: "2026-10-15T00:00:00.000Z"
   },
   {
@@ -57,6 +58,7 @@ const INITIAL_DIRECTORY = [
     company: "Simpal Group of Companies",
     role: "Team Member",
     is_approved: true,
+    login_enabled: true,
     created_at: "2026-10-09T13:45:51.365Z"
   },
   {
@@ -66,6 +68,7 @@ const INITIAL_DIRECTORY = [
     company: "Simpal Group of Companies",
     role: "HR Administrator",
     is_approved: true,
+    login_enabled: true,
     created_at: "2026-08-01T00:00:00.000Z"
   }
 ];
@@ -86,6 +89,20 @@ export function isEmployeeDeleted(emailOrId) {
   if (!emailOrId) return false;
   const q = String(emailOrId).trim().toLowerCase();
   return deletedEmailsSet.has(q);
+}
+
+/**
+ * Helper to determine if an employee profile is authorized for portal login
+ * Profiled employees are false by default (profiling only).
+ */
+export function isEmployeeLoginEnabled(emp) {
+  if (!emp) return false;
+  const email = (emp.email || "").trim().toLowerCase();
+  if (email === "admin@hrhub.com") return true;
+  if (typeof emp.login_enabled === "boolean") return emp.login_enabled;
+  if (emp.metadata && typeof emp.metadata.login_enabled === "boolean") return emp.metadata.login_enabled;
+  if (emp.status === "pre_registered") return true;
+  return false;
 }
 
 /**
@@ -204,6 +221,11 @@ export async function fetchEmployeesFromDatabase() {
           }
           const meta = emp.metadata && typeof emp.metadata === "object" ? emp.metadata : {};
           const createdBy = (emp.created_by || meta.created_by || meta.created_by_email || "").trim().toLowerCase();
+          const loginEnabled = typeof emp.login_enabled === "boolean"
+            ? emp.login_enabled
+            : typeof meta.login_enabled === "boolean"
+              ? meta.login_enabled
+              : (emp.status === "pre_registered" || emailKey === "admin@hrhub.com");
           mergedMap.set(emailKey, {
             id: emp.id || `emp-${Date.now()}`,
             email: emp.email.trim(),
@@ -214,7 +236,8 @@ export async function fetchEmployeesFromDatabase() {
             phone: emp.phone || meta.phone || "",
             created_by: createdBy,
             created_by_email: createdBy,
-            metadata: meta,
+            login_enabled: loginEnabled,
+            metadata: { ...meta, login_enabled: loginEnabled },
             is_approved: typeof emp.is_approved === "boolean" ? emp.is_approved : true,
             created_at: emp.created_at || new Date().toISOString()
           });
@@ -238,6 +261,11 @@ export async function fetchEmployeesFromDatabase() {
             }
             const meta = emp.metadata && typeof emp.metadata === "object" ? emp.metadata : {};
             const createdBy = (emp.created_by || emp.created_by_email || meta.created_by || meta.created_by_email || "").trim().toLowerCase();
+            const loginEnabled = typeof emp.login_enabled === "boolean"
+              ? emp.login_enabled
+              : typeof meta.login_enabled === "boolean"
+                ? meta.login_enabled
+                : (emp.status === "pre_registered" || emailKey === "admin@hrhub.com");
             mergedMap.set(emailKey, {
               ...emp,
               email: emp.email.trim(),
@@ -248,7 +276,8 @@ export async function fetchEmployeesFromDatabase() {
               phone: emp.phone || meta.phone || "",
               created_by: createdBy,
               created_by_email: createdBy,
-              metadata: meta,
+              login_enabled: loginEnabled,
+              metadata: { ...meta, login_enabled: loginEnabled },
               is_approved: typeof emp.is_approved === "boolean" ? emp.is_approved : true
             });
           }
@@ -273,6 +302,11 @@ export async function fetchEmployeesFromDatabase() {
           const existing = mergedMap.get(emailKey) || {};
           const meta = existing.metadata || {};
           const createdBy = existing.created_by || meta.created_by || "";
+          const loginEnabled = typeof existing.login_enabled === "boolean"
+            ? existing.login_enabled
+            : typeof meta.login_enabled === "boolean"
+              ? meta.login_enabled
+              : (prof.status === "pre_registered" || emailKey === "admin@hrhub.com");
           mergedMap.set(emailKey, {
             ...existing,
             id: prof.id || existing.id || `db-${Date.now()}`,
@@ -282,7 +316,8 @@ export async function fetchEmployeesFromDatabase() {
             role: existing.role || "Team Member",
             created_by: createdBy,
             created_by_email: createdBy,
-            metadata: meta,
+            login_enabled: loginEnabled,
+            metadata: { ...meta, login_enabled: loginEnabled },
             is_approved: typeof existing.is_approved === "boolean" ? existing.is_approved : (typeof prof.is_approved === "boolean" ? prof.is_approved : true),
             created_at: prof.created_at || existing.created_at || new Date().toISOString()
           });
@@ -332,6 +367,7 @@ function ensureHrmdAdmin(storeMap) {
       company: "Simpal Group of Companies",
       role: "HR Administrator",
       is_approved: true,
+      login_enabled: true,
       created_at: new Date().toISOString()
     });
   } else {
@@ -339,7 +375,8 @@ function ensureHrmdAdmin(storeMap) {
       ...existing,
       name: "H R M D",
       role: "HR Administrator",
-      is_approved: true
+      is_approved: true,
+      login_enabled: true
     });
   }
 }
@@ -385,9 +422,18 @@ export async function saveStoredEmployee(employee) {
   }
 
   const existing = memoryEmployeeStore.get(targetEmail) || {};
+  const isLogin = typeof employee.login_enabled === "boolean"
+    ? employee.login_enabled
+    : typeof existing.login_enabled === "boolean"
+      ? existing.login_enabled
+      : typeof employee.metadata?.login_enabled === "boolean"
+        ? employee.metadata.login_enabled
+        : targetEmail === "admin@hrhub.com";
+
   const meta = {
     ...(existing.metadata || {}),
     ...(employee.metadata || {}),
+    login_enabled: isLogin,
     created_by: employee.created_by || existing.created_by || employee.metadata?.created_by || existing.metadata?.created_by || "",
     branch: employee.branch || existing.branch || "",
     phone: employee.phone || existing.phone || ""
@@ -406,6 +452,7 @@ export async function saveStoredEmployee(employee) {
     phone: employee.phone || existing.phone || meta.phone || "",
     created_by: createdBy,
     created_by_email: createdBy,
+    login_enabled: isLogin,
     metadata: meta,
     is_approved: typeof employee.is_approved === "boolean" ? employee.is_approved : true,
     created_at: existing.created_at || employee.created_at || new Date().toISOString(),
@@ -522,6 +569,125 @@ export async function updateStoredEmployeeApproval(emailOrId, isApproved) {
   }
 
   return Array.from(memoryEmployeeStore.values());
+}
+
+/**
+ * Update portal login permission for a specific employee profile.
+ * Only accounts with login_enabled = true are permitted to activate or log in.
+ */
+export async function updateStoredEmployeeLoginAccess(emailOrId, loginEnabled) {
+  const query = String(emailOrId || "").trim().toLowerCase();
+  if (!query) return getStoredEmployees();
+
+  const isAllowed = Boolean(loginEnabled);
+  const now = new Date().toISOString();
+  let targetRecord = null;
+
+  for (const [email, record] of memoryEmployeeStore.entries()) {
+    if (email === query || String(record.id).toLowerCase() === query) {
+      // Master superadmin admin@hrhub.com is permanently enabled
+      const effectiveAllowed = email === "admin@hrhub.com" ? true : isAllowed;
+      const meta = { ...(record.metadata || {}), login_enabled: effectiveAllowed };
+      targetRecord = {
+        ...record,
+        login_enabled: effectiveAllowed,
+        metadata: meta,
+        updated_at: now
+      };
+      memoryEmployeeStore.set(email, targetRecord);
+      break;
+    }
+  }
+
+  if (!targetRecord) return getStoredEmployees();
+
+  // Persist update to Supabase Database
+  try {
+    // 1. Dedicated 'employees' table
+    try {
+      await supabase
+        .from(EMPLOYEES_TABLE)
+        .update({
+          login_enabled: targetRecord.login_enabled,
+          metadata: targetRecord.metadata,
+          updated_at: now
+        })
+        .or(`email.ilike.${targetRecord.email},id.eq.${targetRecord.id}`);
+    } catch {
+      await supabase
+        .from(EMPLOYEES_TABLE)
+        .update({
+          metadata: targetRecord.metadata,
+          updated_at: now
+        })
+        .or(`email.ilike.${targetRecord.email},id.eq.${targetRecord.id}`);
+    }
+
+    // 2. Cloud backup in 'user_settings'
+    const allEmployees = Array.from(memoryEmployeeStore.values()).filter(
+      (emp) => !deletedEmailsSet.has((emp.email || "").trim().toLowerCase())
+    );
+    await supabase
+      .from("user_settings")
+      .upsert({
+        user_id: BACKUP_STORE_KEY,
+        settings_json: { employees: allEmployees },
+        updated_at: now
+      }, { onConflict: "user_id" });
+
+    // 3. Dispatch event for instant UI sync
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("hrhub_employees_updated", { detail: allEmployees }));
+    }
+  } catch (err) {
+    console.warn("Notice updating login permission in cloud:", err);
+  }
+
+  return Array.from(memoryEmployeeStore.values());
+}
+
+/**
+ * Bulk update portal login permissions for ALL employees in the directory.
+ * Master HRMD administrator (admin@hrhub.com) remains permanently enabled.
+ */
+export async function updateAllStoredEmployeesLoginAccess(loginEnabled) {
+  const isAllowed = Boolean(loginEnabled);
+  const now = new Date().toISOString();
+
+  for (const [email, record] of memoryEmployeeStore.entries()) {
+    if (email === "admin@hrhub.com") continue;
+    const meta = { ...(record.metadata || {}), login_enabled: isAllowed };
+    memoryEmployeeStore.set(email, {
+      ...record,
+      login_enabled: isAllowed,
+      metadata: meta,
+      updated_at: now
+    });
+  }
+
+  const allEmployees = Array.from(memoryEmployeeStore.values()).filter(
+    (emp) => !deletedEmailsSet.has((emp.email || "").trim().toLowerCase())
+  );
+
+  try {
+    // 1. Cloud backup in 'user_settings'
+    await supabase
+      .from("user_settings")
+      .upsert({
+        user_id: BACKUP_STORE_KEY,
+        settings_json: { employees: allEmployees },
+        updated_at: now
+      }, { onConflict: "user_id" });
+
+    // 2. Dispatch event for instant UI sync
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("hrhub_employees_updated", { detail: allEmployees }));
+    }
+  } catch (err) {
+    console.warn("Notice bulk updating login permissions in cloud:", err);
+  }
+
+  return allEmployees;
 }
 
 /**

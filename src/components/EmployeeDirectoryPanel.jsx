@@ -5,7 +5,7 @@ import {
   Copy, Check, Trash2, ShieldAlert,
   Sparkles, X, Edit3, MapPin,
   Sliders, LayoutGrid, List, User, UserCog, Send,
-  FileText, Paperclip
+  FileText, Paperclip, KeyRound, Lock, Unlock
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import PreRegisterInviteModal from "./PreRegisterInviteModal";
@@ -17,7 +17,10 @@ import {
 import {
   saveStoredEmployee,
   updateStoredEmployeeApproval,
-  deleteStoredEmployee
+  deleteStoredEmployee,
+  updateStoredEmployeeLoginAccess,
+  updateAllStoredEmployeesLoginAccess,
+  isEmployeeLoginEnabled
 } from "../lib/employeeStorage";
 import {
   isUserFeatureAllowed,
@@ -67,6 +70,17 @@ export default function EmployeeDirectoryPanel({
     window.addEventListener("hrhub_rbac_updated", handleRbacUpdate);
     return () => window.removeEventListener("hrhub_rbac_updated", handleRbacUpdate);
   }, []);
+
+  useEffect(() => {
+    const handleEmpUpdate = () => {
+      if (typeof onRefresh === "function") {
+        onRefresh();
+      }
+    };
+    window.addEventListener("hrhub_employees_updated", handleEmpUpdate);
+    return () => window.removeEventListener("hrhub_employees_updated", handleEmpUpdate);
+  }, [onRefresh]);
+
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedFilter, setSelectedFilter] = useState("all"); // 'all' | 'online' | 'pending' | 'approved'
   const [selectedSubsidiary, setSelectedSubsidiary] = useState("all");
@@ -76,6 +90,10 @@ export default function EmployeeDirectoryPanel({
   // Pre-Registration Modal State (Exclusively for HRMD)
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isSubmittingAdd, setIsSubmittingAdd] = useState(false);
+
+  // Portal Login Toggle Tracking States
+  const [isTogglingLoginId, setIsTogglingLoginId] = useState(null);
+  const [isTogglingAllLogins, setIsTogglingAllLogins] = useState(false);
 
   // Unified Enhanced Employee Profiling Modal State (For Add & Edit across all accounts)
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
@@ -169,6 +187,13 @@ export default function EmployeeDirectoryPanel({
 
     return { total, onlineCount, approvedCount, pendingCount };
   }, [managedProfiles, onlineEmails, currentEmail]);
+
+  // Statistics for Portal Login Permission
+  const loginEnabledCount = useMemo(() => {
+    return managedProfiles.filter((p) => isEmployeeLoginEnabled(p)).length;
+  }, [managedProfiles]);
+
+  const isAllLoginsEnabled = managedProfiles.length > 0 && loginEnabledCount === managedProfiles.length;
 
   // Pre-Registration: Exclusively for Head Office HR Administrator
   const canPreRegister = isHRMD;
@@ -302,6 +327,82 @@ export default function EmployeeDirectoryPanel({
       message: `${targetEmail} is now ${newApprovedState ? "APPROVED" : "SUSPENDED"}.`
     });
     setTimeout(() => setNotice(null), 4000);
+  };
+
+  // Toggle individual employee portal login permission (Available for HRMD / Head Office)
+  const handleToggleEmployeeLogin = async (profile) => {
+    if (!profile) return;
+    const targetEmail = (profile.email || "").trim().toLowerCase();
+    const targetId = profile.id;
+    if (!targetEmail && !targetId) return;
+
+    if (targetEmail === "admin@hrhub.com") {
+      setNotice({ type: "warning", message: "Master HRMD Administrator login access is permanent and cannot be revoked." });
+      setTimeout(() => setNotice(null), 4000);
+      return;
+    }
+
+    const currentEnabled = isEmployeeLoginEnabled(profile);
+    const nextState = !currentEnabled;
+    setIsTogglingLoginId(targetId || targetEmail);
+
+    try {
+      await updateStoredEmployeeLoginAccess(targetEmail || targetId, nextState);
+      const updatedProf = {
+        ...profile,
+        login_enabled: nextState,
+        metadata: { ...(profile.metadata || {}), login_enabled: nextState }
+      };
+
+      if (onUpdateProfile) {
+        onUpdateProfile(profile.id, { login_enabled: nextState, metadata: updatedProf.metadata });
+      }
+
+      setNotice({
+        type: nextState ? "success" : "info",
+        message: nextState
+          ? `Portal login ENABLED for ${profile.name || targetEmail}. Employee can now activate their account and receive login invitations.`
+          : `Portal login DISABLED for ${profile.name || targetEmail}. Account is now restricted to HR PROFILING ONLY.`
+      });
+      setTimeout(() => setNotice(null), 5000);
+    } catch (err) {
+      console.warn("Toggle login notice:", err);
+      setNotice({ type: "error", message: "Failed to update login access. Please try again." });
+      setTimeout(() => setNotice(null), 4000);
+    } finally {
+      setIsTogglingLoginId(null);
+    }
+  };
+
+  // Master toggle to enable or disable portal logins for ALL employees (HRMD / Head Office)
+  const handleToggleAllLogins = async (nextState) => {
+    const totalCount = managedProfiles.length;
+    if (totalCount === 0) return;
+
+    const confirmMsg = nextState
+      ? `Are you sure you want to ENABLE portal login access for ALL ${totalCount} employees in the directory?\n\nThey will be permitted to activate accounts and sign in to HRHub.`
+      : `Are you sure you want to restrict ALL ${totalCount} employees to HR PROFILING ONLY?\n\nPortal login and account activation will be disabled. Only Central HRMD will have portal access.`;
+
+    if (!window.confirm(confirmMsg)) return;
+
+    setIsTogglingAllLogins(true);
+    try {
+      await updateAllStoredEmployeesLoginAccess(nextState);
+      if (onRefresh) onRefresh();
+      setNotice({
+        type: nextState ? "success" : "info",
+        message: nextState
+          ? `Portal login successfully ENABLED for all ${totalCount} profiled employees!`
+          : `All profiled employees successfully restricted to HR PROFILING ONLY.`
+      });
+      setTimeout(() => setNotice(null), 5000);
+    } catch (err) {
+      console.warn("Bulk login toggle error:", err);
+      setNotice({ type: "error", message: "Failed to update all employee login permissions." });
+      setTimeout(() => setNotice(null), 4000);
+    } finally {
+      setIsTogglingAllLogins(false);
+    }
   };
 
   // Open Enhanced Employee Profiling Modal in Edit Mode (Available for all accounts)
@@ -636,6 +737,32 @@ export default function EmployeeDirectoryPanel({
             </button>
           )}
 
+          {/* Master Portal Login Access Toggle (Head Office / HRMD Only) */}
+          {isHeadOffice && (
+            <button
+              type="button"
+              onClick={() => handleToggleAllLogins(!isAllLoginsEnabled)}
+              disabled={isTogglingAllLogins || managedProfiles.length === 0}
+              title={isAllLoginsEnabled
+                ? "Click to restrict ALL employees to HR Profiling Only (Disable Portal Logins)"
+                : "Click to enable Portal Login for ALL profiled employees"}
+              className={`inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl border text-xs font-bold transition cursor-pointer shadow-2xs ${
+                isAllLoginsEnabled
+                  ? "bg-emerald-50 border-emerald-300 text-emerald-800 hover:bg-emerald-100"
+                  : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50"
+              }`}
+            >
+              <KeyRound size={14} className={isAllLoginsEnabled ? "text-emerald-700" : "text-slate-400"} />
+              <span className="hidden sm:inline">Portal Logins:</span>
+              <span>{isAllLoginsEnabled ? "All Enabled" : "Profiling Focus"}</span>
+              <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${
+                isAllLoginsEnabled ? "bg-emerald-200/80 text-emerald-950" : "bg-slate-100 text-slate-600"
+              }`}>
+                {loginEnabledCount}/{managedProfiles.length}
+              </span>
+            </button>
+          )}
+
           {/* Add Employee Profile: Available for both HRMD & Branch/Entity Accounts */}
           <button
             type="button"
@@ -792,17 +919,17 @@ export default function EmployeeDirectoryPanel({
         </div>
 
         {/* Tier 2: Search & Dropdown Filters Bar */}
-        <div className="p-3.5 bg-white flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+        <div className="p-3.5 bg-white flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
           {/* Search Bar */}
-          <div className="flex-1 min-w-[220px]">
-            <div className="flex items-center gap-2.5 rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2 text-xs text-slate-800 focus-within:border-emerald-500 focus-within:bg-white focus-within:ring-2 focus-within:ring-emerald-100 transition">
+          <div className="flex-1 min-w-[200px]">
+            <div className="flex items-center gap-2.5 rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2 text-xs text-slate-800 focus-within:border-emerald-500 focus-within:bg-white focus-within:ring-2 focus-within:ring-emerald-100 transition shadow-2xs">
               <Search size={15} className="text-slate-400 shrink-0" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search employee by name, role, email, or branch..."
-                className="w-full border-0 bg-transparent text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none"
+                className="w-full border-0 bg-transparent text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none font-medium"
               />
               {searchQuery && (
                 <button onClick={() => setSearchQuery("")} className="text-slate-400 hover:text-slate-600 cursor-pointer">
@@ -813,16 +940,16 @@ export default function EmployeeDirectoryPanel({
           </div>
 
           {/* Dropdown Filters and View Mode Switcher */}
-          <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+          <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap w-full lg:w-auto">
             {/* Company Select */}
             <select
               value={selectedSubsidiary}
               onChange={(e) => setSelectedSubsidiary(e.target.value)}
-              className="h-9 text-xs font-semibold bg-slate-50 border border-slate-200 text-slate-700 hover:bg-slate-100 rounded-xl px-3 py-1.5 focus:outline-none focus:border-emerald-500 cursor-pointer shadow-2xs"
+              className="h-9 text-xs font-semibold bg-slate-50 border border-slate-200 text-slate-700 hover:bg-slate-100 rounded-xl px-3 py-1.5 focus:outline-none focus:border-emerald-500 cursor-pointer shadow-2xs flex-1 sm:flex-none sm:min-w-[190px]"
             >
               <option value="all">🏢 Company: All Entities</option>
               <option value="stl_all">🎰 All STL Entities (Gaming)</option>
-              <option value="non_stl_all">⛽ All Non-STL Entities (MC Power Gas & SIMCON)</option>
+              <option value="non_stl_all">⛽ All Non-STL Entities</option>
               <option value="head_office_all">🏛️ Head Office (Simpal Group)</option>
 
               <optgroup label="🏛️ Corporate Head Office">
@@ -835,7 +962,7 @@ export default function EmployeeDirectoryPanel({
                 ))}
               </optgroup>
 
-              <optgroup label="⛽ Non-STL Subsidiaries (Retail, Fuel & Construction)">
+              <optgroup label="⛽ Non-STL Subsidiaries">
                 {NON_STL_SUBSIDIARIES.map((sub) => (
                   <option key={sub} value={sub}>{sub}</option>
                 ))}
@@ -846,7 +973,7 @@ export default function EmployeeDirectoryPanel({
             <select
               value={selectedBranchFilter}
               onChange={(e) => setSelectedBranchFilter(e.target.value)}
-              className="h-9 text-xs font-medium bg-slate-50 border border-slate-200 text-slate-700 hover:bg-slate-100 rounded-xl px-3 py-1.5 focus:outline-none focus:border-emerald-500 cursor-pointer"
+              className="h-9 text-xs font-medium bg-slate-50 border border-slate-200 text-slate-700 hover:bg-slate-100 rounded-xl px-3 py-1.5 focus:outline-none focus:border-emerald-500 cursor-pointer shadow-2xs flex-1 sm:flex-none sm:min-w-[140px]"
             >
               <option value="all">📍 Branch: All</option>
               {BRANCH_PRESETS.map((br) => (
@@ -944,6 +1071,7 @@ export default function EmployeeDirectoryPanel({
             const coverPresetId = prof.metadata?.cover_preset_id;
             const customCoverUrl = prof.metadata?.custom_cover_url;
             const requirementsCount = prof.metadata?.requirements_files?.length || 0;
+            const isLoginEnabled = isEmployeeLoginEnabled(prof);
             const coverPresetGradients = {
               preset_emerald: "from-emerald-950 via-teal-900 to-slate-900",
               preset_sapphire: "from-blue-950 via-indigo-900 to-slate-950",
@@ -965,71 +1093,80 @@ export default function EmployeeDirectoryPanel({
                 {hasCover && (
                   customCoverUrl ? (
                     <div
-                      className="h-14 w-full bg-cover bg-center border-b border-slate-100"
+                      className="h-16 w-full bg-cover bg-center border-b border-slate-100 shrink-0"
                       style={{ backgroundImage: `url(${customCoverUrl})` }}
                     />
                   ) : (
                     <div
-                      className={`h-14 w-full bg-gradient-to-r ${coverPresetGradients[coverPresetId] || "from-slate-900 to-slate-800"} border-b border-slate-100`}
+                      className={`h-16 w-full bg-gradient-to-r ${coverPresetGradients[coverPresetId] || "from-slate-900 to-slate-800"} border-b border-slate-100 shrink-0`}
                     />
                   )
                 )}
 
                 {/* Card Header & Identity */}
-                <div className={`p-5 pb-4 space-y-3 ${hasCover ? "-mt-7" : ""}`}>
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-center gap-3">
-                      {/* Avatar */}
-                      <div className="relative shrink-0">
-                        {avatarUrl ? (
-                          <img
-                            src={avatarUrl}
-                            alt={displayName}
-                            className={`w-11 h-11 rounded-xl object-cover border-2 shadow-sm ${hasCover ? "border-white bg-slate-900" : "border-slate-200 bg-slate-100"}`}
-                          />
-                        ) : (
-                          <div className={`w-11 h-11 rounded-xl font-extrabold text-xs flex items-center justify-center shadow-2xs ${hasCover ? "border-2 border-white ring-1 ring-slate-200/50" : ""} ${showOnlineIndicator ? "bg-slate-900 text-emerald-400" : "bg-slate-800 text-slate-300"
-                            }`}>
-                            {initials}
-                          </div>
-                        )}
-                        {showOnlineIndicator && (
-                          <span className="absolute -bottom-1 -right-1 flex h-3 w-3">
-                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                            <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500 ring-2 ring-white"></span>
-                          </span>
-                        )}
-                      </div>
-
-                      {/* Name & Role */}
-                      <div className="min-w-0">
-                        <h4 className="text-sm font-bold text-slate-900 truncate flex items-center gap-1.5">
-                          {displayName}
-                          {isCurrentUser && (
-                            <span className="text-[9px] font-black uppercase text-emerald-700 bg-emerald-100 px-1.5 py-0.2 rounded border border-emerald-200">
-                              You
-                            </span>
-                          )}
-                        </h4>
-                        <div className="flex items-center gap-1.5 mt-0.5">
-                          <span className="text-[11px] font-semibold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200/60 truncate">
-                            {role}
-                          </span>
+                <div className="p-4.5 sm:p-5 pb-4 space-y-3 bg-white">
+                  {/* Top Row: Floating Avatar overlapping cover + Status Badges on the right */}
+                  <div className={`flex items-end justify-between gap-3 ${hasCover ? "-mt-9" : ""}`}>
+                    {/* Avatar */}
+                    <div className="relative shrink-0">
+                      {avatarUrl ? (
+                        <img
+                          src={avatarUrl}
+                          alt={displayName}
+                          className={`w-13 h-13 rounded-2xl object-cover shadow-md ${hasCover ? "ring-4 ring-white border-2 border-slate-200/60 bg-slate-900" : "border-2 border-slate-200 bg-slate-100"}`}
+                        />
+                      ) : (
+                        <div className={`w-13 h-13 rounded-2xl font-black text-sm flex items-center justify-center shadow-md ${hasCover ? "ring-4 ring-white border border-slate-700/60" : "border border-slate-200"} ${showOnlineIndicator ? "bg-slate-900 text-emerald-400" : "bg-slate-800 text-slate-200"}`}>
+                          {initials}
                         </div>
-                      </div>
+                      )}
+                      {showOnlineIndicator && (
+                        <span className="absolute -bottom-1 -right-1 flex h-3.5 w-3.5">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-emerald-500 ring-2 ring-white"></span>
+                        </span>
+                      )}
                     </div>
 
                     {/* Status Badges */}
-                    <div className="flex flex-col items-end gap-1 shrink-0">
+                    <div className="flex flex-col items-end gap-1 shrink-0 pb-0.5">
                       {prof.is_approved ? (
-                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200/70">
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200/70 shadow-2xs">
                           <ShieldCheck size={10} className="text-emerald-600" /> Approved
                         </span>
                       ) : (
-                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200 shadow-2xs">
                           <Clock size={10} className="text-amber-600" /> Pending
                         </span>
                       )}
+
+                      {/* Login Permission Badge */}
+                      {isLoginEnabled ? (
+                        <span className="inline-flex items-center gap-1 text-[9px] font-bold text-emerald-800 bg-emerald-100/90 px-2 py-0.5 rounded-full border border-emerald-300 shadow-2xs" title="Portal Login Enabled">
+                          <KeyRound size={9} className="text-emerald-700" /> Login Enabled
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-[9px] font-semibold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200" title="HR Profiling Only (No Portal Login Access)">
+                          <Lock size={9} className="text-slate-500" /> Profiling Only
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Name & Role (STRICTLY on the clean white card background below the cover!) */}
+                  <div className="min-w-0 pt-0.5">
+                    <h4 className="text-sm font-bold text-slate-900 truncate flex items-center gap-1.5" title={displayName}>
+                      <span className="truncate">{displayName}</span>
+                      {isCurrentUser && (
+                        <span className="text-[9px] font-black uppercase text-emerald-700 bg-emerald-100 px-1.5 py-0.2 rounded border border-emerald-200 shrink-0">
+                          You
+                        </span>
+                      )}
+                    </h4>
+                    <div className="flex items-center gap-1.5 mt-1">
+                      <span className="text-[11px] font-semibold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200/60 truncate" title={role}>
+                        {role}
+                      </span>
                     </div>
                   </div>
 
@@ -1058,8 +1195,36 @@ export default function EmployeeDirectoryPanel({
                   </div>
                 </div>
 
+                {/* Portal Login Permission Toggle (Exclusive for HRMD / Head Office) */}
+                {(isHRMD || isHeadOffice) && (
+                  <div className="px-4.5 py-2.5 bg-slate-50/90 border-t border-slate-100 flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-1.5">
+                      <KeyRound size={13} className={isLoginEnabled ? "text-emerald-600" : "text-slate-400"} />
+                      <span className="font-bold text-slate-700 text-[11px]">Portal Login</span>
+                      <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded-full ${isLoginEnabled ? "bg-emerald-100 text-emerald-800" : "bg-slate-200 text-slate-600"}`}>
+                        {isLoginEnabled ? "Allowed" : "Profiling Only"}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleToggleEmployeeLogin(prof)}
+                      disabled={isTogglingLoginId === (prof.id || prof.email)}
+                      className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                        isLoginEnabled ? "bg-emerald-600" : "bg-slate-300"
+                      }`}
+                      title={isLoginEnabled ? "Click to revoke portal login access (Profiling Only)" : "Click to allow portal login"}
+                    >
+                      <span
+                        className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                          isLoginEnabled ? "translate-x-4" : "translate-x-0"
+                        }`}
+                      />
+                    </button>
+                  </div>
+                )}
+
                 {/* Card Action Footer */}
-                <div className="px-5 py-3 bg-slate-50/70 border-t border-slate-100 flex items-center justify-between gap-2">
+                <div className="px-4.5 py-3 bg-white border-t border-slate-100 flex items-center justify-between gap-2">
                   {canManageProfiles ? (
                     <button
                       type="button"
@@ -1095,24 +1260,33 @@ export default function EmployeeDirectoryPanel({
                       </button>
                     )}
 
-                    <button
-                      type="button"
-                      onClick={() => setInviteEmployee(prof)}
-                      title="Send Setup Invite Card (w/ HRHub Logo)"
-                      className="inline-flex items-center gap-1 px-2 py-1.5 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-600 hover:text-white text-[10px] font-bold transition cursor-pointer"
-                    >
-                      <Send size={12} />
-                      <span>Invite</span>
-                    </button>
+                    {/* Invite & Copy Setup instructions ONLY appear if portal login is enabled! */}
+                    {isLoginEnabled ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => setInviteEmployee(prof)}
+                          title="Send Setup Invite Card (w/ HRHub Logo)"
+                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-600 hover:text-white text-[11px] font-bold transition cursor-pointer shadow-2xs"
+                        >
+                          <Send size={12} />
+                          <span>Invite</span>
+                        </button>
 
-                    <button
-                      type="button"
-                      onClick={() => copyActivationInstructions(prof)}
-                      title="Copy Setup Instructions (w/ HRHub Logo)"
-                      className="p-1.5 rounded-xl border border-slate-200 bg-white text-slate-500 hover:text-emerald-700 hover:border-emerald-300 hover:bg-emerald-50/50 transition cursor-pointer"
-                    >
-                      {copiedId === prof.id ? <Check size={13} className="text-emerald-600" /> : <Copy size={13} />}
-                    </button>
+                        <button
+                          type="button"
+                          onClick={() => copyActivationInstructions(prof)}
+                          title="Copy Setup Instructions (w/ HRHub Logo)"
+                          className="p-1.5 rounded-xl border border-slate-200 bg-white text-slate-500 hover:text-emerald-700 hover:border-emerald-300 hover:bg-emerald-50/50 transition cursor-pointer"
+                        >
+                          {copiedId === prof.id ? <Check size={13} className="text-emerald-600" /> : <Copy size={13} />}
+                        </button>
+                      </>
+                    ) : (
+                      <span className="text-[10px] text-slate-400 font-semibold px-2 py-1 bg-slate-50 border border-slate-100 rounded-lg">
+                        Profiling Only
+                      </span>
+                    )}
 
                     {canManageProfiles && (
                       <button
@@ -1141,6 +1315,7 @@ export default function EmployeeDirectoryPanel({
                   <th className="py-3 px-4">Organization & Branch</th>
                   <th className="py-3 px-4">Role</th>
                   <th className="py-3 px-4">Status</th>
+                  <th className="py-3 px-4">Portal Access</th>
                   <th className="py-3 px-4 text-right">Actions</th>
                 </tr>
               </thead>
@@ -1153,6 +1328,7 @@ export default function EmployeeDirectoryPanel({
                   const initials = prof.email ? prof.email.slice(0, 2).toUpperCase() : "HR";
                   const displayName = prof.name || (prof.email ? prof.email.split("@")[0].replace(/[._]/g, " ").replace(/\b\w/g, (l) => l.toUpperCase()) : "Employee");
                   const branch = prof.branch || DEFAULT_BRANCH_MAP[prof.company] || "Head Office";
+                  const isLoginEnabled = isEmployeeLoginEnabled(prof);
 
                   const avatarUrl = prof.metadata?.avatar_url || prof.avatar_url;
 
@@ -1221,6 +1397,37 @@ export default function EmployeeDirectoryPanel({
                           )}
                         </div>
                       </td>
+                      <td className="py-3 px-4">
+                        {isHeadOffice ? (
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleToggleEmployeeLogin(prof)}
+                              disabled={isTogglingLoginId === (prof.id || prof.email)}
+                              className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                                isLoginEnabled ? "bg-emerald-600" : "bg-slate-300"
+                              }`}
+                              title={isLoginEnabled ? "Click to restrict to HR Profiling Only" : "Click to grant portal login"}
+                            >
+                              <span
+                                className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                                  isLoginEnabled ? "translate-x-4" : "translate-x-0"
+                                }`}
+                              />
+                            </button>
+                            <span className={`text-[10px] font-bold ${isLoginEnabled ? "text-emerald-700" : "text-slate-500"}`}>
+                              {isLoginEnabled ? "Allowed" : "Profiling"}
+                            </span>
+                          </div>
+                        ) : (
+                          <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                            isLoginEnabled ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-slate-100 text-slate-600 border border-slate-200"
+                          }`}>
+                            {isLoginEnabled ? <KeyRound size={10} className="text-emerald-600" /> : <Lock size={10} className="text-slate-500" />}
+                            <span>{isLoginEnabled ? "Allowed" : "Profiling Only"}</span>
+                          </span>
+                        )}
+                      </td>
                       <td className="py-3 px-4 text-right">
                         <div className="flex items-center justify-end gap-1.5">
                           {canManageProfiles && (
@@ -1245,22 +1452,30 @@ export default function EmployeeDirectoryPanel({
                               <Edit3 size={13} />
                             </button>
                           )}
-                          <button
-                            type="button"
-                            onClick={() => setInviteEmployee(prof)}
-                            title="Send setup invite card (w/ HRHub Logo)"
-                            className="p-1 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-600 hover:text-white transition cursor-pointer"
-                          >
-                            <Send size={13} />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => copyActivationInstructions(prof)}
-                            title="Copy setup message (w/ HRHub Logo)"
-                            className="p-1 rounded-lg border border-slate-200 text-slate-400 hover:text-slate-700 transition cursor-pointer"
-                          >
-                            {copiedId === prof.id ? <Check size={13} className="text-emerald-600" /> : <Copy size={13} />}
-                          </button>
+                          {isLoginEnabled ? (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => setInviteEmployee(prof)}
+                                title="Send setup invite card (w/ HRHub Logo)"
+                                className="p-1 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-600 hover:text-white transition cursor-pointer"
+                              >
+                                <Send size={13} />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => copyActivationInstructions(prof)}
+                                title="Copy setup message (w/ HRHub Logo)"
+                                className="p-1 rounded-lg border border-slate-200 text-slate-400 hover:text-slate-700 transition cursor-pointer"
+                              >
+                                {copiedId === prof.id ? <Check size={13} className="text-emerald-600" /> : <Copy size={13} />}
+                              </button>
+                            </>
+                          ) : (
+                            <span className="text-[10px] text-slate-400 font-semibold px-1.5 py-0.5 bg-slate-50 border border-slate-100 rounded">
+                              Profiling
+                            </span>
+                          )}
                           {canManageProfiles && (
                             <button
                               type="button"
