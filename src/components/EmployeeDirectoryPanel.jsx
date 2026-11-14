@@ -39,8 +39,11 @@ import {
   isStlEntity,
   isNonStlEntity,
   isHeadOffice,
-  normalizeBranchForCompany
+  normalizeBranchForCompany,
+  matchesCompanyEntity
 } from "../lib/companyEntities";
+
+export { matchesCompanyEntity };
 
 const SUBSIDIARIES = ALL_SUBSIDIARIES;
 
@@ -48,26 +51,6 @@ const SUBSIDIARIES = ALL_SUBSIDIARIES;
 const ROLES = HR_PRE_REGISTRATION_ROLES;
 
 const BRANCH_PRESETS = ALL_BRANCH_PRESETS;
-
-/**
- * Flexible company matcher to handle database variations (e.g. Glowing Fortune vs Glowing Fortune OPC, SIMCON vs Simpal Construction)
- */
-export function matchesCompanyEntity(profileCompany, targetCompany) {
-  if (!profileCompany || !targetCompany) return false;
-  const pComp = String(profileCompany).toLowerCase().trim();
-  const tComp = String(targetCompany).toLowerCase().trim();
-
-  if (pComp === tComp) return true;
-
-  if (tComp.includes("glowing fortune") && pComp.includes("glowing fortune")) return true;
-  if ((tComp.includes("simcon") || tComp.includes("construction")) && (pComp.includes("simcon") || pComp.includes("construction"))) return true;
-  if (tComp.includes("mc power") && pComp.includes("mc power")) return true;
-  if (tComp.includes("5a royal") && pComp.includes("5a royal")) return true;
-  if (tComp.includes("lucky betplay") && pComp.includes("lucky betplay")) return true;
-  if (tComp.includes("simpal group") && pComp.includes("simpal group")) return true;
-
-  return false;
-}
 
 /**
  * Identify the assigned HR Administrator for a given company/subsidiary.
