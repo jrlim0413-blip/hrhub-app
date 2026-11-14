@@ -221,7 +221,7 @@ export default function ShiftAttendanceOverviewPanel({
 
         {/* METRICS ROW (Strictly calculated from real database records) */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-5">
-          <div className="p-4 rounded-2xl bg-[#f2f5f7] border border-slate-200/80">
+          <div className="p-4 rounded-2xl bg-[#f2f5f7] border border-slate-200/80 stagger-1">
             <div className="flex items-center justify-between text-slate-500 text-xs font-bold mb-1">
               <span>Database Records</span>
               <Users size={15} className="text-emerald-600" />
@@ -232,7 +232,7 @@ export default function ShiftAttendanceOverviewPanel({
             </div>
           </div>
 
-          <div className="p-4 rounded-2xl bg-[#f2f5f7] border border-slate-200/80">
+          <div className="p-4 rounded-2xl bg-[#f2f5f7] border border-slate-200/80 stagger-2">
             <div className="flex items-center justify-between text-slate-500 text-xs font-bold mb-1">
               <span>Present / On-Duty</span>
               <CheckCircle2 size={15} className="text-emerald-600" />
@@ -245,7 +245,7 @@ export default function ShiftAttendanceOverviewPanel({
             </div>
           </div>
 
-          <div className="p-4 rounded-2xl bg-[#f2f5f7] border border-slate-200/80">
+          <div className="p-4 rounded-2xl bg-[#f2f5f7] border border-slate-200/80 stagger-3">
             <div className="flex items-center justify-between text-slate-500 text-xs font-bold mb-1">
               <span>Active Stations</span>
               <Building2 size={15} className="text-blue-600" />
@@ -256,7 +256,7 @@ export default function ShiftAttendanceOverviewPanel({
             </div>
           </div>
 
-          <div className="p-4 rounded-2xl bg-[#f2f5f7] border border-slate-200/80">
+          <div className="p-4 rounded-2xl bg-[#f2f5f7] border border-slate-200/80 stagger-4">
             <div className="flex items-center justify-between text-slate-500 text-xs font-bold mb-1">
               <span>Cloud Status</span>
               <ShieldCheck size={15} className="text-purple-600" />
@@ -273,7 +273,7 @@ export default function ShiftAttendanceOverviewPanel({
       </div>
 
       {/* 2. FILTERS & SEARCH */}
-      <div className="bg-white rounded-3xl border border-slate-200/90 p-4 shadow-xs flex flex-col md:flex-row items-center justify-between gap-3">
+      <div className="bg-white rounded-3xl border border-slate-200/90 p-4 shadow-xs flex flex-col md:flex-row items-center justify-between gap-3 stagger-5">
         <div className="relative w-full md:w-80">
           <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
@@ -341,7 +341,7 @@ export default function ShiftAttendanceOverviewPanel({
           <p className="text-xs text-slate-400">Fetching live shift logs from cloud database table for {selectedDate}.</p>
         </div>
       ) : filteredRecords.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div key={`${selectedDate}_${selectedArea}_${selectedStatus}`} className="grid grid-cols-1 md:grid-cols-2 gap-4 stagger-children">
           {filteredRecords.map((rec) => {
             const name = rec.supervisor_name || rec.username || `Supervisor ${rec.supervisor_id || "--"}`;
             const timeIn = rec.time_in || "--";

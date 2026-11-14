@@ -2047,103 +2047,105 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
             </aside>
 
             <main className={`${communicationTab === "bulletin" ? "md:col-span-6" : "md:col-span-9"} space-y-6`}>
-              {communicationTab === "directory" ? (
-                canViewDirectory ? (
-                  <EmployeeDirectoryPanel
-                    profiles={supabaseProfiles}
-                    onlineEmails={new Set(Object.keys(presenceMap).filter(e => presenceMap[e]?.status !== "offline"))}
-                    currentEmail={currentEmail}
-                    loading={loadingProfiles}
-                    onRefresh={fetchProfiles}
-                    onUpdateProfile={handleUpdateProfile}
-                    onDeleteProfile={handleDeleteProfile}
-                    onOpenPermissions={() => {
-                      setActiveView("workspace");
-                      setWorkspaceTab("permission_matrix");
-                    }}
-                    onNavigateToIr={(employee) => {
-                      if (employee) {
-                        try {
-                          localStorage.setItem("hrhub_incident_target_employee", JSON.stringify(employee));
-                        } catch (err) {
-                          console.warn("Target emp storage notice:", err);
+              <div key={communicationTab} className="animate-tab-fade-in space-y-6">
+                {communicationTab === "directory" ? (
+                  canViewDirectory ? (
+                    <EmployeeDirectoryPanel
+                      profiles={supabaseProfiles}
+                      onlineEmails={new Set(Object.keys(presenceMap).filter(e => presenceMap[e]?.status !== "offline"))}
+                      currentEmail={currentEmail}
+                      loading={loadingProfiles}
+                      onRefresh={fetchProfiles}
+                      onUpdateProfile={handleUpdateProfile}
+                      onDeleteProfile={handleDeleteProfile}
+                      onOpenPermissions={() => {
+                        setActiveView("workspace");
+                        setWorkspaceTab("permission_matrix");
+                      }}
+                      onNavigateToIr={(employee) => {
+                        if (employee) {
+                          try {
+                            localStorage.setItem("hrhub_incident_target_employee", JSON.stringify(employee));
+                          } catch (err) {
+                            console.warn("Target emp storage notice:", err);
+                          }
                         }
-                      }
-                      setActiveView("workspace");
-                      handleOpenWorkspaceTab("incident_reports");
-                      setTimeout(() => {
-                        window.dispatchEvent(
-                          new CustomEvent("hrhub_file_incident_report", {
-                            detail: { employee }
-                          })
-                        );
-                      }, 80);
-                    }}
-                  />
-                ) : (
-                  <div className="bg-white rounded-3xl border border-slate-200/90 p-8 text-center space-y-3">
-                    <Lock size={28} className="mx-auto text-amber-500" />
-                    <h3 className="text-base font-extrabold text-slate-900">Employee Directory Access Restricted</h3>
-                    <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
-                      Your current role does not have authorization to view the centralized personnel directory. Contact Head Office HRMD to update your workstation permissions.
-                    </p>
-                  </div>
-                )
-              ) : communicationTab === "attendance" ? (
-                isHRMD ? (
-                  <ShiftAttendanceOverviewPanel
-                    profiles={supabaseProfiles}
-                    presenceMap={presenceMap}
-                    onOpenChat={handleOpenDirectChat}
-                    onOpenWorkspaceTab={handleOpenWorkspaceTab}
-                  />
-                ) : (
-                  <div className="bg-white rounded-3xl border border-slate-200/90 p-12 text-center space-y-4">
-                    <div className="w-16 h-16 rounded-2xl bg-emerald-50 border border-emerald-200/80 text-emerald-600 flex items-center justify-center mx-auto shadow-xs">
-                      <Calendar size={32} />
-                    </div>
-                    <div className="space-y-1">
-                      <h3 className="text-base font-extrabold text-slate-900">Shift & Attendance Schedule</h3>
+                        setActiveView("workspace");
+                        handleOpenWorkspaceTab("incident_reports");
+                        setTimeout(() => {
+                          window.dispatchEvent(
+                            new CustomEvent("hrhub_file_incident_report", {
+                              detail: { employee }
+                            })
+                          );
+                        }, 80);
+                      }}
+                    />
+                  ) : (
+                    <div className="bg-white rounded-3xl border border-slate-200/90 p-8 text-center space-y-3">
+                      <Lock size={28} className="mx-auto text-amber-500" />
+                      <h3 className="text-base font-extrabold text-slate-900">Employee Directory Access Restricted</h3>
                       <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
-                        Work shifts and roster allocations are currently being coordinated. Official shift schedules will be published here once finalized by Head Office HRMD.
+                        Your current role does not have authorization to view the centralized personnel directory. Contact Head Office HRMD to update your workstation permissions.
                       </p>
                     </div>
-                  </div>
-                )
-              ) : communicationTab === "policies" ? (
-                canViewPolicies ? (
-                  <PoliciesHandbooksPanel />
+                  )
+                ) : communicationTab === "attendance" ? (
+                  isHRMD ? (
+                    <ShiftAttendanceOverviewPanel
+                      profiles={supabaseProfiles}
+                      presenceMap={presenceMap}
+                      onOpenChat={handleOpenDirectChat}
+                      onOpenWorkspaceTab={handleOpenWorkspaceTab}
+                    />
+                  ) : (
+                    <div className="bg-white rounded-3xl border border-slate-200/90 p-12 text-center space-y-4">
+                      <div className="w-16 h-16 rounded-2xl bg-emerald-50 border border-emerald-200/80 text-emerald-600 flex items-center justify-center mx-auto shadow-xs">
+                        <Calendar size={32} />
+                      </div>
+                      <div className="space-y-1">
+                        <h3 className="text-base font-extrabold text-slate-900">Shift & Attendance Schedule</h3>
+                        <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
+                          Work shifts and roster allocations are currently being coordinated. Official shift schedules will be published here once finalized by Head Office HRMD.
+                        </p>
+                      </div>
+                    </div>
+                  )
+                ) : communicationTab === "policies" ? (
+                  canViewPolicies ? (
+                    <PoliciesHandbooksPanel />
+                  ) : (
+                    <div className="bg-white rounded-3xl border border-slate-200/90 p-8 text-center space-y-3">
+                      <Lock size={28} className="mx-auto text-amber-500" />
+                      <h3 className="text-base font-extrabold text-slate-900">Policies & Handbooks Access Restricted</h3>
+                      <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
+                        Access to corporate policies and compliance handbooks has been restricted by Head Office security policies.
+                      </p>
+                    </div>
+                  )
                 ) : (
-                  <div className="bg-white rounded-3xl border border-slate-200/90 p-8 text-center space-y-3">
-                    <Lock size={28} className="mx-auto text-amber-500" />
-                    <h3 className="text-base font-extrabold text-slate-900">Policies & Handbooks Access Restricted</h3>
-                    <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
-                      Access to corporate policies and compliance handbooks has been restricted by Head Office security policies.
-                    </p>
-                  </div>
-                )
-              ) : (
-                /* Bulletin View - Facebook Style Feed */
-                !canViewBulletin ? (
-                  <div className="bg-white rounded-3xl border border-slate-200/90 p-8 text-center space-y-3">
-                    <Lock size={28} className="mx-auto text-amber-500" />
-                    <h3 className="text-base font-extrabold text-slate-900">Company Bulletin Access Restricted</h3>
-                    <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
-                      Viewing company announcements and memorandums feed has been disabled for your account under the Role Access Matrix.
-                    </p>
-                  </div>
-                ) : (
-                  <CompanyBulletinFeed
-                    currentUser={currentUser}
-                    profileName={profileName}
-                    profileRole={displayRole}
-                    profileCompany={displayCompany}
-                    userInitials={userInitials}
-                    isHRMD={isHRMD}
-                    canPost={canPostBulletin}
-                  />
-                )
-              )}
+                  /* Bulletin View - Facebook Style Feed */
+                  !canViewBulletin ? (
+                    <div className="bg-white rounded-3xl border border-slate-200/90 p-8 text-center space-y-3">
+                      <Lock size={28} className="mx-auto text-amber-500" />
+                      <h3 className="text-base font-extrabold text-slate-900">Company Bulletin Access Restricted</h3>
+                      <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
+                        Viewing company announcements and memorandums feed has been disabled for your account under the Role Access Matrix.
+                      </p>
+                    </div>
+                  ) : (
+                    <CompanyBulletinFeed
+                      currentUser={currentUser}
+                      profileName={profileName}
+                      profileRole={displayRole}
+                      profileCompany={displayCompany}
+                      userInitials={userInitials}
+                      isHRMD={isHRMD}
+                      canPost={canPostBulletin}
+                    />
+                  )
+                )}
+              </div>
             </main>
 
             {communicationTab === "bulletin" && (
@@ -2232,8 +2234,9 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
             </div>
           </div>
 
-          {/* EMPTY WORKSPACE STATE or HOME DASHBOARD: Workspace Ready Hub with Frequently Used Modules */}
-          {(!workspaceTab || openTabs.length === 0 || workspaceTab === "home") && (
+          <div key={workspaceTab || "home"} className="animate-tab-fade-in space-y-6">
+            {/* EMPTY WORKSPACE STATE or HOME DASHBOARD: Workspace Ready Hub with Frequently Used Modules */}
+            {(!workspaceTab || openTabs.length === 0 || workspaceTab === "home") && (
             <div className="rounded-2xl border border-slate-200/90 bg-white/80 backdrop-blur-sm p-8 md:p-12 text-center shadow-xs animate-in fade-in">
               <div className="mx-auto w-14 h-14 rounded-2xl bg-emerald-50 text-emerald-600 border border-emerald-100 flex items-center justify-center mb-3 shadow-2xs">
                 <BriefcaseBusiness size={28} />
@@ -2527,6 +2530,7 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
               onClose={() => handleCloseWorkspaceTab(null, "salary_compensation")}
             />
           )}
+          </div>
         </div>
       </div>
     )}

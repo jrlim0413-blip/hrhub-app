@@ -809,11 +809,36 @@ export default function CompanyBulletinFeed({
       {/* ============================================================ */}
       {/* 3. POSTS FEED LIST                                           */}
       {/* ============================================================ */}
-      <div className="space-y-4">
+      <div key={selectedCategory} className="space-y-4">
         {loading && posts.length === 0 ? (
-          <div className="bg-white rounded-2xl border border-slate-200/90 p-12 text-center space-y-2">
-            <RefreshCw size={22} className="animate-spin text-emerald-600 mx-auto" />
-            <p className="text-xs font-bold text-slate-600">Loading company announcements...</p>
+          <div className="space-y-4 animate-tab-fade-in">
+            <div className="bg-white rounded-2xl border border-slate-200/90 p-6 space-y-4 shadow-xs">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full skeleton-shimmer" />
+                <div className="space-y-2 flex-1">
+                  <div className="h-3 w-32 rounded-md skeleton-shimmer" />
+                  <div className="h-2.5 w-24 rounded-md skeleton-shimmer" />
+                </div>
+              </div>
+              <div className="space-y-2 pt-2">
+                <div className="h-3 w-full rounded-md skeleton-shimmer" />
+                <div className="h-3 w-4/5 rounded-md skeleton-shimmer" />
+                <div className="h-3 w-2/3 rounded-md skeleton-shimmer" />
+              </div>
+            </div>
+            <div className="bg-white rounded-2xl border border-slate-200/90 p-6 space-y-4 shadow-xs">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full skeleton-shimmer" />
+                <div className="space-y-2 flex-1">
+                  <div className="h-3 w-36 rounded-md skeleton-shimmer" />
+                  <div className="h-2.5 w-28 rounded-md skeleton-shimmer" />
+                </div>
+              </div>
+              <div className="space-y-2 pt-2">
+                <div className="h-3 w-full rounded-md skeleton-shimmer" />
+                <div className="h-3 w-3/4 rounded-md skeleton-shimmer" />
+              </div>
+            </div>
           </div>
         ) : filteredPosts.length === 0 ? (
           <div className="bg-white rounded-2xl border border-slate-200/90 p-12 text-center space-y-2 text-slate-400">
@@ -822,7 +847,8 @@ export default function CompanyBulletinFeed({
             <p className="text-xs">Select &quot;All Posts&quot; to view company updates or share the first post.</p>
           </div>
         ) : (
-          filteredPosts.map((post) => {
+          <div className="space-y-4 stagger-children">
+            {filteredPosts.map((post) => {
             const isAuthor = currentEmail && post.authorEmail === currentEmail;
             const canDelete = isAuthor || isHRMD;
             const likesArray = Array.isArray(post.likes) ? post.likes : [];
@@ -1135,7 +1161,8 @@ export default function CompanyBulletinFeed({
                 )}
               </article>
             );
-          })
+          })}
+          </div>
         )}
       </div>
 

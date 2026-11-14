@@ -913,7 +913,7 @@ export default function EmployeeDirectoryPanel({
       {isHRMD ? (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {/* Card 1: Total Personnel */}
-          <div className="bg-white border border-slate-200/90 rounded-2xl p-4.5 shadow-xs">
+          <div className="bg-white border border-slate-200/90 rounded-2xl p-4.5 shadow-xs stagger-1">
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Total Personnel</span>
               <span className="p-2 rounded-xl bg-slate-100 text-slate-600">
@@ -925,7 +925,7 @@ export default function EmployeeDirectoryPanel({
           </div>
 
           {/* Card 2: Active Online (Exclusively for HRMD) */}
-          <div className="bg-white border border-slate-200/90 rounded-2xl p-4.5 shadow-xs">
+          <div className="bg-white border border-slate-200/90 rounded-2xl p-4.5 shadow-xs stagger-2">
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Active Online</span>
               <span className="p-2 rounded-xl bg-emerald-50 text-emerald-700">
@@ -943,7 +943,7 @@ export default function EmployeeDirectoryPanel({
           </div>
 
           {/* Card 3: Pending Review */}
-          <div className={`border rounded-2xl p-4.5 shadow-xs transition ${stats.pendingCount > 0
+          <div className={`border rounded-2xl p-4.5 shadow-xs transition stagger-3 ${stats.pendingCount > 0
             ? "bg-amber-50/60 border-amber-200"
             : "bg-white border-slate-200/90"
             }`}>
@@ -969,7 +969,7 @@ export default function EmployeeDirectoryPanel({
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {/* Card 1: Entity Personnel */}
-          <div className="bg-white border border-slate-200/90 rounded-2xl p-4.5 shadow-xs">
+          <div className="bg-white border border-slate-200/90 rounded-2xl p-4.5 shadow-xs stagger-1">
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
                 {currentOpenedCompany || userEntityCompany} Personnel
@@ -983,7 +983,7 @@ export default function EmployeeDirectoryPanel({
           </div>
 
           {/* Card 2: Active Profiles */}
-          <div className="bg-white border border-slate-200/90 rounded-2xl p-4.5 shadow-xs">
+          <div className="bg-white border border-slate-200/90 rounded-2xl p-4.5 shadow-xs stagger-2">
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Active Profiles</span>
               <span className="p-2 rounded-xl bg-emerald-50 text-emerald-700">
@@ -995,7 +995,7 @@ export default function EmployeeDirectoryPanel({
           </div>
 
           {/* Card 3: Assigned Entity HR */}
-          <div className="bg-white border border-emerald-200/90 rounded-2xl p-4.5 shadow-xs bg-linear-to-br from-emerald-50/40 to-teal-50/20">
+          <div className="bg-white border border-emerald-200/90 rounded-2xl p-4.5 shadow-xs bg-linear-to-br from-emerald-50/40 to-teal-50/20 stagger-3">
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-900">
                 Assigned Entity HR
@@ -1018,7 +1018,7 @@ export default function EmployeeDirectoryPanel({
       )}
 
       {/* Unified Corporate Toolbar: Entity Navigation & Controls */}
-      <div className="bg-white border border-slate-200/90 rounded-2xl shadow-xs overflow-hidden">
+      <div className="bg-white border border-slate-200/90 rounded-2xl shadow-xs overflow-hidden stagger-4">
         {/* Tier 1: Dedicated Entity Tabs Bar with Interactive Navigation Controls - Exclusively for Central HR Administrator (HRMD) */}
         {isHRMD && (
           <div className="px-2.5 sm:px-3.5 py-2 bg-slate-50/80 border-b border-slate-200/70 flex items-center justify-between gap-1.5 sm:gap-2 overflow-hidden">
@@ -1297,8 +1297,8 @@ export default function EmployeeDirectoryPanel({
           </div>
         )
       ) : viewMode === "grid" ? (
-        /* Executive Card Grid View */
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        /* Executive Card Grid View with Cascading Reveal */
+        <div key={`${selectedSubsidiary}_${selectedFilter}_grid`} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 stagger-children">
           {filteredProfiles.map((prof) => {
             const email = prof.email?.toLowerCase() || "";
             const isCurrentUser = Boolean(currentEmail && email === currentEmail);
@@ -1553,8 +1553,8 @@ export default function EmployeeDirectoryPanel({
           })}
         </div>
       ) : (
-        /* Detailed Table View */
-        <div className="bg-white border border-slate-200/90 rounded-2xl overflow-hidden shadow-xs">
+        /* Detailed Table View with Fade-In Up */
+        <div key={`${selectedSubsidiary}_${selectedFilter}_table`} className="bg-white border border-slate-200/90 rounded-2xl overflow-hidden shadow-xs animate-tab-fade-in">
           <div className="overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
             <table className="w-full text-left text-xs border-collapse table-auto">
               <thead>
@@ -1567,7 +1567,7 @@ export default function EmployeeDirectoryPanel({
                   <th className="py-2.5 px-3 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 text-slate-700">
+              <tbody className="divide-y divide-slate-100 text-slate-700 stagger-children">
                 {filteredProfiles.map((prof) => {
                   const email = prof.email?.toLowerCase() || "";
                   const isCurrentUser = Boolean(currentEmail && email === currentEmail);
