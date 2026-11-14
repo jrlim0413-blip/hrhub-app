@@ -5,7 +5,7 @@ import {
   Copy, Check, Trash2, ShieldAlert,
   Sparkles, X, Edit3, MapPin,
   Sliders, LayoutGrid, List, User, UserCog, Send,
-  FileText, Paperclip, KeyRound, Lock, Unlock
+  FileText, Paperclip, KeyRound, Lock
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import PreRegisterInviteModal from "./PreRegisterInviteModal";
@@ -18,8 +18,6 @@ import {
   saveStoredEmployee,
   updateStoredEmployeeApproval,
   deleteStoredEmployee,
-  updateStoredEmployeeLoginAccess,
-  updateAllStoredEmployeesLoginAccess,
   isEmployeeLoginEnabled
 } from "../lib/employeeStorage";
 import {
@@ -90,10 +88,6 @@ export default function EmployeeDirectoryPanel({
   // Pre-Registration Modal State (Exclusively for HRMD)
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isSubmittingAdd, setIsSubmittingAdd] = useState(false);
-
-  // Portal Login Toggle Tracking States
-  const [isTogglingLoginId, setIsTogglingLoginId] = useState(null);
-  const [isTogglingAllLogins, setIsTogglingAllLogins] = useState(false);
 
   // Unified Enhanced Employee Profiling Modal State (For Add & Edit across all accounts)
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
@@ -187,13 +181,6 @@ export default function EmployeeDirectoryPanel({
 
     return { total, onlineCount, approvedCount, pendingCount };
   }, [managedProfiles, onlineEmails, currentEmail]);
-
-  // Statistics for Portal Login Permission
-  const loginEnabledCount = useMemo(() => {
-    return managedProfiles.filter((p) => isEmployeeLoginEnabled(p)).length;
-  }, [managedProfiles]);
-
-  const isAllLoginsEnabled = managedProfiles.length > 0 && loginEnabledCount === managedProfiles.length;
 
   // Pre-Registration: Exclusively for Head Office HR Administrator
   const canPreRegister = isHRMD;
@@ -329,82 +316,6 @@ export default function EmployeeDirectoryPanel({
     setTimeout(() => setNotice(null), 4000);
   };
 
-  // Toggle individual employee portal login permission (Available for HRMD / Head Office)
-  const handleToggleEmployeeLogin = async (profile) => {
-    if (!profile) return;
-    const targetEmail = (profile.email || "").trim().toLowerCase();
-    const targetId = profile.id;
-    if (!targetEmail && !targetId) return;
-
-    if (targetEmail === "admin@hrhub.com") {
-      setNotice({ type: "warning", message: "Master HRMD Administrator login access is permanent and cannot be revoked." });
-      setTimeout(() => setNotice(null), 4000);
-      return;
-    }
-
-    const currentEnabled = isEmployeeLoginEnabled(profile);
-    const nextState = !currentEnabled;
-    setIsTogglingLoginId(targetId || targetEmail);
-
-    try {
-      await updateStoredEmployeeLoginAccess(targetEmail || targetId, nextState);
-      const updatedProf = {
-        ...profile,
-        login_enabled: nextState,
-        metadata: { ...(profile.metadata || {}), login_enabled: nextState }
-      };
-
-      if (onUpdateProfile) {
-        onUpdateProfile(profile.id, { login_enabled: nextState, metadata: updatedProf.metadata });
-      }
-
-      setNotice({
-        type: nextState ? "success" : "info",
-        message: nextState
-          ? `Portal login ENABLED for ${profile.name || targetEmail}. Employee can now activate their account and receive login invitations.`
-          : `Portal login DISABLED for ${profile.name || targetEmail}. Account is now restricted to HR PROFILING ONLY.`
-      });
-      setTimeout(() => setNotice(null), 5000);
-    } catch (err) {
-      console.warn("Toggle login notice:", err);
-      setNotice({ type: "error", message: "Failed to update login access. Please try again." });
-      setTimeout(() => setNotice(null), 4000);
-    } finally {
-      setIsTogglingLoginId(null);
-    }
-  };
-
-  // Master toggle to enable or disable portal logins for ALL employees (HRMD / Head Office)
-  const handleToggleAllLogins = async (nextState) => {
-    const totalCount = managedProfiles.length;
-    if (totalCount === 0) return;
-
-    const confirmMsg = nextState
-      ? `Are you sure you want to ENABLE portal login access for ALL ${totalCount} employees in the directory?\n\nThey will be permitted to activate accounts and sign in to HRHub.`
-      : `Are you sure you want to restrict ALL ${totalCount} employees to HR PROFILING ONLY?\n\nPortal login and account activation will be disabled. Only Central HRMD will have portal access.`;
-
-    if (!window.confirm(confirmMsg)) return;
-
-    setIsTogglingAllLogins(true);
-    try {
-      await updateAllStoredEmployeesLoginAccess(nextState);
-      if (onRefresh) onRefresh();
-      setNotice({
-        type: nextState ? "success" : "info",
-        message: nextState
-          ? `Portal login successfully ENABLED for all ${totalCount} profiled employees!`
-          : `All profiled employees successfully restricted to HR PROFILING ONLY.`
-      });
-      setTimeout(() => setNotice(null), 5000);
-    } catch (err) {
-      console.warn("Bulk login toggle error:", err);
-      setNotice({ type: "error", message: "Failed to update all employee login permissions." });
-      setTimeout(() => setNotice(null), 4000);
-    } finally {
-      setIsTogglingAllLogins(false);
-    }
-  };
-
   // Open Enhanced Employee Profiling Modal in Edit Mode (Available for all accounts)
   const handleOpenEdit = (profile) => {
     setProfileModalMode("edit");
@@ -499,11 +410,15 @@ export default function EmployeeDirectoryPanel({
         company: newEmployee.company,
         role: newEmployee.role,
         branch: assignedBranch,
+        is_preregistered: true,
+        login_enabled: true,
         created_by: "admin@hrhub.com",
         created_by_email: "admin@hrhub.com",
         metadata: {
           created_by: "admin@hrhub.com",
-          pre_registered: true
+          pre_registered: true,
+          is_preregistered: true,
+          login_enabled: true
         },
         created_at: new Date().toISOString()
       };
@@ -702,14 +617,14 @@ export default function EmployeeDirectoryPanel({
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5 shrink-0 flex-wrap">
+        <div className="flex items-center gap-2 shrink-0 flex-nowrap overflow-x-auto max-w-full">
           <button
             type="button"
             onClick={onRefresh}
             title="Refresh Directory"
-            className="p-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 hover:text-slate-900 transition cursor-pointer shadow-2xs"
+            className="p-2 sm:p-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 hover:text-slate-900 transition cursor-pointer shadow-2xs shrink-0"
           >
-            <RefreshCw size={15} className={loading ? "animate-spin text-emerald-600" : ""} />
+            <RefreshCw size={14} className={loading ? "animate-spin text-emerald-600" : ""} />
           </button>
 
           {/* Permissions Matrix: Exclusively for Head Office HR Administrator */}
@@ -718,10 +633,10 @@ export default function EmployeeDirectoryPanel({
               type="button"
               onClick={onOpenPermissions}
               title="Configure Role & Permissions Matrix"
-              className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 hover:text-slate-900 text-xs font-bold transition cursor-pointer shadow-2xs"
+              className="inline-flex items-center gap-1.5 px-3 py-2 sm:py-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 hover:text-slate-900 text-xs font-bold transition cursor-pointer shadow-2xs shrink-0"
             >
-              <Sliders size={14} className="text-emerald-600" />
-              <span>Permissions Matrix</span>
+              <Sliders size={14} className="text-emerald-600 shrink-0" />
+              <span className="hidden md:inline">Permissions</span>
             </button>
           )}
 
@@ -730,36 +645,11 @@ export default function EmployeeDirectoryPanel({
             <button
               type="button"
               onClick={handleOpenAddModal}
-              className="inline-flex items-center gap-2 bg-slate-900 hover:bg-slate-800 text-white px-4 py-2.5 rounded-xl font-bold text-xs shadow-sm transition cursor-pointer"
+              title="Pre-Register Employee (Grants HRHub Login Access)"
+              className="inline-flex items-center gap-1.5 bg-slate-900 hover:bg-slate-800 text-white px-3 sm:px-3.5 py-2 sm:py-2.5 rounded-xl font-bold text-xs shadow-sm transition cursor-pointer shrink-0"
             >
-              <UserPlus size={15} className="text-emerald-400" />
-              <span>Pre-Register Employee</span>
-            </button>
-          )}
-
-          {/* Master Portal Login Access Toggle (Head Office / HRMD Only) */}
-          {isHeadOffice && (
-            <button
-              type="button"
-              onClick={() => handleToggleAllLogins(!isAllLoginsEnabled)}
-              disabled={isTogglingAllLogins || managedProfiles.length === 0}
-              title={isAllLoginsEnabled
-                ? "Click to restrict ALL employees to HR Profiling Only (Disable Portal Logins)"
-                : "Click to enable Portal Login for ALL profiled employees"}
-              className={`inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl border text-xs font-bold transition cursor-pointer shadow-2xs ${
-                isAllLoginsEnabled
-                  ? "bg-emerald-50 border-emerald-300 text-emerald-800 hover:bg-emerald-100"
-                  : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50"
-              }`}
-            >
-              <KeyRound size={14} className={isAllLoginsEnabled ? "text-emerald-700" : "text-slate-400"} />
-              <span className="hidden sm:inline">Portal Logins:</span>
-              <span>{isAllLoginsEnabled ? "All Enabled" : "Profiling Focus"}</span>
-              <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${
-                isAllLoginsEnabled ? "bg-emerald-200/80 text-emerald-950" : "bg-slate-100 text-slate-600"
-              }`}>
-                {loginEnabledCount}/{managedProfiles.length}
-              </span>
+              <UserPlus size={14} className="text-emerald-400 shrink-0" />
+              <span className="hidden sm:inline">Pre-Register</span>
             </button>
           )}
 
@@ -767,10 +657,11 @@ export default function EmployeeDirectoryPanel({
           <button
             type="button"
             onClick={handleOpenAddProfileModal}
-            className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2.5 rounded-xl font-bold text-xs shadow-sm shadow-emerald-600/20 transition cursor-pointer"
+            title="Add Employee Profile (Personnel 201 File)"
+            className="inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white px-3 sm:px-3.5 py-2 sm:py-2.5 rounded-xl font-bold text-xs shadow-sm shadow-emerald-600/20 transition cursor-pointer shrink-0"
           >
-            <UserPlus size={15} />
-            <span>Add Employee Profile</span>
+            <UserPlus size={14} className="shrink-0" />
+            <span>Add Profile</span>
           </button>
         </div>
       </div>
@@ -1195,34 +1086,6 @@ export default function EmployeeDirectoryPanel({
                   </div>
                 </div>
 
-                {/* Portal Login Permission Toggle (Exclusive for HRMD / Head Office) */}
-                {(isHRMD || isHeadOffice) && (
-                  <div className="px-4.5 py-2.5 bg-slate-50/90 border-t border-slate-100 flex items-center justify-between text-xs">
-                    <div className="flex items-center gap-1.5">
-                      <KeyRound size={13} className={isLoginEnabled ? "text-emerald-600" : "text-slate-400"} />
-                      <span className="font-bold text-slate-700 text-[11px]">Portal Login</span>
-                      <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded-full ${isLoginEnabled ? "bg-emerald-100 text-emerald-800" : "bg-slate-200 text-slate-600"}`}>
-                        {isLoginEnabled ? "Allowed" : "Profiling Only"}
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => handleToggleEmployeeLogin(prof)}
-                      disabled={isTogglingLoginId === (prof.id || prof.email)}
-                      className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                        isLoginEnabled ? "bg-emerald-600" : "bg-slate-300"
-                      }`}
-                      title={isLoginEnabled ? "Click to revoke portal login access (Profiling Only)" : "Click to allow portal login"}
-                    >
-                      <span
-                        className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                          isLoginEnabled ? "translate-x-4" : "translate-x-0"
-                        }`}
-                      />
-                    </button>
-                  </div>
-                )}
-
                 {/* Card Action Footer */}
                 <div className="px-4.5 py-3 bg-white border-t border-slate-100 flex items-center justify-between gap-2">
                   {canManageProfiles ? (
@@ -1260,8 +1123,8 @@ export default function EmployeeDirectoryPanel({
                       </button>
                     )}
 
-                    {/* Invite & Copy Setup instructions ONLY appear if portal login is enabled! */}
-                    {isLoginEnabled ? (
+                    {/* Invite & Copy Setup instructions ONLY appear if account has portal login access! */}
+                    {isLoginEnabled && (
                       <>
                         <button
                           type="button"
@@ -1282,10 +1145,6 @@ export default function EmployeeDirectoryPanel({
                           {copiedId === prof.id ? <Check size={13} className="text-emerald-600" /> : <Copy size={13} />}
                         </button>
                       </>
-                    ) : (
-                      <span className="text-[10px] text-slate-400 font-semibold px-2 py-1 bg-slate-50 border border-slate-100 rounded-lg">
-                        Profiling Only
-                      </span>
                     )}
 
                     {canManageProfiles && (
@@ -1315,7 +1174,7 @@ export default function EmployeeDirectoryPanel({
                   <th className="py-3 px-4">Organization & Branch</th>
                   <th className="py-3 px-4">Role</th>
                   <th className="py-3 px-4">Status</th>
-                  <th className="py-3 px-4">Portal Access</th>
+                  <th className="py-3 px-4">Access</th>
                   <th className="py-3 px-4 text-right">Actions</th>
                 </tr>
               </thead>
@@ -1398,35 +1257,14 @@ export default function EmployeeDirectoryPanel({
                         </div>
                       </td>
                       <td className="py-3 px-4">
-                        {isHeadOffice ? (
-                          <div className="flex items-center gap-2">
-                            <button
-                              type="button"
-                              onClick={() => handleToggleEmployeeLogin(prof)}
-                              disabled={isTogglingLoginId === (prof.id || prof.email)}
-                              className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                                isLoginEnabled ? "bg-emerald-600" : "bg-slate-300"
-                              }`}
-                              title={isLoginEnabled ? "Click to restrict to HR Profiling Only" : "Click to grant portal login"}
-                            >
-                              <span
-                                className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                                  isLoginEnabled ? "translate-x-4" : "translate-x-0"
-                                }`}
-                              />
-                            </button>
-                            <span className={`text-[10px] font-bold ${isLoginEnabled ? "text-emerald-700" : "text-slate-500"}`}>
-                              {isLoginEnabled ? "Allowed" : "Profiling"}
-                            </span>
-                          </div>
-                        ) : (
-                          <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                            isLoginEnabled ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-slate-100 text-slate-600 border border-slate-200"
-                          }`}>
-                            {isLoginEnabled ? <KeyRound size={10} className="text-emerald-600" /> : <Lock size={10} className="text-slate-500" />}
-                            <span>{isLoginEnabled ? "Allowed" : "Profiling Only"}</span>
-                          </span>
-                        )}
+                        <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-0.5 rounded-full border ${
+                          isLoginEnabled
+                            ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                            : "bg-slate-100 text-slate-600 border-slate-200"
+                        }`}>
+                          {isLoginEnabled ? <KeyRound size={10} className="text-emerald-600" /> : <Lock size={10} className="text-slate-500" />}
+                          <span>{isLoginEnabled ? "Login Access" : "Profiling Only"}</span>
+                        </span>
                       </td>
                       <td className="py-3 px-4 text-right">
                         <div className="flex items-center justify-end gap-1.5">
@@ -1452,7 +1290,7 @@ export default function EmployeeDirectoryPanel({
                               <Edit3 size={13} />
                             </button>
                           )}
-                          {isLoginEnabled ? (
+                          {isLoginEnabled && (
                             <>
                               <button
                                 type="button"
@@ -1471,10 +1309,6 @@ export default function EmployeeDirectoryPanel({
                                 {copiedId === prof.id ? <Check size={13} className="text-emerald-600" /> : <Copy size={13} />}
                               </button>
                             </>
-                          ) : (
-                            <span className="text-[10px] text-slate-400 font-semibold px-1.5 py-0.5 bg-slate-50 border border-slate-100 rounded">
-                              Profiling
-                            </span>
                           )}
                           {canManageProfiles && (
                             <button

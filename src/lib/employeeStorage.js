@@ -92,16 +92,41 @@ export function isEmployeeDeleted(emailOrId) {
 }
 
 /**
- * Helper to determine if an employee profile is authorized for portal login
- * Profiled employees are false by default (profiling only).
+ * Helper to determine if an employee profile is authorized for portal login.
+ * - Accounts input from Pre-Register button automatically have portal login access.
+ * - HR Administrator and management accounts automatically have portal login access.
+ * - Profiled employees from Employee Directory are restricted to HR profiling only.
  */
 export function isEmployeeLoginEnabled(emp) {
   if (!emp) return false;
   const email = (emp.email || "").trim().toLowerCase();
-  if (email === "admin@hrhub.com") return true;
+  if (email === "admin@hrhub.com" || email === "caquennie6@gmail.com") return true;
+
+  // 1. Pre-registered accounts automatically have portal login access
+  if (
+    emp.is_preregistered ||
+    emp.metadata?.is_preregistered ||
+    emp.metadata?.pre_registered ||
+    emp.status === "pre_registered"
+  ) {
+    return true;
+  }
+
+  // 2. HR administrator accounts automatically have portal login access
+  const role = (emp.role || "").trim().toLowerCase();
+  if (
+    role.startsWith("hr admin") ||
+    role === "hr administrator" ||
+    role === "super administrator" ||
+    role === "hr manager"
+  ) {
+    return true;
+  }
+
+  // 3. Explicit login_enabled flags if present
   if (typeof emp.login_enabled === "boolean") return emp.login_enabled;
   if (emp.metadata && typeof emp.metadata.login_enabled === "boolean") return emp.metadata.login_enabled;
-  if (emp.status === "pre_registered") return true;
+
   return false;
 }
 
