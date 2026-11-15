@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import {
   MapPin, ShieldAlert, CheckCircle2, AlertTriangle, Layers, Navigation,
   Search, Plus, Eye, RefreshCw, Compass, Info, X, ChevronRight,
@@ -32,6 +32,21 @@ import MANDAUE_POIS from "../data/mandauePOIs.json";
 // Live Source API Configuration & Pre-Cached Agents Data
 import { API_CONFIG } from "../config/apiConfig";
 import SOURCE_AGENTS_CACHE from "../data/sourceApiAgentsCache.json";
+import { getStlAgents, getStlSupervisors, fetchLiveStlData, matchStlCanonicalName } from "../lib/stlApiLiveService";
+import {
+  MAGUINDANAO_SECTORS,
+  MAGUINDANAO_CHECKPOINTS,
+  ILIGAN_SECTORS,
+  ILIGAN_CHECKPOINTS,
+  COTABATO_SECTORS,
+  COTABATO_CHECKPOINTS,
+  MULTI_ENTITY_PERIMETER_ROUTES,
+  MULTI_ENTITY_ALL_POIS,
+  getSectorPerimeterRoute,
+  getTerritoryPOIs,
+  detectSectorInTerritory
+} from "../data/multiEntityGeoData";
+import { isGlobalAccessUser, getUserAssignedStlEntity } from "../lib/companyEntities";
 
 // Official mapping between Barangay Circuit IDs and Source API brgyId
 export const BARANGAY_API_IDS = {
@@ -215,11 +230,18 @@ function distToPolygon(point, vs) {
   return Math.sqrt(minD2);
 }
 
-// High-precision Barangay detector from GPS Coordinates (Snaps to all 27 cadastral polygons)
+// High-precision Barangay detector from GPS Coordinates (Snaps to all STL territory sectors & cadastral polygons)
 export function detectBarangayFromCoords(lat, lng) {
   const numLat = parseFloat(lat);
   const numLng = parseFloat(lng);
   if (isNaN(numLat) || isNaN(numLng)) return null;
+
+  // 0. Check Multi-Entity STL Territories (Maguindanao, Iligan/Lanao, Cotabato City)
+  const multiSector = detectSectorInTerritory(numLat, numLng);
+  if (multiSector) {
+    return multiSector;
+  }
+
   const pt = [numLat, numLng];
 
   // 1. Strict containment in official cadastral survey polygons
@@ -503,7 +525,22 @@ export const ALL_27_BARANGAYS = [
   ...INTERIOR_BARANGAYS.map((b, idx) => ({ ...b, step: 16 + idx + 1, isEdge: false }))
 ];
 
-export default function OperationsGeoTaggingPanel({ onClose }) {
+export default function OperationsGeoTaggingPanel({ onClose, currentUser = null }) {
+  const activeUser = useMemo(() => {
+    if (currentUser) return currentUser;
+    try {
+      const raw = localStorage.getItem("hrhub_auth_user");
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  }, [currentUser]);
+
+  const userEntityScope = useMemo(() => {
+    return getUserAssignedStlEntity(activeUser);
+  }, [activeUser]);
+
+  const isGlobalUser = !userEntityScope;
   const mapContainerRef = useRef(null);
   const leafletMapRef = useRef(null);
   const layersGroupRef = useRef(null);
@@ -569,6 +606,77 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
   // Copied coordinate toast state
   const [copiedText, setCopiedText] = useState(null);
 
+  // Multi-Entity Territory Selector (STL Operating Sectors Only)
+  const [selectedTerritory, setSelectedTerritory] = useState(() => {
+    const scope = getUserAssignedStlEntity(activeUser);
+    return scope && !scope.isNonStl ? scope.territoryKey : "all";
+  });
+
+  // Enforce territory locking for scoped branch users (e.g. Imperial Gaming sees only Imperial)
+  useEffect(() => {
+    if (userEntityScope && !userEntityScope.isNonStl && selectedTerritory !== userEntityScope.territoryKey) {
+      handleSelectTerritory(userEntityScope.territoryKey);
+    }
+  }, [userEntityScope, selectedTerritory]);
+
+  const TERRITORY_CONFIG = {
+    all: { name: "All STL Territories", coords: [10.3440, 123.9380], zoom: 12, short: "All STL Territories" },
+    lucky_betplay: { name: "Lucky Betplay (Mandaue Sector)", coords: [10.3440, 123.9380], zoom: 13, short: "Lucky Betplay" },
+    five_a: { name: "5A Royal Gaming (Maguindanao)", coords: [7.1850, 124.2380], zoom: 12, short: "5A Royal" },
+    glowing: { name: "Glowing Fortune (Iligan Sector)", coords: [8.2280, 124.2452], zoom: 13, short: "Glowing Fortune" },
+    imperial: { name: "Imperial Gaming (Cotabato Sector)", coords: [7.2236, 124.2464], zoom: 13, short: "Imperial Gaming" }
+  };
+
+  const activeCheckpoints = useMemo(() => {
+    if (selectedTerritory === "five_a") return MAGUINDANAO_CHECKPOINTS;
+    if (selectedTerritory === "glowing") return ILIGAN_CHECKPOINTS;
+    if (selectedTerritory === "imperial") return COTABATO_CHECKPOINTS;
+    return EDGE_BARANGAYS_CIRCUIT;
+  }, [selectedTerritory]);
+
+  const activeSectorsList = useMemo(() => {
+    if (selectedTerritory === "five_a") return MAGUINDANAO_SECTORS;
+    if (selectedTerritory === "glowing") return ILIGAN_SECTORS;
+    if (selectedTerritory === "imperial") return COTABATO_SECTORS;
+    return ALL_27_BARANGAYS;
+  }, [selectedTerritory]);
+
+  const activeRouteCoords = useMemo(() => {
+    if (selectedTerritory === "five_a") {
+      const pts = MAGUINDANAO_CHECKPOINTS.map((c) => c.coords);
+      return [...pts, pts[0]];
+    }
+    if (selectedTerritory === "glowing") {
+      const pts = ILIGAN_CHECKPOINTS.map((c) => c.coords);
+      return [...pts, pts[0]];
+    }
+    if (selectedTerritory === "imperial") {
+      const pts = COTABATO_CHECKPOINTS.map((c) => c.coords);
+      return [...pts, pts[0]];
+    }
+    return SNAPPED_EDGE_ROUTE_COORDS;
+  }, [selectedTerritory]);
+
+  const handleSelectTerritory = (key) => {
+    setSelectedTerritory(key);
+    const cfg = TERRITORY_CONFIG[key];
+    if (cfg && leafletMapRef.current) {
+      leafletMapRef.current.flyTo(cfg.coords, cfg.zoom, { duration: 1.2 });
+    }
+    const nextCheckpoints =
+      key === "five_a"
+        ? MAGUINDANAO_CHECKPOINTS
+        : key === "glowing"
+        ? ILIGAN_CHECKPOINTS
+        : key === "imperial"
+        ? COTABATO_CHECKPOINTS
+        : EDGE_BARANGAYS_CIRCUIT;
+    setSelectedEdgeBarangay(nextCheckpoints[0]);
+    setActiveBarangayCircuit(null);
+    setViewMode("city");
+    setIsCityDriving(false);
+  };
+
   // Driving Simulation States
   const [isCityDriving, setIsCityDriving] = useState(false);
   const [cityRouteIndex, setCityRouteIndex] = useState(0);
@@ -587,9 +695,9 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
     setTimeout(() => setCopiedText(null), 2500);
   };
 
-  // Source API Agents & Supervisors State
-  const [apiAgents, setApiAgents] = useState(() => SOURCE_AGENTS_CACHE?.agents || []);
-  const [apiSupervisors, setApiSupervisors] = useState(() => SOURCE_AGENTS_CACHE?.supervisors || []);
+  // Source API Agents & Supervisors State (Real STL APIs)
+  const [apiAgents, setApiAgents] = useState(() => getStlAgents());
+  const [apiSupervisors, setApiSupervisors] = useState(() => getStlSupervisors());
   const [apiBarangays, setApiBarangays] = useState(() => SOURCE_AGENTS_CACHE?.barangays || []);
   const [isAgentsLoading, setIsAgentsLoading] = useState(false);
   const [isAgentsModalOpen, setIsAgentsModalOpen] = useState(false);
@@ -603,22 +711,12 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
     const fetchLiveAgents = async () => {
       try {
         setIsAgentsLoading(true);
-        const token = API_CONFIG.AGENTS_TOKEN;
-        if (!token) return;
-        const headers = { Accept: "application/json", Authorization: `Bearer ${token}` };
-        const [agentsRes, supRes, bgyRes] = await Promise.all([
-          fetch(API_CONFIG.AGENTS_URL, { headers }),
-          fetch(API_CONFIG.SUPERVISOR_URL, { headers }),
-          fetch(API_CONFIG.BARANGAYS_URL, { headers })
-        ]);
-        if (agentsRes.ok && supRes.ok && bgyRes.ok && isMounted) {
-          const [aData, sData, bData] = await Promise.all([agentsRes.json(), supRes.json(), bgyRes.json()]);
-          const aList = Array.isArray(aData) ? aData : (aData?.data || aData?.agents || []);
-          const sList = Array.isArray(sData) ? sData : (sData?.data || sData?.supervisors || []);
-          const bList = Array.isArray(bData) ? bData : (bData?.data || bData?.barangays || []);
-          if (aList.length > 0) setApiAgents(aList);
-          if (sList.length > 0) setApiSupervisors(sList);
-          if (bList.length > 0) setApiBarangays(bList);
+        const res = await fetchLiveStlData();
+        if (isMounted && res && res.agents && res.agents.length > 0) {
+          setApiAgents(res.agents);
+        }
+        if (isMounted && res && res.supervisors && res.supervisors.length > 0) {
+          setApiSupervisors(res.supervisors);
         }
       } catch (err) {
         console.warn("Using offline / cached source agents:", err);
@@ -630,8 +728,27 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
     return () => { isMounted = false; };
   }, []);
 
-  const getSupervisorName = (supId) => {
-    const s = apiSupervisors.find(x => String(x.id) === String(supId));
+  const getSupervisorName = (supId, agentOrCompany = null) => {
+    if (!supId && supId !== 0) return "Unassigned";
+
+    let companyRaw = "";
+    if (typeof agentOrCompany === "string") {
+      companyRaw = agentOrCompany;
+    } else if (agentOrCompany && typeof agentOrCompany === "object") {
+      companyRaw = agentOrCompany.company || agentOrCompany.companyName || agentOrCompany.companyShort || "";
+    } else if (selectedTerritory && selectedTerritory !== "all") {
+      companyRaw = TERRITORY_CONFIG[selectedTerritory]?.name || "";
+    }
+
+    if (companyRaw) {
+      const canonicalComp = matchStlCanonicalName(companyRaw);
+      const matched = (apiSupervisors || []).find(
+        (x) => String(x.id) === String(supId) && matchStlCanonicalName(x.company || x.companyName || x.companyShort) === canonicalComp
+      );
+      if (matched) return matched.fullName || matched.username || `Supervisor #${supId}`;
+    }
+
+    const s = (apiSupervisors || []).find((x) => String(x.id) === String(supId));
     return s?.fullName || s?.username || (supId ? `Supervisor #${supId}` : "Unassigned");
   };
 
@@ -640,15 +757,88 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
     return b?.name || `Barangay #${bId}`;
   };
 
+  // Agents filtered by selected STL territory
+  const territoryAgents = useMemo(() => {
+    if (selectedTerritory === "five_a") {
+      return apiAgents.filter((a) => {
+        const c = matchStlCanonicalName(a.company);
+        return c.includes("5A") || c.includes("Royal");
+      });
+    }
+    if (selectedTerritory === "glowing") {
+      return apiAgents.filter((a) => {
+        const c = matchStlCanonicalName(a.company);
+        return c.includes("Glowing") || c.includes("Fortune");
+      });
+    }
+    if (selectedTerritory === "imperial") {
+      return apiAgents.filter((a) => {
+        const c = matchStlCanonicalName(a.company);
+        return c.includes("Imperial");
+      });
+    }
+    if (selectedTerritory === "lucky_betplay") {
+      return apiAgents.filter((a) => {
+        const c = matchStlCanonicalName(a.company);
+        return c.includes("Lucky") || c.includes("Betplay");
+      });
+    }
+    return apiAgents;
+  }, [apiAgents, selectedTerritory]);
+
   const getAgentsForBarangayId = (brgyCircuitId) => {
     const validIds = BARANGAY_API_IDS[brgyCircuitId] || [];
-    return apiAgents.filter(a => validIds.includes(String(a.brgyId)));
+    if (validIds.length > 0) {
+      return territoryAgents.filter((a) => validIds.includes(String(a.brgyId)));
+    }
+    const cleanId = String(brgyCircuitId || "").toLowerCase();
+    return territoryAgents.filter((a) => {
+      const loc = `${a.location || ""} ${a.address || ""} ${a.outlet || ""}`.toLowerCase();
+      if (cleanId.includes("dos") || cleanId.includes("sinsuat")) {
+        return loc.includes("dos") || loc.includes("sinsuat") || loc.includes("awang") || loc.includes("dalican");
+      }
+      if (cleanId.includes("kudarat") || cleanId.includes("nuling")) {
+        return loc.includes("kudarat") || loc.includes("nuling") || loc.includes("simuay");
+      }
+      if (cleanId.includes("parang")) return loc.includes("parang");
+      if (cleanId.includes("mastura")) return loc.includes("mastura") || loc.includes("tambu");
+      if (cleanId.includes("matanog")) return loc.includes("matanog") || loc.includes("sarmiento");
+      if (cleanId.includes("barira")) return loc.includes("barira");
+      if (cleanId.includes("buldon")) return loc.includes("buldon");
+      if (cleanId.includes("south_upi")) return loc.includes("south upi") || loc.includes("timanan");
+      if (cleanId.includes("upi")) return loc.includes("upi") || loc.includes("nuro");
+      if (cleanId.includes("dbs")) return loc.includes("dbs") || loc.includes("blah");
+      if (cleanId.includes("northern_kabuntalan")) return loc.includes("northern") || loc.includes("sabaken");
+      if (cleanId.includes("kabuntalan")) return loc.includes("kabuntalan") || loc.includes("tumbao");
+
+      if (cleanId.includes("tibanga")) return loc.includes("tibanga") || loc.includes("iit");
+      if (cleanId.includes("tubod")) return loc.includes("tubod");
+      if (cleanId.includes("suarez")) return loc.includes("suarez");
+      if (cleanId.includes("palao") || cleanId.includes("pala-o")) return loc.includes("palao") || loc.includes("pala-o");
+      if (cleanId.includes("hinaplanon")) return loc.includes("hinaplanon") || loc.includes("mandulog");
+      if (cleanId.includes("kiwalan")) return loc.includes("kiwalan");
+      if (cleanId.includes("tambacan")) return loc.includes("tambacan") || loc.includes("ibjt");
+      if (cleanId.includes("saray")) return loc.includes("saray");
+      if (cleanId.includes("poblacion_iligan")) return loc.includes("poblacion") || loc.includes("quezon");
+      if (cleanId.includes("buruun") || cleanId.includes("buru-un")) return loc.includes("buruun") || loc.includes("buru-un") || loc.includes("cristina");
+      if (cleanId.includes("dalipuga")) return loc.includes("dalipuga");
+      if (cleanId.includes("baloi")) return loc.includes("baloi");
+      if (cleanId.includes("linamon")) return loc.includes("linamon");
+
+      if (cleanId.includes("rosary")) return loc.includes("rosary") || loc.includes("rh");
+      if (cleanId.includes("tamontaka")) return loc.includes("tamontaka");
+      if (cleanId.includes("kalanganan")) return loc.includes("kalanganan");
+      if (cleanId.includes("bagua")) return loc.includes("bagua");
+      if (cleanId.includes("poblacion")) return loc.includes("poblacion");
+
+      return loc.includes(cleanId);
+    });
   };
 
   const activeBarangayAgents = useMemo(() => {
     if (!activeBarangayCircuit) return [];
     return getAgentsForBarangayId(activeBarangayCircuit.id);
-  }, [activeBarangayCircuit, apiAgents]);
+  }, [activeBarangayCircuit, territoryAgents]);
 
   const activeBarangayAgentsFiltered = useMemo(() => {
     if (!brgyAgentSearch.trim()) return activeBarangayAgents;
@@ -662,10 +852,9 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
   }, [activeBarangayAgents, brgyAgentSearch]);
 
   const filteredModalAgents = useMemo(() => {
-    let list = apiAgents;
+    let list = territoryAgents;
     if (agentsModalBarangayFilter !== "all") {
-      const validIds = BARANGAY_API_IDS[agentsModalBarangayFilter] || [];
-      list = list.filter(a => validIds.includes(String(a.brgyId)));
+      list = getAgentsForBarangayId(agentsModalBarangayFilter);
     }
     if (agentsModalSearch.trim()) {
       const q = agentsModalSearch.toLowerCase().trim();
@@ -675,11 +864,11 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
         (a.outlet && a.outlet.toLowerCase().includes(q)) ||
         (a.contactNumber && a.contactNumber.includes(q)) ||
         (a.address && a.address.toLowerCase().includes(q)) ||
-        (getSupervisorName(a.supervisor).toLowerCase().includes(q))
+        (getSupervisorName(a.supervisor, a).toLowerCase().includes(q))
       );
     }
     return list;
-  }, [apiAgents, agentsModalBarangayFilter, agentsModalSearch]);
+  }, [territoryAgents, agentsModalBarangayFilter, agentsModalSearch]);
 
   // ================= AIRTIGHT GEOTAGGING VISIBILITY BROADCAST =================
   // Strictly hide floating AI Buddy whenever GeoTagging panel is active
@@ -850,7 +1039,7 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
       const name = String(ag.fullName || "").toLowerCase();
       const username = String(ag.username || "").toLowerCase();
       const outlet = String(ag.outlet || "").toLowerCase();
-      const supervisor = String(getSupervisorName(ag.supervisor) || "").toLowerCase();
+      const supervisor = String(getSupervisorName(ag.supervisor, ag) || "").toLowerCase();
       const contact = String(ag.contactNumber || "").replace(/[^0-9]/g, "");
       const brgy = String(ag.brgyId || "");
       const id = String(ag.id || "");
@@ -908,11 +1097,60 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
     });
   }, [activeBarangayCircuit, allTaggedAgentsList]);
 
-  // Tagged booths belonging to the currently active barangay
+  // Classify a booth into its operating STL territory (Lucky Betplay, 5A Royal, Glowing Fortune, Imperial Gaming)
+  const getBoothTerritoryKey = useCallback((booth) => {
+    if (!booth) return "lucky_betplay";
+    if (booth.territoryKey && booth.territoryKey !== "all") return booth.territoryKey;
+    const comp = (booth.company || booth.companyName || "").toLowerCase();
+    if (comp.includes("5a") || comp.includes("royal") || comp.includes("maguindanao")) return "five_a";
+    if (comp.includes("glowing") || comp.includes("fortune") || comp.includes("iligan")) return "glowing";
+    if (comp.includes("imperial") || comp.includes("cotabato")) return "imperial";
+    if (comp.includes("lucky") || comp.includes("betplay") || comp.includes("mandaue")) return "lucky_betplay";
+
+    const bId = String(booth.barangayId || "").toLowerCase();
+    if (MAGUINDANAO_SECTORS.some(s => s.id === bId)) return "five_a";
+    if (ILIGAN_SECTORS.some(s => s.id === bId)) return "glowing";
+    if (COTABATO_SECTORS.some(s => s.id === bId)) return "imperial";
+    if (BARANGAY_API_IDS[bId] || ALL_27_BARANGAYS.some(b => b.id === bId)) return "lucky_betplay";
+
+    const coords = booth.coords || [booth.lat, booth.lng];
+    if (coords && coords.length >= 2) {
+      const lat = parseFloat(coords[0]);
+      const lng = parseFloat(coords[1]);
+      if (!isNaN(lat) && !isNaN(lng)) {
+        if (lat >= 10.25 && lat <= 10.45 && lng >= 123.85 && lng <= 124.05) return "lucky_betplay";
+        if (lat >= 8.10 && lat <= 8.35 && lng >= 124.15 && lng <= 124.35) return "glowing";
+        if (lat >= 7.18 && lat <= 7.26 && lng >= 124.20 && lng <= 124.27) return "imperial";
+        if (lat >= 6.80 && lat <= 7.65 && lng >= 123.90 && lng <= 124.60) return "five_a";
+      }
+    }
+    return "lucky_betplay";
+  }, []);
+
+  // Filter user-tagged booths strictly by the currently selected entity / territory
+  const territoryTaggedBooths = useMemo(() => {
+    if (selectedTerritory === "all") return userTaggedBooths;
+    return (userTaggedBooths || []).filter((b) => getBoothTerritoryKey(b) === selectedTerritory);
+  }, [userTaggedBooths, selectedTerritory, getBoothTerritoryKey]);
+
+  // Tagged booths belonging strictly to the currently active barangay / sector
   const activeBarangayTaggedBooths = useMemo(() => {
-    if (!activeBarangayCircuit) return userTaggedBooths;
-    return userTaggedBooths.filter((b) => b.barangayId === activeBarangayCircuit.id);
-  }, [activeBarangayCircuit, userTaggedBooths]);
+    if (!activeBarangayCircuit) return territoryTaggedBooths;
+    const bRoute = getSectorPerimeterRoute(activeBarangayCircuit.id, BARANGAY_PERIMETER_ROUTES);
+    const poly = bRoute?.boundaryPolygon;
+
+    return territoryTaggedBooths.filter((b) => {
+      if (b.barangayId === activeBarangayCircuit.id) return true;
+      if (b.barangayName && activeBarangayCircuit.name && (
+        b.barangayName.toLowerCase().includes(activeBarangayCircuit.name.toLowerCase()) ||
+        activeBarangayCircuit.name.toLowerCase().includes(b.barangayName.toLowerCase())
+      )) return true;
+      if (poly && poly.length > 2 && b.coords && b.coords.length >= 2) {
+        if (pointInPolygon(b.coords, poly)) return true;
+      }
+      return false;
+    });
+  }, [activeBarangayCircuit, territoryTaggedBooths]);
 
   // Open Tag Booth Modal with optional pre-filled coordinates
   const handleOpenBoothModal = (prefilledCoords = null, prefilledBarangay = null) => {
@@ -939,13 +1177,13 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
     const initialDetected = (lat && lng) ? detectBarangayFromCoords(lat, lng) : null;
     setDetectedBarangayResult(initialDetected);
 
-    const nextBoothNum = String(userTaggedBooths.length + 1).padStart(3, "0");
+    const nextBoothNum = String(territoryTaggedBooths.length + 1).padStart(3, "0");
 
     setBoothFormData({
       name: nextBoothNum,
       latStr: lat,
       lngStr: lng,
-      address: initialDetected ? `Brgy. ${initialDetected.name}, Mandaue City` : "",
+      address: initialDetected ? (initialDetected.address || `Brgy. ${initialDetected.name}`) : "",
       selectedAgentId: "",
       tellerName: "",
       supervisor: "",
@@ -994,7 +1232,7 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
       if (!boothFormData.address.trim()) {
         setBoothFormData((prev) => ({
           ...prev,
-          address: `Brgy. ${detected.name}, Mandaue City`
+          address: detected.address || `Brgy. ${detected.name}`
         }));
       }
       if (!boothFormData.name.trim()) {
@@ -1006,9 +1244,9 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
     } else {
       setDetectedBarangayResult({
         id: "outside",
-        name: "Outside Mandaue City",
+        name: "Outside Operational Territory",
         confidence: "Out of Bounds",
-        detail: "Coordinates do not match any of the 27 Mandaue City barangays. Please check your coordinates."
+        detail: "Coordinates do not match any recognized sector in the active STL territories. Please verify your coordinates."
       });
     }
   };
@@ -1035,11 +1273,18 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
     }
 
     const detected = detectBarangayFromCoords(lat, lng) || {
-      id: "mandaue",
-      name: "Mandaue City Territory",
+      id: activeBarangayCircuit ? activeBarangayCircuit.id : (selectedTerritory || "territory"),
+      name: activeBarangayCircuit ? activeBarangayCircuit.name : (TERRITORY_CONFIG[selectedTerritory]?.name || "Operating Sector"),
       confidence: "Custom Pinned Location",
-      detail: "Coordinates fall within Mandaue City territory."
+      detail: `Coordinates fall within ${TERRITORY_CONFIG[selectedTerritory]?.name || "active STL"} territory.`
     };
+
+    const activeTerritoryKey = selectedTerritory !== "all"
+      ? selectedTerritory
+      : (detected.territoryKey || "lucky_betplay");
+    const activeCompanyName = selectedTerritory !== "all"
+      ? (TERRITORY_CONFIG[selectedTerritory]?.short || TERRITORY_CONFIG[selectedTerritory]?.name || "Lucky Betplay")
+      : (detected.companyName || "Lucky Betplay Corporation");
 
     const newBooth = {
       id: editingBoothId || `booth_${Date.now()}`,
@@ -1052,6 +1297,9 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
       barangayName: detected.name,
       detectionConfidence: detected.confidence,
       detectionDetail: detected.detail,
+      territoryKey: activeTerritoryKey,
+      company: activeCompanyName,
+      companyName: activeCompanyName,
       agentId: boothFormData.selectedAgentId || "",
       tellerName: boothFormData.tellerName.trim(),
       supervisor: boothFormData.supervisor.trim(),
@@ -1174,10 +1422,10 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
     }
 
     const detected = detectBarangayFromCoords(lat, lng) || {
-      id: activeBarangayCircuit ? activeBarangayCircuit.id : "mandaue",
-      name: activeBarangayCircuit ? activeBarangayCircuit.name : "Mandaue City Territory",
+      id: activeBarangayCircuit ? activeBarangayCircuit.id : (selectedTerritory || "territory"),
+      name: activeBarangayCircuit ? activeBarangayCircuit.name : (TERRITORY_CONFIG[selectedTerritory]?.name || "Operating Sector"),
       confidence: "Custom Pinned Location",
-      detail: "Coordinates tagged within Mandaue City boundaries."
+      detail: `Coordinates tagged within ${TERRITORY_CONFIG[selectedTerritory]?.name || "active STL"} boundaries.`
     };
 
     const newTag = {
@@ -1189,7 +1437,7 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
       detectedBarangayName: detected.name,
       confidence: detected.confidence,
       detail: detected.detail,
-      notes: inlineCoordForm.notes.trim() || agent.address || `Brgy. ${detected.name}`,
+      notes: inlineCoordForm.notes.trim() || agent.address || detected.address || `Brgy. ${detected.name}`,
       updatedAt: new Date().toISOString()
     };
 
@@ -1198,6 +1446,9 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
       [agent.id]: newTag
     }));
 
+    const agentTerritoryKey = agent.territoryKey || (selectedTerritory !== "all" ? selectedTerritory : (detected.territoryKey || "lucky_betplay"));
+    const agentCompanyName = agent.company || agent.companyName || (selectedTerritory !== "all" ? (TERRITORY_CONFIG[selectedTerritory]?.short || TERRITORY_CONFIG[selectedTerritory]?.name) : (detected.companyName || "Lucky Betplay Corporation"));
+
     // Mirror to userTaggedBooths
     const newBooth = {
       id: `booth_agent_${agent.id}`,
@@ -1205,14 +1456,17 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
       coords: [lat, lng],
       lat,
       lng,
-      address: inlineCoordForm.notes.trim() || agent.address || `Brgy. ${detected.name}, Mandaue City`,
+      address: inlineCoordForm.notes.trim() || agent.address || detected.address || `Brgy. ${detected.name}`,
       barangayId: detected.id,
       barangayName: detected.name,
       detectionConfidence: detected.confidence,
       detectionDetail: detected.detail,
+      territoryKey: agentTerritoryKey,
+      company: agentCompanyName,
+      companyName: agentCompanyName,
       agentId: agent.id,
       tellerName: agent.fullName,
-      supervisor: getSupervisorName(agent.supervisor),
+      supervisor: getSupervisorName(agent.supervisor, agent),
       contactNumber: agent.contactNumber || "",
       notes: inlineCoordForm.notes.trim(),
       updatedAt: new Date().toISOString()
@@ -1423,8 +1677,8 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
   // Start distance measuring from a chosen kiosk
   const startMeasuringFromKiosk = (booth) => {
     if (!booth) return;
-    if (userTaggedBooths.length < 2) {
-      setCopiedText("At least 2 tagged kiosks are required on the map to measure!");
+    if (territoryTaggedBooths.length < 2) {
+      setCopiedText("At least 2 tagged kiosks are required in this territory to measure!");
       setTimeout(() => setCopiedText(null), 3000);
       return;
     }
@@ -1582,10 +1836,14 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
   useEffect(() => {
     if (!leafletLoaded || !mapContainerRef.current || leafletMapRef.current) return;
 
+    const initConfig = userEntityScope && !userEntityScope.isNonStl
+      ? (TERRITORY_CONFIG[userEntityScope.territoryKey] || TERRITORY_CONFIG.lucky_betplay)
+      : TERRITORY_CONFIG.all;
+
     const map = window.L.map(mapContainerRef.current, {
-      center: [10.3440, 123.9380], // Mandaue City Center
-      zoom: 13,
-      minZoom: 11,
+      center: initConfig.coords,
+      zoom: initConfig.zoom,
+      minZoom: 9,
       maxZoom: 18,
       zoomControl: false
     });
@@ -1613,11 +1871,11 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
       setClickedPoint({ lat, lng });
     });
 
-    // Invalidate size and auto-fit to Mandaue City bounds on mount
+    // Invalidate size and auto-fit to active territory bounds on mount
     const timer = setTimeout(() => {
       map.invalidateSize();
-      if (SNAPPED_EDGE_ROUTE_COORDS && SNAPPED_EDGE_ROUTE_COORDS.length > 0) {
-        const bounds = window.L.latLngBounds(SNAPPED_EDGE_ROUTE_COORDS);
+      if (activeRouteCoords && activeRouteCoords.length > 0) {
+        const bounds = window.L.latLngBounds(activeRouteCoords);
         map.fitBounds(bounds, { padding: [45, 45] });
       }
     }, 200);
@@ -1744,10 +2002,12 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
     const group = layersGroupRef.current;
     group.clearLayers();
 
-    // ================= MODE 1: WHOLE MANDAUE CITY VIEW =================
+    // ================= MODE 1: TERRITORY PERIMETER VIEW =================
     if (viewMode === "city") {
-      // 1. Snapped Road Polyline for All 16 Edge Barangays
-      window.L.polyline(SNAPPED_EDGE_ROUTE_COORDS, {
+      const routePts = activeRouteCoords;
+
+      // 1. Polyline for Territory Perimeter Circuit
+      window.L.polyline(routePts, {
         color: "#064e3b",
         weight: 9,
         opacity: 0.9,
@@ -1755,7 +2015,7 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
         lineJoin: "round"
       }).addTo(group);
 
-      const navLine = window.L.polyline(SNAPPED_EDGE_ROUTE_COORDS, {
+      const navLine = window.L.polyline(routePts, {
         color: "#10b981",
         weight: 5.5,
         opacity: 1.0,
@@ -1763,13 +2023,14 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
         lineJoin: "round"
       }).addTo(group);
 
-      navLine.bindTooltip("Mandaue City Perimeter Circuit (Connecting All 16 Edge Barangays)", {
+      const terrName = TERRITORY_CONFIG[selectedTerritory]?.name || "STL Territory";
+      navLine.bindTooltip(`${terrName} Perimeter Patrol Circuit`, {
         direction: "top",
         permanent: false
       });
 
-      // 2. Compact, Non-Overlapping Pins for 16 Edge Barangays (Clean 28px circular badges with coordinates)
-      EDGE_BARANGAYS_CIRCUIT.forEach((eb) => {
+      // 2. Pins for Active Territory Checkpoints
+      activeCheckpoints.forEach((eb) => {
         const isSelected = selectedEdgeBarangay?.id === eb.id;
 
         const edgeIcon = window.L.divIcon({
@@ -1804,7 +2065,7 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
 
         marker.bindTooltip(`
           <div style="font-family: system-ui, sans-serif; padding: 2px;">
-            <strong>Step ${eb.step}: Brgy. ${eb.name}</strong><br/>
+            <strong>Step ${eb.step}: ${eb.name}</strong><br/>
             <span style="font-family: monospace; font-size: 10px; color: #10b981;">GPS: ${formatGPS(eb.coords)}</span>
           </div>
         `, {
@@ -1819,51 +2080,53 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
         });
       });
 
-      // 3. Subtle Dot Pins for Interior Barangays (Zero text collision)
-      INTERIOR_BARANGAYS.forEach((ib) => {
-        const intIcon = window.L.divIcon({
-          className: "interior-barangay-pin",
-          html: `
-            <div style="
-              width: 14px;
-              height: 14px;
-              background: #0f172a;
-              border: 2px solid #64748b;
-              border-radius: 50%;
-              box-shadow: 0 2px 6px rgba(0,0,0,0.4);
-              cursor: pointer;
-              transform: translate(-50%, -50%);
-              display: flex;
-              align-items: center;
-              justify-content: center;
-            ">
-              <span style="width: 4px; height: 4px; background: #10b981; border-radius: 50%;"></span>
+      // 3. Subtle Dot Pins for Interior Barangays (Mandaue only)
+      if (selectedTerritory === "all" || selectedTerritory === "lucky_betplay") {
+        INTERIOR_BARANGAYS.forEach((ib) => {
+          const intIcon = window.L.divIcon({
+            className: "interior-barangay-pin",
+            html: `
+              <div style="
+                width: 14px;
+                height: 14px;
+                background: #0f172a;
+                border: 2px solid #64748b;
+                border-radius: 50%;
+                box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+                cursor: pointer;
+                transform: translate(-50%, -50%);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+              ">
+                <span style="width: 4px; height: 4px; background: #10b981; border-radius: 50%;"></span>
+              </div>
+            `,
+            iconSize: [14, 14],
+            iconAnchor: [7, 7]
+          });
+
+          const marker = window.L.marker(ib.coords, { icon: intIcon }).addTo(group);
+
+          marker.bindTooltip(`
+            <div style="font-family: system-ui, sans-serif; padding: 2px;">
+              <strong>Brgy. ${ib.name} (Interior Hub)</strong><br/>
+              <span style="font-family: monospace; font-size: 10px; color: #38bdf8;">GPS: ${formatGPS(ib.coords)}</span>
             </div>
-          `,
-          iconSize: [14, 14],
-          iconAnchor: [7, 7]
-        });
+          `, {
+            direction: "top",
+            permanent: false
+          });
 
-        const marker = window.L.marker(ib.coords, { icon: intIcon }).addTo(group);
-
-        marker.bindTooltip(`
-          <div style="font-family: system-ui, sans-serif; padding: 2px;">
-            <strong>Brgy. ${ib.name} (Interior Hub)</strong><br/>
-            <span style="font-family: monospace; font-size: 10px; color: #38bdf8;">GPS: ${formatGPS(ib.coords)}</span>
-          </div>
-        `, {
-          direction: "top",
-          permanent: false
+          marker.on("click", (e) => {
+            window.L.DomEvent.stopPropagation(e);
+            handleSelectBarangayPerimeter(ib.id);
+          });
         });
-
-        marker.on("click", (e) => {
-          window.L.DomEvent.stopPropagation(e);
-          handleSelectBarangayPerimeter(ib.id);
-        });
-      });
+      }
 
       // 4. City Driving Car
-      const currentCityPt = SNAPPED_EDGE_ROUTE_COORDS[cityRouteIndex] || SNAPPED_EDGE_ROUTE_COORDS[0];
+      const currentCityPt = activeRouteCoords[cityRouteIndex] || activeRouteCoords[0];
 
       const carIcon = window.L.divIcon({
         className: "road-car-marker",
@@ -1894,7 +2157,7 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
 
     // ================= MODE 2: DEDICATED INDIVIDUAL BARANGAY PERIMETER VIEW (e.g. CASILI) =================
     if (viewMode === "barangay" && activeBarangayCircuit) {
-      const bRoute = BARANGAY_PERIMETER_ROUTES[activeBarangayCircuit.id];
+      const bRoute = getSectorPerimeterRoute(activeBarangayCircuit.id, BARANGAY_PERIMETER_ROUTES);
       if (!bRoute) return;
 
       // 1. EXACT OFFICIAL ADMINISTRATIVE BOUNDARY POLYGON (100% Precise Territory)
@@ -1993,7 +2256,7 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
             <span>↗</span>
           </a>
           <div style="font-size: 9.5px; color: #047857; font-weight: 800;">
-            ✓ 100% Authorized Under Mandaue City Jurisdiction
+            ✓ 100% Authorized Under ${bRoute.companyName || TERRITORY_CONFIG[selectedTerritory]?.name || "Authorized STL"} Jurisdiction
           </div>
         </div>
       `);
@@ -2031,14 +2294,24 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
     }
 
     // ================= POI LAYER 1: PUBLIC TRANSIT TERMINALS & COMMUTER STATIONS =================
+    const currentPOIs = getTerritoryPOIs(selectedTerritory, MANDAUE_POIS);
     const shouldRenderTerminals = viewMode === "barangay" || showTerminals;
     if (shouldRenderTerminals) {
       const terminalsToRender = viewMode === "barangay" && activeBarangayCircuit
-        ? MANDAUE_POIS.terminals.filter(t => t.barangayId === activeBarangayCircuit.id)
-        : MANDAUE_POIS.terminals;
+        ? (activeBarangayData?.terminals && activeBarangayData.terminals.length > 0
+            ? activeBarangayData.terminals
+            : currentPOIs.terminals.filter(t => t.barangayId === activeBarangayCircuit.id))
+        : currentPOIs.terminals;
 
       terminalsToRender.forEach((term) => {
         const isBelongingToActive = activeBarangayCircuit && term.barangayId === activeBarangayCircuit.id;
+        const authName = term.territoryKey === "five_a"
+          ? "5A Royal Gaming"
+          : term.territoryKey === "glowing"
+          ? "Glowing Fortune"
+          : term.territoryKey === "imperial"
+          ? "Imperial Gaming"
+          : "Lucky Betplay";
 
         const termIcon = window.L.divIcon({
           className: "terminal-pin",
@@ -2111,7 +2384,7 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
               <span>↗</span>
             </a>
             <div style="font-size: 9.5px; color: #047857; font-weight: 800;">
-              ✓ Lucky Betplay Authorized Public Transit Point
+              ✓ ${authName} Authorized Public Transit Point
             </div>
           </div>
         `);
@@ -2122,11 +2395,20 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
     const shouldRenderFactories = viewMode === "barangay" || showFactories;
     if (shouldRenderFactories) {
       const factoriesToRender = viewMode === "barangay" && activeBarangayCircuit
-        ? MANDAUE_POIS.factories.filter(f => f.barangayId === activeBarangayCircuit.id)
-        : MANDAUE_POIS.factories;
+        ? (activeBarangayData?.factories && activeBarangayData.factories.length > 0
+            ? activeBarangayData.factories
+            : currentPOIs.factories.filter(f => f.barangayId === activeBarangayCircuit.id))
+        : currentPOIs.factories;
 
       factoriesToRender.forEach((fact) => {
         const isBelongingToActive = activeBarangayCircuit && fact.barangayId === activeBarangayCircuit.id;
+        const authName = fact.territoryKey === "five_a"
+          ? "5A Royal Gaming"
+          : fact.territoryKey === "glowing"
+          ? "Glowing Fortune"
+          : fact.territoryKey === "imperial"
+          ? "Imperial Gaming"
+          : "Lucky Betplay";
 
         const factIcon = window.L.divIcon({
           className: "factory-pin",
@@ -2198,7 +2480,7 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
               <span>↗</span>
             </a>
             <div style="font-size: 9.5px; color: #047857; font-weight: 800;">
-              ✓ Lucky Betplay Designated Employment Zone
+              ✓ ${authName} Designated Employment Zone
             </div>
           </div>
         `);
@@ -2208,8 +2490,8 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
     // ================= LAYER: USER-TAGGED BOOTHS & AGENT OUTLETS ONLY =================
     // Zero synthetic mock booths: ONLY booths and agents entered by the user are plotted!
     const boothsToRender = viewMode === "barangay" && activeBarangayCircuit
-      ? userTaggedBooths.filter((b) => b.barangayId === activeBarangayCircuit.id)
-      : userTaggedBooths;
+      ? activeBarangayTaggedBooths
+      : territoryTaggedBooths;
 
     boothMarkersRef.current = {};
     boothsToRender.forEach((booth) => {
@@ -2431,26 +2713,28 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
       `);
     });
 
-  }, [leafletLoaded, viewMode, activeBarangayCircuit, selectedEdgeBarangay, cityRouteIndex, brgyRouteIndex, showTerminals, showFactories, brgyInspectorTab, activeBarangayAgents, taggedAgentCoords, userTaggedBooths, measuringSourceKiosk]);
+  }, [leafletLoaded, viewMode, selectedTerritory, activeCheckpoints, activeRouteCoords, activeSectorsList, activeBarangayCircuit, selectedEdgeBarangay, cityRouteIndex, brgyRouteIndex, showTerminals, showFactories, brgyInspectorTab, activeBarangayAgents, taggedAgentCoords, territoryTaggedBooths, activeBarangayTaggedBooths, measuringSourceKiosk]);
 
-  // City-Level Driving Animation
+  // City/Territory-Level Driving Animation
   useEffect(() => {
     if (!isCityDriving || viewMode !== "city") return;
 
-    const stepSize = drivingSpeed === 4 ? 6 : drivingSpeed === 2 ? 4 : 2;
-    const intervalTime = 120 / drivingSpeed;
+    const coordsList = activeRouteCoords;
+    const checkpointsList = activeCheckpoints;
+    const stepSize = coordsList.length < 30 ? 1 : drivingSpeed === 4 ? 6 : drivingSpeed === 2 ? 4 : 2;
+    const intervalTime = (coordsList.length < 30 ? 800 : 120) / drivingSpeed;
 
     const timer = setInterval(() => {
       setCityRouteIndex((prev) => {
-        const next = (prev + stepSize) % SNAPPED_EDGE_ROUTE_COORDS.length;
-        const currentPt = SNAPPED_EDGE_ROUTE_COORDS[next];
+        const next = (prev + stepSize) % coordsList.length;
+        const currentPt = coordsList[next];
 
-        // Auto-match closest edge barangay
-        let closestEb = EDGE_BARANGAYS_CIRCUIT[0];
+        // Auto-match closest edge sector / checkpoint
+        let closestEb = checkpointsList[0];
         let minDist = 9999;
-        EDGE_BARANGAYS_CIRCUIT.forEach((eb) => {
+        checkpointsList.forEach((eb) => {
           const dLat = (currentPt[0] - eb.coords[0]) * 111;
-          const dLng = (currentPt[1] - eb.coords[1]) * 111 * Math.cos(currentPt[0] * Math.PI / 180);
+          const dLng = (currentPt[1] - eb.coords[1]) * 111 * Math.cos((currentPt[0] * Math.PI) / 180);
           const dist = Math.sqrt(dLat * dLat + dLng * dLng);
           if (dist < minDist) {
             minDist = dist;
@@ -2461,7 +2745,7 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
         setSelectedEdgeBarangay(closestEb);
 
         // Smooth camera follow
-        if (leafletMapRef.current && (next % 15 === 0)) {
+        if (leafletMapRef.current && (next % 15 === 0 || coordsList.length < 30)) {
           leafletMapRef.current.panTo(currentPt, { animate: true, duration: 0.5 });
         }
 
@@ -2470,13 +2754,13 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
     }, intervalTime);
 
     return () => clearInterval(timer);
-  }, [isCityDriving, viewMode, drivingSpeed]);
+  }, [isCityDriving, viewMode, drivingSpeed, activeRouteCoords, activeCheckpoints]);
 
   // Barangay-Level Driving Animation
   useEffect(() => {
     if (!isBrgyDriving || viewMode !== "barangay" || !activeBarangayCircuit) return;
 
-    const bRoute = BARANGAY_PERIMETER_ROUTES[activeBarangayCircuit.id];
+    const bRoute = getSectorPerimeterRoute(activeBarangayCircuit.id, BARANGAY_PERIMETER_ROUTES);
     if (!bRoute || !bRoute.points || bRoute.points.length === 0) return;
 
     const stepSize = drivingSpeed === 4 ? 4 : drivingSpeed === 2 ? 2 : 1;
@@ -2498,9 +2782,12 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
     return () => clearInterval(timer);
   }, [isBrgyDriving, viewMode, activeBarangayCircuit, drivingSpeed]);
 
-  // Switch into Dedicated Barangay Perimeter Mode (e.g. Casili)
+  // Switch into Dedicated Sector / Barangay Perimeter Mode
   const handleSelectBarangayPerimeter = (barangayId, initialTab = "route") => {
-    const found = ALL_27_BARANGAYS.find(b => b.id === barangayId) || EDGE_BARANGAYS_CIRCUIT.find(b => b.id === barangayId);
+    const found =
+      activeSectorsList.find((b) => b.id === barangayId) ||
+      activeCheckpoints.find((b) => b.id === barangayId) ||
+      ALL_27_BARANGAYS.find((b) => b.id === barangayId);
     if (!found) return;
 
     setActiveBarangayCircuit(found);
@@ -2510,27 +2797,26 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
     setBrgyInspectorTab(initialTab);
 
     if (leafletMapRef.current) {
-      const bRoute = BARANGAY_PERIMETER_ROUTES[barangayId];
+      const bRoute = getSectorPerimeterRoute(barangayId, BARANGAY_PERIMETER_ROUTES);
       if (bRoute && bRoute.boundaryPolygon && bRoute.boundaryPolygon.length > 0) {
-        // Precise fit to the official municipal boundary of the barangay
         const bounds = window.L.latLngBounds(bRoute.boundaryPolygon);
         leafletMapRef.current.fitBounds(bounds, { padding: [60, 60], maxZoom: 16 });
       } else if (bRoute && bRoute.points && bRoute.points.length > 0) {
         const bounds = window.L.latLngBounds(bRoute.points);
         leafletMapRef.current.fitBounds(bounds, { padding: [60, 60], maxZoom: 16 });
-      } else {
-        leafletMapRef.current.flyTo(found.coords, 16, { duration: 1.0 });
+      } else if (found.coords) {
+        leafletMapRef.current.flyTo(found.coords, 15, { duration: 1.0 });
       }
     }
   };
 
-  // Return to Whole Mandaue City View
+  // Return to Whole Territory / City View
   const handleReturnToCityView = () => {
     setViewMode("city");
     setActiveBarangayCircuit(null);
     setIsBrgyDriving(false);
     if (leafletMapRef.current) {
-      const cityBounds = window.L.latLngBounds(SNAPPED_EDGE_ROUTE_COORDS);
+      const cityBounds = window.L.latLngBounds(activeRouteCoords);
       leafletMapRef.current.fitBounds(cityBounds, { padding: [45, 45] });
     }
   };
@@ -2549,16 +2835,18 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
 
     const results = [];
     const seenAgentIds = new Set();
+    const sourceAgents = selectedTerritory === "all" ? apiAgents : territoryAgents;
+    const sourceBooths = territoryTaggedBooths;
 
-    // 1. Match from apiAgents
-    (apiAgents || []).forEach((ag) => {
+    // 1. Match from sourceAgents
+    (sourceAgents || []).forEach((ag) => {
       const name = (ag.fullName || "").toLowerCase();
       const user = (ag.username || "").toLowerCase();
       const idStr = String(ag.id || "");
       if (name.includes(q) || user.includes(q) || idStr === q) {
         seenAgentIds.add(idStr);
-        // Find assigned booth in userTaggedBooths
-        const assignedBooth = (userTaggedBooths || []).find((b) => {
+        // Find assigned booth in sourceBooths
+        const assignedBooth = (sourceBooths || []).find((b) => {
           if (b.agentId && String(b.agentId) === idStr) return true;
           if (b.tellerName) {
             const t = b.tellerName.toLowerCase().trim();
@@ -2574,8 +2862,8 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
       }
     });
 
-    // 2. Match directly from userTaggedBooths (tellerName or booth name/address/barangay)
-    (userTaggedBooths || []).forEach((b) => {
+    // 2. Match directly from sourceBooths (tellerName or booth name/address/barangay)
+    (sourceBooths || []).forEach((b) => {
       const bTeller = (b.tellerName || "").toLowerCase();
       const bName = (b.name || "").toLowerCase();
       const bAddress = (b.address || "").toLowerCase();
@@ -2594,7 +2882,7 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
     });
 
     return results.slice(0, 10);
-  }, [topAgentSearchQuery, apiAgents, userTaggedBooths]);
+  }, [topAgentSearchQuery, apiAgents, territoryAgents, selectedTerritory, territoryTaggedBooths]);
 
   // Focus and fly to a booth marker on map
   const handleFocusBooth = (booth, agentName = "") => {
@@ -2630,7 +2918,7 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
     const agentNameLower = (agent.fullName || "").toLowerCase().trim();
     const agentUserLower = (agent.username || "").toLowerCase().trim();
 
-    const matchedBooth = (userTaggedBooths || []).find((b) => {
+    const matchedBooth = (territoryTaggedBooths || []).find((b) => {
       if (b.agentId && String(b.agentId) === agentIdStr) return true;
       if (b.tellerName) {
         const tLower = b.tellerName.toLowerCase().trim();
@@ -2671,10 +2959,65 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
     }
   };
 
-  const activeBarangayData = activeBarangayCircuit ? BARANGAY_PERIMETER_ROUTES[activeBarangayCircuit.id] : null;
+  const currentTerritoryPOIs = useMemo(() => {
+    return getTerritoryPOIs(selectedTerritory, MANDAUE_POIS);
+  }, [selectedTerritory]);
+
+  const activeBarangayData = activeBarangayCircuit
+    ? getSectorPerimeterRoute(activeBarangayCircuit.id, BARANGAY_PERIMETER_ROUTES)
+    : null;
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3 antialiased">
+      {/* ================= OPERATING TERRITORY & SUBSIDIARY SELECTOR ================= */}
+      <div className="bg-white rounded-xl border border-slate-200/80 p-1.5 sm:p-2 shadow-2xs flex items-center gap-1.5 overflow-x-auto custom-scrollbar">
+        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 pl-1 pr-1 shrink-0 flex items-center gap-1">
+          <Globe size={11} className="text-emerald-600" />
+          <span>Territory:</span>
+        </span>
+        {isGlobalUser ? (
+          Object.entries(TERRITORY_CONFIG).map(([key, cfg]) => {
+            const isSelected = selectedTerritory === key;
+            return (
+              <button
+                key={key}
+                type="button"
+                onClick={() => handleSelectTerritory(key)}
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold transition whitespace-nowrap shadow-2xs shrink-0 cursor-pointer ${
+                  isSelected
+                    ? "bg-slate-900 text-white ring-1 ring-slate-800 shadow-2xs"
+                    : "bg-slate-50 border border-slate-200 text-slate-700 hover:bg-slate-100"
+                }`}
+              >
+                <Building2 size={11} className={isSelected ? "text-emerald-400" : "text-slate-400"} />
+                <span>{cfg.short}</span>
+              </button>
+            );
+          })
+        ) : (
+          userEntityScope && !userEntityScope.isNonStl && (
+            <div className="flex items-center gap-2 px-2.5 py-1 rounded-lg bg-slate-900 text-white text-[11px] font-semibold shadow-2xs shrink-0">
+              <Building2 size={11} className="text-emerald-400" />
+              <span>{TERRITORY_CONFIG[userEntityScope.territoryKey]?.name || userEntityScope.canonicalName}</span>
+              <span className="text-[9px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-1.5 py-0.2 rounded font-bold">
+                Branch Scope
+              </span>
+            </div>
+          )
+        )}
+      </div>
+
+      {userEntityScope?.isNonStl ? (
+        <div className="p-12 text-center rounded-2xl border border-slate-200 bg-slate-50 text-slate-600 space-y-3 shadow-2xs my-4">
+          <Building2 size={36} className="mx-auto text-slate-400" />
+          <h3 className="text-base font-bold text-slate-800">{userEntityScope.canonicalName}</h3>
+          <p className="text-xs max-w-md mx-auto text-slate-500">
+            Operations Geo-Tagging is exclusive to PCSO STL Authorized Operating Entities. Your account is assigned to a Non-STL entity.
+          </p>
+        </div>
+      ) : (
+        <>
+
       {/* ================= TOP SUB-NAVIGATION BAR REPLACING 3 PILLS WITH AGENT SEARCH BAR ================= */}
       <div className="flex items-center justify-between border-b border-slate-200 pb-3 flex-wrap gap-2.5">
         {/* Agent Search Bar */}
@@ -2801,7 +3144,7 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
             Active Franchise Area:
           </span>
           <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-emerald-100 text-emerald-800 border border-emerald-200">
-            Mandaue City (Lucky Betplay)
+            {TERRITORY_CONFIG[selectedTerritory]?.name || "All STL Operating Entities"}
           </span>
         </div>
       </div>
@@ -2817,7 +3160,7 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
       {!leafletLoaded && (
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-950/90 text-slate-300 gap-3 z-30">
           <RefreshCw size={28} className="animate-spin text-emerald-400" />
-          <p className="text-xs font-bold tracking-wide">Loading Mandaue Territory &amp; Boundary Maps...</p>
+          <p className="text-xs font-bold tracking-wide">Loading {TERRITORY_CONFIG[selectedTerritory]?.short || "Territory"} Boundary Maps...</p>
         </div>
       )}
 
@@ -3010,7 +3353,7 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
                 title="Toggle Transit Terminals & Commuter Stations"
               >
                 <Bus size={13} />
-                <span>Terminals ({MANDAUE_POIS.terminals.length})</span>
+                <span>Terminals ({currentTerritoryPOIs.terminals.length})</span>
                 <span className={`w-1.5 h-1.5 rounded-full ${showTerminals ? "bg-amber-400 animate-pulse" : "bg-slate-600"}`} />
               </button>
 
@@ -3025,7 +3368,7 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
                 title="Toggle Industrial Manufacturing Plants & Factories"
               >
                 <Factory size={13} />
-                <span>Factories ({MANDAUE_POIS.factories.length})</span>
+                <span>Factories ({currentTerritoryPOIs.factories.length})</span>
                 <span className={`w-1.5 h-1.5 rounded-full ${showFactories ? "bg-orange-400 animate-pulse" : "bg-slate-600"}`} />
               </button>
 
@@ -3037,10 +3380,10 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
                   setIsAgentsModalOpen(true);
                 }}
                 className="px-2.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 border cursor-pointer bg-emerald-500/20 border-emerald-400 text-emerald-300 shadow-md hover:bg-emerald-500/30"
-                title="View All 389 Live Registered Agents from Source API"
+                title="View Live Registered Agents for this territory"
               >
                 <Users size={13} />
-                <span>Agents ({apiAgents.length})</span>
+                <span>Agents ({territoryAgents.length})</span>
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
               </button>
 
@@ -3052,7 +3395,7 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
                 title="View User-Tagged Booths & Stations on Map"
               >
                 <MapPin size={13} className="text-emerald-400" />
-                <span>Tagged Booths ({userTaggedBooths.length})</span>
+                <span>Tagged Booths ({territoryTaggedBooths.length})</span>
               </button>
 
               {/* Central Supabase Cloud Database Sync Status */}
@@ -3196,12 +3539,12 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
           </div>
         )}
 
-        {/* Horizontal Barangay Selector Strip */}
+        {/* Horizontal Sector Selector Strip */}
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
           <span className="px-2.5 py-1 rounded-xl bg-slate-900/95 border border-slate-800 text-[10px] font-black text-cyan-400 backdrop-blur-md shrink-0">
-            Select Barangay to Inspect:
+            Select Sector to Inspect:
           </span>
-          {ALL_27_BARANGAYS.map((b) => {
+          {activeSectorsList.map((b) => {
             const isCurrent = activeBarangayCircuit?.id === b.id;
             const bAgentsCount = getAgentsForBarangayId(b.id).length;
             return (
@@ -3334,7 +3677,7 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
                   Brgy. {activeBarangayCircuit.name}
                 </h3>
                 <p className="text-[10.5px] text-cyan-400 font-bold mt-0.5">
-                  100% Authorized Under Mandaue City (Lucky Betplay Corporation)
+                  100% Authorized Under {TERRITORY_CONFIG[selectedTerritory]?.name || "Authorized STL Area"}
                 </p>
               </div>
 
@@ -3791,7 +4134,7 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
                         <div className="text-[9.5px] text-slate-300 bg-slate-900/80 p-1.5 rounded border border-slate-800 space-y-0.5">
                           <div className="flex justify-between">
                             <span className="text-slate-400">Supervisor:</span>
-                            <strong className="text-slate-200">{getSupervisorName(agent.supervisor)}</strong>
+                            <strong className="text-slate-200">{getSupervisorName(agent.supervisor, agent)}</strong>
                           </div>
                           {agent.contactNumber && (
                             <div className="flex justify-between items-center">
@@ -3921,7 +4264,7 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
                               (inlineCoordForm.latStr || inlineCoordForm.lngStr) && (
                                 <div className="p-1 rounded-lg bg-amber-950/60 border border-amber-700 text-amber-300 text-[9.5px] flex items-center gap-1">
                                   <AlertTriangle size={11} className="shrink-0" />
-                                  <span>Outside Mandaue City boundaries. Please check coordinates.</span>
+                                  <span>Outside {TERRITORY_CONFIG[selectedTerritory]?.short || "STL"} territory boundaries. Please check coordinates.</span>
                                 </div>
                               )
                             )}
@@ -4014,7 +4357,7 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
                     }`}
                 >
                   <MapPin size={12} className={cityInspectorTab === "tagged_agents" ? "text-white" : "text-emerald-400"} />
-                  <span>Tagged Booths ({userTaggedBooths.length})</span>
+                  <span>Tagged Booths ({territoryTaggedBooths.length})</span>
                 </button>
               </div>
             </div>
@@ -4024,10 +4367,10 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
                 <div className="flex items-start justify-between gap-2 border-b border-slate-800 pb-2">
                   <div>
                     <span className="px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 inline-block mb-0.5">
-                      City Edge Barangay {selectedEdgeBarangay.step} of 16
+                      Sector Checkpoint {selectedEdgeBarangay.step} of {activeCheckpoints.length}
                     </span>
                     <h3 className="text-base font-black text-white leading-tight">
-                      Brgy. {selectedEdgeBarangay.name}
+                      {selectedEdgeBarangay.name}
                     </h3>
                     <p className="text-[10.5px] text-emerald-400 font-bold mt-0.5">
                       {selectedEdgeBarangay.edgeSector}
@@ -4037,7 +4380,7 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
                   <div className="text-right shrink-0">
                     <span className="text-[8.5px] uppercase font-bold text-slate-500 block">Operator</span>
                     <span className="text-xs font-mono font-black text-emerald-400">
-                      Lucky Betplay
+                      {TERRITORY_CONFIG[selectedTerritory]?.short || "Lucky Betplay"}
                     </span>
                   </div>
                 </div>
@@ -4059,10 +4402,12 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
                     <span className="text-slate-400">Primary Highway:</span>
                     <strong className="text-white text-right">{selectedEdgeBarangay.mainRoad}</strong>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">Bordering LGU:</span>
-                    <strong className="text-rose-400 text-right">{selectedEdgeBarangay.bordersWith}</strong>
-                  </div>
+                  {selectedEdgeBarangay.bordersWith && (
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">Bordering LGU:</span>
+                      <strong className="text-rose-400 text-right">{selectedEdgeBarangay.bordersWith}</strong>
+                    </div>
+                  )}
                   <div className="flex justify-between items-center">
                     <span className="text-slate-400">Registered Agents:</span>
                     <span className="font-bold text-emerald-400">{getAgentsForBarangayId(selectedEdgeBarangay.id).length} Tellers</span>
@@ -4087,14 +4432,14 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
                   className="w-full py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-black text-xs transition cursor-pointer flex items-center justify-center gap-1.5 shadow-md shadow-cyan-900/30"
                 >
                   <Route size={13} />
-                  <span>Inspect Brgy. {selectedEdgeBarangay.name} (Boundary, Terminals &amp; Agents)</span>
+                  <span>Inspect Sector {selectedEdgeBarangay.name}</span>
                 </button>
               </>
             ) : (
               <div className="space-y-1.5 overflow-y-auto max-h-[250px] pr-1">
                 <div className="flex items-center justify-between pb-1 mb-1 border-b border-slate-800">
                   <span className="text-[10.5px] font-bold text-slate-400">
-                    {userTaggedBooths.length} User-Tagged Booths &amp; Outlets
+                    {territoryTaggedBooths.length} User-Tagged Booths &amp; Outlets
                   </span>
                   <button
                     type="button"
@@ -4106,8 +4451,8 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
                   </button>
                 </div>
 
-                {userTaggedBooths.length > 0 ? (
-                  userTaggedBooths.map((booth) => (
+                {territoryTaggedBooths.length > 0 ? (
+                  territoryTaggedBooths.map((booth) => (
                     <div
                       key={booth.id}
                       className="p-2.5 rounded-xl bg-slate-950 border border-amber-900/40 hover:border-amber-500/80 transition space-y-1.5"
@@ -4242,9 +4587,9 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
                     </span>
                   </div>
                   <p className="text-xs text-slate-400 flex items-center gap-2 mt-0.5">
-                    <span>Source: <code className="text-cyan-300 font-mono">stl-mandaue-api.com/api/accountant/teller</code></span>
+                    <span>Source: <code className="text-cyan-300 font-mono">{selectedTerritory === "five_a" ? "stl-mag-api.com" : selectedTerritory === "glowing" ? "stl-ldn-api.com" : selectedTerritory === "imperial" ? "stl-cotabato-api.com" : "stl-mandaue-api.com"}/api/accountant/teller</code></span>
                     <span>•</span>
-                    <span className="text-emerald-400 font-bold">{apiAgents.length} Registered Agents</span>
+                    <span className="text-emerald-400 font-bold">{territoryAgents.length} Registered Agents</span>
                   </p>
                 </div>
               </div>
@@ -4299,9 +4644,9 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
                     : "bg-slate-950 text-slate-400 hover:text-slate-200 border border-slate-800"
                     }`}
                 >
-                  All ({apiAgents.length})
+                  All ({territoryAgents.length})
                 </button>
-                {ALL_27_BARANGAYS.map((b) => {
+                {activeSectorsList.map((b) => {
                   const count = getAgentsForBarangayId(b.id).length;
                   const isSel = agentsModalBarangayFilter === b.id;
                   return (
@@ -4328,10 +4673,11 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
             <div className="p-3 sm:p-5 overflow-y-auto flex-1 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {filteredModalAgents.map((agent, idx) => {
                 const bgyName = getBarangayNameFromApiId(agent.brgyId);
-                const supName = getSupervisorName(agent.supervisor);
-                const matchedBarangay = ALL_27_BARANGAYS.find(b => {
+                const supName = getSupervisorName(agent.supervisor, agent);
+                const matchedBarangay = activeSectorsList.find(b => {
                   const validIds = BARANGAY_API_IDS[b.id] || [];
-                  return validIds.includes(String(agent.brgyId));
+                  if (validIds.includes(String(agent.brgyId))) return true;
+                  return `${agent.location || ""} ${agent.address || ""}`.toLowerCase().includes(b.name.toLowerCase());
                 });
 
                 return (
@@ -4446,7 +4792,7 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
                             <span>Add Coordinates on Row</span>
                           </button>
                         ) : (
-                          <span className="text-[10px] text-slate-500 italic">Mandaue City Territory</span>
+                          <span className="text-[10px] text-slate-500 italic">{TERRITORY_CONFIG[selectedTerritory]?.name || "STL Territory"}</span>
                         )}
                       </div>
                     )}
@@ -4475,7 +4821,7 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
             <div className="p-3 sm:p-4 border-t border-slate-800 bg-slate-950/90 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-400 shrink-0">
               <div className="flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-emerald-400" />
-                <span>Showing <strong>{filteredModalAgents.length}</strong> of <strong>{apiAgents.length}</strong> registered agents across Mandaue City</span>
+                <span>Showing <strong>{filteredModalAgents.length}</strong> of <strong>{territoryAgents.length}</strong> registered agents across {TERRITORY_CONFIG[selectedTerritory]?.short || "the territory"}</span>
               </div>
               <button
                 type="button"
@@ -4540,7 +4886,7 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
                         const detected = detectBarangayFromCoords(lat, lng);
                         setDetectedBarangayResult(detected);
                         if (detected && !boothFormData.address) {
-                          setBoothFormData((prev) => ({ ...prev, address: `Brgy. ${detected.name}, Mandaue City` }));
+                          setBoothFormData((prev) => ({ ...prev, address: detected.address || `Brgy. ${detected.name}` }));
                         }
                       }}
                       className="text-[10px] font-bold text-cyan-400 hover:underline flex items-center gap-1 cursor-pointer"
@@ -4600,7 +4946,7 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
                         <span className="text-base">{detectedBarangayResult.id === "outside" ? "⚠️" : "📍"}</span>
                         <div>
                           <div className="text-xs font-black text-white">
-                            {detectedBarangayResult.id === "outside" ? "Outside Mandaue City" : `Brgy. ${detectedBarangayResult.name}`}
+                            {detectedBarangayResult.id === "outside" ? "Outside Operational Territory" : `Brgy. ${detectedBarangayResult.name}`}
                           </div>
                           <div className="text-[10px] text-slate-400 font-semibold">
                             {detectedBarangayResult.confidence}
@@ -4633,7 +4979,7 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
                     required
                     value={boothFormData.address}
                     onChange={(e) => setBoothFormData((prev) => ({ ...prev, address: e.target.value }))}
-                    placeholder="e.g. Lopez Jaena St. near Subangdaku Flyover, Mandaue City"
+                    placeholder={`e.g. Near town center, ${TERRITORY_CONFIG[selectedTerritory]?.short || "Territory"}`}
                     className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-cyan-500"
                   />
                   <p className="text-[10px] text-slate-500 mt-1">
@@ -4707,7 +5053,7 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
                           </span>
                         </div>
                         <div className="text-[11px] text-slate-300 truncate mt-0.5">
-                          📍 {selectedAgentObj.outlet || "Outlet"} • Supervisor: {getSupervisorName(selectedAgentObj.supervisor)}
+                          📍 {selectedAgentObj.outlet || "Outlet"} • Supervisor: {getSupervisorName(selectedAgentObj.supervisor, selectedAgentObj)}
                         </div>
                         {selectedAgentObj.contactNumber && (
                           <div className="text-[10px] font-mono text-slate-400 mt-0.5">
@@ -4875,7 +5221,7 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
                                   ...prev,
                                   selectedAgentId: ag.id,
                                   tellerName: ag.fullName,
-                                  supervisor: getSupervisorName(ag.supervisor),
+                                  supervisor: getSupervisorName(ag.supervisor, ag),
                                   contactNumber: ag.contactNumber || prev.contactNumber,
                                   address: prev.address || ag.address || "",
                                   name: prev.name || ag.outlet || `${ag.fullName} Station`
@@ -4929,7 +5275,7 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
                                   <div className="text-[11px] text-slate-400 truncate mt-0.5 flex items-center gap-2 flex-wrap">
                                     <span>📍 {ag.outlet || "Outlet"}</span>
                                     <span className="text-slate-600">•</span>
-                                    <span>Spvr: {getSupervisorName(ag.supervisor)}</span>
+                                    <span>Spvr: {getSupervisorName(ag.supervisor, ag)}</span>
                                     {ag.contactNumber && (
                                       <>
                                         <span className="text-slate-600">•</span>
@@ -5162,7 +5508,7 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
                               Booth {s.name}
                             </h4>
                             <div className="text-xs text-emerald-400 font-bold mt-0.5">
-                              Brgy. {s.barangayName || "Mandaue City"}
+                              Brgy. {s.barangayName || (TERRITORY_CONFIG[selectedTerritory]?.short || "Operating Area")}
                             </div>
                             <div className="text-[11px] text-slate-400 line-clamp-1 mt-0.5">
                               📍 {s.address || `Brgy. ${s.barangayName}`}
@@ -5249,7 +5595,7 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
                               Booth {t.name}
                             </h4>
                             <div className="text-xs text-cyan-400 font-bold mt-0.5">
-                              Brgy. {t.barangayName || "Mandaue City"}
+                              Brgy. {t.barangayName || (TERRITORY_CONFIG[selectedTerritory]?.short || "Operating Area")}
                             </div>
                             <div className="text-[11px] text-slate-400 line-clamp-1 mt-0.5">
                               📍 {t.address || `Brgy. ${t.barangayName}`}
@@ -5372,6 +5718,8 @@ export default function OperationsGeoTaggingPanel({ onClose }) {
         </div>
       )}
       </div>
+        </>
+      )}
     </div>
   );
 }

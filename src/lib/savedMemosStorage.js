@@ -6,6 +6,7 @@
 
 import { supabase } from "./supabase.js";
 import { getUserAccountKey } from "./userSettingsStorage.js";
+import { autoLogHRAction } from "./hrWorkLogsStorage.js";
 
 export const SAVED_MEMOS_TABLE = "saved_memos";
 
@@ -237,6 +238,30 @@ export async function saveMemoRecordToDb(currentUser = null, memoRecord = {}) {
   }
   if (!memoryMemosStore.has(accountKey)) {
     memoryMemosStore.set(accountKey, [formattedMemo]);
+  }
+
+  // Telemetry: Auto-record HR operational action to database
+  try {
+    const issuerName = memoRecord.from || memoRecord.from_field || currentUser?.name || "HR Officer";
+    const issuerCompany = memoRecord.metadata?.signatoryCompany || currentUser?.company || "Simpal Group of Companies";
+    const subjectClean = memoRecord.subject ? ` (${memoRecord.subject})` : "";
+
+    autoLogHRAction({
+      user: {
+        name: currentUser?.name || issuerName,
+        email: currentUser?.email || "admin@hrhub.com",
+        role: currentUser?.role || "HR Administrator",
+        company: currentUser?.company || issuerCompany,
+        branch: currentUser?.branch || "Head Office (SGC)"
+      },
+      taskProject: `Issued Official Disciplinary Memo${subjectClean} [Ref: ${cleanRef}]`,
+      category: "Employee Relations & Due Process",
+      progressComments: `Drafted and issued official memorandum to ${memoRecord.to_field || "employee"} regarding ${memoRecord.category || "policy compliance"}.`,
+      status: "Completed",
+      durationMinutes: 40
+    });
+  } catch (logErr) {
+    console.warn("Auto-log memo telemetry notice:", logErr);
   }
 
   return {

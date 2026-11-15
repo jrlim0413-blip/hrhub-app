@@ -375,11 +375,11 @@ export default function CompanyBulletinFeed({
   }, [posts, activeFilter]);
 
   return (
-    <div className="space-y-4 max-w-3xl mx-auto">
+    <div className="space-y-3 max-w-3xl mx-auto antialiased">
       {/* Toast Notification */}
       {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 bg-slate-900 text-white text-xs font-bold px-4 py-2.5 rounded-2xl shadow-xl flex items-center gap-2 animate-in fade-in slide-in-from-bottom-2">
-          <CheckCircle2 size={15} className="text-emerald-400" />
+        <div className="fixed bottom-6 right-6 z-50 bg-slate-900 text-white text-xs font-bold px-3.5 py-2 rounded-xl shadow-xl flex items-center gap-2 animate-in fade-in slide-in-from-bottom-2">
+          <CheckCircle2 size={14} className="text-emerald-400" />
           <span>{toastMessage}</span>
         </div>
       )}
@@ -388,34 +388,34 @@ export default function CompanyBulletinFeed({
       {/* 1. FACEBOOK-STYLE "CREATE POST" COMPOSER                     */}
       {/* ============================================================ */}
       {canPost ? (
-        <div className="bg-white rounded-2xl border border-slate-200/90 shadow-sm p-4 space-y-3 transition">
+        <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-3 sm:p-3.5 space-y-2.5 transition">
           {/* Top Trigger Row */}
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-slate-900 text-emerald-400 font-extrabold text-xs flex items-center justify-center shrink-0 shadow-2xs">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-full bg-slate-900 text-emerald-400 font-bold text-[11px] flex items-center justify-center shrink-0 shadow-2xs">
               {userInitials}
             </div>
 
             <div
               onClick={() => setIsComposerExpanded(true)}
-              className="flex-1 bg-slate-100/80 hover:bg-slate-100 rounded-full px-4 py-2.5 text-xs text-slate-500 font-medium cursor-pointer transition select-none flex items-center justify-between"
+              className="flex-1 bg-slate-100/80 hover:bg-slate-100 rounded-full px-3.5 py-1.5 text-xs text-slate-500 font-medium cursor-pointer transition select-none flex items-center justify-between"
             >
-              <span>What&apos;s on your mind, {profileName.split(" ")[0]}? Share announcements, motivations, reminders, or videos...</span>
-              <Sparkles size={14} className="text-emerald-600 hidden sm:block" />
+              <span className="truncate">What&apos;s on your mind, {profileName.split(" ")[0]}? Share announcements, motivations, reminders...</span>
+              <Sparkles size={13} className="text-emerald-600 hidden sm:block shrink-0 ml-1.5" />
             </div>
           </div>
 
           {/* Quick Media Action Row */}
           {!isComposerExpanded && (
-            <div className="pt-2 border-t border-slate-100 flex items-center justify-around text-xs font-bold text-slate-600">
+            <div className="pt-1.5 border-t border-slate-100 flex items-center justify-around text-[11px] font-semibold text-slate-600">
               <button
                 type="button"
                 onClick={() => {
                   setIsComposerExpanded(true);
                   fileInputRef.current?.click();
                 }}
-                className="flex items-center gap-2 px-3 py-1.5 rounded-xl hover:bg-slate-100 transition cursor-pointer"
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg hover:bg-slate-100 transition cursor-pointer"
               >
-                <Camera size={16} className="text-emerald-600" />
+                <Camera size={14} className="text-emerald-600" />
                 <span>Photo</span>
               </button>
 
@@ -425,9 +425,9 @@ export default function CompanyBulletinFeed({
                   setIsComposerExpanded(true);
                   videoFileInputRef.current?.click();
                 }}
-                className="flex items-center gap-2 px-3 py-1.5 rounded-xl hover:bg-slate-100 transition cursor-pointer"
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg hover:bg-slate-100 transition cursor-pointer"
               >
-                <Video size={16} className="text-indigo-600" />
+                <Video size={14} className="text-indigo-600" />
                 <span>Video Clip</span>
               </button>
 
@@ -437,9 +437,9 @@ export default function CompanyBulletinFeed({
                   setIsComposerExpanded(true);
                   setIsVideoLinkModalOpen(true);
                 }}
-                className="flex items-center gap-2 px-3 py-1.5 rounded-xl hover:bg-slate-100 transition cursor-pointer"
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg hover:bg-slate-100 transition cursor-pointer"
               >
-                <Link2 size={16} className="text-rose-600" />
+                <Link2 size={14} className="text-rose-600" />
                 <span>Video Link</span>
               </button>
 
@@ -449,9 +449,9 @@ export default function CompanyBulletinFeed({
                   setIsComposerExpanded(true);
                   setPostCategory("HR Motivation");
                 }}
-                className="flex items-center gap-2 px-3 py-1.5 rounded-xl hover:bg-slate-100 transition cursor-pointer"
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg hover:bg-slate-100 transition cursor-pointer"
               >
-                <Sparkles size={16} className="text-amber-500" />
+                <Sparkles size={14} className="text-amber-500" />
                 <span>Motivation</span>
               </button>
             </div>
@@ -727,8 +727,8 @@ export default function CompanyBulletinFeed({
       {/* ============================================================ */}
       {/* 2. FEED TOOLBAR & CATEGORY FILTER TABS                       */}
       {/* ============================================================ */}
-      <div className="bg-white rounded-2xl border border-slate-200/90 p-2 sm:p-2.5 flex flex-wrap items-center justify-between gap-2 shadow-2xs">
-        <div className="flex items-center gap-1.5 flex-wrap flex-1 min-w-0">
+      <div className="bg-white rounded-xl border border-slate-200/80 p-1.5 sm:p-2 flex flex-wrap items-center justify-between gap-1.5 shadow-2xs">
+        <div className="flex items-center gap-1 flex-wrap flex-1 min-w-0">
           {[
             { id: "all", label: "All Posts" },
             { id: "HR Motivation", label: "💡 Motivation" },
@@ -744,7 +744,7 @@ export default function CompanyBulletinFeed({
                 key={tab.id}
                 type="button"
                 onClick={() => setActiveFilter(tab.id)}
-                className={`px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-xl text-[11px] sm:text-xs font-bold transition cursor-pointer whitespace-nowrap ${
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition cursor-pointer whitespace-nowrap ${
                   isActive
                     ? "bg-slate-900 text-white shadow-xs"
                     : "bg-slate-50 hover:bg-slate-100 text-slate-600"
@@ -760,9 +760,9 @@ export default function CompanyBulletinFeed({
           type="button"
           onClick={fetchFeed}
           title="Refresh Feed"
-          className="p-1.5 text-slate-400 hover:text-emerald-700 hover:bg-slate-100 rounded-xl transition cursor-pointer shrink-0 self-start sm:self-center"
+          className="p-1 text-slate-400 hover:text-emerald-700 hover:bg-slate-100 rounded-lg transition cursor-pointer shrink-0 self-start sm:self-center"
         >
-          <RefreshCw size={14} className={loading ? "animate-spin text-emerald-600" : ""} />
+          <RefreshCw size={13} className={loading ? "animate-spin text-emerald-600" : ""} />
         </button>
       </div>
 
@@ -885,54 +885,53 @@ export default function CompanyBulletinFeed({
                 )}
 
                 {/* Post Author Header */}
-                <div className="p-4 sm:p-5 pb-3 flex items-start justify-between gap-3">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-10 h-10 rounded-full bg-slate-900 text-emerald-400 font-extrabold text-xs flex items-center justify-center shrink-0 shadow-2xs">
+                <div className="p-3 sm:p-3.5 pb-2 flex items-start justify-between gap-2.5">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="w-8 h-8 rounded-full bg-slate-900 text-emerald-400 font-bold text-[11px] flex items-center justify-center shrink-0 shadow-2xs">
                       {authorInitials}
                     </div>
 
                     <div className="min-w-0">
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        <h4 className="font-bold text-slate-900 text-xs sm:text-sm truncate">
+                        <h4 className="font-bold text-slate-900 text-xs truncate">
                           {post.authorName || "HR Administrator"}
                         </h4>
                         {post.isOfficial && (
-                          <span className="inline-flex items-center gap-1 rounded bg-emerald-50 border border-emerald-200 px-1.5 py-0.2 text-[9px] font-black text-emerald-700 uppercase">
-                            <CheckCircle2 size={9} className="text-emerald-600" />
+                          <span className="inline-flex items-center gap-0.5 rounded bg-emerald-50 border border-emerald-200 px-1 py-0.1 text-[9px] font-bold text-emerald-700 uppercase">
+                            <CheckCircle2 size={8} className="text-emerald-600" />
                             Official
                           </span>
                         )}
                         {post.pinned && (
-                          <span className="inline-flex items-center gap-1 rounded bg-amber-100 border border-amber-300 px-1.5 py-0.2 text-[9px] font-black text-amber-900 uppercase">
-                            <Pin size={9} className="fill-amber-700 text-amber-700" />
+                          <span className="inline-flex items-center gap-0.5 rounded bg-amber-100 border border-amber-300 px-1 py-0.1 text-[9px] font-bold text-amber-900 uppercase">
+                            <Pin size={8} className="fill-amber-700 text-amber-700" />
                             Pinned
                           </span>
                         )}
                         {post.videoUrl && (
-                          <span className="inline-flex items-center gap-1 rounded bg-indigo-50 border border-indigo-200 px-1.5 py-0.2 text-[9px] font-black text-indigo-700 uppercase">
-                            <Video size={9} className="text-indigo-600" />
+                          <span className="inline-flex items-center gap-0.5 rounded bg-indigo-50 border border-indigo-200 px-1 py-0.1 text-[9px] font-bold text-indigo-700 uppercase">
+                            <Video size={8} className="text-indigo-600" />
                             Video
                           </span>
                         )}
                       </div>
 
-                      <div className="flex items-center gap-1.5 text-[11px] text-slate-500 flex-wrap">
+                      <div className="flex items-center gap-1 text-[10px] text-slate-500 flex-wrap">
                         <span className="font-semibold text-slate-600">{post.authorRole || "Team Member"}</span>
                         <span>•</span>
-                        <span className="truncate">{post.authorCompany || "Simpal Group"}</span>
+                        <span className="truncate max-w-[120px]">{post.authorCompany || "Simpal Group"}</span>
                         <span>•</span>
-                        <span className="flex items-center gap-1 font-mono text-slate-400">
-                          <Clock size={10} />
+                        <span className="flex items-center gap-0.5 font-mono text-slate-400">
+                          <Clock size={9} />
                           {formatRelativeTime(post.createdAt)}
                         </span>
-                        <Globe size={11} className="text-slate-400" />
                       </div>
                     </div>
                   </div>
 
                   {/* Header Actions: Category Badge & Delete */}
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <span className="text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded-full border bg-slate-50 text-slate-700 border-slate-200">
+                  <div className="flex items-center gap-1 shrink-0">
+                    <span className="text-[9px] font-bold uppercase px-2 py-0.5 rounded-md border bg-slate-50 text-slate-700 border-slate-200">
                       {post.category || "Announcement"}
                     </span>
 
@@ -940,25 +939,25 @@ export default function CompanyBulletinFeed({
                       <button
                         type="button"
                         onClick={() => handleDeletePost(post.id)}
-                        className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer"
+                        className="p-1 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer"
                         title="Delete post"
                       >
-                        <Trash2 size={14} />
+                        <Trash2 size={12} />
                       </button>
                     )}
                   </div>
                 </div>
 
                 {/* Post Content Body */}
-                <div className="px-4 sm:px-5 space-y-2">
+                <div className="px-3 sm:px-3.5 space-y-1.5">
                   {post.title && (
-                    <h3 className="text-sm sm:text-base font-black text-slate-900 leading-snug">
+                    <h3 className="text-xs sm:text-sm font-bold text-slate-900 leading-snug">
                       {post.title}
                     </h3>
                   )}
 
                   {post.content && (
-                    <p className="text-xs sm:text-sm text-slate-700 leading-relaxed whitespace-pre-wrap font-normal">
+                    <p className="text-xs text-slate-700 leading-relaxed whitespace-pre-wrap font-normal">
                       {post.content}
                     </p>
                   )}
@@ -1001,20 +1000,20 @@ export default function CompanyBulletinFeed({
                   </div>
                 )}
 
-                {/* Facebook Reaction & Counts Stats Bar */}
-                <div className="px-4 sm:px-5 pt-3 pb-2 flex items-center justify-between text-xs text-slate-500 border-b border-slate-100">
+                {/* Reaction & Counts Stats Bar */}
+                <div className="px-3 sm:px-3.5 pt-2 pb-1.5 flex items-center justify-between text-[11px] text-slate-500 border-b border-slate-100">
                   <div className="flex items-center gap-1.5">
                     {likesArray.length > 0 && (
                       <span className="flex items-center -space-x-1">
-                        <span className="w-4.5 h-4.5 rounded-full bg-emerald-600 text-white flex items-center justify-center text-[9px] shadow-xs">
+                        <span className="w-4 h-4 rounded-full bg-emerald-600 text-white flex items-center justify-center text-[8px] shadow-2xs">
                           👍
                         </span>
-                        <span className="w-4.5 h-4.5 rounded-full bg-rose-500 text-white flex items-center justify-center text-[9px] shadow-xs">
+                        <span className="w-4 h-4 rounded-full bg-rose-500 text-white flex items-center justify-center text-[8px] shadow-2xs">
                           ❤️
                         </span>
                       </span>
                     )}
-                    <span className="font-semibold text-slate-600">
+                    <span className="font-medium text-slate-600">
                       {likesArray.length === 0
                         ? "Be the first to acknowledge"
                         : likesArray.length === 1
@@ -1025,7 +1024,7 @@ export default function CompanyBulletinFeed({
                     </span>
                   </div>
 
-                  <div className="flex items-center gap-3 text-slate-400 font-medium">
+                  <div className="flex items-center gap-2 text-slate-400 font-medium">
                     <button
                       type="button"
                       onClick={() => handleToggleComments(post.id)}
@@ -1036,29 +1035,29 @@ export default function CompanyBulletinFeed({
                   </div>
                 </div>
 
-                {/* Facebook Action Buttons: Like, Comment, Share */}
-                <div className="px-2 py-1 flex items-center justify-around text-xs font-bold text-slate-600">
+                {/* Action Buttons: Like, Comment, Share */}
+                <div className="px-1.5 py-0.5 flex items-center justify-around text-[11px] font-semibold text-slate-600">
                   <button
                     type="button"
                     onClick={() => handleToggleLike(post.id)}
-                    className={`flex-1 py-2 rounded-xl flex items-center justify-center gap-2 transition cursor-pointer ${
+                    className={`flex-1 py-1.5 rounded-lg flex items-center justify-center gap-1.5 transition cursor-pointer ${
                       hasLiked
                         ? "text-emerald-700 bg-emerald-50/70 hover:bg-emerald-100/70"
                         : "hover:bg-slate-100/80 text-slate-600"
                     }`}
                   >
-                    <ThumbsUp size={16} className={hasLiked ? "fill-emerald-600 text-emerald-600" : ""} />
+                    <ThumbsUp size={14} className={hasLiked ? "fill-emerald-600 text-emerald-600" : ""} />
                     <span>{hasLiked ? "Acknowledged" : "Acknowledge"}</span>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => handleToggleComments(post.id)}
-                    className={`flex-1 py-2 rounded-xl flex items-center justify-center gap-2 transition cursor-pointer ${
+                    className={`flex-1 py-1.5 rounded-lg flex items-center justify-center gap-1.5 transition cursor-pointer ${
                       isCommentsOpen ? "text-emerald-700 bg-slate-100" : "hover:bg-slate-100/80 text-slate-600"
                     }`}
                   >
-                    <MessageCircle size={16} />
+                    <MessageCircle size={14} />
                     <span>Comment</span>
                   </button>
 
@@ -1068,9 +1067,9 @@ export default function CompanyBulletinFeed({
                       navigator.clipboard.writeText(`${post.title ? post.title + "\n\n" : ""}${post.content || ""}`);
                       showToast("Post content copied to clipboard!");
                     }}
-                    className="flex-1 py-2 rounded-xl flex items-center justify-center gap-2 hover:bg-slate-100/80 transition cursor-pointer text-slate-600"
+                    className="flex-1 py-1.5 rounded-lg flex items-center justify-center gap-1.5 hover:bg-slate-100/80 transition cursor-pointer text-slate-600"
                   >
-                    <Share2 size={16} />
+                    <Share2 size={14} />
                     <span>Share</span>
                   </button>
                 </div>

@@ -33,7 +33,8 @@ import {
   ArrowUpRight,
   ArrowDownLeft,
   Calendar,
-  Copy
+  Copy,
+  TrendingUp
 } from "lucide-react";
 import { COMPANIES, CORPORATE_GROUP_EMBLEM } from "./MemoGeneratorPanel";
 import {
@@ -716,6 +717,66 @@ export default function SalaryCompensationPanel({ currentUser, profiles = [], on
     });
     return map;
   }, [caSummary]);
+
+  // Area & Sector Cash Advancement Percentage Analytics
+  const caAreaStats = useMemo(() => {
+    const areaMap = new Map();
+    let grandTotalCa = 0;
+
+    (caSummary.employeeSummaries || []).forEach((emp) => {
+      const rawArea = (emp.department || emp.companyName || "General Operations").trim();
+      const area = rawArea || "General Operations";
+      const issued = Number(emp.issuedTotal || 0);
+      const remaining = Number(emp.outstandingBalance || 0);
+
+      const existing = areaMap.get(area) || {
+        area,
+        totalIssued: 0,
+        outstanding: 0,
+        personnelCount: 0
+      };
+
+      existing.totalIssued += issued;
+      existing.outstanding += remaining;
+      existing.personnelCount += 1;
+      areaMap.set(area, existing);
+
+      grandTotalCa += issued;
+    });
+
+    if (grandTotalCa === 0 && Array.isArray(caEntries) && caEntries.length > 0) {
+      caEntries.forEach((entry) => {
+        const rawArea = (entry.department || entry.companyName || "General Operations").trim();
+        const area = rawArea || "General Operations";
+        const amt = Number(entry.amount || 0);
+        const existing = areaMap.get(area) || {
+          area,
+          totalIssued: 0,
+          outstanding: 0,
+          personnelCount: 0
+        };
+        existing.totalIssued += amt;
+        existing.personnelCount += 1;
+        areaMap.set(area, existing);
+        grandTotalCa += amt;
+      });
+    }
+
+    const areasList = Array.from(areaMap.values())
+      .map((item) => ({
+        ...item,
+        percentage: grandTotalCa > 0 ? Number(((item.totalIssued / grandTotalCa) * 100).toFixed(1)) : 0
+      }))
+      .sort((a, b) => b.totalIssued - a.totalIssued);
+
+    const topArea = areasList.length > 0 && areasList[0].totalIssued > 0 ? areasList[0] : null;
+
+    return {
+      areasList,
+      topArea,
+      grandTotalCa
+    };
+  }, [caSummary, caEntries]);
 
   const filteredCaEmployeeSummaries = useMemo(() => {
     const q = caEmpSearch.toLowerCase().trim();
@@ -1811,60 +1872,79 @@ export default function SalaryCompensationPanel({ currentUser, profiles = [], on
           </div>
         </div>
 
-        {/* 4 Executive KPI Summary Cards */}
+        {/* 5 Executive KPI Summary Cards */}
         {subView === "cash_advance" ? (
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-5">
-            <div className="rounded-xl bg-white/5 border border-white/10 p-3.5">
-              <div className="flex items-center justify-between text-[10.5px] font-bold uppercase tracking-wider text-slate-400">
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-2.5 mt-4">
+            <div className="rounded-xl bg-white/5 border border-white/10 p-3">
+              <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-slate-400">
                 <span>CA Personnel</span>
-                <Users size={13} className="text-sky-400" />
+                <Users size={12} className="text-sky-400" />
               </div>
-              <div className="text-xl font-black text-white mt-1">
+              <div className="text-lg font-black text-white mt-1">
                 {caSummary.employeeSummaries.length}
               </div>
-              <div className="text-[10.5px] text-slate-400 mt-0.5 truncate">
-                {caSummary.settledCount || 0} settled • {caSummary.activeCount || 0} with open balance
+              <div className="text-[10px] text-slate-400 mt-0.5 truncate">
+                {caSummary.settledCount || 0} settled • {caSummary.activeCount || 0} open
               </div>
             </div>
 
-            <div className="rounded-xl bg-white/5 border border-white/10 p-3.5">
-              <div className="flex items-center justify-between text-[10.5px] font-bold uppercase tracking-wider text-slate-400">
+            <div className="rounded-xl bg-white/5 border border-white/10 p-3">
+              <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-slate-400">
                 <span>Approved CA (Whole)</span>
-                <ArrowUpRight size={13} className="text-amber-400" />
+                <ArrowUpRight size={12} className="text-amber-400" />
               </div>
-              <div className="text-lg md:text-xl font-black text-amber-300 mt-1">
+              <div className="text-lg font-black text-amber-300 mt-1">
                 {formatMoney(caSummary.totalIssued)}
               </div>
-              <div className="text-[10.5px] text-slate-400 mt-0.5">
-                Total approved principal CA granted
+              <div className="text-[10px] text-slate-400 mt-0.5">
+                Principal CA granted
               </div>
             </div>
 
-            <div className="rounded-xl bg-white/5 border border-white/10 p-3.5">
-              <div className="flex items-center justify-between text-[10.5px] font-bold uppercase tracking-wider text-slate-400">
+            <div className="rounded-xl bg-white/5 border border-white/10 p-3">
+              <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-slate-400">
                 <span>Deducted via Payroll</span>
-                <ArrowDownLeft size={13} className="text-emerald-400" />
+                <ArrowDownLeft size={12} className="text-emerald-400" />
               </div>
-              <div className="text-lg md:text-xl font-black text-emerald-300 mt-1">
+              <div className="text-lg font-black text-emerald-300 mt-1">
                 {formatMoney(caSummary.totalPayrollDeducted)}
               </div>
-              <div className="text-[10.5px] text-slate-400 mt-0.5 truncate">
-                {caSummary.overallRecoveryRatePct || 0}% recovered • Direct paid: {formatMoney(caSummary.totalRepaid)}
+              <div className="text-[10px] text-slate-400 mt-0.5 truncate">
+                {caSummary.overallRecoveryRatePct || 0}% recovered
               </div>
             </div>
 
-            <div className="rounded-xl bg-emerald-500/15 border border-emerald-400/30 p-3.5">
-              <div className="flex items-center justify-between text-[10.5px] font-bold uppercase tracking-wider text-emerald-200">
-                <span>Net Remaining Balance</span>
-                <Wallet size={13} className="text-emerald-300" />
+            <div className="rounded-xl bg-emerald-500/15 border border-emerald-400/30 p-3">
+              <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-emerald-200">
+                <span>Net Balance</span>
+                <Wallet size={12} className="text-emerald-300" />
               </div>
-              <div className="text-lg md:text-xl font-black text-white mt-1">
+              <div className="text-lg font-black text-white mt-1">
                 {formatMoney(caSummary.netOutstandingBalance)}
               </div>
-              <div className="text-[10.5px] text-emerald-200/80 mt-0.5">
+              <div className="text-[10px] text-emerald-200/80 mt-0.5">
                 {caSummary.unlinkedCount > 0
-                  ? `${caSummary.unlinkedCount} employee(s) need whole CA logged`
-                  : `Approved Whole − Deductions`}
+                  ? `${caSummary.unlinkedCount} need whole CA`
+                  : `Remaining balance`}
+              </div>
+            </div>
+
+            {/* Top Area by CA & Percentage Card */}
+            <div className="rounded-xl bg-amber-500/15 border border-amber-400/30 p-3 col-span-2 lg:col-span-1">
+              <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-amber-200">
+                <span>Top CA Area (%)</span>
+                <TrendingUp size={12} className="text-amber-300" />
+              </div>
+              <div className="text-lg font-black text-amber-300 mt-1 flex items-baseline gap-1.5 truncate">
+                <span className="truncate">{caAreaStats.topArea ? caAreaStats.topArea.area : "General"}</span>
+                {caAreaStats.topArea && (
+                  <span className="text-xs font-bold text-amber-400 font-mono">
+                    ({caAreaStats.topArea.percentage}%)
+                  </span>
+                )}
+              </div>
+              <div className="text-[10px] text-amber-200/80 mt-0.5 truncate">
+                {caAreaStats.topArea ? `${formatMoney(caAreaStats.topArea.totalIssued)} granted` : "No CA records logged"}
               </div>
             </div>
           </div>
@@ -3202,6 +3282,134 @@ export default function SalaryCompensationPanel({ currentUser, profiles = [], on
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+
+          {/* Section 0: Area Cash Advancement Percentage Analytics & Regional Ranking */}
+          {caAreaStats.areasList.length > 0 && (
+            <div className="bg-white border border-slate-200/90 rounded-2xl p-3 sm:p-4 shadow-2xs space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2.5 border-b border-slate-100">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-600 flex items-center justify-center shrink-0">
+                    <TrendingUp size={14} />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-slate-900 tracking-tight flex items-center gap-1.5">
+                      <span>Area Cash Advancement Distribution &amp; Share</span>
+                      <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-amber-100 text-amber-800">
+                        {caAreaStats.areasList.length} Operating Areas
+                      </span>
+                    </h4>
+                    <p className="text-[10px] text-slate-500">
+                      Regional share breakdown in percentage. Click any area chip to instantly filter the employee ledger below.
+                    </p>
+                  </div>
+                </div>
+
+                {caAreaStats.topArea && (
+                  <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200/80 shadow-2xs">
+                    <div className="text-[11px] font-semibold text-amber-900 flex items-center gap-1">
+                      <span className="text-amber-600 font-black">Top Area:</span>
+                      <span className="font-bold underline decoration-amber-400">{caAreaStats.topArea.area}</span>
+                    </div>
+                    <span className="px-2 py-0.5 rounded-lg bg-amber-600 text-white text-[11px] font-black font-mono shadow-2xs">
+                      {caAreaStats.topArea.percentage}%
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Area Percentage Grid / Ranking List */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
+                {caAreaStats.areasList.map((item, index) => {
+                  const isTop = index === 0;
+                  const isActiveFilter = caEmpSearch.trim().toLowerCase() === item.area.toLowerCase();
+
+                  return (
+                    <button
+                      key={item.area}
+                      type="button"
+                      onClick={() => setCaEmpSearch(isActiveFilter ? "" : item.area)}
+                      className={`text-left p-2.5 rounded-xl border transition-all cursor-pointer relative overflow-hidden group ${
+                        isActiveFilter
+                          ? "bg-amber-50/80 border-amber-400 ring-2 ring-amber-400/40 shadow-xs"
+                          : isTop
+                          ? "bg-slate-50/80 hover:bg-amber-50/40 border-amber-200/90 shadow-2xs"
+                          : "bg-white hover:bg-slate-50/80 border-slate-200/80 shadow-2xs"
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-1.5 mb-1.5">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <span
+                              className={`w-4 h-4 rounded text-[9px] font-black flex items-center justify-center shrink-0 ${
+                                isTop
+                                  ? "bg-amber-600 text-white"
+                                  : index === 1
+                                  ? "bg-slate-700 text-white"
+                                  : index === 2
+                                  ? "bg-amber-800 text-white"
+                                  : "bg-slate-200 text-slate-700"
+                              }`}
+                            >
+                              #{index + 1}
+                            </span>
+                            <span className="text-xs font-bold text-slate-900 truncate" title={item.area}>
+                              {item.area}
+                            </span>
+                          </div>
+                          <span className="text-[10px] text-slate-500 block ml-5.5">
+                            {item.personnelCount} {item.personnelCount === 1 ? "employee" : "employees"}
+                          </span>
+                        </div>
+
+                        <div className="text-right shrink-0">
+                          <span
+                            className={`text-xs font-black font-mono ${
+                              isTop ? "text-amber-600" : "text-slate-800"
+                            }`}
+                          >
+                            {item.percentage}%
+                          </span>
+                          <span className="text-[9.5px] text-slate-400 block font-mono">
+                            {formatMoney(item.totalIssued)}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Percentage Progress Bar */}
+                      <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all duration-500 ${
+                            isTop
+                              ? "bg-gradient-to-r from-amber-500 to-orange-500"
+                              : "bg-gradient-to-r from-emerald-500 to-teal-500"
+                          }`}
+                          style={{ width: `${Math.min(100, Math.max(2, item.percentage))}%` }}
+                        />
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {caEmpSearch && (
+                <div className="flex items-center justify-between text-[11px] pt-1 text-slate-500">
+                  <span className="flex items-center gap-1">
+                    <span>Filtering table by:</span>
+                    <strong className="text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 font-mono">
+                      &quot;{caEmpSearch}&quot;
+                    </strong>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setCaEmpSearch("")}
+                    className="text-xs font-bold text-amber-700 hover:text-amber-900 underline cursor-pointer"
+                  >
+                    Clear Filter / Show All
+                  </button>
+                </div>
+              )}
             </div>
           )}
 

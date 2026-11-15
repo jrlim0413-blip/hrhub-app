@@ -17,22 +17,10 @@ import {
   getLocalFieldAccounts,
   fetchFieldMonitoringAccounts
 } from "../lib/fieldMonitoringStorage";
+import { getStlSupervisors } from "../lib/stlApiLiveService";
 
-// Active Mandaue Supervisors (Strictly Mandaue City)
-const SUPERVISORS = [
-  { id: 21, fullName: "ARLFRED SABERON", area: "Mandaue City", username: "spvr-arlfred" },
-  { id: 22, fullName: "RAFFY BAGUIO", area: "Mandaue City", username: "spvr-raffy" },
-  { id: 23, fullName: "ROEL CATALAN", area: "Mandaue City", username: "spvr-roel" },
-  { id: 24, fullName: "MICHAEL DE GUZMAN", area: "Mandaue City", username: "spvr-michael" },
-  { id: 25, fullName: "JOEL ESTORCO", area: "Mandaue City", username: "spvr-joel" },
-  { id: 26, fullName: "HARRY EYA", area: "Mandaue City", username: "spvr-eya" },
-  { id: 27, fullName: "CARL MANGRUBAN", area: "Mandaue City", username: "spvr-carl" },
-  { id: 28, fullName: "JED MELENDREZ", area: "Mandaue City", username: "spvr-jed" },
-  { id: 29, fullName: "NYOR SESALDO", area: "Mandaue City", username: "spvr-nyor" },
-  { id: 30, fullName: "NARCISO TAGUD JR.", area: "Mandaue City", username: "spvr-jason" },
-  { id: 31, fullName: "MOLLY BATUBALANOS", area: "Mandaue City", username: "spvr-molly" },
-  { id: 32, fullName: "COORDINATOR - APPLEGROUP", area: "Mandaue City", username: "spvr-apple" }
-];
+// Real Active STL Supervisors across all 4 subsidiaries
+const SUPERVISORS = getStlSupervisors();
 
 function getTodayString() {
   const d = new Date();
@@ -134,11 +122,30 @@ async function verifySourceApiCredentials(username, password, supervisor = null)
   }
 
   const endpoints = [
+    // Lucky Betplay Corporation (Mandaue City)
     "https://stl-mandaue-api.com/api/coordinator/login",
     "https://stl-mandaue-api.com/api/teller/login",
     "https://stl-mandaue-api.com/api/cashier/login",
     "https://stl-mandaue-api.com/api/accountant/login",
-    "https://stl-mandaue-api.com/api/admin/login"
+    "https://stl-mandaue-api.com/api/admin/login",
+    // Glowing Fortune OPC (Iligan City & Lanao)
+    "https://stl-ldn-api.com/api/coordinator/login",
+    "https://stl-ldn-api.com/api/teller/login",
+    "https://stl-ldn-api.com/api/cashier/login",
+    "https://stl-ldn-api.com/api/accountant/login",
+    "https://stl-ldn-api.com/api/admin/login",
+    // 5A Royal Gaming OPC (Maguindanao)
+    "https://stl-mag-api.com/api/coordinator/login",
+    "https://stl-mag-api.com/api/teller/login",
+    "https://stl-mag-api.com/api/cashier/login",
+    "https://stl-mag-api.com/api/accountant/login",
+    "https://stl-mag-api.com/api/admin/login",
+    // Imperial Gaming OPC (Cotabato City)
+    "https://stl-cotabato-api.com/api/coordinator/login",
+    "https://stl-cotabato-api.com/api/teller/login",
+    "https://stl-cotabato-api.com/api/cashier/login",
+    "https://stl-cotabato-api.com/api/accountant/login",
+    "https://stl-cotabato-api.com/api/admin/login"
   ];
 
   let isVerifiedByApi = false;

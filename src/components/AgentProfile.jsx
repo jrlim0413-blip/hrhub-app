@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { API_CONFIG } from "../config/apiConfig";
 import {
   Activity, Archive, Award, CalendarDays, Check, CheckCircle2, CreditCard, Database, Download, Eye, FileDown, FileText,
@@ -114,6 +115,27 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
   useEffect(() => {
     setRequirementsOpen(false);
   }, [agentKey]);
+
+  // Lock background window scroll when modal is active
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const origOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = origOverflow;
+    };
+  }, []);
+
+  // Close modal on Escape key press
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape" && !showIdCardModal && !previewModalImage && !pdfPreviewState.isOpen && !organizingSlotId) {
+        onClose?.();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose, showIdCardModal, previewModalImage, pdfPreviewState.isOpen, organizingSlotId]);
 
   // Load saved profile overrides and requirements from database whenever agentKey changes
   useEffect(() => {
@@ -671,14 +693,24 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
     return !REGISTRATION_SLOTS.some((slot) => findRequirementsForSlot([req], slot.id).length > 0);
   });
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 px-3 py-5 backdrop-blur-md sm:px-6">
-      <div className="max-h-[95vh] w-full max-w-5xl overflow-y-auto rounded-[28px] border border-white/70 bg-slate-50 text-slate-900 shadow-[0_24px_90px_rgba(15,23,42,0.28)] ring-1 ring-slate-900/5">
-        <div className="relative h-36 overflow-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-emerald-900">
+  if (typeof document === "undefined") return null;
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[9990] flex items-center justify-center bg-slate-950/70 p-3 sm:p-5 backdrop-blur-md animate-in fade-in duration-200"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose?.();
+      }}
+    >
+      <div
+        className="relative max-h-[92vh] w-full max-w-5xl overflow-y-auto rounded-[26px] border border-slate-700/60 bg-slate-50 text-slate-900 shadow-[0_25px_90px_rgba(0,0,0,0.5)] ring-1 ring-white/10 custom-scrollbar animate-in zoom-in-95 duration-200"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="relative h-32 sm:h-36 overflow-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-emerald-900 shrink-0">
           <div className="absolute -right-10 -top-20 h-56 w-56 rounded-full bg-emerald-400/20 blur-2xl" />
           <div className="absolute bottom-0 left-0 h-20 w-72 bg-sky-300/10 blur-2xl" />
           <div className="absolute left-6 top-6 text-[10px] font-bold uppercase tracking-[0.24em] text-emerald-300">HRHub · Agent profile</div>
-          <button type="button" onClick={onClose} aria-label="Close agent profile" className="absolute right-5 top-5 rounded-full border border-white/20 bg-white/10 p-2.5 text-white/80 backdrop-blur transition hover:bg-white/20 hover:text-white">
+          <button type="button" onClick={onClose} aria-label="Close agent profile" className="absolute right-5 top-5 rounded-full border border-white/20 bg-white/10 p-2.5 text-white/80 backdrop-blur transition hover:bg-white/20 hover:text-white cursor-pointer shadow-lg hover:scale-105 active:scale-95">
             <X size={16} />
           </button>
         </div>
@@ -1740,7 +1772,7 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
       {/* Interactive Full-Screen PDF Preview Modal */}
       {pdfPreviewState.isOpen && (
         <div
-          className="fixed inset-0 z-[75] flex items-center justify-center bg-slate-950/85 p-3 sm:p-5 backdrop-blur-md"
+          className="fixed inset-0 z-[9996] flex items-center justify-center bg-slate-950/85 p-3 sm:p-5 backdrop-blur-md"
           onClick={closePdfPreview}
         >
           <div
@@ -1843,7 +1875,7 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
       {/* Full-Screen Image Preview Modal */}
       {previewModalImage && (
         <div
-          className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm"
+          className="fixed inset-0 z-[9995] flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm"
           onClick={() => setPreviewModalImage(null)}
         >
           <div
@@ -1929,6 +1961,7 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
           onClose={() => setShowIdCardModal(false)}
         />
       )}
-    </div>
+    </div>,
+    document.body
   );
 }

@@ -48,6 +48,7 @@ import {
   saveAreaConfigs,
   DEFAULT_AREAS
 } from "../lib/areaApiConfigStorage";
+import { getUserAssignedStlEntity, isGlobalAccessUser } from "../lib/companyEntities";
 
 const DEFAULT_GROSS_URL = API_CONFIG.GROSS_REPORT_URL || "https://stl-mandaue-api.com/api/accountant/TellerGrossPerDateRange?id=2";
 const DEFAULT_ACTIVE_TELLERS_URL = API_CONFIG.ACTIVE_TELLERS_URL || "https://stl-mandaue-api.com/api/accountant/ActiveTellers?id=2";
@@ -179,8 +180,25 @@ const AREA_PALETTES = [
 export default function MultiAreaBettingRatioView({
   parentRange = null,
   onSelectAreaForLive = null,
-  onNavigateToTools = null
+  onNavigateToTools = null,
+  currentUser = null
 }) {
+  const activeUser = useMemo(() => {
+    if (currentUser) return currentUser;
+    try {
+      const raw = localStorage.getItem("hrhub_auth_user");
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  }, [currentUser]);
+
+  const userEntityScope = useMemo(() => {
+    return getUserAssignedStlEntity(activeUser);
+  }, [activeUser]);
+
+  const isGlobalUser = !userEntityScope;
+
   const todayStr = useMemo(() => formatDate(new Date()), []);
   const yesterdayStr = useMemo(() => {
     const d = new Date();
@@ -214,13 +232,46 @@ export default function MultiAreaBettingRatioView({
 
   // Area configurations from storage / Supabase
   const [areaConfigs, setAreaConfigs] = useState(() => getAreaConfigs());
+
+  // Filter area configs based on user's assigned entity
+  const targetAreaConfigs = useMemo(() => {
+    if (isGlobalUser) return areaConfigs;
+    if (userEntityScope?.isNonStl) return [];
+    const canon = (userEntityScope.canonicalName || "").toLowerCase();
+    const shortN = (userEntityScope.shortName || "").toLowerCase();
+    const matched = areaConfigs.filter((area) => {
+      const c = (area.companyName || "").toLowerCase();
+      return (
+        c.includes(canon) ||
+        canon.includes(c) ||
+        c.includes(shortN) ||
+        (userEntityScope.code === "5ARG" && (c.includes("5a") || c.includes("royal") || (area.areaName || "").toLowerCase().includes("maguindanao"))) ||
+        (userEntityScope.code === "IMP" && (c.includes("imperial") || (area.areaName || "").toLowerCase().includes("cotabato"))) ||
+        (userEntityScope.code === "GFC" && (c.includes("glowing") || c.includes("fortune"))) ||
+        (userEntityScope.code === "LBC" && (c.includes("lucky") || c.includes("betplay") || (area.areaName || "").toLowerCase().includes("mandaue")))
+      );
+    });
+    return matched.length > 0 ? matched : areaConfigs;
+  }, [areaConfigs, isGlobalUser, userEntityScope]);
+
   const [areaResults, setAreaResults] = useState({});
   const [loading, setLoading] = useState(false);
   const [syncProgress, setSyncProgress] = useState({ current: 0, total: 0, activeAreaName: "" });
   const [selectedSort, setSelectedSort] = useState("gross"); // 'gross' | 'share' | 'productivity' | 'tellers'
-  const [selectedCompanyFilter, setSelectedCompanyFilter] = useState("all");
+  const [selectedCompanyFilter, setSelectedCompanyFilter] = useState(() => {
+    if (!isGlobalUser && userEntityScope) {
+      return userEntityScope.canonicalName;
+    }
+    return "all";
+  });
   const [lastRefreshedAt, setLastRefreshedAt] = useState(null);
   const [todayFinishedDraws, setTodayFinishedDraws] = useState([]);
+
+  useEffect(() => {
+    if (!isGlobalUser && userEntityScope) {
+      setSelectedCompanyFilter(userEntityScope.canonicalName);
+    }
+  }, [isGlobalUser, userEntityScope]);
 
   // Fetch official finished draws and winning results for today
   useEffect(() => {
@@ -263,7 +314,7 @@ export default function MultiAreaBettingRatioView({
 
   // Fetch all areas data
   const fetchAllAreasData = async () => {
-    const activeAreas = areaConfigs.filter((a) => a.isActive !== false);
+    const activeAreas = targetAreaConfigs.filter((a) => a.isActive !== false);
     if (activeAreas.length === 0) return;
 
     setLoading(true);
@@ -457,20 +508,23 @@ export default function MultiAreaBettingRatioView({
   // Initial fetch on mount or when date range changes
   useEffect(() => {
     fetchAllAreasData();
-  }, [dateRange.from, dateRange.to, areaConfigs.length]);
+  }, [dateRange.from, dateRange.to, targetAreaConfigs.length]);
 
   // Company options for filter
   const companyOptions = useMemo(() => {
+    if (!isGlobalUser && userEntityScope) {
+      return [userEntityScope.canonicalName];
+    }
     const list = new Set();
-    areaConfigs.forEach((a) => {
+    targetAreaConfigs.forEach((a) => {
       if (a.companyName) list.add(a.companyName);
     });
     return Array.from(list);
-  }, [areaConfigs]);
+  }, [targetAreaConfigs, isGlobalUser, userEntityScope]);
 
   // Aggregate and calculate Ratios across all areas
   const aggregatedStats = useMemo(() => {
-    const activeAreas = areaConfigs.filter((a) => a.isActive !== false);
+    const activeAreas = targetAreaConfigs.filter((a) => a.isActive !== false);
     const areaEntries = activeAreas.map((area, index) => {
       const res = areaResults[area.id] || {
         area,
@@ -573,7 +627,7 @@ export default function MultiAreaBettingRatioView({
       onlineCount,
       totalCount: calculatedAreas.length
     };
-  }, [areaConfigs, areaResults, selectedCompanyFilter, selectedSort]);
+  }, [targetAreaConfigs, areaResults, selectedCompanyFilter, selectedSort]);
 
   // Export to CSV
   const handleExportCsv = () => {
@@ -687,6 +741,22 @@ export default function MultiAreaBettingRatioView({
       window.dispatchEvent(new CustomEvent("hrhub_switch_workspace_tab", { detail: { tabId: "api_health" } }));
     }
   };
+
+  if (userEntityScope?.isNonStl) {
+    return (
+      <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-8 text-center backdrop-blur-md">
+        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-500/10 text-amber-400 border border-amber-500/20 mb-4">
+          <ShieldCheck size={28} />
+        </div>
+        <h3 className="text-lg font-black text-white">
+          Multi-Entity Betting Ratio Restricted
+        </h3>
+        <p className="mt-2 text-sm text-slate-400 max-w-md mx-auto">
+          Multi-Entity Betting Ratio and Turnover Analytics are exclusive to PCSO Authorized STL Gaming entities. Your account is scoped to <strong className="text-white">{userEntityScope.canonicalName}</strong>.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 p-4 sm:p-6 bg-slate-900/50 rounded-3xl border border-slate-800 text-slate-100">
@@ -1029,17 +1099,24 @@ export default function MultiAreaBettingRatioView({
 
           {/* Quick Filters */}
           <div className="flex items-center gap-2">
-            {companyOptions.length > 1 && (
-              <select
-                value={selectedCompanyFilter}
-                onChange={(e) => setSelectedCompanyFilter(e.target.value)}
-                className="rounded-xl border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs text-white outline-none focus:border-emerald-500"
-              >
-                <option value="all">All Companies</option>
-                {companyOptions.map((c) => (
-                  <option key={c} value={c}>{c}</option>
-                ))}
-              </select>
+            {!isGlobalUser ? (
+              <div className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/10 text-emerald-400 font-bold text-xs rounded-xl border border-emerald-500/30">
+                <ShieldCheck size={13} className="text-emerald-400 shrink-0" />
+                <span>{userEntityScope?.shortName || selectedCompanyFilter}</span>
+              </div>
+            ) : (
+              companyOptions.length > 1 && (
+                <select
+                  value={selectedCompanyFilter}
+                  onChange={(e) => setSelectedCompanyFilter(e.target.value)}
+                  className="rounded-xl border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs text-white outline-none focus:border-emerald-500"
+                >
+                  <option value="all">All Companies</option>
+                  {companyOptions.map((c) => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+              )
             )}
 
             <select

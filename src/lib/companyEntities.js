@@ -186,8 +186,8 @@ export function isNonStlEntity(companyName) {
 
 export function isHeadOffice(companyName) {
   if (!companyName) return false;
-  const c = companyName.toLowerCase();
-  return c.includes("simpal group") || c === "sgc" || c === "head office";
+  const c = String(companyName).toLowerCase().trim();
+  return c.includes("simpal group") || c.includes("sgc") || c.includes("head office");
 }
 
 // ============================================================================
@@ -292,4 +292,140 @@ export const OPERATIONAL_DESIGNATION_GROUPS = [
 
 // Flat array of all designations for validation and lookups
 export const ALL_OPERATIONAL_ROLES = OPERATIONAL_DESIGNATION_GROUPS.flatMap((g) => g.roles);
+
+/**
+ * ============================================================================
+ * 4. MULTI-ENTITY ACCESS CONTROL (RBAC & SUBSIDIARY SCOPING)
+ * ============================================================================
+ * Rule:
+ * - "Si HR administrator at ang naka assigned sa Head office(SGC) lang is ang maka kita sa lahat."
+ * - Users assigned to a specific STL entity (Imperial Gaming, Lucky Betplay, 5A Royal, Glowing Fortune)
+ *   are strictly scoped to their assigned entity in Agents Directory, Supervisor Attendance, and Geo-Tagging.
+ */
+
+export function isGlobalAccessUser(user = null) {
+  let u = user;
+  if (!u && typeof window !== "undefined") {
+    try {
+      const raw = localStorage.getItem("hrhub_auth_user");
+      if (raw) u = JSON.parse(raw);
+    } catch {}
+  }
+  if (!u) return false;
+
+  const email = String(u.email || "").toLowerCase().trim();
+  const role = String(u.role || "").toLowerCase().trim();
+  const name = String(u.name || "").toLowerCase().trim();
+  const company = String(u.company || "").trim();
+  const comp = company.toLowerCase();
+
+  // 1. Central HRMD Master Accounts (Always have global multi-entity access)
+  if (
+    email === "admin@hrhub.com" ||
+    name === "h r m d" ||
+    name === "hrmd" ||
+    email === "jay@simpalgroup.com" ||
+    email === "efilfonimda@gmail.com"
+  ) {
+    return true;
+  }
+
+  // 2. If the account belongs to any specific subsidiary, THEY ARE STRICTLY SCOPED TO THAT SUBSIDIARY!
+  // This rule applies even if their role title is HR Administrator, HR Admin V, On-site HR, etc.
+  const isSubsidiaryCompany =
+    comp.includes("5a") ||
+    comp.includes("royal") ||
+    comp.includes("maguindanao") ||
+    comp.includes("imperial") ||
+    comp.includes("cotabato") ||
+    comp.includes("glowing") ||
+    comp.includes("fortune") ||
+    comp.includes("iligan") ||
+    comp.includes("ldn") ||
+    comp.includes("lucky") ||
+    comp.includes("betplay") ||
+    comp.includes("mandaue") ||
+    comp.includes("mc power") ||
+    comp.includes("simcon") ||
+    comp.includes("construction");
+
+  if (isSubsidiaryCompany && !isHeadOffice(company)) {
+    return false; // Scoped to their subsidiary branch!
+  }
+
+  // 3. Head Office (Simpal Group of Companies / SGC) personnel see all entities
+  if (isHeadOffice(company)) {
+    return true;
+  }
+
+  // 4. Default: Only if unassigned to a subsidiary and role is explicitly HR Administrator
+  if (!company && (role.includes("hr administrator") || role.includes("super administrator"))) {
+    return true;
+  }
+
+  return false;
+}
+
+export function getUserAssignedStlEntity(user = null) {
+  let u = user;
+  if (!u && typeof window !== "undefined") {
+    try {
+      const raw = localStorage.getItem("hrhub_auth_user");
+      if (raw) u = JSON.parse(raw);
+    } catch {}
+  }
+  if (!u) return null;
+
+  // HR Administrator and Head Office (SGC) see all entities (not locked)
+  if (isGlobalAccessUser(u)) {
+    return null;
+  }
+
+  const comp = String(u.company || "").toLowerCase().trim();
+
+  if (comp.includes("imperial") || comp.includes("cotabato")) {
+    return {
+      canonicalName: "Imperial Gaming OPC",
+      shortName: "Imperial Gaming",
+      territoryKey: "imperial",
+      code: "IMP"
+    };
+  }
+  if (comp.includes("5a") || comp.includes("royal") || comp.includes("maguindanao")) {
+    return {
+      canonicalName: "5A Royal Gaming OPC",
+      shortName: "5A Royal",
+      territoryKey: "five_a",
+      code: "5ARG"
+    };
+  }
+  if (comp.includes("glowing") || comp.includes("fortune") || comp.includes("iligan") || comp.includes("ldn")) {
+    return {
+      canonicalName: "Glowing Fortune",
+      shortName: "Glowing Fortune",
+      territoryKey: "glowing",
+      code: "GFC"
+    };
+  }
+  if (comp.includes("lucky") || comp.includes("betplay") || comp.includes("mandaue")) {
+    return {
+      canonicalName: "Lucky Betplay Corporation",
+      shortName: "Lucky Betplay",
+      territoryKey: "lucky_betplay",
+      code: "LBC"
+    };
+  }
+
+  // Non-STL Entities
+  if (comp.includes("mc power") || comp.includes("simcon") || comp.includes("construction")) {
+    return {
+      canonicalName: comp.includes("mc power") ? "MC POWER GAS" : "Simpal Construction (SIMCON)",
+      shortName: comp.includes("mc power") ? "MC Power Gas" : "SIMCON",
+      isNonStl: true
+    };
+  }
+
+  return null;
+}
+
 

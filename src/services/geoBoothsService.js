@@ -43,6 +43,9 @@ export function normalizeBooth(raw) {
     supervisor: String(raw.supervisor || "").trim(),
     contactNumber: String(raw.contact_number || raw.contactNumber || "").trim(),
     notes: String(raw.notes || "").trim(),
+    territoryKey: String(raw.territory_key || raw.territoryKey || "").trim(),
+    company: String(raw.company || raw.companyName || "").trim(),
+    companyName: String(raw.company || raw.companyName || "").trim(),
     createdAt: raw.created_at || raw.createdAt || new Date().toISOString(),
     updatedAt: raw.updated_at || raw.updatedAt || new Date().toISOString()
   };

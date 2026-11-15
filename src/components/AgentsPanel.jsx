@@ -1,8 +1,21 @@
-import { useState, useEffect } from "react";
-import { AlertCircle, Bot, Download, LoaderCircle, RefreshCw, Search, Users, MapPin, Store } from "lucide-react";
+import { useState, useEffect, useMemo } from "react";
+import { AlertCircle, Bot, Download, LoaderCircle, RefreshCw, Search, Users, MapPin, Store, Building2, ChevronLeft, ChevronRight, ShieldCheck, ChevronDown } from "lucide-react";
 import AgentProfile from "./AgentProfile";
-import { API_CONFIG } from "../config/apiConfig";
-import SOURCE_AGENTS_CACHE from "../data/sourceApiAgentsCache.json";
+import {
+  ENTITY_METADATA,
+  matchesCompanyEntity,
+  isGlobalAccessUser,
+  getUserAssignedStlEntity
+} from "../lib/companyEntities";
+import {
+  getStlAgents,
+  getStlSupervisors,
+  fetchLiveStlData,
+  matchStlCanonicalName,
+  STL_ONLY_SUBSIDIARIES,
+  isStlEntity
+} from "../lib/stlApiLiveService";
+import SOURCE_API_CACHE from "../data/sourceApiAgentsCache.json";
 
 function getAgentList(payload) {
   if (Array.isArray(payload)) return payload;
@@ -33,10 +46,6 @@ function getBarangayList(payload) {
 
 function getAgentName(agent, index) {
   return agent.name || agent.full_name || agent.fullName || agent.username || agent.email || `Agent ${index + 1}`;
-}
-
-function getAgentDetails(agent) {
-  return agent.role || agent.position || agent.title || agent.department || agent.email || "Agent profile";
 }
 
 function isAgentActive(agent) {
@@ -73,51 +82,60 @@ function getAgentStatus(agent) {
   return isAgentActive(agent) ? "active" : "inactive";
 }
 
-export default function AgentsPanel({ onClose }) {
-  const [agents, setAgents] = useState(() => SOURCE_AGENTS_CACHE?.agents || []);
+export default function AgentsPanel({ onClose, currentUser = null }) {
+  const activeUser = useMemo(() => {
+    if (currentUser) return currentUser;
+    try {
+      const raw = localStorage.getItem("hrhub_auth_user");
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  }, [currentUser]);
+
+  const userEntityScope = useMemo(() => {
+    return getUserAssignedStlEntity(activeUser);
+  }, [activeUser]);
+
+  const isGlobalUser = !userEntityScope;
+
+  const [baseAgents, setBaseAgents] = useState(() => getStlAgents());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [loaded, setLoaded] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all"); // 'all' | 'active' | 'inactive'
+  const [selectedEntity, setSelectedEntity] = useState(() => {
+    const scope = getUserAssignedStlEntity(activeUser);
+    return scope && !scope.isNonStl ? scope.canonicalName : "all";
+  });
   const [selectedAgent, setSelectedAgent] = useState(null);
-  const [supervisors, setSupervisors] = useState(() => SOURCE_AGENTS_CACHE?.supervisors || []);
-  const [barangays, setBarangays] = useState(() => SOURCE_AGENTS_CACHE?.barangays || []);
+  const [supervisors, setSupervisors] = useState(() => getStlSupervisors());
+  const [visibleCount, setVisibleCount] = useState(60);
+
+  // Enforce entity locking for scoped branch users (e.g. Imperial Gaming sees only Imperial)
+  useEffect(() => {
+    if (userEntityScope && !userEntityScope.isNonStl && selectedEntity !== userEntityScope.canonicalName) {
+      setSelectedEntity(userEntityScope.canonicalName);
+    }
+  }, [userEntityScope, selectedEntity]);
 
   const loadAgents = async () => {
     setLoading(true);
     setError("");
 
     try {
-      const token = API_CONFIG.AGENTS_TOKEN;
-      if (!token) {
-        throw new Error("Missing AGENTS_TOKEN in API_CONFIG");
+      const res = await fetchLiveStlData();
+      if (res.agents && res.agents.length > 0) {
+        setBaseAgents(res.agents);
       }
-
-      const headers = { Accept: "application/json" };
-      headers.Authorization = `Bearer ${token}`;
-
-      const [agentsResponse, supervisorsResponse, barangaysResponse] = await Promise.all([
-        fetch(API_CONFIG.AGENTS_URL, { headers }),
-        fetch(API_CONFIG.SUPERVISOR_URL, { headers }),
-        fetch(API_CONFIG.BARANGAYS_URL, { headers })
-      ]);
-      if (!agentsResponse.ok) throw new Error(`Agents API returned ${agentsResponse.status}`);
-      if (!supervisorsResponse.ok) throw new Error(`Supervisors API returned ${supervisorsResponse.status}`);
-      if (!barangaysResponse.ok) throw new Error(`Barangays API returned ${barangaysResponse.status}`);
-
-      const [payload, supervisorsPayload, barangaysPayload] = await Promise.all([
-        agentsResponse.json(),
-        supervisorsResponse.json(),
-        barangaysResponse.json()
-      ]);
-      setSupervisors(getSupervisorList(supervisorsPayload));
-      setBarangays(getBarangayList(barangaysPayload));
-      setAgents(getAgentList(payload));
+      if (res.supervisors && res.supervisors.length > 0) {
+        setSupervisors(res.supervisors);
+      }
       setLoaded(true);
     } catch (requestError) {
       console.warn("Could not fetch live agents from API, using cached data:", requestError);
-      if (!agents || agents.length === 0) {
+      if (!baseAgents || baseAgents.length === 0) {
         setError(requestError.message || "Unable to load agents.");
       }
     } finally {
@@ -129,11 +147,100 @@ export default function AgentsPanel({ onClose }) {
     loadAgents();
   }, []);
 
-  const activeCount = agents.filter((a) => isAgentActive(a)).length;
-  const inactiveCount = agents.length - activeCount;
+  // Reset pagination limit on filter change
+  useEffect(() => {
+    setVisibleCount(60);
+  }, [searchTerm, statusFilter, selectedEntity]);
 
-  const filteredAgents = agents.filter((agent) => {
-    const searchableText = JSON.stringify(agent).toLowerCase();
+  // Unified all real STL agents
+  const allCombinedAgents = useMemo(() => {
+    return baseAgents || [];
+  }, [baseAgents]);
+
+  // Combined Supervisors lookup with company-scoped composite key to prevent cross-entity ID collisions
+  const allSupervisors = useMemo(() => {
+    const map = new Map();
+    (supervisors || []).forEach((s) => {
+      const canonicalComp = matchStlCanonicalName(s.company || s.companyName || s.companyShort);
+      const compositeKey = `${canonicalComp}_${s.id}`;
+      map.set(compositeKey, s);
+      if (!map.has(String(s.id))) {
+        map.set(String(s.id), s);
+      }
+    });
+    return map;
+  }, [supervisors]);
+
+  // Combined Barangays lookup
+  const allBarangays = useMemo(() => {
+    const map = new Map();
+    (SOURCE_API_CACHE?.barangays || []).forEach((b) => map.set(String(b.id), b));
+    return map;
+  }, []);
+
+  // STL-Only Entities list for tabs (Excluding non-STL)
+  const entityTabList = useMemo(() => {
+    const targetSubs = userEntityScope && !userEntityScope.isNonStl
+      ? [userEntityScope.canonicalName]
+      : STL_ONLY_SUBSIDIARIES;
+
+    return targetSubs.map((name) => {
+      const meta = ENTITY_METADATA[name] || {};
+      const count = allCombinedAgents.filter((a) => matchesCompanyEntity(a.company, name)).length;
+      return {
+        id: name,
+        name,
+        shortName: meta.shortName || name,
+        logoUrl: meta.logoUrl || null,
+        count
+      };
+    });
+  }, [allCombinedAgents, userEntityScope]);
+
+  const activeCount = allCombinedAgents.filter((a) => {
+    if (selectedEntity !== "all" && !matchesCompanyEntity(a.company, selectedEntity)) return false;
+    return isAgentActive(a);
+  }).length;
+
+  const currentEntityTotal = allCombinedAgents.filter((a) => {
+    if (selectedEntity !== "all" && !matchesCompanyEntity(a.company, selectedEntity)) return false;
+    return true;
+  }).length;
+
+  const inactiveCount = currentEntityTotal - activeCount;
+
+  const getSupervisorName = (supervisorId, agentOrCompany = null) => {
+    if (!supervisorId && supervisorId !== 0) return "Field Coordinator";
+
+    let companyRaw = "";
+    if (typeof agentOrCompany === "string") {
+      companyRaw = agentOrCompany;
+    } else if (agentOrCompany && typeof agentOrCompany === "object") {
+      companyRaw = agentOrCompany.company || agentOrCompany.companyName || agentOrCompany.companyShort || "";
+    } else if (selectedEntity && selectedEntity !== "all") {
+      companyRaw = selectedEntity;
+    }
+
+    if (companyRaw) {
+      const canonicalComp = matchStlCanonicalName(companyRaw);
+      const compositeKey = `${canonicalComp}_${supervisorId}`;
+      const spvr = allSupervisors.get(compositeKey);
+      if (spvr) {
+        return spvr.fullName || spvr.full_name || spvr.name || `Supervisor #${supervisorId}`;
+      }
+    }
+
+    const supervisor = allSupervisors.get(String(supervisorId));
+    return supervisor?.fullName || supervisor?.full_name || supervisor?.name || `Supervisor #${supervisorId}`;
+  };
+
+  const filteredAgents = allCombinedAgents.filter((agent) => {
+    if (selectedEntity !== "all") {
+      if (!matchesCompanyEntity(agent.company, selectedEntity)) return false;
+    }
+
+    const spvrName = getSupervisorName(agent.supervisor, agent);
+    const searchableText = `${agent.fullName || agent.name || ""} ${agent.username || ""} ${agent.outlet || ""} ${agent.location || ""} ${agent.address || ""} ${agent.company || ""} ${spvrName}`.toLowerCase();
     const matchesSearch = searchableText.includes(searchTerm.toLowerCase());
     const isActive = isAgentActive(agent);
 
@@ -146,25 +253,26 @@ export default function AgentsPanel({ onClose }) {
     return matchesSearch;
   });
 
-  const getSupervisorName = (supervisorId) => {
-    const supervisor = supervisors.find((record) => String(record.id) === String(supervisorId));
-    return supervisor?.fullName || supervisor?.full_name || supervisor?.name || "Supervisor not found";
+  const getBarangayName = (barangayId, agent = null) => {
+    if (agent?.barangayName) return agent.barangayName;
+    if (agent?.barangay) return agent.barangay;
+    if (agent?.location) return agent.location;
+    if (!barangayId) return agent?.address || "Operating Sector";
+    const barangay = allBarangays.get(String(barangayId));
+    return barangay?.name || agent?.address || "Operating Sector";
   };
 
-  const getBarangayName = (barangayId) => {
-    const barangay = barangays.find((record) => String(record.id) === String(barangayId));
-    return barangay?.name || "Barangay not found";
-  };
-
-  // Download list of agents (Name and Status only)
+  // Download list of agents (Name, Company, and Status only)
   const handleDownload = () => {
     if (!filteredAgents || filteredAgents.length === 0) return;
 
-    const headers = ["#", "Agent Name", "Status"];
+    const headers = ["#", "Agent Name", "Entity / Subsidiary", "Outlet", "Status"];
     const rows = filteredAgents.map((agent, idx) => {
       const name = getAgentName(agent, idx).replace(/"/g, '""');
+      const company = (agent.company || "Lucky Betplay Corporation").replace(/"/g, '""');
+      const outlet = (agent.outlet || "").replace(/"/g, '""');
       const status = isAgentActive(agent) ? "Active" : "Inactive";
-      return `"${idx + 1}","${name}","${status}"`;
+      return `"${idx + 1}","${name}","${company}","${outlet}","${status}"`;
     });
 
     const csvContent = "\uFEFF" + [headers.join(","), ...rows].join("\r\n");
@@ -174,7 +282,7 @@ export default function AgentsPanel({ onClose }) {
     const dateStr = new Date().toISOString().slice(0, 10);
     const statusLabel = statusFilter === "inactive" ? "Inactive" : "Active";
     link.href = url;
-    link.download = `Agents_${statusLabel}_List_${dateStr}.csv`;
+    link.download = `Agents_${selectedEntity === "all" ? "All_Entities" : selectedEntity}_${statusLabel}_${dateStr}.csv`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -182,156 +290,317 @@ export default function AgentsPanel({ onClose }) {
   };
 
   return (
-    <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700">
-            <Bot size={20} />
+    <div className="mt-3 rounded-2xl border border-slate-200/80 bg-white p-3 sm:p-4 shadow-2xs antialiased">
+      {/* Header Row */}
+      <div className="flex flex-wrap items-center justify-between gap-2.5 border-b border-slate-100 pb-3">
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-100 shrink-0">
+            <Bot size={18} />
           </div>
           <div>
-            <h3 className="text-sm font-extrabold text-slate-900">Agents directory</h3>
-            <p className="text-[11px] text-slate-500">
+            <h3 className="text-base font-bold text-slate-900 tracking-tight leading-tight">Agents & Field Tellers Directory</h3>
+            <p className="text-[11px] text-slate-500 mt-0.5">
               {loaded ? (
                 <>
-                  <span className="font-bold text-emerald-600">{activeCount} Active</span>
+                  <span className="font-bold text-emerald-700">{activeCount} Active</span>
                   {" · "}
                   <span className="font-semibold text-slate-500">{inactiveCount} Inactive</span>
+                  {" · "}
+                  <span className="text-slate-400">Total: {currentEntityTotal} {selectedEntity === "all" ? "across all entities" : `in ${selectedEntity}`}</span>
                 </>
               ) : (
-                "View agents connected to this workspace"
+                "View agents connected to this enterprise"
               )}
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <button type="button" onClick={loadAgents} disabled={loading} className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-xs font-bold text-emerald-400 transition hover:bg-slate-800 disabled:cursor-wait disabled:opacity-60">
-            {loading ? <LoaderCircle size={14} className="animate-spin" /> : loaded ? <RefreshCw size={14} /> : <Users size={14} />}
-            {loading ? "Loading agents" : loaded ? "Refresh agents" : "View agents"}
+
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={loadAgents}
+            disabled={loading}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-1.5 text-[11px] font-semibold text-emerald-400 transition hover:bg-slate-800 disabled:cursor-wait disabled:opacity-60 shadow-2xs"
+          >
+            {loading ? <LoaderCircle size={12} className="animate-spin" /> : loaded ? <RefreshCw size={12} /> : <Users size={12} />}
+            <span>{loading ? "Loading..." : "Refresh"}</span>
           </button>
-          <button type="button" onClick={onClose} aria-label="Close agents panel" className="rounded-lg px-2 py-1 text-lg leading-none text-slate-400 hover:bg-slate-100 hover:text-slate-700">×</button>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close agents panel"
+            className="p-1 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition"
+          >
+            ×
+          </button>
         </div>
       </div>
 
+      {/* Multi-Entity Carousel / Tabs Bar (STL Subsidiaries Only) */}
+      <div className="mt-3 flex items-center gap-1.5 overflow-x-auto custom-scrollbar pb-1">
+        {isGlobalUser ? (
+          <button
+            type="button"
+            onClick={() => setSelectedEntity("all")}
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold transition whitespace-nowrap shadow-2xs shrink-0 cursor-pointer ${
+              selectedEntity === "all"
+                ? "bg-slate-900 text-white ring-1 ring-slate-800 shadow-2xs"
+                : "bg-slate-50 border border-slate-200 text-slate-700 hover:bg-slate-100"
+            }`}
+          >
+            <Building2 size={12} className={selectedEntity === "all" ? "text-emerald-400" : "text-slate-400"} />
+            <span>All STL Entities</span>
+            <span className={`text-[9px] px-1.5 py-0.2 rounded-full font-bold ${selectedEntity === "all" ? "bg-white/20 text-white" : "bg-slate-200 text-slate-700"}`}>
+              {allCombinedAgents.length}
+            </span>
+          </button>
+        ) : (
+          userEntityScope && !userEntityScope.isNonStl && (
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11px] font-bold shrink-0">
+              <ShieldCheck size={13} className="text-emerald-600" />
+              <span>Assigned Branch Scope:</span>
+            </div>
+          )
+        )}
+
+        {entityTabList.map((ent) => {
+          const isSelected = selectedEntity === ent.id;
+          return (
+            <button
+              key={ent.id}
+              type="button"
+              onClick={() => {
+                if (isGlobalUser) {
+                  setSelectedEntity(ent.id);
+                }
+              }}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold transition whitespace-nowrap shadow-2xs shrink-0 ${
+                isGlobalUser ? "cursor-pointer" : "cursor-default"
+              } ${
+                isSelected
+                  ? "bg-slate-900 text-white ring-1 ring-slate-800 shadow-2xs"
+                  : "bg-white border border-slate-200 text-slate-700 hover:bg-slate-100"
+              }`}
+            >
+              {ent.logoUrl ? (
+                <img src={ent.logoUrl} alt={ent.shortName} className="w-3.5 h-3.5 rounded object-contain shrink-0" />
+              ) : (
+                <Building2 size={12} className={isSelected ? "text-emerald-400" : "text-slate-400"} />
+              )}
+              <span>{ent.shortName}</span>
+              <span className={`text-[9px] px-1.5 py-0.2 rounded-full font-bold ${isSelected ? "bg-emerald-500/20 text-emerald-300" : "bg-slate-100 text-slate-600"}`}>
+                {ent.count}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      {userEntityScope?.isNonStl && (
+        <div className="mt-4 p-8 text-center rounded-2xl border border-slate-200 bg-slate-50 text-slate-600 space-y-2">
+          <Building2 size={32} className="mx-auto text-slate-400" />
+          <h3 className="text-sm font-bold text-slate-800">{userEntityScope.canonicalName}</h3>
+          <p className="text-xs max-w-md mx-auto text-slate-500">
+            Agents Directory is exclusive to PCSO STL Authorized Operating Entities. Your account is assigned to a Non-STL entity.
+          </p>
+        </div>
+      )}
+
       {error && (
-        <div className="mt-4 flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700">
-          <AlertCircle size={15} className="mt-0.5 shrink-0" />
+        <div className="mt-3 flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 p-2.5 text-xs text-rose-700">
+          <AlertCircle size={14} className="mt-0.5 shrink-0" />
           <div>
-            <p className="font-bold">Unable to load agents</p>
-            <p className="mt-0.5">{error}. Check the API URL, token, and CORS settings.</p>
+            <p className="font-bold">Unable to load live agents</p>
+            <p className="mt-0.5 text-[11px]">{error}. Displaying pre-cached and multi-entity roster.</p>
           </div>
         </div>
       )}
 
-      {loaded && !error && agents.length === 0 && (
-        <p className="mt-4 rounded-xl bg-slate-50 p-4 text-center text-xs text-slate-500">No agents were returned by the API.</p>
-      )}
+      {/* Filter Row: Search, Active/Inactive Tabs, Download */}
+      <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
+        <label className="relative flex-1">
+          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            value={searchTerm}
+            onChange={(event) => setSearchTerm(event.target.value)}
+            placeholder={`Search ${selectedEntity === "all" ? "all" : selectedEntity} agents by name, username, outlet, or sector...`}
+            className="w-full rounded-lg border border-slate-200 bg-slate-50 py-1.5 pl-8 pr-3 text-xs outline-none focus:border-emerald-500 focus:bg-white transition"
+          />
+        </label>
 
-      {agents.length > 0 && (
-        <>
-          <div className="mt-4 flex flex-col gap-2.5 sm:flex-row sm:items-center">
-            <label className="relative flex-1">
-              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Search agents..." className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-9 pr-3 text-xs outline-none focus:border-emerald-500" />
-            </label>
+        {/* All, Active & Inactive Filter Tabs */}
+        <div className="inline-flex items-center rounded-lg border border-slate-200 bg-slate-100/90 p-0.5 shrink-0">
+          <button
+            type="button"
+            onClick={() => setStatusFilter("all")}
+            className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[11px] font-semibold transition cursor-pointer ${
+              statusFilter === "all"
+                ? "bg-slate-900 text-white shadow-2xs"
+                : "text-slate-600 hover:text-slate-900"
+            }`}
+          >
+            <span>All</span>
+            <span className={`rounded-full px-1.5 py-0.2 text-[9px] font-bold ${statusFilter === "all" ? "bg-white/20 text-white" : "bg-slate-200 text-slate-700"}`}>
+              {currentEntityTotal}
+            </span>
+          </button>
 
-            {/* All, Active & Inactive Filter Tabs */}
-            <div className="inline-flex items-center rounded-xl border border-slate-200 bg-slate-100/90 p-1 shrink-0">
-              <button
-                type="button"
-                onClick={() => setStatusFilter("all")}
-                className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition cursor-pointer ${statusFilter === "all"
-                  ? "bg-slate-900 text-white shadow-xs"
-                  : "text-slate-600 hover:bg-white/60 hover:text-slate-900"
-                  }`}
-              >
-                <span>All</span>
-                <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-black ${statusFilter === "all" ? "bg-white/20 text-white" : "bg-slate-200 text-slate-700"}`}>
-                  {agents.length}
-                </span>
-              </button>
+          <button
+            type="button"
+            onClick={() => setStatusFilter("active")}
+            className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[11px] font-semibold transition cursor-pointer ${
+              statusFilter === "active"
+                ? "bg-emerald-600 text-white shadow-2xs"
+                : "text-slate-600 hover:text-slate-900"
+            }`}
+          >
+            <span>Active</span>
+            <span className={`rounded-full px-1.5 py-0.2 text-[9px] font-bold ${statusFilter === "active" ? "bg-white/20 text-white" : "bg-slate-200 text-slate-700"}`}>
+              {activeCount}
+            </span>
+          </button>
 
-              <button
-                type="button"
-                onClick={() => setStatusFilter("active")}
-                className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition cursor-pointer ${statusFilter === "active"
-                  ? "bg-emerald-500 text-slate-950 shadow-xs"
-                  : "text-slate-600 hover:bg-white/60 hover:text-slate-900"
-                  }`}
-              >
-                <span>Active</span>
-                <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-black ${statusFilter === "active" ? "bg-slate-950/20 text-slate-950" : "bg-slate-200 text-slate-700"
-                  }`}>
-                  {activeCount}
-                </span>
-              </button>
+          <button
+            type="button"
+            onClick={() => setStatusFilter("inactive")}
+            className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[11px] font-semibold transition cursor-pointer ${
+              statusFilter === "inactive"
+                ? "bg-slate-900 text-white shadow-2xs"
+                : "text-slate-600 hover:text-slate-900"
+            }`}
+          >
+            <span>Inactive</span>
+            <span className={`rounded-full px-1.5 py-0.2 text-[9px] font-bold ${statusFilter === "inactive" ? "bg-white/20 text-white" : "bg-slate-200 text-slate-700"}`}>
+              {inactiveCount}
+            </span>
+          </button>
+        </div>
 
-              <button
-                type="button"
-                onClick={() => setStatusFilter("inactive")}
-                className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition cursor-pointer ${statusFilter === "inactive"
-                  ? "bg-slate-900 text-white shadow-xs"
-                  : "text-slate-600 hover:bg-white/60 hover:text-slate-900"
-                  }`}
-              >
-                <span>Inactive</span>
-                <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-black ${statusFilter === "inactive" ? "bg-white/20 text-white" : "bg-slate-200 text-slate-700"
-                  }`}>
-                  {inactiveCount}
-                </span>
-              </button>
-            </div>
+        {/* Download Button */}
+        <button
+          type="button"
+          onClick={handleDownload}
+          disabled={filteredAgents.length === 0}
+          className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-slate-900 px-3 py-1.5 text-[11px] font-semibold text-emerald-400 shadow-2xs transition hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed shrink-0 cursor-pointer"
+          title="Download filtered agents roster"
+        >
+          <Download size={12} />
+          <span className="hidden sm:inline">Export</span>
+        </button>
+      </div>
 
-            {/* Download Button (Name & Status only) */}
+      {/* Agents Card Grid */}
+      <div className="mt-3 grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+        {filteredAgents.slice(0, visibleCount).map((agent, index) => {
+          const entityMeta = ENTITY_METADATA[agent.company] || {};
+          const isAct = isAgentActive(agent);
+
+          return (
             <button
               type="button"
-              onClick={handleDownload}
-              disabled={filteredAgents.length === 0}
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-xs font-bold text-emerald-400 shadow-xs transition hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed shrink-0 cursor-pointer"
-              title="Download agents list (Name & Status only)"
+              key={agent.id || agent.uuid || index}
+              onClick={() => setSelectedAgent({ agent, index })}
+              className="rounded-xl border border-slate-200/90 bg-white p-2.5 sm:p-3 text-left transition hover:border-emerald-300 hover:shadow-2xs cursor-pointer flex flex-col justify-between"
             >
-              <Download size={14} />
-            </button>
-          </div>
-
-          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {filteredAgents.map((agent, index) => (
-              <button type="button" key={agent.id || agent.uuid || index} onClick={() => setSelectedAgent({ agent, index })} className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-left transition hover:-translate-y-0.5 hover:border-emerald-300 hover:bg-emerald-50/40 hover:shadow-sm">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-900 text-xs font-bold text-emerald-400">
+              <div>
+                <div className="flex items-center gap-2.5">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-900 text-xs font-bold text-emerald-400 shrink-0">
                     {getAgentName(agent, index).slice(0, 2).toUpperCase()}
                   </div>
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex-1">
                     <h4 className="truncate text-xs font-bold text-slate-900">{getAgentName(agent, index)}</h4>
-                    <p className="truncate text-[10px] text-slate-500 font-mono">@{agent.username || `agent_${agent.id}`}</p>
+                    <p className="truncate text-[10px] text-slate-400 font-mono">@{agent.username || `agent_${agent.id}`}</p>
                   </div>
-                  <span className={`ml-auto rounded-full px-2 py-1 text-[9px] font-bold ${getAgentStatus(agent) === "active" ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-600"}`}>
-                    {getAgentStatus(agent) === "active" ? "Active" : "Inactive"}
+                  <span className={`ml-auto rounded-full px-1.5 py-0.2 text-[8.5px] font-bold shrink-0 ${isAct ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-slate-100 text-slate-600 border border-slate-200"}`}>
+                    {isAct ? "Active" : "Inactive"}
                   </span>
                 </div>
-                {agent.outlet && <p className="mt-2.5 truncate text-[11px] font-semibold text-emerald-800 flex items-center gap-1"><Store size={12} className="shrink-0 text-emerald-600" /> {agent.outlet}</p>}
-                {agent.brgyId && <p className="mt-1 truncate text-[10px] text-slate-600 flex items-center gap-1"><MapPin size={12} className="shrink-0 text-rose-500" /> Brgy: <span className="font-semibold text-slate-800">{getBarangayName(agent.brgyId)}</span></p>}
-                {agent.supervisor !== undefined && <p className="mt-1 truncate text-[10px] text-slate-500">Supervisor: <span className="font-semibold text-slate-700">{getSupervisorName(agent.supervisor)}</span></p>}
-                <p className="mt-2 text-[10px] font-bold text-emerald-700">View profile →</p>
-              </button>
-            ))}
+
+                {/* Entity Badge */}
+                <div className="mt-2 flex items-center gap-1.5">
+                  <span className="inline-flex items-center gap-1 text-[9px] font-bold text-slate-700 bg-slate-50 border border-slate-200 px-1.5 py-0.2 rounded truncate">
+                    <Building2 size={9} className="text-emerald-600 shrink-0" />
+                    <span className="truncate">{agent.company || "Lucky Betplay Corporation"}</span>
+                  </span>
+                </div>
+
+                {agent.outlet && (
+                  <p className="mt-1.5 truncate text-[10px] font-semibold text-emerald-800 flex items-center gap-1">
+                    <Store size={11} className="shrink-0 text-emerald-600" />
+                    <span className="truncate">{agent.outlet}</span>
+                  </p>
+                )}
+
+                {agent.location && (
+                  <p className="mt-0.5 truncate text-[10px] text-slate-500 flex items-center gap-1">
+                    <MapPin size={11} className="shrink-0 text-rose-500" />
+                    <span className="truncate">Location: <span className="font-semibold text-slate-700">{agent.location}</span></span>
+                  </p>
+                )}
+
+                {agent.supervisor !== undefined && agent.supervisor !== null && (
+                  <p className="mt-0.5 truncate text-[10px] text-slate-400">
+                    Supervisor: <span className="font-semibold text-slate-600">{getSupervisorName(agent.supervisor, agent)}</span>
+                  </p>
+                )}
+              </div>
+
+              <div className="mt-2 pt-1.5 border-t border-slate-100 flex items-center justify-between text-[9.5px] text-emerald-700 font-bold">
+                <span>View Profile &amp; ID</span>
+                <span>→</span>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Pagination / Load More Bar */}
+      {filteredAgents.length > visibleCount && (
+        <div className="mt-3 flex flex-col sm:flex-row items-center justify-between gap-2 p-2.5 bg-slate-50 rounded-xl border border-slate-200/80 text-xs">
+          <span className="text-slate-500 text-[11px] font-medium">
+            Showing <strong className="text-slate-800 font-bold">{visibleCount}</strong> of <strong className="text-slate-800 font-bold">{filteredAgents.length}</strong> real STL agents
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setVisibleCount((prev) => Math.min(prev + 60, filteredAgents.length))}
+              className="px-3 py-1 rounded-lg bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 text-xs font-semibold shadow-2xs transition flex items-center gap-1 cursor-pointer"
+            >
+              <ChevronDown size={12} />
+              <span>Load 60 More</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setVisibleCount(filteredAgents.length)}
+              className="px-3 py-1 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 text-xs font-bold shadow-2xs transition cursor-pointer"
+            >
+              Show All ({filteredAgents.length})
+            </button>
           </div>
-          {filteredAgents.length === 0 && <p className="mt-4 rounded-xl bg-slate-50 p-4 text-center text-xs text-slate-500">No agents match your filters.</p>}
-        </>
+        </div>
       )}
 
-      {selectedAgent && <AgentProfile
-        agent={selectedAgent.agent}
-        index={selectedAgent.index}
-        supervisorName={getSupervisorName(selectedAgent.agent.supervisor)}
-        barangayName={getBarangayName(selectedAgent.agent.brgyId)}
-        onSave={(updatedAgent) => {
-          setAgents((currentAgents) => currentAgents.map((currentAgent) => (
-            currentAgent.id === updatedAgent.id ? updatedAgent : currentAgent
-          )));
-          setSelectedAgent((currentSelection) => ({ ...currentSelection, agent: updatedAgent }));
-        }}
-        onClose={() => setSelectedAgent(null)}
-      />}
+      {filteredAgents.length === 0 && (
+        <div className="mt-3 rounded-xl bg-slate-50 p-6 text-center text-xs text-slate-500">
+          No personnel found under {selectedEntity === "all" ? "any entity" : selectedEntity} matching your search filter.
+        </div>
+      )}
+
+      {selectedAgent && (
+        <AgentProfile
+          agent={selectedAgent.agent}
+          index={selectedAgent.index}
+          supervisorName={getSupervisorName(selectedAgent.agent.supervisor, selectedAgent.agent)}
+          barangayName={getBarangayName(selectedAgent.agent?.brgyId, selectedAgent.agent)}
+          onSave={(updatedAgent) => {
+            setBaseAgents((currentAgents) => currentAgents.map((currentAgent) => (
+              currentAgent.id === updatedAgent.id ? updatedAgent : currentAgent
+            )));
+            setSelectedAgent((currentSelection) => ({ ...currentSelection, agent: updatedAgent }));
+          }}
+          onClose={() => setSelectedAgent(null)}
+        />
+      )}
     </div>
   );
 }

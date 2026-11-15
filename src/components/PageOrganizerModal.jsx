@@ -219,7 +219,7 @@ export default function PageOrganizerModal({
 
   return (
     <div
-      className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/85 p-3 sm:p-6 backdrop-blur-md animate-in fade-in duration-150"
+      className="fixed inset-0 z-[9998] flex items-center justify-center bg-slate-950/85 p-3 sm:p-6 backdrop-blur-md animate-in fade-in duration-150"
       onClick={onClose}
     >
       <div

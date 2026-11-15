@@ -231,53 +231,53 @@ export default function PoliciesHandbooksPanel() {
   }, [searchQuery, selectedCategory]);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3 antialiased text-slate-800">
       {/* 1. HEADER */}
-      <div className="bg-white rounded-3xl border border-slate-200/90 p-6 shadow-xs">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-5 border-b border-slate-100">
+      <div className="bg-white rounded-2xl border border-slate-200/80 p-3 sm:p-4 shadow-2xs">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-3 border-b border-slate-100">
           <div>
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 text-[11px] font-black tracking-tight mb-2">
-              <BookOpen size={13} className="text-emerald-600" />
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 text-[10px] font-bold tracking-tight mb-1">
+              <BookOpen size={11} className="text-emerald-600" />
               <span>OFFICIAL CORPORATE HANDBOOK LIBRARY</span>
             </div>
-            <h1 className="text-2xl font-black text-slate-900 tracking-tight">
+            <h1 className="text-base font-bold text-slate-900 tracking-tight leading-tight">
               Corporate Governance & Compliance Handbooks
             </h1>
-            <p className="text-xs text-slate-500 mt-1 max-w-2xl leading-relaxed">
-              Certified legal volumes, DOLE compliance handbooks, and operational manuals governing all Simpal Group entities, branch terminals, and site personnel.
+            <p className="text-[11px] text-slate-500 mt-0.5 max-w-xl truncate leading-normal">
+              Certified legal volumes, DOLE compliance handbooks, and operational manuals governing all Simpal Group entities.
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
-            <span className="px-3.5 py-1.5 rounded-xl bg-slate-900 text-emerald-400 font-bold text-xs flex items-center gap-1.5 shadow-2xs">
-              <Scale size={13} />
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="px-2.5 py-1 rounded-lg bg-slate-900 text-emerald-400 font-bold text-[10px] flex items-center gap-1.5 shadow-2xs">
+              <Scale size={11} />
               <span>DOLE 2026 Certified Library</span>
             </span>
           </div>
         </div>
 
         {/* SEARCH & CATEGORY CHIPS */}
-        <div className="pt-5 space-y-3">
+        <div className="pt-3 space-y-2">
           <div className="relative">
-            <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search by handbook title, due process, OSH RA 11058, or document ref..."
-              className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-emerald-500 transition font-medium"
+              className="w-full pl-8 pr-3.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-emerald-500 transition font-medium"
             />
           </div>
 
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 custom-scrollbar">
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 custom-scrollbar">
             {categories.map((cat) => (
               <button
                 key={cat}
                 type="button"
                 onClick={() => setSelectedCategory(cat)}
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition cursor-pointer ${
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold whitespace-nowrap transition cursor-pointer ${
                   selectedCategory === cat
-                    ? "bg-slate-900 text-white shadow-xs"
+                    ? "bg-slate-900 text-white shadow-2xs"
                     : "bg-slate-100 hover:bg-slate-200 text-slate-600"
                 }`}
               >
@@ -289,7 +289,7 @@ export default function PoliciesHandbooksPanel() {
       </div>
 
       {/* 2. REALISTIC 3D BOOKSHELF GALLERY */}
-      <div key={selectedCategory} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pt-2 stagger-children">
+      <div key={selectedCategory} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 sm:gap-4 pt-1 stagger-children">
         {filteredPolicies.map((policy) => {
           const Icon = policy.icon;
 
@@ -300,21 +300,20 @@ export default function PoliciesHandbooksPanel() {
               className="group cursor-pointer flex flex-col justify-between select-none"
             >
               {/* 3D BOOK CONTAINER WITH PERSPECTIVE */}
-              <div className="relative py-4 px-2 flex justify-center items-center">
+              <div className="relative py-2 px-1 flex justify-center items-center">
                 {/* Book Shadow on Shelf */}
-                <div className="absolute bottom-2 w-48 h-5 bg-slate-900/25 rounded-full blur-md group-hover:w-52 group-hover:h-6 group-hover:bg-slate-900/35 group-hover:translate-y-2 transition-all duration-300" />
+                <div className="absolute bottom-1.5 w-40 h-4 bg-slate-900/20 rounded-full blur-sm group-hover:w-44 group-hover:h-5 group-hover:bg-slate-900/30 group-hover:translate-y-1.5 transition-all duration-300" />
 
                 {/* The 3D Book */}
                 <div
-                  className="relative w-56 h-80 rounded-r-2xl rounded-l-md shadow-2xl transition-all duration-400 ease-out transform group-hover:-translate-y-3 group-hover:-rotate-2 group-hover:shadow-[0_25px_35px_-8px_rgba(0,0,0,0.5)]"
+                  className="relative w-44 h-64 sm:w-48 sm:h-68 rounded-r-xl rounded-l-xs shadow-xl transition-all duration-300 ease-out transform group-hover:-translate-y-2 group-hover:-rotate-1 group-hover:shadow-[0_20px_30px_-6px_rgba(0,0,0,0.4)]"
                   style={{
                     perspective: "1200px",
                     transformStyle: "preserve-3d"
                   }}
                 >
                   {/* Layered White/Ivory Pages on the Right Edge */}
-                  <div className="absolute -right-2 top-2.5 bottom-2.5 w-3 bg-gradient-to-r from-amber-50 via-slate-100 to-amber-100 rounded-r shadow-inner border-r border-t border-b border-amber-200/60 flex flex-col justify-around py-1">
-                    <span className="w-full h-px bg-slate-300/60" />
+                  <div className="absolute -right-1.5 top-2 bottom-2 w-2 bg-gradient-to-r from-amber-50 via-slate-100 to-amber-100 rounded-r shadow-inner border-r border-t border-b border-amber-200/60 flex flex-col justify-around py-0.5">
                     <span className="w-full h-px bg-slate-300/60" />
                     <span className="w-full h-px bg-slate-300/60" />
                     <span className="w-full h-px bg-slate-300/60" />
@@ -322,11 +321,11 @@ export default function PoliciesHandbooksPanel() {
                   </div>
 
                   {/* Layered Pages on Bottom Edge */}
-                  <div className="absolute -bottom-1.5 left-4 right-1 h-2 bg-gradient-to-b from-slate-200 to-amber-50 rounded-b shadow-xs border-b border-amber-200/60" />
+                  <div className="absolute -bottom-1 left-3 right-1 h-1.5 bg-gradient-to-b from-slate-200 to-amber-50 rounded-b shadow-xs border-b border-amber-200/60" />
 
                   {/* Silky Ribbon Bookmark hanging at the top */}
                   <div
-                    className={`absolute -top-1 right-7 w-4 h-9 ${policy.ribbonColor} shadow-md z-20 transition-all duration-300 group-hover:h-11`}
+                    className={`absolute -top-1 right-5 w-3.5 h-7 ${policy.ribbonColor} shadow-sm z-20 transition-all duration-300 group-hover:h-9`}
                     style={{
                       clipPath: "polygon(0 0, 100% 0, 100% 100%, 50% 80%, 0 100%)"
                     }}
@@ -334,57 +333,57 @@ export default function PoliciesHandbooksPanel() {
 
                   {/* Hardcover Main Face */}
                   <div
-                    className={`relative w-full h-full rounded-r-2xl rounded-l-md bg-gradient-to-br ${policy.coverGradient} p-4.5 flex flex-col justify-between overflow-hidden border border-white/10 z-10`}
+                    className={`relative w-full h-full rounded-r-xl rounded-l-xs bg-gradient-to-br ${policy.coverGradient} p-3.5 flex flex-col justify-between overflow-hidden border border-white/10 z-10`}
                   >
                     {/* Spine Binding Crease Shading on Left Edge */}
-                    <div className="absolute left-0 top-0 bottom-0 w-5 bg-gradient-to-r from-black/50 via-white/10 to-transparent pointer-events-none rounded-l-md" />
-                    <div className="absolute left-5 top-0 bottom-0 w-px bg-black/40 pointer-events-none" />
+                    <div className="absolute left-0 top-0 bottom-0 w-4 bg-gradient-to-r from-black/50 via-white/10 to-transparent pointer-events-none rounded-l-xs" />
+                    <div className="absolute left-4 top-0 bottom-0 w-px bg-black/40 pointer-events-none" />
 
                     {/* Animated Light Sheen on Hover */}
                     <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/15 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000 ease-in-out pointer-events-none" />
 
                     {/* Decorative Gilded Border Inlay */}
-                    <div className="absolute inset-2.5 rounded-xl border border-amber-400/30 ring-1 ring-amber-300/15 pointer-events-none" />
+                    <div className="absolute inset-2 rounded-lg border border-amber-400/30 ring-1 ring-amber-300/15 pointer-events-none" />
 
                     {/* Book Header: Seal & Corporate Name */}
-                    <div className="relative pt-1 pl-3 text-center space-y-1">
-                      <div className="w-9 h-9 rounded-full bg-black/40 border border-amber-400/40 text-amber-300 flex items-center justify-center mx-auto shadow-inner">
-                        <Icon size={16} />
+                    <div className="relative pt-0.5 pl-2 text-center space-y-0.5">
+                      <div className="w-7 h-7 rounded-full bg-black/40 border border-amber-400/40 text-amber-300 flex items-center justify-center mx-auto shadow-inner">
+                        <Icon size={13} />
                       </div>
-                      <p className="text-[8px] font-black uppercase tracking-widest text-amber-200/90">
+                      <p className="text-[7.5px] font-black uppercase tracking-widest text-amber-200/90">
                         SIMPAL GROUP
                       </p>
-                      <p className="text-[7px] font-bold tracking-wider text-amber-300/60 uppercase">
+                      <p className="text-[6.5px] font-bold tracking-wider text-amber-300/60 uppercase">
                         Official Manual • 2026
                       </p>
                     </div>
 
                     {/* Book Center: Title & Subtitle */}
-                    <div className="relative pl-3 text-center space-y-1.5 my-auto">
-                      <h2 className="text-sm font-black text-amber-100 tracking-tight leading-snug drop-shadow-sm font-serif">
+                    <div className="relative pl-2 text-center space-y-1 my-auto">
+                      <h2 className="text-xs sm:text-[13px] font-bold text-amber-100 tracking-tight leading-snug drop-shadow-xs font-serif">
                         {policy.title}
                       </h2>
-                      <div className="w-8 h-0.5 bg-amber-400/50 mx-auto" />
-                      <p className="text-[9px] font-medium text-amber-200/80 leading-tight">
+                      <div className="w-6 h-0.5 bg-amber-400/50 mx-auto" />
+                      <p className="text-[8.5px] font-medium text-amber-200/80 leading-tight">
                         {policy.subtitle}
                       </p>
                     </div>
 
                     {/* Book Footer: Reference & Seal */}
-                    <div className="relative pl-3 text-center pt-2 border-t border-amber-400/20">
-                      <p className="text-[8px] font-mono font-bold text-amber-300/70 tracking-wider">
+                    <div className="relative pl-2 text-center pt-1.5 border-t border-amber-400/20">
+                      <p className="text-[7.5px] font-mono font-bold text-amber-300/70 tracking-wider">
                         {policy.docRef}
                       </p>
-                      <p className="text-[6.5px] uppercase tracking-widest text-white/50 font-semibold mt-0.5">
+                      <p className="text-[6px] uppercase tracking-widest text-white/50 font-semibold mt-0.5">
                         Central Secretariat Archive
                       </p>
                     </div>
 
                     {/* Hover "Read" Floating Pill */}
-                    <div className="absolute inset-x-4 bottom-4 opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-y-2 group-hover:translate-y-0 z-30">
-                      <div className="bg-slate-900/90 backdrop-blur-xs text-emerald-400 border border-emerald-400/30 text-[10px] font-black py-1.5 px-3 rounded-xl flex items-center justify-center gap-1.5 shadow-lg">
-                        <BookOpen size={11} />
-                        <span>Open & Read Handbook</span>
+                    <div className="absolute inset-x-3 bottom-3 opacity-0 group-hover:opacity-100 transition-all duration-200 transform translate-y-1.5 group-hover:translate-y-0 z-30">
+                      <div className="bg-slate-900/90 backdrop-blur-xs text-emerald-400 border border-emerald-400/30 text-[9px] font-bold py-1 px-2.5 rounded-lg flex items-center justify-center gap-1 shadow-md">
+                        <BookOpen size={10} />
+                        <span>Open & Read</span>
                       </div>
                     </div>
                   </div>
@@ -392,8 +391,8 @@ export default function PoliciesHandbooksPanel() {
               </div>
 
               {/* Handbook Info Card Beneath the Book */}
-              <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-2xs hover:border-slate-300 transition space-y-2 mt-1">
-                <div className="flex items-center justify-between text-[10px]">
+              <div className="bg-white rounded-xl border border-slate-200/80 p-3 shadow-2xs hover:border-slate-300 transition space-y-1.5 mt-0.5">
+                <div className="flex items-center justify-between text-[9px]">
                   <span className={`px-2 py-0.5 rounded-full font-bold border ${policy.badgeColor}`}>
                     {policy.badge}
                   </span>
@@ -402,7 +401,7 @@ export default function PoliciesHandbooksPanel() {
                   </span>
                 </div>
 
-                <h3 className="font-extrabold text-slate-900 text-xs line-clamp-1 group-hover:text-emerald-700 transition">
+                <h3 className="font-bold text-slate-900 text-xs line-clamp-1 group-hover:text-emerald-700 transition">
                   {policy.title}
                 </h3>
 
@@ -410,11 +409,11 @@ export default function PoliciesHandbooksPanel() {
                   {policy.summary}
                 </p>
 
-                <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[10px] text-slate-400 font-medium">
+                <div className="pt-1.5 border-t border-slate-100 flex items-center justify-between text-[10px] text-slate-400 font-medium">
                   <span>Effective: {policy.effectiveDate}</span>
-                  <span className="text-emerald-700 font-bold group-hover:translate-x-1 transition flex items-center gap-0.5">
+                  <span className="text-emerald-700 font-bold group-hover:translate-x-0.5 transition flex items-center gap-0.5">
                     <span>Inspect</span>
-                    <ChevronRight size={11} />
+                    <ChevronRight size={10} />
                   </span>
                 </div>
               </div>

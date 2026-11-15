@@ -5,7 +5,7 @@ import {
   CheckCircle2, AlertTriangle, Clock, Search, Users, Zap, Check, ChevronDown, Ticket,
   Layers, ListFilter, Hash, ChevronLeft, ChevronRight, Eye, ArrowDownToLine,
   Radio, RotateCw, Receipt, SlidersHorizontal, BadgeCheck, Clock3, Activity, Sparkles, Timer,
-  MapPin, Settings
+  MapPin, Settings, Building2, ShieldCheck
 } from "lucide-react";
 import { API_CONFIG } from "../config/apiConfig";
 import {
@@ -14,6 +14,7 @@ import {
   setSelectedAreaId,
   getAreaConfigById
 } from "../lib/areaApiConfigStorage";
+import { isGlobalAccessUser, getUserAssignedStlEntity } from "../lib/companyEntities";
 
 const DEFAULT_GROSS_URL = API_CONFIG.GROSS_REPORT_URL;
 const DEFAULT_SUPERVISOR_URL = API_CONFIG.SUPERVISOR_URL;
@@ -421,7 +422,7 @@ function SupervisorPicker({ value, onChange, summaries, metrics, showFigures = t
   );
 }
 
-export default function GrossReportPanel({ initialTab = "realtime" } = {}) {
+export default function GrossReportPanel({ initialTab = "realtime", currentUser = null } = {}) {
   const [range, setRange] = useState(getInitialRange);
   const [rawGrossList, setRawGrossList] = useState(() => CACHED_GROSS || []);
   const [recordsState, setRecordsState] = useState(() => CACHED_RECORDS || []);
@@ -432,6 +433,22 @@ export default function GrossReportPanel({ initialTab = "realtime" } = {}) {
   const [reportTab, setReportTab] = useState(initialTab || "realtime");
   const [previewOpen, setPreviewOpen] = useState(false);
 
+  const activeUser = useMemo(() => {
+    if (currentUser) return currentUser;
+    try {
+      const raw = localStorage.getItem("hrhub_auth_user");
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  }, [currentUser]);
+
+  const userEntityScope = useMemo(() => {
+    return getUserAssignedStlEntity(activeUser);
+  }, [activeUser]);
+
+  const isGlobalUser = !userEntityScope;
+
   useEffect(() => {
     if (initialTab) {
       setReportTab(initialTab);
@@ -440,8 +457,52 @@ export default function GrossReportPanel({ initialTab = "realtime" } = {}) {
 
   // Multi-Area & Entity API Configuration Integration
   const [areaConfigs, setAreaConfigs] = useState(() => getAreaConfigs());
+
+  // Filter area configs based on user's assigned entity
+  const filteredAreaConfigs = useMemo(() => {
+    if (isGlobalUser) return areaConfigs;
+    if (userEntityScope?.isNonStl) return [];
+
+    const canon = (userEntityScope.canonicalName || "").toLowerCase();
+    const shortN = (userEntityScope.shortName || "").toLowerCase();
+    const matched = areaConfigs.filter((area) => {
+      const c = (area.companyName || "").toLowerCase();
+      return (
+        c.includes(canon) ||
+        canon.includes(c) ||
+        c.includes(shortN) ||
+        (userEntityScope.code === "5ARG" && (c.includes("5a") || c.includes("royal") || (area.areaName || "").toLowerCase().includes("maguindanao"))) ||
+        (userEntityScope.code === "IMP" && (c.includes("imperial") || (area.areaName || "").toLowerCase().includes("cotabato"))) ||
+        (userEntityScope.code === "GFC" && (c.includes("glowing") || c.includes("fortune"))) ||
+        (userEntityScope.code === "LBC" && (c.includes("lucky") || c.includes("betplay") || (area.areaName || "").toLowerCase().includes("mandaue")))
+      );
+    });
+
+    return matched.length > 0 ? matched : areaConfigs;
+  }, [areaConfigs, isGlobalUser, userEntityScope]);
+
   const [selectedAreaId, setSelectedAreaIdState] = useState(() => getSelectedAreaId());
-  const currentArea = useMemo(() => getAreaConfigById(selectedAreaId), [selectedAreaId, areaConfigs]);
+
+  // Ensure selectedAreaId is valid within user's filteredAreaConfigs
+  useEffect(() => {
+    if (!isGlobalUser && filteredAreaConfigs.length > 0) {
+      const exists = filteredAreaConfigs.some((a) => a.id === selectedAreaId);
+      if (!exists) {
+        setSelectedAreaIdState(filteredAreaConfigs[0].id);
+        setSelectedAreaId(filteredAreaConfigs[0].id);
+      }
+    }
+  }, [filteredAreaConfigs, isGlobalUser, selectedAreaId]);
+
+  const currentArea = useMemo(() => {
+    if (!isGlobalUser && filteredAreaConfigs.length > 0) {
+      const found = filteredAreaConfigs.find((a) => a.id === selectedAreaId);
+      if (found) return found;
+      return filteredAreaConfigs[0];
+    }
+    return getAreaConfigById(selectedAreaId);
+  }, [selectedAreaId, areaConfigs, filteredAreaConfigs, isGlobalUser]);
+
   const currentAreaRef = useRef(currentArea);
   currentAreaRef.current = currentArea;
 
@@ -510,7 +571,13 @@ export default function GrossReportPanel({ initialTab = "realtime" } = {}) {
     try {
       const activeArea = currentAreaRef.current;
       const token = String(activeArea?.grossReportToken || DEFAULT_TOKEN).trim();
-      const url = `https://stl-mandaue-api.com/api/admin/draw?from=${targetDate}&to=${targetDate}`;
+      let adminDrawBase = "https://stl-mandaue-api.com";
+      try {
+        if (activeArea?.grossReportUrl) {
+          adminDrawBase = new URL(activeArea.grossReportUrl).origin;
+        }
+      } catch {}
+      const url = `${adminDrawBase}/api/admin/draw?from=${targetDate}&to=${targetDate}`;
       const res = await fetch(url, {
         headers: { Accept: "application/json", Authorization: `Bearer ${token}` }
       });
@@ -2828,6 +2895,22 @@ export default function GrossReportPanel({ initialTab = "realtime" } = {}) {
 
   const openPreview = () => setPreviewOpen(true);
 
+  if (userEntityScope?.isNonStl) {
+    return (
+      <section className="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
+        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-50 text-amber-600 border border-amber-200 mb-4">
+          <ShieldCheck size={28} />
+        </div>
+        <h3 className="text-lg font-black text-slate-800">
+          Gross Operations Report Restricted
+        </h3>
+        <p className="mt-2 text-sm text-slate-600 max-w-md mx-auto">
+          Gross Operations and Live Bet Monitoring are exclusive to Authorized Small Town Lottery (STL) gaming entities. Your account is scoped to <strong className="text-slate-800">{userEntityScope.canonicalName}</strong>.
+        </p>
+      </section>
+    );
+  }
+
   return (
     <section className="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
       {/* Executive Command Header */}
@@ -2861,18 +2944,26 @@ export default function GrossReportPanel({ initialTab = "realtime" } = {}) {
                 <MapPin size={12} />
                 Area:
               </span>
-              <select
-                value={selectedAreaId}
-                onChange={(e) => handleAreaChange(e.target.value)}
-                className="bg-slate-900/90 text-white font-bold rounded-md px-2 py-0.5 border border-white/15 outline-none focus:border-emerald-400 cursor-pointer text-xs max-w-48 truncate"
-                title="Select Area / Entity for Gross Report"
-              >
-                {areaConfigs.map((area) => (
-                  <option key={area.id} value={area.id} className="bg-slate-900 text-white">
-                    {area.areaName} ({area.companyName})
-                  </option>
-                ))}
-              </select>
+              {!isGlobalUser && filteredAreaConfigs.length <= 1 ? (
+                <div className="flex items-center gap-1.5 px-2 py-0.5 bg-emerald-500/20 text-emerald-300 font-bold text-xs rounded-md border border-emerald-500/30">
+                  <ShieldCheck size={12} className="text-emerald-400 shrink-0" />
+                  <span>{filteredAreaConfigs[0]?.areaName || currentArea?.areaName || "Assigned Area"}</span>
+                  <span className="text-[10px] text-emerald-400/80 font-normal">({userEntityScope?.shortName || "Branch Scope"})</span>
+                </div>
+              ) : (
+                <select
+                  value={selectedAreaId}
+                  onChange={(e) => handleAreaChange(e.target.value)}
+                  className="bg-slate-900/90 text-white font-bold rounded-md px-2 py-0.5 border border-white/15 outline-none focus:border-emerald-400 cursor-pointer text-xs max-w-48 truncate"
+                  title="Select Area / Entity for Gross Report"
+                >
+                  {filteredAreaConfigs.map((area) => (
+                    <option key={area.id} value={area.id} className="bg-slate-900 text-white">
+                      {area.areaName} ({area.companyName})
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
 
             {/* Contextual Date Controls */}

@@ -6,6 +6,7 @@
  */
 
 import { supabase } from "./supabase.js";
+import { autoLogHRAction } from "./hrWorkLogsStorage.js";
 
 const BULLETIN_FEED_KEY = "company_bulletin_feed_master";
 
@@ -179,6 +180,25 @@ export async function createBulletinPostInDb(postData) {
     });
   } catch {
     // Non-blocking schema fallback
+  }
+
+  // Telemetry: Auto-record HR operational log into database
+  try {
+    autoLogHRAction({
+      user: {
+        name: newPost.authorName,
+        email: newPost.authorEmail,
+        role: newPost.authorRole,
+        company: newPost.authorCompany
+      },
+      taskProject: `Corporate Bulletin Broadcast: ${newPost.title || newPost.category}`,
+      category: "Corporate Policy & Administrative",
+      progressComments: `Published enterprise communication: "${newPost.title || newPost.category}" (${newPost.category}) to company bulletin.`,
+      status: "Completed",
+      durationMinutes: 20
+    });
+  } catch (logErr) {
+    console.warn("Auto-log bulletin notice:", logErr);
   }
 
   return { success: true, post: newPost, allPosts: updatedFeed };

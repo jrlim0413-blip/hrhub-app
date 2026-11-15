@@ -828,46 +828,46 @@ export default function EmployeeDirectoryPanel({
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3 antialiased text-slate-800">
       {/* Top Banner Notice */}
       {notice && (
-        <div className={`p-3.5 rounded-2xl border text-xs font-semibold flex items-center justify-between gap-3 shadow-xs animate-in fade-in slide-in-from-top-2 ${notice.type === "success"
+        <div className={`p-2.5 rounded-xl border text-xs font-semibold flex items-center justify-between gap-2.5 shadow-2xs animate-in fade-in slide-in-from-top-2 ${notice.type === "success"
           ? "bg-emerald-50 border-emerald-200 text-emerald-900"
           : "bg-amber-50 border-amber-200 text-amber-900"
           }`}>
-          <div className="flex items-center gap-2">
-            <CheckCircle2 size={16} className="text-emerald-600 shrink-0" />
+          <div className="flex items-center gap-1.5">
+            <CheckCircle2 size={14} className="text-emerald-600 shrink-0" />
             <span>{notice.message}</span>
           </div>
           <button onClick={() => setNotice(null)} className="text-slate-400 hover:text-slate-700 cursor-pointer">
-            <X size={14} />
+            <X size={13} />
           </button>
         </div>
       )}
 
       {/* Main Corporate Header */}
-      <div className="bg-white border border-slate-200/90 rounded-2xl p-6 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="bg-white border border-slate-200/80 rounded-2xl p-3 sm:p-4 shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-3">
         <div>
-          <div className="flex items-center gap-2">
-            <span className="p-1.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200/70">
-              <Users size={16} />
+          <div className="flex items-center gap-1.5">
+            <span className="p-1 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200/70">
+              <Users size={13} />
             </span>
-            <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-700">Simpal Group • Personnel Governance</span>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700">Simpal Group • Personnel Governance</span>
           </div>
-          <h2 className="mt-1 text-2xl font-black text-slate-900 tracking-tight">Employee Directory</h2>
-          <p className="mt-0.5 text-xs text-slate-500 max-w-xl">
-            Enterprise personnel database, corporate roles, and branch assignments.
+          <h2 className="mt-0.5 text-base font-bold text-slate-900 tracking-tight leading-tight">Employee Directory</h2>
+          <p className="text-[11px] text-slate-500 max-w-xl truncate mt-0.5">
+            Enterprise personnel database, corporate roles, and branch assignments across subsidiaries.
           </p>
         </div>
 
-        <div className="flex items-center gap-2 shrink-0 flex-nowrap overflow-x-auto max-w-full">
+        <div className="flex items-center gap-1.5 shrink-0 flex-nowrap overflow-x-auto max-w-full">
           <button
             type="button"
             onClick={onRefresh}
             title="Refresh Directory"
-            className="p-2 sm:p-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 hover:text-slate-900 transition cursor-pointer shadow-2xs shrink-0"
+            className="p-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 hover:text-slate-900 transition cursor-pointer shadow-2xs shrink-0"
           >
-            <RefreshCw size={14} className={loading ? "animate-spin text-emerald-600" : ""} />
+            <RefreshCw size={13} className={loading ? "animate-spin text-emerald-600" : ""} />
           </button>
 
           {/* Permissions Matrix: Exclusively for Head Office HR Administrator */}
@@ -876,9 +876,9 @@ export default function EmployeeDirectoryPanel({
               type="button"
               onClick={onOpenPermissions}
               title="Configure Role & Permissions Matrix"
-              className="inline-flex items-center gap-1.5 px-3 py-2 sm:py-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 hover:text-slate-900 text-xs font-bold transition cursor-pointer shadow-2xs shrink-0"
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 hover:text-slate-900 text-xs font-semibold transition cursor-pointer shadow-2xs shrink-0"
             >
-              <Sliders size={14} className="text-emerald-600 shrink-0" />
+              <Sliders size={13} className="text-emerald-600 shrink-0" />
               <span className="hidden md:inline">Permissions</span>
             </button>
           )}
@@ -889,9 +889,9 @@ export default function EmployeeDirectoryPanel({
               type="button"
               onClick={handleOpenAddModal}
               title="Pre-Register Employee (Grants HRHub Login Access)"
-              className="inline-flex items-center gap-1.5 bg-slate-900 hover:bg-slate-800 text-white px-3 sm:px-3.5 py-2 sm:py-2.5 rounded-xl font-bold text-xs shadow-sm transition cursor-pointer shrink-0"
+              className="inline-flex items-center gap-1 bg-slate-900 hover:bg-slate-800 text-white px-2.5 py-1.5 rounded-lg font-bold text-xs shadow-2xs transition cursor-pointer shrink-0"
             >
-              <UserPlus size={14} className="text-emerald-400 shrink-0" />
+              <UserPlus size={13} className="text-emerald-400 shrink-0" />
               <span className="hidden sm:inline">Pre-Register</span>
             </button>
           )}
@@ -901,9 +901,9 @@ export default function EmployeeDirectoryPanel({
             type="button"
             onClick={handleOpenAddProfileModal}
             title="Add Employee Profile (Personnel 201 File)"
-            className="inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white px-3 sm:px-3.5 py-2 sm:py-2.5 rounded-xl font-bold text-xs shadow-sm shadow-emerald-600/20 transition cursor-pointer shrink-0"
+            className="inline-flex items-center gap-1 bg-emerald-600 hover:bg-emerald-500 text-white px-2.5 py-1.5 rounded-lg font-bold text-xs shadow-2xs transition cursor-pointer shrink-0"
           >
-            <UserPlus size={14} className="shrink-0" />
+            <UserPlus size={13} className="shrink-0" />
             <span>Add Profile</span>
           </button>
         </div>
@@ -911,108 +911,107 @@ export default function EmployeeDirectoryPanel({
 
       {/* Metric KPI Cards (3 Cards for HRMD, 2 Cards for Branch/Entity Accounts) */}
       {isHRMD ? (
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
           {/* Card 1: Total Personnel */}
-          <div className="bg-white border border-slate-200/90 rounded-2xl p-4.5 shadow-xs stagger-1">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Total Personnel</span>
-              <span className="p-2 rounded-xl bg-slate-100 text-slate-600">
-                <Users size={16} />
-              </span>
+          <div className="bg-slate-50/70 border border-slate-200/70 rounded-xl px-3.5 py-2 flex items-center justify-between shadow-2xs">
+            <div>
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 block">Total Personnel</span>
+              <div className="flex items-baseline gap-1 mt-0.5">
+                <span className="text-base font-bold text-slate-900 font-mono tracking-tight">{stats.total}</span>
+                <span className="text-[10px] text-slate-400">enrolled</span>
+              </div>
             </div>
-            <p className="mt-3 text-2xl font-black text-slate-900 tracking-tight">{stats.total}</p>
-            <p className="text-[11px] text-slate-400 mt-0.5">Enrolled across subsidiaries</p>
+            <div className="w-7 h-7 rounded-lg bg-white border border-slate-200/80 flex items-center justify-center text-slate-500 shadow-2xs">
+              <Users size={13} />
+            </div>
           </div>
 
           {/* Card 2: Active Online (Exclusively for HRMD) */}
-          <div className="bg-white border border-slate-200/90 rounded-2xl p-4.5 shadow-xs stagger-2">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Active Online</span>
-              <span className="p-2 rounded-xl bg-emerald-50 text-emerald-700">
-                <Sparkles size={16} />
-              </span>
+          <div className="bg-slate-50/70 border border-slate-200/70 rounded-xl px-3.5 py-2 flex items-center justify-between shadow-2xs">
+            <div>
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 block">Active Online</span>
+              <div className="flex items-baseline gap-1.5 mt-0.5">
+                <span className="text-base font-bold text-emerald-700 font-mono tracking-tight">{stats.onlineCount}</span>
+                <span className="flex h-2 w-2 relative">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                </span>
+                <span className="text-[10px] text-slate-400">sessions</span>
+              </div>
             </div>
-            <div className="mt-3 flex items-center gap-2">
-              <p className="text-2xl font-black text-emerald-700 tracking-tight">{stats.onlineCount}</p>
-              <span className="flex h-2.5 w-2.5 relative">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
-              </span>
+            <div className="w-7 h-7 rounded-lg bg-white border border-slate-200/80 flex items-center justify-center text-emerald-600 shadow-2xs">
+              <Sparkles size={13} />
             </div>
-            <p className="text-[11px] text-slate-400 mt-0.5">Real-time active sessions</p>
           </div>
 
           {/* Card 3: Pending Review */}
-          <div className={`border rounded-2xl p-4.5 shadow-xs transition stagger-3 ${stats.pendingCount > 0
+          <div className={`border rounded-xl px-3.5 py-2 flex items-center justify-between shadow-2xs transition ${stats.pendingCount > 0
             ? "bg-amber-50/60 border-amber-200"
-            : "bg-white border-slate-200/90"
+            : "bg-slate-50/70 border-slate-200/70"
             }`}>
-            <div className="flex items-center justify-between">
-              <span className={`text-[11px] font-bold uppercase tracking-wider ${stats.pendingCount > 0 ? "text-amber-900" : "text-slate-500"
-                }`}>
+            <div>
+              <span className={`text-[10px] font-semibold uppercase tracking-wider block ${stats.pendingCount > 0 ? "text-amber-900" : "text-slate-400"}`}>
                 Pending Review
               </span>
-              <span className={`p-2 rounded-xl ${stats.pendingCount > 0 ? "bg-amber-100 text-amber-800" : "bg-slate-100 text-slate-600"
-                }`}>
-                <Clock size={16} />
-              </span>
+              <div className="flex items-baseline gap-1 mt-0.5">
+                <span className={`text-base font-bold font-mono tracking-tight ${stats.pendingCount > 0 ? "text-amber-700" : "text-slate-900"}`}>
+                  {stats.pendingCount}
+                </span>
+                <span className="text-[10px] text-slate-400">
+                  {stats.pendingCount > 0 ? "needs review" : "all verified"}
+                </span>
+              </div>
             </div>
-            <p className={`mt-3 text-2xl font-black tracking-tight ${stats.pendingCount > 0 ? "text-amber-700" : "text-slate-900"
-              }`}>
-              {stats.pendingCount}
-            </p>
-            <p className="text-[11px] text-slate-400 mt-0.5">
-              {stats.pendingCount > 0 ? "Requires authorization" : "All accounts verified"}
-            </p>
+            <div className={`w-7 h-7 rounded-lg flex items-center justify-center shadow-2xs ${stats.pendingCount > 0 ? "bg-amber-100 text-amber-800" : "bg-white border border-slate-200/80 text-slate-500"}`}>
+              <Clock size={13} />
+            </div>
           </div>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
           {/* Card 1: Entity Personnel */}
-          <div className="bg-white border border-slate-200/90 rounded-2xl p-4.5 shadow-xs stagger-1">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
-                {currentOpenedCompany || userEntityCompany} Personnel
+          <div className="bg-slate-50/70 border border-slate-200/70 rounded-xl px-3.5 py-2 flex items-center justify-between shadow-2xs">
+            <div>
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 block truncate max-w-[140px]">
+                {currentOpenedCompany || userEntityCompany}
               </span>
-              <span className="p-2 rounded-xl bg-slate-100 text-slate-600">
-                <Users size={16} />
-              </span>
+              <div className="flex items-baseline gap-1 mt-0.5">
+                <span className="text-base font-bold text-slate-900 font-mono tracking-tight">{stats.total}</span>
+                <span className="text-[10px] text-slate-400">personnel</span>
+              </div>
             </div>
-            <p className="mt-3 text-2xl font-black text-slate-900 tracking-tight">{stats.total}</p>
-            <p className="text-[11px] text-slate-400 mt-0.5">Enrolled under {currentOpenedCompany || userEntityCompany}</p>
+            <div className="w-7 h-7 rounded-lg bg-white border border-slate-200/80 flex items-center justify-center text-slate-500 shadow-2xs">
+              <Users size={13} />
+            </div>
           </div>
 
           {/* Card 2: Active Profiles */}
-          <div className="bg-white border border-slate-200/90 rounded-2xl p-4.5 shadow-xs stagger-2">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Active Profiles</span>
-              <span className="p-2 rounded-xl bg-emerald-50 text-emerald-700">
-                <ShieldCheck size={16} />
-              </span>
+          <div className="bg-slate-50/70 border border-slate-200/70 rounded-xl px-3.5 py-2 flex items-center justify-between shadow-2xs">
+            <div>
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 block">Active Profiles</span>
+              <div className="flex items-baseline gap-1 mt-0.5">
+                <span className="text-base font-bold text-emerald-700 font-mono tracking-tight">{stats.approvedCount}</span>
+                <span className="text-[10px] text-slate-400">approved</span>
+              </div>
             </div>
-            <p className="mt-3 text-2xl font-black text-emerald-700 tracking-tight">{stats.approvedCount}</p>
-            <p className="text-[11px] text-slate-400 mt-0.5">Approved in system registry</p>
+            <div className="w-7 h-7 rounded-lg bg-white border border-slate-200/80 flex items-center justify-center text-emerald-600 shadow-2xs">
+              <ShieldCheck size={13} />
+            </div>
           </div>
 
           {/* Card 3: Assigned Entity HR */}
-          <div className="bg-white border border-emerald-200/90 rounded-2xl p-4.5 shadow-xs bg-linear-to-br from-emerald-50/40 to-teal-50/20 stagger-3">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-900">
+          <div className="bg-emerald-50/40 border border-emerald-200/80 rounded-xl px-3.5 py-2 flex items-center justify-between shadow-2xs">
+            <div className="min-w-0 pr-1">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-900 block">
                 Assigned Entity HR
               </span>
-              <span className="p-2 rounded-xl bg-emerald-100 text-emerald-800">
-                <ShieldCheck size={16} />
-              </span>
+              <p className="text-xs font-bold text-slate-900 truncate mt-0.5" title={assignedHrForOpenedEntity?.name || "Supervised by Central HRMD"}>
+                {assignedHrForOpenedEntity?.name || "Supervised by Central HRMD"}
+              </p>
             </div>
-            <p className="mt-3 text-base font-black text-slate-900 tracking-tight truncate" title={assignedHrForOpenedEntity?.name || assignedHrForOpenedEntity?.email || "No On-Site HR Assigned"}>
-              {assignedHrForOpenedEntity?.name || (assignedHrForOpenedEntity?.email ? assignedHrForOpenedEntity.email.split("@")[0] : "No On-Site HR Assigned")}
-            </p>
-            <p className="text-[11px] text-emerald-700 font-semibold mt-0.5 truncate flex items-center gap-1.5">
-              <span>{assignedHrForOpenedEntity?.role || "Supervised by Central HRMD"}</span>
-              {assignedHrForOpenedEntity?.email && (
-                <span className="text-slate-400 font-normal">({assignedHrForOpenedEntity.email})</span>
-              )}
-            </p>
+            <div className="w-7 h-7 rounded-lg bg-emerald-100 text-emerald-800 flex items-center justify-center shadow-2xs shrink-0">
+              <ShieldCheck size={13} />
+            </div>
           </div>
         </div>
       )}
@@ -1021,15 +1020,15 @@ export default function EmployeeDirectoryPanel({
       <div className="bg-white border border-slate-200/90 rounded-2xl shadow-xs overflow-hidden stagger-4">
         {/* Tier 1: Dedicated Entity Tabs Bar with Interactive Navigation Controls - Exclusively for Central HR Administrator (HRMD) */}
         {isHRMD && (
-          <div className="px-2.5 sm:px-3.5 py-2 bg-slate-50/80 border-b border-slate-200/70 flex items-center justify-between gap-1.5 sm:gap-2 overflow-hidden">
+          <div className="px-2.5 sm:px-3 py-1.5 bg-slate-50/80 border-b border-slate-200/70 flex items-center justify-between gap-1.5 overflow-hidden">
             {/* Scroll Left Button */}
             <button
               type="button"
               onClick={() => scrollTabs("left")}
               title="Scroll entities left"
-              className="p-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 text-slate-500 hover:text-slate-800 transition cursor-pointer shadow-2xs shrink-0"
+              className="p-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 text-slate-500 hover:text-slate-800 transition cursor-pointer shadow-2xs shrink-0"
             >
-              <ChevronLeft size={13} />
+              <ChevronLeft size={12} />
             </button>
 
             {/* Scrollable Tabs Container */}
@@ -1044,8 +1043,8 @@ export default function EmployeeDirectoryPanel({
                     key={tab.id}
                     type="button"
                     onClick={() => setSelectedSubsidiary(tab.id)}
-                    className={`group flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shadow-2xs shrink-0 ${isSelected
-                        ? "bg-slate-900 text-white shadow-sm ring-2 ring-emerald-500/40"
+                    className={`group flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all cursor-pointer whitespace-nowrap shadow-2xs shrink-0 ${isSelected
+                        ? "bg-slate-900 text-white shadow-2xs ring-1 ring-slate-800"
                         : "bg-white border border-slate-200/90 text-slate-700 hover:bg-slate-100 hover:text-slate-900"
                       }`}
                   >
@@ -1056,11 +1055,11 @@ export default function EmployeeDirectoryPanel({
                         className={`w-3.5 h-3.5 rounded object-contain shrink-0 ${isSelected ? "brightness-110 drop-shadow-xs" : ""}`}
                       />
                     ) : (
-                      <Building2 size={12} className={isSelected ? "text-emerald-400" : "text-slate-400"} />
+                      <Building2 size={11} className={isSelected ? "text-emerald-400" : "text-slate-400"} />
                     )}
                     <span>{tab.shortName}</span>
                     <span
-                      className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${isSelected
+                      className={`text-[9px] px-1.5 py-0.2 rounded-full font-bold ${isSelected
                           ? "bg-emerald-500/20 text-emerald-300 border border-emerald-400/30"
                           : "bg-slate-100 text-slate-600 border border-slate-200/70"
                         }`}
@@ -1085,9 +1084,9 @@ export default function EmployeeDirectoryPanel({
               type="button"
               onClick={() => scrollTabs("right")}
               title="Scroll entities right"
-              className="p-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 text-slate-500 hover:text-slate-800 transition cursor-pointer shadow-2xs shrink-0"
+              className="p-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 text-slate-500 hover:text-slate-800 transition cursor-pointer shadow-2xs shrink-0"
             >
-              <ChevronRight size={13} />
+              <ChevronRight size={12} />
             </button>
 
             {/* Non-STL Interactive Toggle */}
@@ -1095,12 +1094,12 @@ export default function EmployeeDirectoryPanel({
               type="button"
               onClick={() => setShowNonStl((prev) => !prev)}
               title="Toggle Non-STL Subsidiaries (MC Power Gas & Simcon)"
-              className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[11px] font-bold border transition cursor-pointer shrink-0 shadow-2xs ${showNonStl
-                  ? "bg-amber-600 text-white border-amber-600 shadow-sm"
+              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold border transition cursor-pointer shrink-0 shadow-2xs ${showNonStl
+                  ? "bg-amber-600 text-white border-amber-600 shadow-2xs"
                   : "bg-amber-50 text-amber-900 border-amber-200 hover:bg-amber-100"
                 }`}
             >
-              <Fuel size={12} className={showNonStl ? "text-white" : "text-amber-700"} />
+              <Fuel size={11} className={showNonStl ? "text-white" : "text-amber-700"} />
               <span className="hidden sm:inline">{showNonStl ? "Hide Non-STL" : "+ Non-STL (2)"}</span>
               <span className="sm:hidden">{showNonStl ? "STL" : "+2"}</span>
             </button>
@@ -1115,7 +1114,7 @@ export default function EmployeeDirectoryPanel({
                   setSelectedSubsidiary(isHRMD ? "all" : (currentProfile?.company || "all"));
                   setSelectedBranchFilter("all");
                 }}
-                className="text-xs font-semibold text-rose-600 hover:text-rose-700 hover:underline px-2 py-1 shrink-0 cursor-pointer hidden xl:inline"
+                className="text-[11px] font-semibold text-rose-600 hover:text-rose-700 hover:underline px-2 py-0.5 shrink-0 cursor-pointer hidden xl:inline"
               >
                 Reset
               </button>
@@ -1124,11 +1123,11 @@ export default function EmployeeDirectoryPanel({
         )}
 
         {/* Tier 2: Search Bar, Status Filter, Branch Filter, and View Mode */}
-        <div className="p-2.5 sm:p-3 bg-white flex flex-col md:flex-row items-stretch md:items-center justify-between gap-2">
+        <div className="p-2 sm:p-2.5 bg-white flex flex-col md:flex-row items-stretch md:items-center justify-between gap-1.5 sm:gap-2">
           {/* Search Bar */}
           <div className="flex-1 min-w-[160px]">
-            <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs text-slate-800 focus-within:border-emerald-500 focus-within:bg-white focus-within:ring-2 focus-within:ring-emerald-100 transition shadow-2xs">
-              <Search size={14} className="text-slate-400 shrink-0" />
+            <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs text-slate-800 focus-within:border-emerald-500 focus-within:bg-white focus-within:ring-2 focus-within:ring-emerald-100 transition shadow-2xs">
+              <Search size={13} className="text-slate-400 shrink-0" />
               <input
                 type="text"
                 value={searchQuery}
@@ -1138,19 +1137,19 @@ export default function EmployeeDirectoryPanel({
               />
               {searchQuery && (
                 <button onClick={() => setSearchQuery("")} className="text-slate-400 hover:text-slate-600 cursor-pointer">
-                  <X size={13} />
+                  <X size={12} />
                 </button>
               )}
             </div>
           </div>
 
           {/* Dropdown Filters and View Mode Switcher */}
-          <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap shrink-0">
+          <div className="flex items-center gap-1.5 flex-wrap sm:flex-nowrap shrink-0">
             {/* Status Filter Dropdown */}
             <select
               value={selectedFilter}
               onChange={(e) => setSelectedFilter(e.target.value)}
-              className="h-8.5 text-xs font-semibold bg-slate-50 border border-slate-200 text-slate-700 hover:bg-slate-100 rounded-xl px-2.5 py-1 focus:outline-none focus:border-emerald-500 cursor-pointer shadow-2xs flex-1 sm:flex-none sm:min-w-[145px]"
+              className="h-8 text-[11px] font-semibold bg-slate-50 border border-slate-200 text-slate-700 hover:bg-slate-100 rounded-lg px-2 py-1 focus:outline-none focus:border-emerald-500 cursor-pointer shadow-2xs flex-1 sm:flex-none sm:min-w-[135px]"
             >
               <option value="all">👥 Status: All ({stats.total})</option>
               {isHRMD && (
@@ -1167,7 +1166,7 @@ export default function EmployeeDirectoryPanel({
             <select
               value={selectedBranchFilter}
               onChange={(e) => setSelectedBranchFilter(e.target.value)}
-              className="h-8.5 text-xs font-medium bg-slate-50 border border-slate-200 text-slate-700 hover:bg-slate-100 rounded-xl px-2.5 py-1 focus:outline-none focus:border-emerald-500 cursor-pointer shadow-2xs flex-1 sm:flex-none sm:min-w-[120px]"
+              className="h-8 text-[11px] font-medium bg-slate-50 border border-slate-200 text-slate-700 hover:bg-slate-100 rounded-lg px-2 py-1 focus:outline-none focus:border-emerald-500 cursor-pointer shadow-2xs flex-1 sm:flex-none sm:min-w-[115px]"
             >
               <option value="all">📍 Branch: All</option>
               {BRANCH_PRESETS.map((br) => (
@@ -1176,25 +1175,25 @@ export default function EmployeeDirectoryPanel({
             </select>
 
             {/* View Mode Switcher */}
-            <div className="flex rounded-xl border border-slate-200 bg-slate-100 p-0.5 shrink-0 ml-auto sm:ml-0">
+            <div className="flex rounded-lg border border-slate-200 bg-slate-100 p-0.5 shrink-0 ml-auto sm:ml-0">
               <button
                 type="button"
                 onClick={() => setViewMode("grid")}
                 title="Cards View"
-                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${viewMode === "grid" ? "bg-white text-slate-900 shadow-xs" : "text-slate-500 hover:text-slate-800"
+                className={`px-2 py-1 rounded-md text-[11px] font-semibold transition cursor-pointer flex items-center gap-1.5 ${viewMode === "grid" ? "bg-white text-slate-900 shadow-2xs" : "text-slate-500 hover:text-slate-800"
                   }`}
               >
-                <LayoutGrid size={13} />
+                <LayoutGrid size={12} />
                 <span>Cards</span>
               </button>
               <button
                 type="button"
                 onClick={() => setViewMode("table")}
                 title="Table View"
-                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${viewMode === "table" ? "bg-white text-slate-900 shadow-xs" : "text-slate-500 hover:text-slate-800"
+                className={`px-2 py-1 rounded-md text-[11px] font-semibold transition cursor-pointer flex items-center gap-1.5 ${viewMode === "table" ? "bg-white text-slate-900 shadow-2xs" : "text-slate-500 hover:text-slate-800"
                   }`}
               >
-                <List size={13} />
+                <List size={12} />
                 <span>Table</span>
               </button>
             </div>
@@ -1298,7 +1297,7 @@ export default function EmployeeDirectoryPanel({
         )
       ) : viewMode === "grid" ? (
         /* Executive Card Grid View with Cascading Reveal */
-        <div key={`${selectedSubsidiary}_${selectedFilter}_grid`} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 stagger-children">
+        <div key={`${selectedSubsidiary}_${selectedFilter}_grid`} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-3.5 stagger-children">
           {filteredProfiles.map((prof) => {
             const email = prof.email?.toLowerCase() || "";
             const isCurrentUser = Boolean(currentEmail && email === currentEmail);
@@ -1333,48 +1332,48 @@ export default function EmployeeDirectoryPanel({
             return (
               <div
                 key={prof.id || prof.email}
-                className={`bg-white rounded-2xl border transition shadow-xs flex flex-col justify-between overflow-hidden ${isProfAssignedHr
-                    ? "ring-2 ring-emerald-500/30 border-emerald-300 shadow-sm"
+                className={`bg-white rounded-xl border transition shadow-2xs flex flex-col justify-between overflow-hidden ${isProfAssignedHr
+                    ? "ring-1 ring-emerald-500/40 border-emerald-300 shadow-2xs"
                     : showOnlineIndicator
-                      ? "border-slate-200 hover:border-emerald-300 hover:shadow-sm"
-                      : "border-slate-200/80 hover:border-slate-300 hover:shadow-sm"
+                      ? "border-slate-200 hover:border-emerald-300 hover:shadow-2xs"
+                      : "border-slate-200/80 hover:border-slate-300 hover:shadow-2xs"
                   }`}
               >
                 {/* Optional Executive Cover Banner */}
                 {hasCover && (
                   customCoverUrl ? (
                     <div
-                      className="h-16 w-full bg-cover bg-center border-b border-slate-100 shrink-0"
+                      className="h-11 sm:h-12 w-full bg-cover bg-center border-b border-slate-100 shrink-0"
                       style={{ backgroundImage: `url(${customCoverUrl})` }}
                     />
                   ) : (
                     <div
-                      className={`h-16 w-full bg-gradient-to-r ${coverPresetGradients[coverPresetId] || "from-slate-900 to-slate-800"} border-b border-slate-100 shrink-0`}
+                      className={`h-11 sm:h-12 w-full bg-gradient-to-r ${coverPresetGradients[coverPresetId] || "from-slate-900 to-slate-800"} border-b border-slate-100 shrink-0`}
                     />
                   )
                 )}
 
                 {/* Card Header & Identity */}
-                <div className="p-4.5 sm:p-5 pb-4 space-y-3 bg-white">
+                <div className="p-3 sm:p-3.5 pb-2.5 space-y-2 bg-white">
                   {/* Top Row: Floating Avatar overlapping cover + Status Badges on the right */}
-                  <div className={`flex items-end justify-between gap-3 ${hasCover ? "-mt-9" : ""}`}>
+                  <div className={`flex items-end justify-between gap-2 ${hasCover ? "-mt-6" : ""}`}>
                     {/* Avatar */}
                     <div className="relative shrink-0">
                       {avatarUrl ? (
                         <img
                           src={avatarUrl}
                           alt={displayName}
-                          className={`w-13 h-13 rounded-2xl object-cover shadow-md ${hasCover ? "ring-4 ring-white border-2 border-slate-200/60 bg-slate-900" : "border-2 border-slate-200 bg-slate-100"}`}
+                          className={`w-10 h-10 rounded-xl object-cover shadow-xs ${hasCover ? "ring-2 ring-white border border-slate-200/60 bg-slate-900" : "border border-slate-200 bg-slate-100"}`}
                         />
                       ) : (
-                        <div className={`w-13 h-13 rounded-2xl font-black text-sm flex items-center justify-center shadow-md ${hasCover ? "ring-4 ring-white border border-slate-700/60" : "border border-slate-200"} ${showOnlineIndicator ? "bg-slate-900 text-emerald-400" : "bg-slate-800 text-slate-200"}`}>
+                        <div className={`w-10 h-10 rounded-xl font-bold text-xs flex items-center justify-center shadow-xs ${hasCover ? "ring-2 ring-white border border-slate-700/60" : "border border-slate-200"} ${showOnlineIndicator ? "bg-slate-900 text-emerald-400" : "bg-slate-800 text-slate-200"}`}>
                           {initials}
                         </div>
                       )}
                       {showOnlineIndicator && (
-                        <span className="absolute -bottom-1 -right-1 flex h-3.5 w-3.5">
+                        <span className="absolute -bottom-0.5 -right-0.5 flex h-3 w-3">
                           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                          <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-emerald-500 ring-2 ring-white"></span>
+                          <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500 ring-1 ring-white"></span>
                         </span>
                       )}
                     </div>
@@ -1382,71 +1381,71 @@ export default function EmployeeDirectoryPanel({
                     {/* Status Badges */}
                     <div className="flex flex-col items-end gap-1 shrink-0 pb-0.5">
                       {isProfAssignedHr ? (
-                        <span className="inline-flex items-center gap-1 text-[10px] font-black text-teal-900 bg-teal-100/90 px-2.5 py-0.5 rounded-full border border-teal-300 shadow-2xs" title="Assigned HR Administrator for this Entity">
+                        <span className="inline-flex items-center gap-1 text-[9px] font-bold text-teal-900 bg-teal-100/90 px-2 py-0.5 rounded-full border border-teal-300 shadow-2xs" title="Assigned HR Administrator for this Entity">
                           🏛️ Assigned Entity HR
                         </span>
                       ) : (
-                        <>
+                        <div className="flex items-center gap-1">
                           {prof.is_approved ? (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200/70 shadow-2xs">
-                              <ShieldCheck size={10} className="text-emerald-600" /> Approved
+                            <span className="inline-flex items-center gap-0.5 text-[9px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded-full border border-emerald-200/70 shadow-2xs">
+                              <ShieldCheck size={9} className="text-emerald-600" /> Approved
                             </span>
                           ) : (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200 shadow-2xs">
-                              <Clock size={10} className="text-amber-600" /> Pending
+                            <span className="inline-flex items-center gap-0.5 text-[9px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded-full border border-amber-200 shadow-2xs">
+                              <Clock size={9} className="text-amber-600" /> Pending
                             </span>
                           )}
 
                           {isLoginEnabled ? (
-                            <span className="inline-flex items-center gap-1 text-[9px] font-bold text-emerald-800 bg-emerald-100/90 px-2 py-0.5 rounded-full border border-emerald-300 shadow-2xs" title="Portal Login Enabled">
-                              <KeyRound size={9} className="text-emerald-700" /> Login Access
+                            <span className="inline-flex items-center gap-0.5 text-[8.5px] font-bold text-emerald-800 bg-emerald-100/90 px-1.5 py-0.5 rounded-full border border-emerald-300 shadow-2xs" title="Portal Login Enabled">
+                              <KeyRound size={8} className="text-emerald-700" /> Login
                             </span>
                           ) : (
-                            <span className="inline-flex items-center gap-1 text-[9px] font-semibold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200" title="HR Profiling Only (No Portal Login Access)">
-                              <Lock size={9} className="text-slate-500" /> Profiling Only
+                            <span className="inline-flex items-center gap-0.5 text-[8.5px] font-semibold text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded-full border border-slate-200" title="HR Profiling Only (No Portal Login Access)">
+                              <Lock size={8} className="text-slate-500" /> Profiling
                             </span>
                           )}
-                        </>
+                        </div>
                       )}
                     </div>
                   </div>
 
-                  {/* Name & Role (STRICTLY on the clean white card background below the cover!) */}
+                  {/* Name & Role */}
                   <div className="min-w-0 pt-0.5">
-                    <h4 className="text-sm font-bold text-slate-900 truncate flex items-center gap-1.5" title={displayName}>
+                    <h4 className="text-xs sm:text-sm font-bold text-slate-900 tracking-tight truncate flex items-center gap-1.5" title={displayName}>
                       <span className="truncate">{displayName}</span>
                       {isCurrentUser && (
-                        <span className="text-[9px] font-black uppercase text-emerald-700 bg-emerald-100 px-1.5 py-0.2 rounded border border-emerald-200 shrink-0">
+                        <span className="text-[8px] font-black uppercase text-emerald-700 bg-emerald-100 px-1 py-0.2 rounded border border-emerald-200 shrink-0">
                           You
                         </span>
                       )}
                     </h4>
-                    <div className="flex items-center gap-1.5 mt-1">
-                      <span className="text-[11px] font-semibold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200/60 truncate" title={role}>
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      <span className="text-[10px] font-semibold text-emerald-800 bg-emerald-50 px-1.5 py-0.2 rounded-md border border-emerald-200/60 truncate" title={role}>
                         {role}
                       </span>
                     </div>
                   </div>
 
                   {/* Metadata List */}
-                  <div className="pt-2.5 border-t border-slate-100 space-y-1.5 text-xs">
-                    <p className="text-slate-500 truncate flex items-center gap-2">
-                      <Mail size={13} className="text-slate-400 shrink-0" />
+                  <div className="pt-2 border-t border-slate-100 space-y-1 text-[11px]">
+                    <p className="text-slate-500 truncate flex items-center gap-1.5">
+                      <Mail size={12} className="text-slate-400 shrink-0" />
                       <span className="truncate">{prof.email}</span>
                     </p>
-                    <p className="text-slate-600 font-medium truncate flex items-center gap-2">
-                      <Building2 size={13} className="text-slate-400 shrink-0" />
+                    <p className="text-slate-600 font-medium truncate flex items-center gap-1.5">
+                      <Building2 size={12} className="text-slate-400 shrink-0" />
                       <span className="truncate">{company}</span>
                     </p>
-                    <p className="text-slate-600 truncate flex items-center gap-2">
-                      <MapPin size={13} className="text-emerald-600 shrink-0" />
+                    <p className="text-slate-600 truncate flex items-center gap-1.5">
+                      <MapPin size={12} className="text-emerald-600 shrink-0" />
                       <span className="truncate">{branch}</span>
                     </p>
                     {requirementsCount > 0 && (
-                      <div className="pt-1 flex items-center gap-1.5">
-                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                          <Paperclip size={10} className="text-emerald-600" />
-                          <span>{requirementsCount} 201 File(s) Attached</span>
+                      <div className="pt-0.5 flex items-center gap-1.5">
+                        <span className="inline-flex items-center gap-1 text-[9px] font-bold text-emerald-800 bg-emerald-50 px-1.5 py-0.2 rounded-full border border-emerald-200">
+                          <Paperclip size={9} className="text-emerald-600" />
+                          <span>{requirementsCount} 201 File(s)</span>
                         </span>
                       </div>
                     )}
@@ -1455,12 +1454,12 @@ export default function EmployeeDirectoryPanel({
 
                 {/* Portal Login Authorization Switch (Exclusive for Central HRMD Administrator when reviewing entity-enrolled profiles) */}
                 {isHRMD && !isProfAssignedHr && (selectedFilter === "entity_enrolled" || isEntityEnrolledEmployee(prof)) && (
-                  <div className={`px-4.5 py-2.5 border-t flex items-center justify-between text-xs transition ${isLoginEnabled ? "bg-emerald-50/60 border-emerald-100" : "bg-slate-50 border-slate-100"
+                  <div className={`px-3.5 py-1.5 border-t flex items-center justify-between text-[11px] transition ${isLoginEnabled ? "bg-emerald-50/60 border-emerald-100" : "bg-slate-50 border-slate-100"
                     }`}>
                     <div className="flex items-center gap-1.5">
-                      <KeyRound size={13} className={isLoginEnabled ? "text-emerald-600" : "text-slate-400"} />
-                      <span className="font-bold text-slate-700 text-[11px]">Portal Login</span>
-                      <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded-full ${isLoginEnabled ? "bg-emerald-100 text-emerald-800" : "bg-slate-200 text-slate-600"
+                      <KeyRound size={12} className={isLoginEnabled ? "text-emerald-600" : "text-slate-400"} />
+                      <span className="font-bold text-slate-700 text-[10px]">Portal Login</span>
+                      <span className={`text-[8.5px] font-bold px-1.5 py-0.2 rounded-full ${isLoginEnabled ? "bg-emerald-100 text-emerald-800" : "bg-slate-200 text-slate-600"
                         }`}>
                         {isLoginEnabled ? "Login Enabled" : "Profiling Only"}
                       </span>
@@ -1469,12 +1468,12 @@ export default function EmployeeDirectoryPanel({
                       type="button"
                       onClick={() => handleToggleEmployeeLogin(prof)}
                       disabled={isTogglingLoginId === (prof.id || prof.email)}
-                      className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${isLoginEnabled ? "bg-emerald-600" : "bg-slate-300"
+                      className={`relative inline-flex h-4.5 w-8 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${isLoginEnabled ? "bg-emerald-600" : "bg-slate-300"
                         }`}
                       title={isLoginEnabled ? "Click to restrict to HR Profiling Only" : "Click to authorize Portal Login & Account Activation"}
                     >
                       <span
-                        className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${isLoginEnabled ? "translate-x-4" : "translate-x-0"
+                        className={`pointer-events-none inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${isLoginEnabled ? "translate-x-3.5" : "translate-x-0"
                           }`}
                       />
                     </button>
@@ -1482,44 +1481,44 @@ export default function EmployeeDirectoryPanel({
                 )}
 
                 {/* Card Action Footer */}
-                <div className="px-4.5 py-3 bg-white border-t border-slate-100 flex items-center justify-between gap-2">
+                <div className="px-3.5 py-2 bg-white border-t border-slate-100 flex items-center justify-between gap-1.5">
                   {isProfAssignedHr ? (
-                    <span className="inline-flex items-center gap-1.5 py-1.5 px-3 rounded-xl text-xs font-bold text-teal-800 bg-teal-50 border border-teal-200/80 shadow-2xs">
-                      <ShieldCheck size={13} className="text-teal-600" />
+                    <span className="inline-flex items-center gap-1 py-1 px-2.5 rounded-lg text-[11px] font-bold text-teal-800 bg-teal-50 border border-teal-200/80 shadow-2xs">
+                      <ShieldCheck size={12} className="text-teal-600" />
                       <span>Assigned HR Admin</span>
                     </span>
                   ) : canManageProfiles ? (
                     <button
                       type="button"
                       onClick={() => handleToggleApproval(prof)}
-                      className={`py-1.5 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs ${prof.is_approved
+                      className={`py-1 px-2.5 rounded-lg text-[11px] font-semibold transition flex items-center justify-center gap-1 cursor-pointer shadow-2xs ${prof.is_approved
                         ? "bg-white border border-slate-200 text-slate-600 hover:text-rose-600 hover:border-rose-200 hover:bg-rose-50"
                         : "bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/20"
                         }`}
                     >
                       {prof.is_approved ? (
                         <>
-                          <ShieldAlert size={12} className="text-slate-400" />
+                          <ShieldAlert size={11} className="text-slate-400" />
                           <span>Revoke</span>
                         </>
                       ) : (
                         <>
-                          <CheckCircle2 size={12} />
+                          <CheckCircle2 size={11} />
                           <span>Approve</span>
                         </>
                       )}
                     </button>
                   ) : <div />}
 
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-1">
                     {canManageProfiles && !isProfAssignedHr && (
                       <button
                         type="button"
                         onClick={() => handleOpenEdit(prof)}
                         title="Edit Profile"
-                        className="p-1.5 rounded-xl border border-slate-200 bg-white text-slate-600 hover:text-emerald-700 hover:border-emerald-300 hover:bg-emerald-50/50 transition cursor-pointer"
+                        className="p-1 rounded-lg border border-slate-200 bg-white text-slate-600 hover:text-emerald-700 hover:border-emerald-300 hover:bg-emerald-50/50 transition cursor-pointer"
                       >
-                        <Edit3 size={13} />
+                        <Edit3 size={12} />
                       </button>
                     )}
 
@@ -1529,9 +1528,9 @@ export default function EmployeeDirectoryPanel({
                         type="button"
                         onClick={() => setInviteEmployee(prof)}
                         title="Send Setup Invite Card (w/ HRHub Logo)"
-                        className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-600 hover:text-white text-[11px] font-bold transition cursor-pointer shadow-2xs"
+                        className="inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-600 hover:text-white text-[10px] font-bold transition cursor-pointer shadow-2xs"
                       >
-                        <Send size={12} />
+                        <Send size={11} />
                         <span>Invite</span>
                       </button>
                     )}
@@ -1541,9 +1540,9 @@ export default function EmployeeDirectoryPanel({
                         type="button"
                         onClick={() => handleDeleteEmployee(prof)}
                         title="Remove from Directory"
-                        className="p-1.5 rounded-xl border border-slate-200 bg-white text-slate-400 hover:text-rose-600 hover:border-rose-200 hover:bg-rose-50 transition cursor-pointer"
+                        className="p-1 rounded-lg border border-slate-200 bg-white text-slate-400 hover:text-rose-600 hover:border-rose-200 hover:bg-rose-50 transition cursor-pointer"
                       >
-                        <Trash2 size={13} />
+                        <Trash2 size={12} />
                       </button>
                     )}
                   </div>
@@ -1554,17 +1553,17 @@ export default function EmployeeDirectoryPanel({
         </div>
       ) : (
         /* Detailed Table View with Fade-In Up */
-        <div key={`${selectedSubsidiary}_${selectedFilter}_table`} className="bg-white border border-slate-200/90 rounded-2xl overflow-hidden shadow-xs animate-tab-fade-in">
+        <div key={`${selectedSubsidiary}_${selectedFilter}_table`} className="bg-white border border-slate-200/90 rounded-xl overflow-hidden shadow-2xs animate-tab-fade-in">
           <div className="overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
             <table className="w-full text-left text-xs border-collapse table-auto">
               <thead>
-                <tr className="bg-slate-50/90 border-b border-slate-200 text-[10px] font-black uppercase tracking-wider text-slate-400">
-                  <th className="py-2.5 px-3">Employee</th>
-                  <th className="py-2.5 px-3">Organization & Branch</th>
-                  <th className="py-2.5 px-3">Role</th>
-                  <th className="py-2.5 px-3">Status</th>
-                  <th className="py-2.5 px-3">Access</th>
-                  <th className="py-2.5 px-3 text-right">Actions</th>
+                <tr className="bg-slate-50/90 border-b border-slate-200 text-[9px] font-bold uppercase tracking-wider text-slate-400">
+                  <th className="py-2 px-3">Employee</th>
+                  <th className="py-2 px-3">Organization & Branch</th>
+                  <th className="py-2 px-3">Role</th>
+                  <th className="py-2 px-3">Status</th>
+                  <th className="py-2 px-3">Access</th>
+                  <th className="py-2 px-3 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-slate-700 stagger-children">
@@ -1588,29 +1587,29 @@ export default function EmployeeDirectoryPanel({
 
                   return (
                     <tr key={prof.id || prof.email} className={`hover:bg-slate-50/70 transition ${isProfAssignedHr ? "bg-emerald-50/20" : ""}`}>
-                      <td className="py-2.5 px-3">
-                        <div className="flex items-center gap-2.5">
+                      <td className="py-2 px-3">
+                        <div className="flex items-center gap-2">
                           <div className="relative shrink-0">
                             {avatarUrl ? (
                               <img
                                 src={avatarUrl}
                                 alt={displayName}
-                                className="w-8 h-8 rounded-xl object-cover border border-slate-200 bg-slate-100"
+                                className="w-7 h-7 rounded-lg object-cover border border-slate-200 bg-slate-100"
                               />
                             ) : (
-                              <div className="w-8 h-8 rounded-xl font-bold text-xs flex items-center justify-center bg-slate-800 text-slate-200">
+                              <div className="w-7 h-7 rounded-lg font-bold text-[11px] flex items-center justify-center bg-slate-800 text-slate-200">
                                 {initials}
                               </div>
                             )}
                             {showOnlineIndicator && (
                               <span
-                                className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-white animate-pulse"
+                                className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-500 ring-1 ring-white animate-pulse"
                                 title="Active Online Now"
                               />
                             )}
                           </div>
                           <div className="min-w-0">
-                            <p className="font-bold text-slate-900 text-xs truncate flex items-center gap-1.5">
+                            <p className="font-bold text-slate-900 text-xs truncate flex items-center gap-1">
                               <span className="truncate">{displayName}</span>
                               {isCurrentUser && (
                                 <span className="text-[8px] font-black uppercase text-emerald-700 bg-emerald-50 px-1 py-0.2 rounded border border-emerald-200 shrink-0">
@@ -1623,7 +1622,7 @@ export default function EmployeeDirectoryPanel({
                         </div>
                       </td>
 
-                      <td className="py-2.5 px-3 font-medium text-slate-600">
+                      <td className="py-2 px-3 font-medium text-slate-600">
                         <span className="block font-semibold text-slate-800 text-xs truncate max-w-[170px]" title={prof.company || "Simpal Group of Companies"}>
                           {prof.company || "Simpal Group of Companies"}
                         </span>
@@ -1633,66 +1632,66 @@ export default function EmployeeDirectoryPanel({
                         </span>
                       </td>
 
-                      <td className="py-2.5 px-3 text-slate-600">
+                      <td className="py-2 px-3 text-slate-600">
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <span className="text-xs font-medium text-slate-700 truncate max-w-[140px]" title={prof.role || "Team Member"}>
                             {prof.role || "Team Member"}
                           </span>
                           {isProfAssignedHr && (
-                            <span className="inline-flex items-center gap-0.5 text-[9px] font-bold text-teal-800 bg-teal-100/90 px-1.5 py-0.2 rounded-full border border-teal-300 shrink-0">
+                            <span className="inline-flex items-center gap-0.5 text-[8.5px] font-bold text-teal-800 bg-teal-100/90 px-1.5 py-0.2 rounded-full border border-teal-300 shrink-0">
                               🏛️ Assigned HR
                             </span>
                           )}
                         </div>
                       </td>
 
-                      <td className="py-2.5 px-3 whitespace-nowrap">
+                      <td className="py-2 px-3 whitespace-nowrap">
                         {prof.is_approved ? (
-                          <span className="inline-flex items-center gap-1 text-[9px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                            <ShieldCheck size={10} className="text-emerald-600" /> Approved
+                          <span className="inline-flex items-center gap-0.5 text-[8.5px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded-full border border-emerald-200">
+                            <ShieldCheck size={9} className="text-emerald-600" /> Approved
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1 text-[9px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
-                            <Clock size={10} className="text-amber-600" /> Pending
+                          <span className="inline-flex items-center gap-0.5 text-[8.5px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded-full border border-amber-200">
+                            <Clock size={9} className="text-amber-600" /> Pending
                           </span>
                         )}
                       </td>
 
-                      <td className="py-2.5 px-3 whitespace-nowrap">
+                      <td className="py-2 px-3 whitespace-nowrap">
                         {isHRMD && !isProfAssignedHr && (selectedFilter === "entity_enrolled" || isEntityEnrolledEmployee(prof)) ? (
                           <div className="flex items-center gap-1.5">
                             <button
                               type="button"
                               onClick={() => handleToggleEmployeeLogin(prof)}
                               disabled={isTogglingLoginId === (prof.id || prof.email)}
-                              className={`relative inline-flex h-4.5 w-8 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${isLoginEnabled ? "bg-emerald-600" : "bg-slate-300"
+                              className={`relative inline-flex h-4 w-7 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${isLoginEnabled ? "bg-emerald-600" : "bg-slate-300"
                                 }`}
                               title={isLoginEnabled ? "Click to restrict to HR Profiling Only" : "Click to authorize Portal Login & Account Activation"}
                             >
                               <span
-                                className={`pointer-events-none inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${isLoginEnabled ? "translate-x-3.5" : "translate-x-0"
+                                className={`pointer-events-none inline-block h-3 w-3 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${isLoginEnabled ? "translate-x-3" : "translate-x-0"
                                   }`}
                               />
                             </button>
-                            <span className={`text-[10px] font-bold ${isLoginEnabled ? "text-emerald-700" : "text-slate-500"}`}>
+                            <span className={`text-[9px] font-bold ${isLoginEnabled ? "text-emerald-700" : "text-slate-500"}`}>
                               {isLoginEnabled ? "Login" : "Profiling"}
                             </span>
                           </div>
                         ) : (
-                          <span className={`inline-flex items-center gap-1 text-[9px] font-bold px-2 py-0.5 rounded-full border ${isLoginEnabled
+                          <span className={`inline-flex items-center gap-0.5 text-[8.5px] font-bold px-1.5 py-0.5 rounded-full border ${isLoginEnabled
                               ? "bg-emerald-50 text-emerald-800 border-emerald-200"
                               : "bg-slate-100 text-slate-600 border-slate-200"
                             }`}>
-                            {isLoginEnabled ? <KeyRound size={9} className="text-emerald-600" /> : <Lock size={9} className="text-slate-400" />}
-                            <span>{isLoginEnabled ? "Login Access" : "Profiling Only"}</span>
+                            {isLoginEnabled ? <KeyRound size={8} className="text-emerald-600" /> : <Lock size={8} className="text-slate-400" />}
+                            <span>{isLoginEnabled ? "Login" : "Profiling"}</span>
                           </span>
                         )}
                       </td>
 
-                      <td className="py-2.5 px-3 text-right whitespace-nowrap">
+                      <td className="py-2 px-3 text-right whitespace-nowrap">
                         <div className="flex items-center justify-end gap-1">
                           {isProfAssignedHr ? (
-                            <span className="px-2 py-0.5 rounded-lg text-[10px] font-bold text-teal-800 bg-teal-50 border border-teal-200">
+                            <span className="px-2 py-0.5 rounded-md text-[9px] font-bold text-teal-800 bg-teal-50 border border-teal-200">
                               Assigned HR
                             </span>
                           ) : canManageProfiles ? (
@@ -1700,7 +1699,7 @@ export default function EmployeeDirectoryPanel({
                               type="button"
                               onClick={() => handleToggleApproval(prof)}
                               title={prof.is_approved ? "Revoke Approval" : "Approve Employee"}
-                              className={`px-2 py-1 rounded-lg text-[10px] font-bold transition cursor-pointer shadow-2xs ${prof.is_approved
+                              className={`px-2 py-0.5 rounded-md text-[9px] font-bold transition cursor-pointer shadow-2xs ${prof.is_approved
                                   ? "bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200"
                                   : "bg-emerald-600 hover:bg-emerald-500 text-white"
                                 }`}
@@ -1714,9 +1713,9 @@ export default function EmployeeDirectoryPanel({
                               type="button"
                               onClick={() => handleOpenEdit(prof)}
                               title="Edit employee profile"
-                              className="p-1 rounded-lg border border-slate-200 bg-white text-slate-500 hover:text-emerald-700 hover:border-emerald-300 hover:bg-emerald-50 transition cursor-pointer"
+                              className="p-1 rounded-md border border-slate-200 bg-white text-slate-500 hover:text-emerald-700 hover:border-emerald-300 hover:bg-emerald-50 transition cursor-pointer"
                             >
-                              <Edit3 size={12} />
+                              <Edit3 size={11} />
                             </button>
                           )}
 
@@ -1725,9 +1724,9 @@ export default function EmployeeDirectoryPanel({
                               type="button"
                               onClick={() => setInviteEmployee(prof)}
                               title="Send setup invite card"
-                              className="p-1 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-600 hover:text-white transition cursor-pointer shadow-2xs"
+                              className="p-1 rounded-md border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-600 hover:text-white transition cursor-pointer shadow-2xs"
                             >
-                              <Send size={12} />
+                              <Send size={11} />
                             </button>
                           )}
 
@@ -1735,10 +1734,10 @@ export default function EmployeeDirectoryPanel({
                             <button
                               type="button"
                               onClick={() => handleDeleteEmployee(prof)}
-                              title="Remove employee"
-                              className="p-1 rounded-lg border border-slate-200 bg-white text-slate-400 hover:text-rose-600 hover:border-rose-200 hover:bg-rose-50 transition cursor-pointer"
+                              title="Remove from directory"
+                              className="p-1 rounded-md border border-slate-200 bg-white text-slate-400 hover:text-rose-600 hover:border-rose-200 hover:bg-rose-50 transition cursor-pointer"
                             >
-                              <Trash2 size={12} />
+                              <Trash2 size={11} />
                             </button>
                           )}
                         </div>

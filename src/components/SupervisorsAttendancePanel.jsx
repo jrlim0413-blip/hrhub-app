@@ -1,4 +1,5 @@
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { createPortal } from "react-dom";
 import {
   Users, UserCheck, Clock, Calendar, Search, Filter,
   Download, Printer, RefreshCw, CheckCircle2, AlertTriangle,
@@ -7,7 +8,8 @@ import {
   AlertCircle, Eye, Check, Camera, Smartphone,
   ExternalLink, Navigation, LocateFixed,
   Map as MapIcon, Layers, Shield, Cloud, Loader2, Video, VideoOff, RotateCw,
-  UserPlus, Key, Trash2, ShieldAlert, Sparkles, EyeOff, FileText, FileSpreadsheet
+  UserPlus, Key, Trash2, ShieldAlert, Sparkles, EyeOff, FileText, FileSpreadsheet,
+  Building2
 } from "lucide-react";
 import { API_CONFIG } from "../config/apiConfig";
 import {
@@ -27,22 +29,22 @@ import {
   getCachedFieldMonitoringAccounts,
   subscribeToFieldAccountsRealtime
 } from "../lib/fieldMonitoringStorage";
+import {
+  ENTITY_METADATA,
+  matchesCompanyEntity,
+  isGlobalAccessUser,
+  getUserAssignedStlEntity
+} from "../lib/companyEntities";
+import {
+  getStlSupervisors,
+  getStlAgents,
+  fetchLiveStlData,
+  STL_ONLY_SUBSIDIARIES,
+  matchStlCanonicalName
+} from "../lib/stlApiLiveService";
 
-// Fallback active supervisors (matching live STL Mandaue API IDs 21 to 32)
-const FALLBACK_SUPERVISORS = [
-  { id: 21, fullName: "ARLFRED SABERON", area: "Mandaue City", username: "spvr-arlfred", isActive: 1 },
-  { id: 22, fullName: "RAFFY BAGUIO", area: "Mandaue City", username: "spvr-raffy", isActive: 1 },
-  { id: 23, fullName: "ROEL CATALAN", area: "Mandaue City", username: "spvr-roel", isActive: 1 },
-  { id: 24, fullName: "MICHAEL DE GUZMAN", area: "Mandaue City", username: "spvr-michael", isActive: 1 },
-  { id: 25, fullName: "JOEL ESTORCO", area: "Mandaue City", username: "spvr-joel", isActive: 1 },
-  { id: 26, fullName: "HARRY EYA", area: "Mandaue City", username: "spvr-eya", isActive: 1 },
-  { id: 27, fullName: "CARL MANGRUBAN", area: "Mandaue City", username: "spvr-carl", isActive: 1 },
-  { id: 28, fullName: "JED MELENDREZ", area: "Mandaue City", username: "spvr-jed", isActive: 1 },
-  { id: 29, fullName: "NYOR SESALDO", area: "Mandaue City", username: "spvr-nyor", isActive: 1 },
-  { id: 30, fullName: "NARCISO TAGUD JR.", area: "Mandaue City", username: "spvr-jason", isActive: 1 },
-  { id: 31, fullName: "MOLLY BATUBALANOS", area: "Mandaue City", username: "spvr-molly", isActive: 1 },
-  { id: 32, fullName: "COORDINATOR - APPLEGROUP", area: "Mandaue City", username: "spvr-apple", isActive: 1 }
-];
+// Real STL supervisors pulled directly from live source APIs
+const FALLBACK_SUPERVISORS = getStlSupervisors();
 
 // Areas filter reference
 const AREAS = [
@@ -237,10 +239,26 @@ function getDaysForPeriod(periodType, baseDateStr) {
   }
 }
 
-export default function SupervisorsAttendancePanel({ onClose }) {
+export default function SupervisorsAttendancePanel({ onClose, currentUser = null }) {
+  const activeUser = useMemo(() => {
+    if (currentUser) return currentUser;
+    try {
+      const raw = localStorage.getItem("hrhub_auth_user");
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  }, [currentUser]);
+
+  const userEntityScope = useMemo(() => {
+    return getUserAssignedStlEntity(activeUser);
+  }, [activeUser]);
+
+  const isGlobalUser = !userEntityScope;
+
   const [selectedDate, setSelectedDate] = useState(getTodayString);
-  const [supervisorsList, setSupervisorsList] = useState([]);
-  const [agentsList, setAgentsList] = useState([]);
+  const [supervisorsList, setSupervisorsList] = useState(() => getStlSupervisors());
+  const [agentsList, setAgentsList] = useState(() => getStlAgents());
   const [attendanceRecords, setAttendanceRecords] = useState([]);
   const [loading, setLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -249,7 +267,18 @@ export default function SupervisorsAttendancePanel({ onClose }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [areaFilter, setAreaFilter] = useState("all");
+  const [selectedEntity, setSelectedEntity] = useState(() => {
+    const scope = getUserAssignedStlEntity(activeUser);
+    return scope && !scope.isNonStl ? scope.canonicalName : "all";
+  });
   const [viewMode, setViewMode] = useState("table"); // 'table' | 'cards'
+
+  // Enforce entity locking for scoped branch users
+  useEffect(() => {
+    if (userEntityScope && !userEntityScope.isNonStl && selectedEntity !== userEntityScope.canonicalName) {
+      setSelectedEntity(userEntityScope.canonicalName);
+    }
+  }, [userEntityScope, selectedEntity]);
 
   // Viewing Agents Modal State (view tellers under a supervisor)
   const [viewingSupervisorAgents, setViewingSupervisorAgents] = useState(null);
@@ -557,47 +586,24 @@ export default function SupervisorsAttendancePanel({ onClose }) {
     setLoading(true);
 
     try {
-      const token = API_CONFIG.AGENTS_TOKEN;
-      const headers = { Accept: "application/json" };
-      if (token) headers.Authorization = `Bearer ${token}`;
+      const res = await fetchLiveStlData();
+      const allSpvrs = res.supervisors && res.supervisors.length > 0 ? res.supervisors : getStlSupervisors();
+      const allAgents = res.agents && res.agents.length > 0 ? res.agents : getStlAgents();
 
-      // Parallel fetch from both Live APIs
-      const [spvrRes, agentsRes] = await Promise.all([
-        fetch(API_CONFIG.SUPERVISOR_URL, { headers }),
-        fetch(API_CONFIG.AGENTS_URL, { headers })
-      ]);
-
-      let spvrs = [];
-      if (spvrRes.ok) {
-        const payload = await spvrRes.json();
-        spvrs = Array.isArray(payload) ? payload : (payload.data || payload.supervisors || payload.results || []);
-      }
-
-      let agents = [];
-      if (agentsRes.ok) {
-        const payload = await agentsRes.json();
-        agents = Array.isArray(payload) ? payload : (payload.data || payload.agents || payload.results || []);
-      }
-
-      // Filter: Keep active supervisors only (Remove IDs 13 to 20, remove test supervisors)
-      spvrs = spvrs.filter((s) => {
-        const id = Number(s.id);
-        if (id >= 13 && id <= 20) return false;
-        const name = String(s.fullName || s.username || "").toLowerCase();
-        if (name.includes("test spvr") || name.includes("test supervisor") || name.startsWith("spvr")) return false;
-        return true;
-      });
-
-      if (spvrs.length === 0) spvrs = FALLBACK_SUPERVISORS;
-
-      setSupervisorsList(spvrs);
-      setAgentsList(agents);
-      if (spvrs.length > 0 && !simSupervisorId) {
-        setSimSupervisorId(String(spvrs[0].id));
+      setSupervisorsList(allSpvrs);
+      setAgentsList(allAgents);
+      if (allSpvrs.length > 0 && !simSupervisorId) {
+        setSimSupervisorId(String(allSpvrs[0].id));
       }
     } catch (err) {
       console.warn("Unable to fetch live database, using cached supervisor data:", err.message);
-      setSupervisorsList(FALLBACK_SUPERVISORS);
+      const allSpvrs = getStlSupervisors();
+      const allAgents = getStlAgents();
+      setSupervisorsList(allSpvrs);
+      setAgentsList(allAgents);
+      if (allSpvrs.length > 0 && !simSupervisorId) {
+        setSimSupervisorId(String(allSpvrs[0].id));
+      }
     } finally {
       setLoading(false);
     }
@@ -611,29 +617,47 @@ export default function SupervisorsAttendancePanel({ onClose }) {
   const agentStatsBySupervisor = useMemo(() => {
     const map = {};
     supervisorsList.forEach((s) => {
-      map[String(s.id)] = {
+      const canonicalComp = matchStlCanonicalName(s.company);
+      const compositeKey = `${canonicalComp}_${s.id}`;
+      map[compositeKey] = {
         total: 0,
         active: 0,
         inactive: 0,
         agents: []
       };
+      if (!map[String(s.id)]) {
+        map[String(s.id)] = map[compositeKey];
+      }
     });
 
     agentsList.forEach((agent) => {
       const spvrId = String(agent.supervisor || agent.supervisor_id || agent.supervisorId || "");
-      if (spvrId && map[spvrId]) {
-        map[spvrId].total += 1;
-        if (agent.isActive === 1 || agent.isActive === true || agent.status === "active") {
-          map[spvrId].active += 1;
+      if (!spvrId) return;
+      const canonicalComp = matchStlCanonicalName(agent.company);
+      const compositeKey = `${canonicalComp}_${spvrId}`;
+
+      const target = map[compositeKey] || map[spvrId];
+      if (target) {
+        target.total += 1;
+        const isAgentActive = (agent.isActive === 1 || agent.isActive === true || agent.status === "active");
+        if (isAgentActive) {
+          target.active += 1;
+          target.agents.push(agent);
         } else {
-          map[spvrId].inactive += 1;
+          target.inactive += 1;
         }
-        map[spvrId].agents.push(agent);
       }
     });
 
     return map;
   }, [supervisorsList, agentsList]);
+
+  const getSupervisorAgentStats = useCallback((rec) => {
+    if (!rec) return { total: 0, active: 0, inactive: 0, agents: [] };
+    const comp = matchStlCanonicalName(rec.company);
+    const key = `${comp}_${rec.supervisorId}`;
+    return agentStatsBySupervisor[key] || agentStatsBySupervisor[String(rec.supervisorId)] || { total: 0, active: 0, inactive: 0, agents: [] };
+  }, [agentStatsBySupervisor]);
 
   // 3. Load or Initialize Attendance Records for Selected Date & Sync with Supabase Cloud
   useEffect(() => {
@@ -645,11 +669,17 @@ export default function SupervisorsAttendancePanel({ onClose }) {
 
     // Initialize clean attendance records from real API data + registered Field Monitoring accounts
     const supervisorRecords = supervisorsList.map((spvr, index) => {
+      const canonicalComp = matchStlCanonicalName(spvr.company);
+      const uniqueKey = `${canonicalComp}_${spvr.id}`;
       return {
+        key: uniqueKey,
+        uniqueKey: uniqueKey,
         supervisorId: spvr.id,
         fullName: spvr.fullName || spvr.username || `Supervisor ${spvr.id}`,
         username: spvr.username || `spvr_${spvr.id}`,
-        area: String(spvr.area && spvr.area !== "5" ? spvr.area : "Mandaue City"),
+        area: String(spvr.area && spvr.area !== "5" ? spvr.area : (spvr.companyShort || spvr.company || "Operating Sector")),
+        company: canonicalComp,
+        companyShort: spvr.companyShort || canonicalComp,
         role: "Supervisor",
         status: "Awaiting Check-in",
         timeIn: "--",
@@ -665,12 +695,18 @@ export default function SupervisorsAttendancePanel({ onClose }) {
     });
 
     const monitoringRecords = fieldAccounts.map((fm) => {
+      const canonicalComp = matchStlCanonicalName(fm.company);
+      const uniqueKey = `FM_${fm.id}`;
       return {
+        key: uniqueKey,
+        uniqueKey: uniqueKey,
         supervisorId: fm.id,
         fullName: fm.fullName,
         username: fm.username,
         password: fm.password || "Password123!",
-        area: fm.area || "Mandaue City",
+        area: fm.area || "Operating Sector",
+        company: canonicalComp,
+        companyShort: fm.company || canonicalComp,
         role: "Field Monitoring",
         status: "Awaiting Check-in",
         timeIn: "--",
@@ -694,16 +730,19 @@ export default function SupervisorsAttendancePanel({ onClose }) {
         const parsed = JSON.parse(cached);
         if (Array.isArray(parsed) && parsed.length > 0) {
           const valid = parsed.filter((r) => {
-            const id = Number(r.supervisorId);
-            return !(id >= 13 && id <= 20) && !String(r.fullName).startsWith("SPVR ");
+            return !String(r.fullName).startsWith("SPVR ");
           });
           if (valid.length > 0) {
             const validMap = new Map();
-            valid.forEach((r) => validMap.set(String(r.supervisorId), r));
+            valid.forEach((r) => {
+              const comp = matchStlCanonicalName(r.company);
+              validMap.set(`${comp}_${r.supervisorId}`, r);
+              validMap.set(String(r.supervisorId), r);
+            });
 
             // Merge cache into initialRecords, preserving role and field monitoring identity
             currentWorkingRecords = initialRecords.map((initRec) => {
-              const saved = validMap.get(String(initRec.supervisorId));
+              const saved = validMap.get(initRec.uniqueKey) || validMap.get(String(initRec.supervisorId));
               if (saved) {
                 return {
                   ...initRec,
@@ -717,13 +756,6 @@ export default function SupervisorsAttendancePanel({ onClose }) {
               }
               return initRec;
             });
-
-            // Also keep any extra valid records in cache if any
-            const initIds = new Set(initialRecords.map((r) => String(r.supervisorId)));
-            const extra = valid.filter((r) => !initIds.has(String(r.supervisorId)));
-            if (extra.length > 0) {
-              currentWorkingRecords = [...currentWorkingRecords, ...extra];
-            }
           }
         }
       } catch { }
@@ -1279,7 +1311,7 @@ export default function SupervisorsAttendancePanel({ onClose }) {
     ];
 
     const rows = attendanceRecords.map((r) => {
-      const spvrStats = agentStatsBySupervisor[String(r.supervisorId)] || { total: 0, active: 0 };
+      const spvrStats = getSupervisorAgentStats(r);
       const coords = r.latitude && r.longitude ? `${r.latitude}, ${r.longitude}` : "No GPS";
       const hasPhoto = r.photoProof ? "Yes" : "No";
 
@@ -2065,23 +2097,61 @@ export default function SupervisorsAttendancePanel({ onClose }) {
 
   // Computed Metrics
   const stats = useMemo(() => {
-    const totalSupervisors = attendanceRecords.length;
-    const present = attendanceRecords.filter((r) => r.status === "Present").length;
-    const late = attendanceRecords.filter((r) => r.status === "Late").length;
-    const ob = attendanceRecords.filter((r) => r.status === "Official Business").length;
-    const leave = attendanceRecords.filter((r) => r.status === "On Leave" || r.status === "Day Off").length;
-    const pending = attendanceRecords.filter((r) => r.status === "Awaiting Check-in" || r.status === "Absent").length;
-    const totalAgentsManaged = Object.values(agentStatsBySupervisor).reduce((acc, curr) => acc + curr.total, 0);
+    const activeRecords = attendanceRecords.filter((r) => {
+      if (selectedEntity !== "all" && !matchesCompanyEntity(r.company, selectedEntity)) {
+        return false;
+      }
+      if (r.role !== "Field Monitoring") {
+        const spvrStats = getSupervisorAgentStats(r);
+        return spvrStats && spvrStats.active > 0;
+      }
+      return true;
+    });
+
+    const totalSupervisors = activeRecords.length;
+    const present = activeRecords.filter((r) => r.status === "Present").length;
+    const late = activeRecords.filter((r) => r.status === "Late").length;
+    const ob = activeRecords.filter((r) => r.status === "Official Business").length;
+    const leave = activeRecords.filter((r) => r.status === "On Leave" || r.status === "Day Off").length;
+    const pending = activeRecords.filter((r) => r.status === "Awaiting Check-in" || r.status === "Absent").length;
+
+    let totalAgentsManaged = 0;
+    activeRecords.forEach((r) => {
+      if (r.role !== "Field Monitoring") {
+        const spvrStats = getSupervisorAgentStats(r);
+        totalAgentsManaged += spvrStats?.active || 0;
+      }
+    });
 
     return { totalSupervisors, totalAgentsManaged, present, late, ob, leave, pending };
-  }, [attendanceRecords, agentStatsBySupervisor]);
+  }, [attendanceRecords, selectedEntity, getSupervisorAgentStats]);
 
   // Filtered Records
+  // Dynamic Areas / Sectors list based on selected entity & real attendance records
+  const dynamicAreas = useMemo(() => {
+    const set = new Set();
+    attendanceRecords.forEach((r) => {
+      if (selectedEntity === "all" || matchesCompanyEntity(r.company, selectedEntity)) {
+        if (r.area) set.add(String(r.area).trim());
+      }
+    });
+    return [
+      { id: "all", label: "All Sectors / Operating Areas" },
+      ...Array.from(set).sort().map((area) => ({ id: area, label: `Sector / Area: ${area}` }))
+    ];
+  }, [attendanceRecords, selectedEntity]);
+
   const filteredRecords = useMemo(() => {
     return attendanceRecords.filter((r) => {
       // Category filter (Source API Supervisors vs Field Monitoring)
       if (rosterCategoryFilter === "supervisors" && r.role === "Field Monitoring") return false;
       if (rosterCategoryFilter === "monitoring" && r.role !== "Field Monitoring") return false;
+
+      // Kung inactive ang naka-assigned na agent sa kanila o walang active agent, huwag nang i-display
+      if (r.role !== "Field Monitoring") {
+        const spvrStats = getSupervisorAgentStats(r);
+        if (!spvrStats || spvrStats.active === 0) return false;
+      }
 
       const searchMatch =
         searchTerm === "" ||
@@ -2107,10 +2177,37 @@ export default function SupervisorsAttendancePanel({ onClose }) {
       }
 
       const areaMatch = areaFilter === "all" || String(r.area) === areaFilter;
+      const entityMatch = selectedEntity === "all" || matchesCompanyEntity(r.company, selectedEntity);
 
-      return searchMatch && statusMatch && areaMatch;
+      return searchMatch && statusMatch && areaMatch && entityMatch;
     });
-  }, [attendanceRecords, searchTerm, statusFilter, areaFilter, rosterCategoryFilter]);
+  }, [attendanceRecords, searchTerm, statusFilter, areaFilter, rosterCategoryFilter, selectedEntity, getSupervisorAgentStats]);
+
+  // Entities tabs calculation (STL Subsidiaries Only)
+  const entityTabList = useMemo(() => {
+    const targetSubs = userEntityScope && !userEntityScope.isNonStl
+      ? [userEntityScope.canonicalName]
+      : STL_ONLY_SUBSIDIARIES;
+
+    return targetSubs.map((name) => {
+      const meta = ENTITY_METADATA[name] || {};
+      const count = attendanceRecords.filter((r) => {
+        if (!matchesCompanyEntity(r.company, name)) return false;
+        if (r.role !== "Field Monitoring") {
+          const spvrStats = getSupervisorAgentStats(r);
+          if (!spvrStats || spvrStats.active === 0) return false;
+        }
+        return true;
+      }).length;
+      return {
+        id: name,
+        name,
+        shortName: meta.shortName || name,
+        logoUrl: meta.logoUrl || null,
+        count
+      };
+    });
+  }, [attendanceRecords, getSupervisorAgentStats, userEntityScope]);
 
   // Formatted date header
   const formattedDateTitle = useMemo(() => {
@@ -2128,7 +2225,7 @@ export default function SupervisorsAttendancePanel({ onClose }) {
   }, [selectedDate]);
 
   return (
-    <div className="space-y-6 font-['Figtree','Inter',sans-serif]">
+    <div className="space-y-3 font-['Figtree','Inter',sans-serif] antialiased">
       {/* Toast Alert Notification */}
       {toastMessage && (
         <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-xl bg-slate-900 text-white px-4 py-3 shadow-xl border border-slate-700 animate-in fade-in slide-in-from-bottom-3 duration-200">
@@ -2138,60 +2235,60 @@ export default function SupervisorsAttendancePanel({ onClose }) {
       )}
 
       {/* ================= 1. HEADER & DATE CONTROLS ================= */}
-      <div className="rounded-2xl border border-slate-200/90 bg-white p-5 md:p-6 shadow-sm">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+      <div className="rounded-2xl border border-slate-200/80 bg-white p-3.5 sm:p-4 shadow-2xs">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
           <div className="space-y-1">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="inline-flex items-center gap-1.5 rounded-md bg-emerald-50 px-2.5 py-0.5 text-[11px] font-bold text-[#008559] border border-emerald-200/60 uppercase tracking-wider">
-                <ShieldCheck size={12} />
-                Live Database • STL Mandaue API
+              <span className="inline-flex items-center gap-1.5 rounded-md bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-[#008559] border border-emerald-200/60 uppercase tracking-wider">
+                <ShieldCheck size={11} />
+                Live Database • Multi-Entity Field Operations
               </span>
               <span className="text-xs text-slate-400">•</span>
               {cloudSyncStatus === "synced" ? (
-                <span className="inline-flex items-center gap-1.5 rounded-md bg-emerald-50 px-2.5 py-0.5 text-[11px] font-bold text-emerald-800 border border-emerald-200/80">
+                <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-800 border border-emerald-200/80">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                  Cloud Database Synced
+                  Cloud Synced
                 </span>
               ) : cloudSyncStatus === "syncing" ? (
-                <span className="inline-flex items-center gap-1.5 rounded-md bg-sky-50 px-2.5 py-0.5 text-[11px] font-bold text-sky-700 border border-sky-200/80">
-                  <RefreshCw size={10} className="animate-spin text-sky-600" />
-                  Connecting Cloud...
+                <span className="inline-flex items-center gap-1 rounded-md bg-sky-50 px-2 py-0.5 text-[10px] font-bold text-sky-700 border border-sky-200/80">
+                  <RefreshCw size={9} className="animate-spin text-sky-600" />
+                  Connecting...
                 </span>
               ) : (
-                <span className="inline-flex items-center gap-1.5 rounded-md bg-amber-50 px-2.5 py-0.5 text-[11px] font-bold text-amber-700 border border-amber-200/80" title="Local storage active. Run 03_supervisor_attendance_schema.sql in Supabase to enable cloud persistence.">
-                  <AlertTriangle size={11} className="text-amber-600" />
+                <span className="inline-flex items-center gap-1 rounded-md bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-700 border border-amber-200/80" title="Local storage active. Run 03_supervisor_attendance_schema.sql in Supabase to enable cloud persistence.">
+                  <AlertTriangle size={10} className="text-amber-600" />
                   Local Cache Mode
                 </span>
               )}
               <span className="text-xs text-slate-400">•</span>
               <span className="text-xs font-semibold text-slate-600">
-                {stats.totalSupervisors} Active Supervisors • {stats.totalAgentsManaged} Total Agents Managed
+                {stats.totalSupervisors} Supervisors • {stats.totalAgentsManaged} Agents Managed
               </span>
             </div>
-            <h1 className="text-2xl md:text-3xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2.5">
-              <UserCheck className="text-[#008559]" size={28} />
+            <h1 className="text-base font-bold text-slate-900 tracking-tight leading-tight flex items-center gap-2 mt-0.5">
+              <UserCheck className="text-[#008559]" size={20} />
               Supervisors Attendance
             </h1>
-            <p className="text-xs md:text-sm text-slate-500 max-w-2xl">
-              Live monitoring of Area Supervisors, exact Time In, number of agents handled, GPS location, and real photo check-in from their mobile devices.
+            <p className="text-[11px] text-slate-500 max-w-2xl mt-0.5">
+              Live monitoring of Area Supervisors, Time In, assigned tellers, GPS location, and photo check-in from their mobile devices across all subsidiaries.
             </p>
           </div>
 
           {/* Date Selector Navigation Bar */}
-          <div className="flex flex-wrap items-center gap-2 bg-slate-50/90 p-2 rounded-2xl border border-slate-200/80">
+          <div className="flex flex-wrap items-center gap-1.5 bg-slate-50/90 p-1.5 rounded-xl border border-slate-200/80">
             <button
               type="button"
               onClick={handlePrevDay}
-              className="p-2 rounded-xl bg-white border border-slate-200/80 hover:bg-slate-100 text-slate-700 transition shadow-2xs cursor-pointer"
+              className="p-1.5 rounded-lg bg-white border border-slate-200/80 hover:bg-slate-100 text-slate-700 transition shadow-2xs cursor-pointer"
               title="Previous Day"
             >
-              <ChevronLeft size={16} />
+              <ChevronLeft size={14} />
             </button>
 
             <button
               type="button"
               onClick={handleSetToday}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer shadow-2xs ${selectedDate === getTodayString()
+              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer shadow-2xs ${selectedDate === getTodayString()
                 ? "bg-[#008559] text-white"
                 : "bg-white text-slate-700 border border-slate-200/80 hover:bg-slate-100"
                 }`}
@@ -2200,22 +2297,22 @@ export default function SupervisorsAttendancePanel({ onClose }) {
             </button>
 
             <div className="relative flex items-center">
-              <Calendar size={14} className="absolute left-2.5 text-slate-400 pointer-events-none" />
+              <Calendar size={13} className="absolute left-2.5 text-slate-400 pointer-events-none" />
               <input
                 type="date"
                 value={selectedDate}
                 onChange={(e) => setSelectedDate(e.target.value)}
-                className="pl-8 pr-2.5 py-1.5 bg-white border border-slate-200/80 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:border-[#008559] transition shadow-2xs"
+                className="pl-7 pr-2 py-1 bg-white border border-slate-200/80 rounded-lg text-xs font-semibold text-slate-800 focus:outline-none focus:border-[#008559] transition shadow-2xs"
               />
             </div>
 
             <button
               type="button"
               onClick={handleNextDay}
-              className="p-2 rounded-xl bg-white border border-slate-200/80 hover:bg-slate-100 text-slate-700 transition shadow-2xs cursor-pointer"
+              className="p-1.5 rounded-lg bg-white border border-slate-200/80 hover:bg-slate-100 text-slate-700 transition shadow-2xs cursor-pointer"
               title="Next Day"
             >
-              <ChevronRight size={16} />
+              <ChevronRight size={14} />
             </button>
 
             {/* Re-sync Live API */}
@@ -2228,74 +2325,134 @@ export default function SupervisorsAttendancePanel({ onClose }) {
                   showToast("Re-synced with live database!");
                 });
               }}
-              className="p-2 rounded-xl bg-white border border-slate-200/80 hover:bg-emerald-50 hover:text-[#008559] text-slate-600 transition shadow-2xs cursor-pointer"
+              className="p-1.5 rounded-lg bg-white border border-slate-200/80 hover:bg-emerald-50 hover:text-[#008559] text-slate-600 transition shadow-2xs cursor-pointer"
               title="Re-fetch from Database API"
             >
-              <RefreshCw size={16} className={isRefreshing || loading ? "animate-spin text-[#008559]" : ""} />
+              <RefreshCw size={14} className={isRefreshing || loading ? "animate-spin text-[#008559]" : ""} />
             </button>
           </div>
         </div>
 
         {/* Action Toolbar */}
-        <div className="mt-4 pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3 text-xs">
+        <div className="mt-3 pt-2.5 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2.5 text-xs">
           <div className="flex flex-wrap items-center gap-2 text-slate-700 font-medium">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span>Attendance Log for:</span>
+            <span>Log for:</span>
             <strong className="text-slate-900 font-bold">{formattedDateTitle}</strong>
             <button
               type="button"
               onClick={handleManualPurgePhotos}
-              className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-[11px] font-semibold transition cursor-pointer"
-              title="End-of-day automatic photo purge is active to optimize system storage. Time-In records remain 100% intact. Click to optimize storage now."
+              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-[10px] font-semibold transition cursor-pointer"
+              title="Auto photo purge active to protect cloud storage."
             >
-              <Sparkles size={11} className="text-emerald-600" />
-              <span>Auto-Purge Active (Storage Protected)</span>
+              <Sparkles size={10} className="text-emerald-600" />
+              <span>Storage Protected</span>
             </button>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-1.5">
             <button
               type="button"
               onClick={handleOpenWeeklyReport}
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition shadow-xs hover:shadow-indigo-950/20 active:scale-95 cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition shadow-2xs cursor-pointer"
               title="Open Attendance Report (Weekly / 15-Day Semi-Monthly Cutoffs)"
             >
-              <Calendar size={13} />
+              <Calendar size={12} />
               <span>Attendance Report</span>
             </button>
 
             <button
               type="button"
               onClick={handleOpenAddAccount}
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold transition shadow-xs hover:shadow-emerald-950/20 active:scale-95 cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold transition shadow-2xs cursor-pointer"
               title="Add or manage Field Monitoring login accounts"
             >
-              <UserPlus size={13} />
-              <span>Field Monitoring Accounts ({fieldAccounts.length})</span>
+              <UserPlus size={12} />
+              <span>Field Monitors ({fieldAccounts.length})</span>
             </button>
 
             <button
               type="button"
               onClick={handleExportCSV}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white text-slate-700 hover:bg-slate-100 border border-slate-200 text-xs font-bold transition shadow-2xs cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white text-slate-700 hover:bg-slate-100 border border-slate-200 text-xs font-bold transition shadow-2xs cursor-pointer"
               title="Download Daily Attendance CSV"
             >
-              <Download size={13} />
-              <span>Daily CSV</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={handlePrint}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white text-slate-700 hover:bg-slate-100 border border-slate-200 text-xs font-bold transition shadow-2xs cursor-pointer"
-              title="Print Daily Sheet"
-            >
-              <Printer size={13} />
-              <span>Print Sheet</span>
+              <Download size={12} />
+              <span>CSV</span>
             </button>
           </div>
         </div>
       </div>
+
+      {/* Multi-Entity Carousel / Tabs Bar (STL Subsidiaries Only) */}
+      <div className="bg-white rounded-xl border border-slate-200/80 p-2 shadow-2xs flex items-center gap-1.5 overflow-x-auto custom-scrollbar">
+        {isGlobalUser ? (
+          <button
+            type="button"
+            onClick={() => setSelectedEntity("all")}
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold transition whitespace-nowrap shadow-2xs shrink-0 cursor-pointer ${
+              selectedEntity === "all"
+                ? "bg-slate-900 text-white ring-1 ring-slate-800 shadow-2xs"
+                : "bg-slate-50 border border-slate-200 text-slate-700 hover:bg-slate-100"
+            }`}
+          >
+            <Building2 size={12} className={selectedEntity === "all" ? "text-emerald-400" : "text-slate-400"} />
+            <span>All STL Entities</span>
+            <span className={`text-[9px] px-1.5 py-0.2 rounded-full font-bold ${selectedEntity === "all" ? "bg-white/20 text-white" : "bg-slate-200 text-slate-700"}`}>
+              {attendanceRecords.length}
+            </span>
+          </button>
+        ) : (
+          userEntityScope && !userEntityScope.isNonStl && (
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11px] font-bold shrink-0">
+              <ShieldCheck size={13} className="text-emerald-600" />
+              <span>Assigned Branch Scope:</span>
+            </div>
+          )
+        )}
+
+        {entityTabList.map((ent) => {
+          const isSelected = selectedEntity === ent.id;
+          return (
+            <button
+              key={ent.id}
+              type="button"
+              onClick={() => {
+                if (isGlobalUser) {
+                  setSelectedEntity(ent.id);
+                }
+              }}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold transition whitespace-nowrap shadow-2xs shrink-0 ${
+                isGlobalUser ? "cursor-pointer" : "cursor-default"
+              } ${
+                isSelected
+                  ? "bg-slate-900 text-white ring-1 ring-slate-800 shadow-2xs"
+                  : "bg-white border border-slate-200 text-slate-700 hover:bg-slate-100"
+              }`}
+            >
+              {ent.logoUrl ? (
+                <img src={ent.logoUrl} alt={ent.shortName} className="w-3.5 h-3.5 rounded object-contain shrink-0" />
+              ) : (
+                <Building2 size={12} className={isSelected ? "text-emerald-400" : "text-slate-400"} />
+              )}
+              <span>{ent.shortName}</span>
+              <span className={`text-[9px] px-1.5 py-0.2 rounded-full font-bold ${isSelected ? "bg-emerald-500/20 text-emerald-300" : "bg-slate-100 text-slate-600"}`}>
+                {ent.count}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      {userEntityScope?.isNonStl && (
+        <div className="p-8 text-center rounded-2xl border border-slate-200 bg-slate-50 text-slate-600 space-y-2">
+          <Building2 size={32} className="mx-auto text-slate-400" />
+          <h3 className="text-sm font-bold text-slate-800">{userEntityScope.canonicalName}</h3>
+          <p className="text-xs max-w-md mx-auto text-slate-500">
+            Supervisor Attendance is exclusive to PCSO STL Authorized Operating Entities. Your account is assigned to a Non-STL entity.
+          </p>
+        </div>
+      )}
 
       {/* ================= 2. METRIC STATS CARDS ================= */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
@@ -2374,39 +2531,6 @@ export default function SupervisorsAttendancePanel({ onClose }) {
           />
         </div>
 
-        {/* Status Tabs Filter */}
-        <div className="flex items-center gap-1 overflow-x-auto custom-scrollbar pb-1 max-w-full">
-          {[
-            { id: "all", label: "All", count: stats.totalSupervisors },
-            { id: "present", label: "Checked In", count: stats.present },
-            { id: "late", label: "Late", count: stats.late },
-            { id: "ob", label: "OB", count: stats.ob },
-            { id: "leave", label: "Leave", count: stats.leave },
-            { id: "pending", label: "Awaiting", count: stats.pending }
-          ].map((tab) => {
-            const isSelected = statusFilter === tab.id;
-            return (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => setStatusFilter(tab.id)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer shrink-0 flex items-center gap-1.5 ${isSelected
-                  ? "bg-slate-900 text-white shadow-xs"
-                  : "bg-slate-100 text-slate-600 hover:bg-slate-200/80"
-                  }`}
-              >
-                <span>{tab.label}</span>
-                <span
-                  className={`text-[10px] px-1.5 py-0.2 rounded-md ${isSelected ? "bg-white/20 text-white" : "bg-white text-slate-600"
-                    }`}
-                >
-                  {tab.count}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-
         {/* Category Pill: All vs Supervisors vs Field Monitoring */}
         <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200 shrink-0">
           <button
@@ -2415,7 +2539,7 @@ export default function SupervisorsAttendancePanel({ onClose }) {
             className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${rosterCategoryFilter === "all" ? "bg-white text-slate-900 shadow-2xs" : "text-slate-500 hover:text-slate-900"
               }`}
           >
-            All ({attendanceRecords.length})
+            All ({attendanceRecords.filter(r => r.role === "Field Monitoring" || (getSupervisorAgentStats(r)?.active > 0)).length})
           </button>
           <button
             type="button"
@@ -2423,7 +2547,7 @@ export default function SupervisorsAttendancePanel({ onClose }) {
             className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${rosterCategoryFilter === "supervisors" ? "bg-white text-slate-900 shadow-2xs" : "text-slate-500 hover:text-slate-900"
               }`}
           >
-            Supervisors ({attendanceRecords.filter((r) => r.role !== "Field Monitoring").length})
+            Supervisors ({attendanceRecords.filter((r) => r.role !== "Field Monitoring" && (getSupervisorAgentStats(r)?.active > 0)).length})
           </button>
           <button
             type="button"
@@ -2443,7 +2567,7 @@ export default function SupervisorsAttendancePanel({ onClose }) {
             onChange={(e) => setAreaFilter(e.target.value)}
             className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:outline-none focus:border-[#008559] transition cursor-pointer"
           >
-            {AREAS.map((a) => (
+            {dynamicAreas.map((a) => (
               <option key={a.id} value={a.id}>
                 {a.label}
               </option>
@@ -2519,14 +2643,10 @@ export default function SupervisorsAttendancePanel({ onClose }) {
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {filteredRecords.map((record) => {
-                  const spvrStats = agentStatsBySupervisor[String(record.supervisorId)] || {
-                    total: 0,
-                    active: 0,
-                    agents: []
-                  };
+                  const spvrStats = getSupervisorAgentStats(record);
 
                   return (
-                    <tr key={record.supervisorId} className="hover:bg-slate-50/70 transition">
+                    <tr key={record.uniqueKey || `${record.company}_${record.supervisorId}`} className="hover:bg-slate-50/70 transition">
                       {/* Name & ID */}
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-3">
@@ -2574,8 +2694,7 @@ export default function SupervisorsAttendancePanel({ onClose }) {
                             title="Click to view full list of assigned agents"
                           >
                             <Users size={12} className="text-sky-600 group-hover:scale-110 transition-transform" />
-                            <span>{spvrStats.total} Agents</span>
-                            <span className="text-[10px] font-normal text-sky-600">({spvrStats.active} Active)</span>
+                            <span>{spvrStats.active} Active Agents</span>
                           </button>
                         )}
                       </td>
@@ -2723,15 +2842,11 @@ export default function SupervisorsAttendancePanel({ onClose }) {
         /* CARDS / GRID VIEW */
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredRecords.map((record) => {
-            const spvrStats = agentStatsBySupervisor[String(record.supervisorId)] || {
-              total: 0,
-              active: 0,
-              agents: []
-            };
+            const spvrStats = getSupervisorAgentStats(record);
 
             return (
               <div
-                key={record.supervisorId}
+                key={record.uniqueKey || `${record.company}_${record.supervisorId}`}
                 className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm hover:shadow-md transition flex flex-col justify-between"
               >
                 <div>
@@ -2774,10 +2889,7 @@ export default function SupervisorsAttendancePanel({ onClose }) {
                         Assigned Agents
                       </span>
                       <div className="text-sm font-extrabold text-sky-900">
-                        {spvrStats.total} Agents
-                        <span className="text-xs font-semibold text-sky-600 ml-1">
-                          ({spvrStats.active} Active)
-                        </span>
+                        {spvrStats.active} Active Agents
                       </div>
                     </div>
                     <button
@@ -2937,9 +3049,17 @@ export default function SupervisorsAttendancePanel({ onClose }) {
       )}
 
       {/* ================= 5. VIEW ASSIGNED AGENTS MODAL ================= */}
-      {viewingSupervisorAgents && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-xs animate-in fade-in duration-150">
-          <div className="w-full max-w-2xl bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[85vh]">
+      {viewingSupervisorAgents && typeof document !== "undefined" && createPortal(
+        <div
+          className="fixed inset-0 z-[9990] flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-sm animate-in fade-in duration-150"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setViewingSupervisorAgents(null);
+          }}
+        >
+          <div
+            className="w-full max-w-2xl bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[85vh] animate-in zoom-in-95 duration-150"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="px-6 py-4 bg-sky-900 text-white flex items-center justify-between shrink-0">
               <div>
                 <h3 className="text-base font-bold flex items-center gap-2">
@@ -2947,7 +3067,7 @@ export default function SupervisorsAttendancePanel({ onClose }) {
                   Assigned Agents: {viewingSupervisorAgents.supervisorName}
                 </h3>
                 <p className="text-xs text-sky-200">
-                  Supervisor #{viewingSupervisorAgents.supervisorId} • Total: {viewingSupervisorAgents.stats.total} Agents ({viewingSupervisorAgents.stats.active} Active, {viewingSupervisorAgents.stats.inactive} Inactive)
+                  Supervisor #{viewingSupervisorAgents.supervisorId} • {viewingSupervisorAgents.stats.active} Active Assigned Agents
                 </p>
               </div>
               <button
@@ -2963,7 +3083,7 @@ export default function SupervisorsAttendancePanel({ onClose }) {
             <div className="p-4 overflow-y-auto custom-scrollbar space-y-2 flex-1">
               {viewingSupervisorAgents.stats.agents.length === 0 ? (
                 <div className="text-center py-8 text-slate-400 text-xs">
-                  No agents linked to this supervisor in the live database.
+                  No active agents currently assigned to this supervisor.
                 </div>
               ) : (
                 <div className="divide-y divide-slate-100">
@@ -3008,13 +3128,22 @@ export default function SupervisorsAttendancePanel({ onClose }) {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* ================= 6. PHOTO & GPS VERIFICATION MODAL (BOND PAPER PROPORTION) ================= */}
-      {viewingPhotoRecord && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 md:p-6 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-150">
-          <div className="w-full max-w-5xl max-h-[92vh] bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col">
+      {viewingPhotoRecord && typeof document !== "undefined" && createPortal(
+        <div
+          className="fixed inset-0 z-[9990] flex items-center justify-center p-3 md:p-6 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-150"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setViewingPhotoRecord(null);
+          }}
+        >
+          <div
+            className="w-full max-w-5xl max-h-[92vh] bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col animate-in zoom-in-95 duration-150"
+            onClick={(e) => e.stopPropagation()}
+          >
             {/* Header */}
             <div className="px-6 py-4 bg-slate-900 text-white flex items-center justify-between shrink-0 border-b border-slate-800">
               <div className="flex items-center gap-3">
@@ -3190,11 +3319,12 @@ export default function SupervisorsAttendancePanel({ onClose }) {
               </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* ================= 7. FIELD CHECK-IN MODAL (BOND PAPER PROPORTION & LIVE MAP) ================= */}
-      {isSimulatorOpen && (
+      {isSimulatorOpen && typeof document !== "undefined" && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 md:p-6 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-150">
           <div className="w-full max-w-5xl max-h-[92vh] bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col">
             {/* Header */}
@@ -3399,10 +3529,10 @@ export default function SupervisorsAttendancePanel({ onClose }) {
                   >
                     <optgroup label="STL Supervisors (Source API)">
                       {supervisorsList.map((s) => {
-                        const count = agentStatsBySupervisor[String(s.id)]?.total || 0;
+                        const count = getSupervisorAgentStats(s)?.total || 0;
                         return (
-                          <option key={s.id} value={s.id}>
-                            #{s.id} - {s.fullName} ({count} Assigned Agents • {s.area === "Mandaue City" || s.area === "5" || !s.area ? "Mandaue City" : `Area ${s.area}`})
+                          <option key={s.uniqueKey || `${s.company}_${s.id}`} value={s.id}>
+                            #{s.id} - {s.fullName} ({count} Assigned Agents • {s.companyShort || s.company || s.area || "Operating Sector"})
                           </option>
                         );
                       })}
@@ -3516,11 +3646,12 @@ export default function SupervisorsAttendancePanel({ onClose }) {
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* ================= 8. EDIT DTR RECORD MODAL ================= */}
-      {editingRecord && (
+      {editingRecord && typeof document !== "undefined" && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
           <div className="w-full max-w-lg bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
             <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
@@ -3674,10 +3805,11 @@ export default function SupervisorsAttendancePanel({ onClose }) {
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
       {/* ================= FIELD MONITORING ACCOUNTS MANAGEMENT MODAL ================= */}
-      {isFieldAccountsModalOpen && (
+      {isFieldAccountsModalOpen && typeof document !== "undefined" && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="w-full max-w-2xl rounded-3xl border border-slate-200 bg-white shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
             {/* Header */}
@@ -3922,11 +4054,12 @@ export default function SupervisorsAttendancePanel({ onClose }) {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* ================= 8. ATTENDANCE REPORT MODAL (WEEKLY & SEMI-MONTHLY 15-DAY CUTOFFS) ================= */}
-      {isWeeklyModalOpen && (
+      {isWeeklyModalOpen && typeof document !== "undefined" && createPortal(
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 animate-in fade-in duration-200">
           <div className="bg-white rounded-3xl shadow-2xl w-[98vw] max-w-[1680px] h-[94vh] max-h-[94vh] flex flex-col overflow-hidden border border-slate-200 animate-in zoom-in-95 duration-200">
             {/* Modal Header */}
@@ -4275,7 +4408,8 @@ export default function SupervisorsAttendancePanel({ onClose }) {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* ================= FLOATING TOAST: COPIED PWA NOTICE ================= */}

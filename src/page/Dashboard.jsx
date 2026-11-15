@@ -59,6 +59,8 @@ import {
   markThreadAsRead,
   formatMessengerTime
 } from "../lib/chatService";
+import { autoLogHRAction, getTodayDateStr } from "../lib/hrWorkLogsStorage";
+import { isHeadOffice, isGlobalAccessUser, getUserAssignedStlEntity } from "../lib/companyEntities";
 
 function formatTimeAgo(dateString) {
   if (!dateString) return "Recently";
@@ -499,7 +501,16 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
     return raw;
   });
   const [profileEmail, setProfileEmail] = useState(currentUser?.email || "admin@hrhub.com");
-  const [profileCompany, setProfileCompany] = useState(currentUser?.company || "Simpal Group of Companies");
+  const [profileCompany, setProfileCompany] = useState(() => {
+    try {
+      const raw = localStorage.getItem("hrhub_auth_user");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed?.company) return parsed.company;
+      }
+    } catch {}
+    return currentUser?.company || "Simpal Group of Companies";
+  });
   const [profilePhone, setProfilePhone] = useState("+63 917 555 0148");
   const [profileLocation, setProfileLocation] = useState("Makati City, Philippines");
   const [profileDepartment, setProfileDepartment] = useState("People Operations");
@@ -530,8 +541,8 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
         ? "HR"
         : profileName.split(" ").filter(Boolean).map((n) => n[0]).join("").slice(0, 2).toUpperCase())
     : (profileEmail ? profileEmail.slice(0, 2).toUpperCase() : "HR");
-  const displayRole = profileRole || currentUser?.role || "Team Member";
-  const displayCompany = profileCompany || currentUser?.company || "Simpal Group of Companies";
+  const displayRole = currentUser?.role || profileRole || "Team Member";
+  const displayCompany = currentUser?.company || profileCompany || "Simpal Group of Companies";
 
   // Dynamic Workspace Tabs State: default empty
   const [openTabs, setOpenTabs] = useState(() => {
@@ -705,17 +716,52 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
     };
   }, []);
 
-  const currentUserObj = useMemo(() => ({
-    email: (currentUser?.email || profileEmail || "").toLowerCase().trim(),
-    role: profileRole || currentUser?.role || "Team Member",
-    company: profileCompany || currentUser?.company || "Simpal Group of Companies"
-  }), [currentUser, profileEmail, profileRole, profileCompany]);
+  const currentUserObj = useMemo(() => {
+    let rawAuth = null;
+    try {
+      const raw = localStorage.getItem("hrhub_auth_user");
+      if (raw) rawAuth = JSON.parse(raw);
+    } catch {}
+
+    const company = currentUser?.company || rawAuth?.company || profileCompany || "Simpal Group of Companies";
+    const role = currentUser?.role || rawAuth?.role || profileRole || "Team Member";
+    const email = (currentUser?.email || rawAuth?.email || profileEmail || "").toLowerCase().trim();
+    const name = currentUser?.name || rawAuth?.name || profileName || "";
+
+    return {
+      email,
+      name,
+      role,
+      company
+    };
+  }, [currentUser, profileEmail, profileRole, profileCompany, profileName]);
 
   // Determine whether current user is Head Office HRMD Master Account
   const isHRMD = useMemo(() => {
-    const curEmail = (currentUser?.email || profileEmail || "").toLowerCase().trim();
-    const role = (profileRole || currentUser?.role || "").toLowerCase().trim();
-    const name = (profileName || currentUser?.name || "").toLowerCase().trim();
+    const curEmail = (currentUserObj.email || "").toLowerCase().trim();
+    const role = (currentUserObj.role || "").toLowerCase().trim();
+    const name = (currentUserObj.name || "").toLowerCase().trim();
+    const company = (currentUserObj.company || "").toLowerCase().trim();
+
+    // Subsidiary accounts are NOT Head Office Master HRMD!
+    const isSubsidiary =
+      company.includes("5a") ||
+      company.includes("royal") ||
+      company.includes("maguindanao") ||
+      company.includes("imperial") ||
+      company.includes("cotabato") ||
+      company.includes("glowing") ||
+      company.includes("fortune") ||
+      company.includes("iligan") ||
+      company.includes("lucky") ||
+      company.includes("betplay") ||
+      company.includes("mandaue") ||
+      company.includes("mc power") ||
+      company.includes("simcon");
+
+    if (isSubsidiary && !isHeadOffice(company)) {
+      return false;
+    }
 
     return (
       curEmail === "admin@hrhub.com" ||
@@ -723,11 +769,9 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
       curEmail === "efilfonimda@gmail.com" ||
       curEmail.includes("hrmd") ||
       name.replace(/\s+/g, "") === "hrmd" ||
-      role === "super administrator" ||
-      role === "super admin" ||
-      role === "hr administrator"
+      (isHeadOffice(company) && (role.includes("hr administrator") || role.includes("super administrator")))
     );
-  }, [currentUser, profileEmail, profileRole, profileName]);
+  }, [currentUserObj]);
 
   const isCommWorkspaceAllowed = isUserTabAllowed(currentUserObj, "communication", matrixData);
   const canViewBulletin = isUserFeatureAllowed(currentUserObj, "comm_bulletin", matrixData);
@@ -769,6 +813,41 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
       }
     }
   }, [isHRMD, workspaceTab]);
+
+  // Telemetry: Auto-log Daily Shift Start for HR Officer
+  useEffect(() => {
+    if (!currentUser) return;
+    const roleLower = String(currentUser.role || profileRole || "").toLowerCase();
+    const isHrOrAdmin =
+      isHRMD ||
+      roleLower.includes("hr") ||
+      roleLower.includes("admin") ||
+      currentUser.isAssignedEntityHR;
+
+    if (isHrOrAdmin) {
+      const today = getTodayDateStr();
+      const userEmail = (currentUser.email || profileEmail || "unknown").toLowerCase();
+      const storageKey = `hrhub_shift_login_audit_${userEmail}_${today}`;
+
+      if (!sessionStorage.getItem(storageKey)) {
+        sessionStorage.setItem(storageKey, "true");
+        autoLogHRAction({
+          user: {
+            name: profileName || currentUser.name || "HR Officer",
+            email: userEmail,
+            role: profileRole || currentUser.role || "HR Administrator",
+            company: profileCompany || currentUser.company || "Simpal Group of Companies",
+            branch: currentUser.branch || "Head Office (SGC)"
+          },
+          taskProject: "Daily HR Shift Login & Station Portal Check-in",
+          category: "General HR Admin",
+          progressComments: `Initiated active operational shift and workstation session at ${profileCompany || currentUser.company}.`,
+          status: "Completed",
+          durationMinutes: 15
+        });
+      }
+    }
+  }, [currentUser, isHRMD, profileName, profileRole, profileEmail, profileCompany]);
 
   // Direct Team Chat State
   const [activeDirectChatUser, setActiveDirectChatUser] = useState(null);
@@ -2091,26 +2170,21 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
                     </div>
                   )
                 ) : communicationTab === "attendance" ? (
-                  isHRMD ? (
-                    <ShiftAttendanceOverviewPanel
-                      profiles={supabaseProfiles}
-                      presenceMap={presenceMap}
-                      onOpenChat={handleOpenDirectChat}
-                      onOpenWorkspaceTab={handleOpenWorkspaceTab}
-                    />
-                  ) : (
-                    <div className="bg-white rounded-3xl border border-slate-200/90 p-12 text-center space-y-4">
-                      <div className="w-16 h-16 rounded-2xl bg-emerald-50 border border-emerald-200/80 text-emerald-600 flex items-center justify-center mx-auto shadow-xs">
-                        <Calendar size={32} />
-                      </div>
-                      <div className="space-y-1">
-                        <h3 className="text-base font-extrabold text-slate-900">Shift & Attendance Schedule</h3>
-                        <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
-                          Work shifts and roster allocations are currently being coordinated. Official shift schedules will be published here once finalized by Head Office HRMD.
-                        </p>
-                      </div>
-                    </div>
-                  )
+                  <ShiftAttendanceOverviewPanel
+                    profiles={supabaseProfiles}
+                    presenceMap={presenceMap}
+                    currentProfile={{
+                      name: profileName,
+                      role: profileRole,
+                      email: profileEmail,
+                      company: profileCompany,
+                      branch: currentUser?.branch || "Head Office (SGC)"
+                    }}
+                    currentUser={currentUser}
+                    isHRMD={isHRMD}
+                    onOpenChat={handleOpenDirectChat}
+                    onOpenWorkspaceTab={handleOpenWorkspaceTab}
+                  />
                 ) : communicationTab === "policies" ? (
                   canViewPolicies ? (
                     <PoliciesHandbooksPanel />
@@ -2174,16 +2248,16 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
             setIsCollapsed={setIsSidebarCollapsed}
             isHRMD={isHRMD}
           />
-          <div className="flex-1 min-w-0 p-4 md:p-6 transition-all duration-300 overflow-x-hidden">
+          <div className="flex-1 min-w-0 p-3 sm:p-4 transition-all duration-300 overflow-x-hidden antialiased">
           {/* WORKSPACE CENTRAL OPERATIONS HUB */}
-          <div className="mb-6 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="mb-3 rounded-2xl border border-slate-200/80 bg-white p-3 sm:p-3.5 shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-2.5">
             <div className="shrink-0">
-              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-emerald-600">Operations & Executive Hub</p>
-              <h2 className="mt-0.5 text-2xl font-extrabold text-slate-900">Workspace</h2>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-600">Operations & Executive Hub</p>
+              <h2 className="text-base font-bold text-slate-900 tracking-tight leading-tight mt-0.5">Workspace</h2>
             </div>
 
             {/* WORKSPACE INTEGRATED TABS (Right-aligned, new tabs enter on the right side and shift older tabs to the left) */}
-            <div className="flex items-center justify-end gap-2 overflow-x-auto custom-scrollbar pb-1 max-w-full flex-1">
+            <div className="flex items-center justify-end gap-1.5 overflow-x-auto custom-scrollbar pb-0.5 max-w-full flex-1">
               {openTabs.length === 0 ? (
                 <span className="text-xs text-slate-400 italic font-medium hidden sm:inline">
                   No active tabs. Select a module from the sidebar.
@@ -2204,28 +2278,28 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
                       onKeyDown={(e) => {
                         if (e.key === "Enter" || e.key === " ") setWorkspaceTab(tabId);
                       }}
-                      className={`group inline-flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-bold transition-all shadow-xs cursor-pointer shrink-0 animate-in fade-in slide-in-from-right-4 duration-200 ${
+                      className={`group inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[11px] font-semibold transition-all shadow-2xs cursor-pointer shrink-0 animate-in fade-in slide-in-from-right-4 duration-200 ${
                         isActive
                           ? tabDef.activeClass
                           : "bg-slate-100 text-slate-700 hover:bg-slate-200"
                       }`}
                     >
                       <Icon
-                        size={14}
+                        size={12}
                         className={isActive ? tabDef.activeIconClass : tabDef.inactiveIconClass}
                       />
                       <span>{tabDef.label}</span>
                       <button
                         type="button"
                         onClick={(e) => handleCloseWorkspaceTab(e, tabId)}
-                        className={`p-0.5 rounded-md transition cursor-pointer ${
+                        className={`p-0.5 rounded transition cursor-pointer ${
                           isActive
                             ? "hover:bg-white/20 text-white/80 hover:text-white"
                             : "hover:bg-slate-300 text-slate-400 hover:text-slate-700"
                         }`}
                         title={`Close ${tabDef.label}`}
                       >
-                        <X size={12} />
+                        <X size={11} />
                       </button>
                     </div>
                   );
@@ -2234,34 +2308,34 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
             </div>
           </div>
 
-          <div key={workspaceTab || "home"} className="animate-tab-fade-in space-y-6">
+          <div key={workspaceTab || "home"} className="animate-tab-fade-in space-y-3">
             {/* EMPTY WORKSPACE STATE or HOME DASHBOARD: Workspace Ready Hub with Frequently Used Modules */}
             {(!workspaceTab || openTabs.length === 0 || workspaceTab === "home") && (
-            <div className="rounded-2xl border border-slate-200/90 bg-white/80 backdrop-blur-sm p-8 md:p-12 text-center shadow-xs animate-in fade-in">
-              <div className="mx-auto w-14 h-14 rounded-2xl bg-emerald-50 text-emerald-600 border border-emerald-100 flex items-center justify-center mb-3 shadow-2xs">
-                <BriefcaseBusiness size={28} />
+            <div className="rounded-2xl border border-slate-200/80 bg-white/90 backdrop-blur-sm p-5 sm:p-7 text-center shadow-2xs animate-in fade-in">
+              <div className="mx-auto w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-100 flex items-center justify-center mb-2 shadow-2xs">
+                <BriefcaseBusiness size={20} />
               </div>
-              <h3 className="text-xl font-extrabold text-slate-900 mb-1">
+              <h3 className="text-base font-bold text-slate-900 tracking-tight mb-0.5">
                 Workspace Ready
               </h3>
-              <p className="text-xs text-slate-500 max-w-md mx-auto mb-4 leading-relaxed">
+              <p className="text-[11px] text-slate-500 max-w-md mx-auto mb-3 leading-relaxed">
                 Choose any functional module from the sidebar, or launch your frequently used modules below:
               </p>
 
               {/* 10-Day Frequent Usage Tracker Header */}
-              <div className="mb-6 flex flex-wrap items-center justify-center gap-2.5">
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-bold text-amber-800 shadow-2xs">
-                  <Flame size={13} className="text-amber-500" />
+              <div className="mb-4 flex flex-wrap items-center justify-center gap-2">
+                <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-[10px] font-bold text-amber-800 shadow-2xs">
+                  <Flame size={11} className="text-amber-500" />
                   <span>Frequently Used Modules</span>
                 </span>
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600">
-                  <Clock size={12} className="text-slate-400" />
+                <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-0.5 text-[10px] font-semibold text-slate-600">
+                  <Clock size={10} className="text-slate-400" />
                   <span>Resets in {frequentStats.daysRemaining} {frequentStats.daysRemaining === 1 ? "day" : "days"} (10-Day Cycle)</span>
                 </span>
               </div>
 
               {/* Grid of Frequent (or All) Module Cards */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 max-w-3xl mx-auto text-left">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-2.5 max-w-3xl mx-auto text-left">
                 {displayedWorkspaceTabs.map((tab) => {
                   const Icon = tab.icon;
                   const useCount = frequentStats.counts?.[tab.id] || 0;
@@ -2270,16 +2344,16 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
                       key={tab.id}
                       type="button"
                       onClick={() => handleOpenWorkspaceTab(tab.id)}
-                      className="p-3.5 rounded-xl border border-slate-200 bg-white hover:border-emerald-400 hover:bg-emerald-50/30 hover:shadow-xs transition text-left cursor-pointer group flex items-start gap-3 relative"
+                      className="p-2.5 rounded-xl border border-slate-200/90 bg-white hover:border-emerald-400 hover:bg-emerald-50/20 hover:shadow-2xs transition text-left cursor-pointer group flex items-start gap-2.5 relative"
                     >
-                      <div className="p-2 rounded-lg bg-slate-50 border border-slate-200 group-hover:border-emerald-200 group-hover:bg-white text-slate-700 group-hover:text-emerald-700 transition shrink-0">
-                        <Icon size={18} />
+                      <div className="p-1.5 rounded-lg bg-slate-50 border border-slate-200/80 group-hover:border-emerald-200 group-hover:bg-white text-slate-700 group-hover:text-emerald-700 transition shrink-0">
+                        <Icon size={14} />
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="font-bold text-xs text-slate-800 group-hover:text-emerald-800 transition truncate flex items-center justify-between gap-1">
                           <span className="truncate">{tab.label}</span>
                           {useCount > 0 && (
-                            <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200 shrink-0">
+                            <span className="text-[9px] font-bold text-emerald-700 bg-emerald-50 px-1 py-0.2 rounded border border-emerald-200 shrink-0">
                               {useCount}x
                             </span>
                           )}
@@ -2347,16 +2421,22 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
 
           {/* TAB 2: AGENTS DIRECTORY */}
           {workspaceTab === "agents" && (
-            <AgentsPanel onClose={() => handleCloseWorkspaceTab(null, "agents")} />
+            <AgentsPanel
+              onClose={() => handleCloseWorkspaceTab(null, "agents")}
+              currentUser={currentUserObj}
+            />
           )}
 
           {/* TAB 3: GROSS REPORT */}
-          {workspaceTab === "gross" && <GrossReportPanel />}
+          {workspaceTab === "gross" && (
+            <GrossReportPanel currentUser={currentUserObj} />
+          )}
 
           {/* TAB: MULTI-ENTITY REVENUE TRENDS & BETTING RATIO */}
           {(workspaceTab === "revenue_trends" || workspaceTab === "betting_ratio") && (
             <div className="space-y-4">
               <MultiAreaBettingRatioView
+                currentUser={currentUserObj}
                 onSelectAreaForLive={() => {
                   handleOpenWorkspaceTab("gross");
                 }}
@@ -2415,13 +2495,19 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
           {/* DEDICATED GEOTAGGING WORKSPACE TAB */}
           {workspaceTab === "geotagging" && (
             <div className="animate-in fade-in">
-              <OperationsGeoTaggingPanel onClose={() => handleCloseWorkspaceTab(null, "geotagging")} />
+              <OperationsGeoTaggingPanel
+                onClose={() => handleCloseWorkspaceTab(null, "geotagging")}
+                currentUser={currentUserObj}
+              />
             </div>
           )}
 
           {/* TAB 5: SUPERVISORS ATTENDANCE */}
           {workspaceTab === "supervisors_attendance" && (
-            <SupervisorsAttendancePanel onClose={() => handleCloseWorkspaceTab(null, "supervisors_attendance")} />
+            <SupervisorsAttendancePanel
+              onClose={() => handleCloseWorkspaceTab(null, "supervisors_attendance")}
+              currentUser={currentUserObj}
+            />
           )}
 
           {/* TAB 6: ROLE & ACCOUNT CAPABILITIES MATRIX */}
