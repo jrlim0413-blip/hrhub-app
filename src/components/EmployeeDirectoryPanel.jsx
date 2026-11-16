@@ -1755,7 +1755,7 @@ export default function EmployeeDirectoryPanel({
 
       {/* Pre-Register / Profiling Modal */}
       {isAddModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-sm p-4">
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/60 backdrop-blur-sm p-4 pt-4 sm:pt-8">
           <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto animate-in fade-in zoom-in-95">
             <div className="p-6 border-b border-slate-100 flex items-center justify-between">
               <div>

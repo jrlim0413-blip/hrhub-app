@@ -1724,6 +1724,19 @@ export default function MemoGeneratorPanel({
 
     const actualRef = sanitizeMemoRef(getCompanySpecificMemoRef(targetComp.code, memoRef));
 
+    // Dynamic Multi-Entity Scope:
+    // If user is drafting for 4 entities (or multiple), save all included entities!
+    // If only 1 entity is selected, save only that single entity.
+    const savedIncludedCompanyIds = (Array.isArray(includedCompanyIds) && includedCompanyIds.length > 0)
+      ? [...includedCompanyIds]
+      : [targetComp.id];
+
+    // Collect letterhead overrides for all saved entities
+    const savedLetterheads = {};
+    savedIncludedCompanyIds.forEach((cId) => {
+      savedLetterheads[cId] = letterheadOverrides[cId] || savedLetterheadDefaults[cId];
+    });
+
     const newMemo = {
       id: "memo_" + Date.now(),
       ref: actualRef,
@@ -1736,7 +1749,7 @@ export default function MemoGeneratorPanel({
       companyId: targetComp.id,
       companyName: targetComp.name,
       companyCode: targetComp.code,
-      includedCompanyIds: [targetComp.id], // Strictly scoped to only this entity!
+      includedCompanyIds: savedIncludedCompanyIds, // Saves 4 entities if 4 were saved, or 1 if 1 was saved!
       signatoryLabel,
       signatoryName,
       signatoryTitle,
@@ -1761,16 +1774,9 @@ export default function MemoGeneratorPanel({
         showDiagonalStamp,
         diagonalStampText
       },
-      letterheadOverrides: {
-        [targetComp.id]: letterheadOverrides[targetComp.id] || savedLetterheadDefaults[targetComp.id]
-      },
+      letterheadOverrides: savedLetterheads,
       savedAt: new Date().toISOString()
     };
-
-    // Keep viewer strictly focused on ONLY this entity
-    setIncludedCompanyIds([targetComp.id]);
-    setSelectedCompanyId(targetComp.id);
-    setPreviewEntityIndex(0);
 
     const updated = [newMemo, ...savedMemos.filter((m) => m.ref !== actualRef || m.companyId !== targetComp.id)];
     setSavedMemos(updated);
@@ -1781,7 +1787,7 @@ export default function MemoGeneratorPanel({
       if (res.syncedToSupabase) {
         setImageCopyToast({
           type: "success",
-          message: `✓ Memo '${actualRef}' for ${targetComp.name} saved to Database!`
+          message: `✓ Memo '${actualRef}' (${savedIncludedCompanyIds.length} ${savedIncludedCompanyIds.length === 1 ? "Entity" : "Entities"}) saved to Database!`
         });
       }
     } catch (e) {
@@ -1809,15 +1815,43 @@ export default function MemoGeneratorPanel({
     // 1. Resolve matching company entity strictly based on the memorandum reference!
     const memoCompany = resolveCompanyFromMemoRef(cleanRef, { ...m, ref: cleanRef }, companies);
 
-    // 2. Set the selected company so Step 1, Step 2, Step 3, and Step 4 letterhead use this company
-    setSelectedCompanyId(memoCompany.id);
+    // 2. Multi-Entity Dynamic Logic:
+    // "kapag apat na entity ang na save, dapat apat din ang mag appear, kung isang entity lang ang pag save, dapat isa lang din ang mag appear kapag e load memo."
+    const rawSavedIds = Array.isArray(m.includedCompanyIds) && m.includedCompanyIds.length > 0
+      ? m.includedCompanyIds
+      : (Array.isArray(m.metadata?.includedCompanyIds) && m.metadata.includedCompanyIds.length > 0
+        ? m.metadata.includedCompanyIds
+        : [memoCompany.id]);
 
-    // 3. STRICT REQUIREMENT: Only the entity this memo was made for must appear in the viewer!
-    // Set includedCompanyIds to ONLY this company (zero other entities in the viewer)
-    setIncludedCompanyIds([memoCompany.id]);
+    const validSavedIds = rawSavedIds.filter((id) => companies.some((c) => c.id === id));
+    const finalIncludedIds = validSavedIds.length > 0 ? validSavedIds : [memoCompany.id];
 
-    // 4. Set preview index to 0 so Step 4 immediately displays this single entity
-    setPreviewEntityIndex(0);
+    // Auto-reveal toggles if SGC or Non-STL entities were included in the saved memo
+    if (finalIncludedIds.includes(HEAD_OFFICE_ID)) {
+      setShowSimpalGroup(true);
+    }
+    if (finalIncludedIds.some((id) => NON_STL_COMPANY_IDS.includes(id))) {
+      setShowNonStl(true);
+    }
+
+    // Restore exact number of entities (4 if 4 saved, 1 if 1 saved)
+    setIncludedCompanyIds(finalIncludedIds);
+
+    // Select primary company and active preview index
+    if (finalIncludedIds.includes(memoCompany.id)) {
+      setSelectedCompanyId(memoCompany.id);
+      const targetIdx = finalIncludedIds.indexOf(memoCompany.id);
+      setPreviewEntityIndex(targetIdx >= 0 ? targetIdx : 0);
+    } else {
+      setSelectedCompanyId(finalIncludedIds[0]);
+      setPreviewEntityIndex(0);
+    }
+
+    // Restore letterhead overrides across all included entities if present
+    if (m.letterheadOverrides || m.metadata?.letterheadOverrides) {
+      const overrides = m.letterheadOverrides || m.metadata?.letterheadOverrides;
+      setLetterheadOverrides((prev) => ({ ...prev, ...overrides }));
+    }
 
     // 5. Populate form fields
     if (cleanRef) setMemoRef(cleanRef);
@@ -4260,15 +4294,38 @@ ${renderMemoDirectivesHtml(memoContent)}
                       Set Today
                     </button>
                   </label>
-                  <div className="relative">
+                  <div className="relative flex items-center">
                     <input
                       type="text"
                       value={memoDate}
                       onChange={(e) => setMemoDate(e.target.value)}
                       placeholder="e.g. SEPTEMBER 24, 2026"
-                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-xs font-bold text-slate-900 focus:border-emerald-500 focus:bg-white focus:outline-none shadow-2xs"
+                      className="w-full rounded-xl border border-slate-200 bg-slate-50 pl-3.5 pr-32 py-2.5 text-xs font-bold text-slate-900 focus:border-emerald-500 focus:bg-white focus:outline-none shadow-2xs transition"
                     />
-                    <Calendar size={15} className="absolute right-3.5 top-3 text-slate-400 pointer-events-none" />
+                    <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                      <label
+                        className="relative flex items-center gap-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white px-2.5 py-1 text-xs font-bold cursor-pointer shadow-xs transition hover:scale-[1.02] active:scale-[0.98]"
+                        title="Pick date from interactive calendar"
+                      >
+                        <Calendar size={13} className="text-white drop-shadow-xs" />
+                        <span className="text-[11px] font-extrabold text-white">Calendar</span>
+                        <input
+                          type="date"
+                          className="absolute inset-0 opacity-0 cursor-pointer w-full h-full [color-scheme:dark]"
+                          onChange={(e) => {
+                            if (!e.target.value) return;
+                            const [year, month, day] = e.target.value.split("-").map(Number);
+                            const d = new Date(year, month - 1, day);
+                            const formatted = new Intl.DateTimeFormat("en-US", {
+                              month: "long",
+                              day: "2-digit",
+                              year: "numeric"
+                            }).format(d).toUpperCase();
+                            setMemoDate(formatted);
+                          }}
+                        />
+                      </label>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -5512,11 +5569,11 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                   <button
                     type="button"
                     onClick={handleSaveMemoToArchive}
-                    className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-[0.98] text-white font-bold px-3.5 py-2 text-xs shadow-xs transition cursor-pointer"
-                    title="Save memo to local records archive"
+                    className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-[0.98] text-white font-bold px-3.5 py-2 text-xs shadow-md shadow-emerald-600/25 transition cursor-pointer"
+                    title={`Save official memorandum for all included entities (${activeCompanies.length} ${activeCompanies.length === 1 ? "Entity" : "Entities"}) to Database Records Archive`}
                   >
-                    <Save size={14} />
-                    <span>Save to Records</span>
+                    <Save size={14} className="text-white" />
+                    <span>Save to Records ({activeCompanies.length} {activeCompanies.length === 1 ? "Entity" : "Entities"})</span>
                   </button>
 
                   <button
@@ -6076,7 +6133,7 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
 
       {/* ================= MODAL: DIRECT EMAIL & PDF DISPATCH WITH COMPANY SEGREGATION ================= */}
       {emailModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 p-4 backdrop-blur-xs animate-in fade-in duration-150">
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/75 p-3 sm:p-5 pt-4 sm:pt-6 md:pt-8 backdrop-blur-xs animate-in fade-in duration-150">
           <div className="w-full max-w-2xl rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl space-y-4 max-h-[92vh] overflow-y-auto custom-scrollbar">
             {/* Modal Header */}
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
@@ -6357,7 +6414,7 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
 
       {/* ================= MODAL: UNLINKED WORK EMAIL NOTIFICATION & EXPLANATION ================= */}
       {unlinkedNoticeModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm animate-in fade-in duration-150">
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/80 p-3 sm:p-5 pt-4 sm:pt-6 md:pt-8 backdrop-blur-sm animate-in fade-in duration-150">
           <div className="w-full max-w-2xl rounded-3xl border border-amber-200/90 bg-white p-6 shadow-2xl space-y-4 max-h-[92vh] flex flex-col">
             {/* Modal Header */}
             <div className="flex items-center justify-between border-b border-slate-100 pb-3 shrink-0">
@@ -6488,7 +6545,7 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
 
       {/* ================= MODAL: GOOGLE APPS SCRIPT DEPLOYMENT GUIDE ================= */}
       {showScriptGuideModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm animate-in fade-in duration-150">
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/80 p-3 sm:p-5 pt-4 sm:pt-6 md:pt-8 backdrop-blur-sm animate-in fade-in duration-150">
           <div className="w-full max-w-3xl rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl space-y-4 max-h-[92vh] flex flex-col">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3 shrink-0">
               <div className="flex items-center gap-2.5">
@@ -6650,7 +6707,7 @@ function doGet(e) {
 
       {/* ================= MODAL: MAGNIFIED CANVAS EDITOR ================= */}
       {magnifyModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 p-4 backdrop-blur-sm animate-in fade-in duration-150">
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/75 p-3 sm:p-5 pt-4 sm:pt-6 md:pt-8 backdrop-blur-sm animate-in fade-in duration-150">
           <div className="w-full max-w-5xl rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl space-y-4 max-h-[92vh] flex flex-col">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3 shrink-0">
               <div className="flex items-center gap-2.5">
@@ -6756,8 +6813,8 @@ function doGet(e) {
         ].filter(item => item.code === "ALL" || item.count > 0);
 
         return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 p-3 sm:p-5 backdrop-blur-sm animate-in fade-in duration-150">
-            <div className="w-full max-w-4xl lg:max-w-5xl rounded-3xl border border-slate-200 bg-white p-5 sm:p-7 shadow-2xl space-y-4 max-h-[88vh] flex flex-col">
+          <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/75 p-3 sm:p-5 pt-4 sm:pt-6 md:pt-8 backdrop-blur-sm animate-in fade-in duration-150">
+            <div className="w-full max-w-4xl lg:max-w-5xl rounded-3xl border border-slate-200 bg-white p-5 sm:p-7 shadow-2xl space-y-4 max-h-[92vh] flex flex-col">
               {/* Header */}
               <div className="flex items-center justify-between border-b border-slate-100 pb-3 shrink-0">
                 <div className="flex items-center gap-3">
@@ -6904,8 +6961,17 @@ function doGet(e) {
                               <span className="text-[11px] font-extrabold uppercase px-2 py-0.5 rounded-md bg-white text-slate-700 border border-slate-200 shadow-2xs">
                                 {comp.name}
                               </span>
-                              <span className="text-[11px] text-slate-500 font-medium inline-flex items-center gap-1 font-mono">
-                                <Calendar size={12} className="text-slate-400" />
+                              {m.includedCompanyIds && m.includedCompanyIds.length > 1 ? (
+                                <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200 shadow-2xs">
+                                  {m.includedCompanyIds.length} Entities Included
+                                </span>
+                              ) : (
+                                <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 border border-slate-200 shadow-2xs">
+                                  Single Entity
+                                </span>
+                              )}
+                              <span className="text-[11px] text-slate-700 bg-white font-bold px-2 py-0.5 rounded-md border border-slate-200 inline-flex items-center gap-1 shadow-2xs">
+                                <Calendar size={12} className="text-emerald-600" />
                                 {m.date}
                               </span>
                               {(m.signatorySignature || m.metadata?.signatorySignature) && (

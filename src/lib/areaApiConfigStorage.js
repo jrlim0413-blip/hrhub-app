@@ -8,6 +8,7 @@
 
 import { supabase } from "./supabase";
 import { API_CONFIG } from "../config/apiConfig";
+import { proxyFetch } from "./serverlessProxyService";
 
 export const AREA_CONFIGS_STORAGE_KEY = "hrhub_area_api_configs";
 export const SELECTED_AREA_STORAGE_KEY = "hrhub_selected_gross_area_id";
@@ -448,7 +449,7 @@ export async function testEndpointHealth({ url, token, method = "GET", timeoutMs
     const headers = { Accept: "application/json" };
     if (token) headers.Authorization = `Bearer ${token}`;
 
-    const res = await fetch(preparedUrl, {
+    const res = await proxyFetch(preparedUrl, {
       method,
       headers,
       signal: controller.signal

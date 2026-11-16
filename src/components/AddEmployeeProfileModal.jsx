@@ -513,7 +513,7 @@ export default function AddEmployeeProfileModal({
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 backdrop-blur-md p-2 sm:p-4 md:p-6 overflow-y-auto animate-in fade-in duration-150">
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/75 backdrop-blur-md p-2 sm:p-4 md:p-6 pt-3 sm:pt-6 md:pt-8 animate-in fade-in duration-150">
       {/* BOND PAPER FORMATTED DOSSIER CONTAINER (max-w-4xl, min-h-[720px], official executive aesthetic) */}
       <div className="bg-white rounded-3xl border border-slate-300 shadow-2xl w-full max-w-4xl min-h-[720px] max-h-[92vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-150 relative ring-1 ring-slate-900/5">
 

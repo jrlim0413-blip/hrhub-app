@@ -1104,7 +1104,7 @@ export default function AgentIdCardModal({
   };
 
   return (
-    <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-slate-950/85 p-2 sm:p-4 backdrop-blur-md animate-fade-in overflow-y-auto">
+    <div className="fixed inset-0 z-[10000] flex items-start justify-center overflow-y-auto bg-slate-950/85 p-2 sm:p-4 pt-3 sm:pt-6 md:pt-8 backdrop-blur-md animate-fade-in">
       {/* Studio Dialog Container */}
       <div className="relative flex flex-col w-full max-w-[1340px] max-h-[96vh] rounded-3xl bg-slate-900 border border-slate-700/80 shadow-2xl overflow-hidden text-slate-100">
         

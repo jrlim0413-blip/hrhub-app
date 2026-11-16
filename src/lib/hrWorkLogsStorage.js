@@ -168,6 +168,9 @@ function normalizeLogRecord(raw) {
         : `${numericDuration.toFixed(1)} hrs`
       : "--";
 
+  const progressText = raw.progress_comments || raw.progressComments || "";
+  const isAuto = Boolean(raw.is_auto_logged || raw.isAutoLogged || progressText.includes("[Auto-Logged]"));
+
   return {
     id: String(raw.id || `log_${Date.now()}`),
     date: raw.log_date || raw.date || getTodayDateStr(),
@@ -177,9 +180,9 @@ function normalizeLogRecord(raw) {
     endTime: raw.end_time || raw.endTime || "5:00 PM",
     hoursWorked: raw.hours_worked_formatted || formattedDuration,
     numericHours: numericDuration,
-    progressComments: raw.progress_comments || raw.progressComments || "",
+    progressComments: progressText.replace("[Auto-Logged] ", "").replace("[Auto-Logged]", "").trim(),
     status: raw.status || "Completed",
-    isAutoLogged: Boolean(raw.is_auto_logged || raw.isAutoLogged),
+    isAutoLogged: isAuto,
     authorName: raw.author_name || raw.authorName || "HR Officer",
     authorEmail: (raw.author_email || raw.authorEmail || "").toLowerCase().trim(),
     authorRole: raw.author_role || raw.authorRole || "HR Administrator",
@@ -218,12 +221,12 @@ export async function fetchAllWorkLogs() {
     // 2. Fallback to `user_settings` table if dedicated table is pending SQL execution
     const { data: settingsData } = await supabase
       .from("user_settings")
-      .select("raw_settings")
-      .eq("account_key", FALLBACK_SETTINGS_KEY)
+      .select("settings_json")
+      .eq("user_id", FALLBACK_SETTINGS_KEY)
       .maybeSingle();
 
-    if (settingsData?.raw_settings && Array.isArray(settingsData.raw_settings)) {
-      const normalized = settingsData.raw_settings.map(normalizeLogRecord).filter(Boolean);
+    if (settingsData?.settings_json && Array.isArray(settingsData.settings_json)) {
+      const normalized = settingsData.settings_json.map(normalizeLogRecord).filter(Boolean);
       memoryWorkLogsList = normalized;
       return normalized;
     }
@@ -263,6 +266,11 @@ export async function addWorkLogEntry(entry) {
   const dateStr = entry.date || getTodayDateStr();
   const { numericHours, formatted: formattedDuration } = calculateHoursWorked(entry.startTime, entry.endTime);
 
+  const comments = (entry.progressComments || "").trim();
+  const taggedComments = entry.isAutoLogged && !comments.includes("[Auto-Logged]")
+    ? `[Auto-Logged] ${comments}`.trim()
+    : comments;
+
   const payloadSnake = {
     log_date: dateStr,
     task_project: entry.taskProject.trim(),
@@ -270,9 +278,8 @@ export async function addWorkLogEntry(entry) {
     start_time: entry.startTime || "8:00 AM",
     end_time: entry.endTime || "5:00 PM",
     hours_worked: numericHours,
-    progress_comments: (entry.progressComments || "").trim(),
+    progress_comments: taggedComments,
     status: entry.status || "Completed",
-    is_auto_logged: Boolean(entry.isAutoLogged),
     author_name: entry.authorName || "HR Officer",
     author_email: (entry.authorEmail || "").toLowerCase().trim(),
     author_role: entry.authorRole || "HR Administrator",
@@ -298,11 +305,11 @@ export async function addWorkLogEntry(entry) {
       try {
         await supabase.from("user_settings").upsert(
           {
-            account_key: FALLBACK_SETTINGS_KEY,
-            raw_settings: updated,
+            user_id: FALLBACK_SETTINGS_KEY,
+            settings_json: updated,
             updated_at: new Date().toISOString()
           },
-          { onConflict: "account_key" }
+          { onConflict: "user_id" }
         );
       } catch {}
 
@@ -331,11 +338,11 @@ export async function addWorkLogEntry(entry) {
     try {
       await supabase.from("user_settings").upsert(
         {
-          account_key: FALLBACK_SETTINGS_KEY,
-          raw_settings: updated,
+          user_id: FALLBACK_SETTINGS_KEY,
+          settings_json: updated,
           updated_at: new Date().toISOString()
         },
-        { onConflict: "account_key" }
+        { onConflict: "user_id" }
       );
     } catch {}
 
@@ -369,11 +376,11 @@ export async function deleteWorkLogEntry(logId) {
     try {
       await supabase.from("user_settings").upsert(
         {
-          account_key: FALLBACK_SETTINGS_KEY,
-          raw_settings: updated,
+          user_id: FALLBACK_SETTINGS_KEY,
+          settings_json: updated,
           updated_at: new Date().toISOString()
         },
-        { onConflict: "account_key" }
+        { onConflict: "user_id" }
       );
     } catch {}
 

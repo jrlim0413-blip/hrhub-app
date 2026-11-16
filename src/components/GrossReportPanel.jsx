@@ -8,6 +8,7 @@ import {
   MapPin, Settings, Building2, ShieldCheck
 } from "lucide-react";
 import { API_CONFIG } from "../config/apiConfig";
+import { proxyFetch } from "../lib/serverlessProxyService";
 import {
   getAreaConfigs,
   getSelectedAreaId,
@@ -578,7 +579,7 @@ export default function GrossReportPanel({ initialTab = "realtime", currentUser 
         }
       } catch {}
       const url = `${adminDrawBase}/api/admin/draw?from=${targetDate}&to=${targetDate}`;
-      const res = await fetch(url, {
+      const res = await proxyFetch(url, {
         headers: { Accept: "application/json", Authorization: `Bearer ${token}` }
       });
       if (res.ok) {
@@ -727,7 +728,7 @@ export default function GrossReportPanel({ initialTab = "realtime", currentUser 
     const headers = { Accept: "application/json", Authorization: `Bearer ${token}` };
 
     try {
-      const res = await fetch(`${baseUrl}/${entry.transactionId}`, { headers });
+      const res = await proxyFetch(`${baseUrl}/${entry.transactionId}`, { headers });
       if (res.ok) {
         const payload = await res.json();
         const combis = Array.isArray(payload?.data) ? payload.data : [];
@@ -797,7 +798,7 @@ export default function GrossReportPanel({ initialTab = "realtime", currentUser 
         url.searchParams.set("from", fromDate);
         url.searchParams.set("to", toDate);
 
-        const res = await fetch(url.toString(), { headers });
+        const res = await proxyFetch(url.toString(), { headers });
 
         const rem = res.headers.get("x-ratelimit-remaining");
         if (rem !== null) {
@@ -964,8 +965,8 @@ export default function GrossReportPanel({ initialTab = "realtime", currentUser 
 
       // 1. FAST PARALLEL BOOT: Fetch active tellers and supervisors first (~200ms)
       const [spvrResult, tellersResult] = await Promise.allSettled([
-        fetch(supervisorUrl, { headers: { Accept: "application/json", Authorization: `Bearer ${token}` } }).then((r) => (r.ok ? r.json() : null)),
-        fetch(activeTellersUrl, { headers: { Accept: "application/json", Authorization: `Bearer ${token}` } }).then((r) => (r.ok ? r.json() : null))
+        proxyFetch(supervisorUrl, { headers: { Accept: "application/json", Authorization: `Bearer ${token}` } }).then((r) => (r.ok ? r.json() : null)),
+        proxyFetch(activeTellersUrl, { headers: { Accept: "application/json", Authorization: `Bearer ${token}` } }).then((r) => (r.ok ? r.json() : null))
       ]);
 
       const supervisorsPayload = spvrResult.status === "fulfilled" ? spvrResult.value : null;
@@ -973,7 +974,7 @@ export default function GrossReportPanel({ initialTab = "realtime", currentUser 
 
       if (!tellersPayload && !CACHED_TELLERS) {
         try {
-          const backupRes = await fetch(backupTellersUrl, { headers: { Accept: "application/json", Authorization: `Bearer ${token}` } });
+          const backupRes = await proxyFetch(backupTellersUrl, { headers: { Accept: "application/json", Authorization: `Bearer ${token}` } });
           if (backupRes.ok) tellersPayload = await backupRes.json();
         } catch {}
       }
@@ -1041,7 +1042,7 @@ export default function GrossReportPanel({ initialTab = "realtime", currentUser 
             url.searchParams.set("from", chunk.from);
             url.searchParams.set("to", chunk.to);
 
-            const res = await fetch(url.toString(), {
+            const res = await proxyFetch(url.toString(), {
               headers: { Accept: "application/json", Authorization: `Bearer ${token}` }
             });
             if (res.ok) {
@@ -1091,7 +1092,7 @@ export default function GrossReportPanel({ initialTab = "realtime", currentUser 
       url.searchParams.set("from", targetDate);
       url.searchParams.set("to", targetDate);
 
-      const res = await fetch(url.toString(), {
+      const res = await proxyFetch(url.toString(), {
         headers: { Accept: "application/json", Authorization: `Bearer ${token}` }
       });
       if (res.ok) {
@@ -2968,12 +2969,12 @@ export default function GrossReportPanel({ initialTab = "realtime", currentUser 
 
             {/* Contextual Date Controls */}
             {reportTab === "realtime" ? (
-              <div className="inline-flex items-center rounded-lg border border-white/15 bg-white/5 p-0.5 backdrop-blur-xs">
+              <div className="inline-flex items-center gap-1.5 rounded-xl border border-white/20 bg-white/10 p-1 backdrop-blur-xs text-xs shadow-xs">
                 <button
                   type="button"
                   onClick={() => setRealtimeDate(todayStr)}
-                  className={`rounded-md px-2 py-1 text-xs font-bold transition ${
-                    realtimeDate === todayStr ? "bg-emerald-500 text-slate-950 shadow-xs" : "text-slate-300 hover:text-white"
+                  className={`rounded-lg px-2.5 py-1 text-xs font-bold transition cursor-pointer ${
+                    realtimeDate === todayStr ? "bg-emerald-500 text-slate-950 shadow-xs" : "text-slate-200 hover:text-white hover:bg-white/10"
                   }`}
                   title="Today (Finished Draws Only)"
                 >
@@ -2982,37 +2983,44 @@ export default function GrossReportPanel({ initialTab = "realtime", currentUser 
                 <button
                   type="button"
                   onClick={() => setRealtimeDate(yesterdayStr)}
-                  className={`rounded-md px-2 py-1 text-xs font-bold transition ${
-                    realtimeDate === yesterdayStr ? "bg-emerald-500 text-slate-950 shadow-xs" : "text-slate-300 hover:text-white"
+                  className={`rounded-lg px-2.5 py-1 text-xs font-bold transition cursor-pointer ${
+                    realtimeDate === yesterdayStr ? "bg-emerald-500 text-slate-950 shadow-xs" : "text-slate-200 hover:text-white hover:bg-white/10"
                   }`}
                   title="Yesterday"
                 >
                   Yesterday
                 </button>
-                <input
-                  type="date"
-                  value={realtimeDate}
-                  onChange={(e) => setRealtimeDate(e.target.value)}
-                  className="rounded-md border border-white/15 bg-slate-900/90 px-1.5 py-0.5 text-xs font-semibold text-white outline-none focus:border-emerald-400"
-                  title="Audit date"
-                />
+                <div className="flex items-center gap-1.5 rounded-lg border border-white/25 bg-slate-900/95 px-2.5 py-1 text-xs shadow-inner">
+                  <CalendarDays size={14} className="text-white drop-shadow-xs shrink-0" />
+                  <input
+                    type="date"
+                    value={realtimeDate}
+                    onChange={(e) => setRealtimeDate(e.target.value)}
+                    className="bg-transparent text-white font-bold text-xs outline-none cursor-pointer [color-scheme:dark] [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:filter [&::-webkit-calendar-picker-indicator]:invert"
+                    title="Audit date"
+                  />
+                </div>
               </div>
             ) : (
-              <div className="inline-flex items-center gap-1.5 rounded-lg border border-white/15 bg-white/5 px-2.5 py-1 backdrop-blur-xs text-xs">
-                <CalendarDays size={13} className="text-emerald-400" />
-                <input
-                  type="date"
-                  value={range.from}
-                  onChange={(event) => setRange({ ...range, from: event.target.value })}
-                  className="rounded border border-white/15 bg-slate-900/90 px-1.5 py-0.5 text-xs text-white outline-none"
-                />
-                <span className="text-xs text-slate-400">to</span>
-                <input
-                  type="date"
-                  value={range.to}
-                  onChange={(event) => setRange({ ...range, to: event.target.value })}
-                  className="rounded border border-white/15 bg-slate-900/90 px-1.5 py-0.5 text-xs text-white outline-none"
-                />
+              <div className="inline-flex items-center gap-2 rounded-xl border border-white/20 bg-white/10 p-1 backdrop-blur-xs text-xs shadow-xs">
+                <div className="flex items-center gap-1.5 rounded-lg border border-white/25 bg-slate-900/95 px-2.5 py-1 text-xs shadow-inner">
+                  <CalendarDays size={14} className="text-white drop-shadow-xs shrink-0" />
+                  <input
+                    type="date"
+                    value={range.from}
+                    onChange={(event) => setRange({ ...range, from: event.target.value })}
+                    className="bg-transparent text-white font-bold text-xs outline-none cursor-pointer [color-scheme:dark] [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:filter [&::-webkit-calendar-picker-indicator]:invert"
+                    title="Start Date"
+                  />
+                  <span className="text-xs font-semibold text-slate-300 px-0.5">to</span>
+                  <input
+                    type="date"
+                    value={range.to}
+                    onChange={(event) => setRange({ ...range, to: event.target.value })}
+                    className="bg-transparent text-white font-bold text-xs outline-none cursor-pointer [color-scheme:dark] [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:filter [&::-webkit-calendar-picker-indicator]:invert"
+                    title="End Date"
+                  />
+                </div>
               </div>
             )}
 
@@ -4037,7 +4045,7 @@ export default function GrossReportPanel({ initialTab = "realtime", currentUser 
         </>
       )}
 
-      {previewOpen && <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/70 p-3 sm:p-6" role="dialog" aria-modal="true" aria-label="Daily gross report preview">
+      {previewOpen && <div className="fixed inset-0 z-[70] flex items-start justify-center overflow-y-auto bg-slate-950/70 p-3 sm:p-6 pt-4 sm:pt-6 md:pt-8" role="dialog" aria-modal="true" aria-label="Daily gross report preview">
         <div className="flex max-h-[95vh] w-full max-w-[1400px] flex-col overflow-hidden rounded-2xl bg-slate-100 shadow-2xl">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-[#0d1b2a] px-5 py-4 text-white">
             <div>
@@ -4536,7 +4544,7 @@ export default function GrossReportPanel({ initialTab = "realtime", currentUser 
       {/* MODAL: Live Bet Tickets per Agent */}
       {selectedAgentDetails && (
         <div
-          className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/70 p-3 sm:p-6 backdrop-blur-xs"
+          className="fixed inset-0 z-[80] flex items-start justify-center overflow-y-auto bg-slate-950/70 p-3 sm:p-6 pt-4 sm:pt-6 md:pt-8 backdrop-blur-xs"
           role="dialog"
           aria-modal="true"
           aria-label="Agent live bets detail"
@@ -4787,7 +4795,7 @@ export default function GrossReportPanel({ initialTab = "realtime", currentUser 
       {/* MODAL: Ticket Combinations Inspector */}
       {selectedTicketModal && (
         <div
-          className="fixed inset-0 z-[85] flex items-center justify-center bg-slate-950/70 p-3 sm:p-6 backdrop-blur-xs"
+          className="fixed inset-0 z-[85] flex items-start justify-center overflow-y-auto bg-slate-950/70 p-3 sm:p-6 pt-4 sm:pt-6 md:pt-8 backdrop-blur-xs"
           role="dialog"
           aria-modal="true"
           aria-label="Ticket combinations inspector"

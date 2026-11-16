@@ -697,7 +697,7 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[9990] flex items-center justify-center bg-slate-950/70 p-3 sm:p-5 backdrop-blur-md animate-in fade-in duration-200"
+      className="fixed inset-0 z-[9990] flex items-start justify-center overflow-y-auto bg-slate-950/70 p-3 sm:p-5 pt-3 sm:pt-6 md:pt-8 pb-8 backdrop-blur-md animate-in fade-in duration-200"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose?.();
       }}
@@ -1772,7 +1772,7 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
       {/* Interactive Full-Screen PDF Preview Modal */}
       {pdfPreviewState.isOpen && (
         <div
-          className="fixed inset-0 z-[9996] flex items-center justify-center bg-slate-950/85 p-3 sm:p-5 backdrop-blur-md"
+          className="fixed inset-0 z-[9996] flex items-start justify-center overflow-y-auto bg-slate-950/85 p-3 sm:p-5 pt-4 sm:pt-6 md:pt-8 backdrop-blur-md"
           onClick={closePdfPreview}
         >
           <div
@@ -1875,7 +1875,7 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
       {/* Full-Screen Image Preview Modal */}
       {previewModalImage && (
         <div
-          className="fixed inset-0 z-[9995] flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm"
+          className="fixed inset-0 z-[9995] flex items-start justify-center overflow-y-auto bg-slate-950/80 p-4 pt-4 sm:pt-6 md:pt-8 backdrop-blur-sm"
           onClick={() => setPreviewModalImage(null)}
         >
           <div

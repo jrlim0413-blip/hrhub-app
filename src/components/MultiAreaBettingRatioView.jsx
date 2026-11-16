@@ -40,6 +40,7 @@ import {
   Wallet
 } from "lucide-react";
 import { API_CONFIG } from "../config/apiConfig";
+import { proxyFetch } from "../lib/serverlessProxyService";
 import {
   getAreaConfigs,
   loadAreaConfigsFromCloud,
@@ -277,7 +278,7 @@ export default function MultiAreaBettingRatioView({
   useEffect(() => {
     const fetchTodayDraws = async () => {
       try {
-        const res = await fetch(`https://stl-mandaue-api.com/api/admin/draw?from=${todayStr}&to=${todayStr}`, {
+        const res = await proxyFetch(`https://stl-mandaue-api.com/api/admin/draw?from=${todayStr}&to=${todayStr}`, {
           headers: { Authorization: `Bearer ${API_CONFIG.GROSS_REPORT_TOKEN || DEFAULT_TOKEN}`, Accept: "application/json" }
         });
         if (res.ok) {
@@ -342,7 +343,7 @@ export default function MultiAreaBettingRatioView({
           if (!activeTellersUrlObj.searchParams.has("id")) {
             activeTellersUrlObj.searchParams.set("id", accountantId);
           }
-          const tRes = await fetch(activeTellersUrlObj.toString(), {
+          const tRes = await proxyFetch(activeTellersUrlObj.toString(), {
             headers: { Accept: "application/json", Authorization: `Bearer ${token}` }
           });
           if (tRes.ok) {
@@ -369,7 +370,7 @@ export default function MultiAreaBettingRatioView({
             const chunkUrl = new URL(grossUrlObj.toString());
             chunkUrl.searchParams.set("from", chunk.from);
             chunkUrl.searchParams.set("to", chunk.to);
-            const gRes = await fetch(chunkUrl.toString(), {
+            const gRes = await proxyFetch(chunkUrl.toString(), {
               headers: { Accept: "application/json", Authorization: `Bearer ${token}` }
             });
             if (gRes.ok) {
@@ -836,20 +837,20 @@ export default function MultiAreaBettingRatioView({
           </div>
 
           {/* Date Range Inputs */}
-          <div className="inline-flex items-center gap-1.5 rounded-xl border border-slate-800 bg-slate-950 px-3 py-1.5 text-xs text-slate-300">
-            <CalendarDays size={13} className="text-emerald-400 shrink-0" />
+          <div className="inline-flex items-center gap-2 rounded-xl border border-slate-700/80 bg-slate-950 px-3 py-1.5 text-xs text-slate-300 shadow-inner">
+            <CalendarDays size={14} className="text-white drop-shadow-xs shrink-0" />
             <input
               type="date"
               value={dateRange.from}
               onChange={(e) => setDateRange({ ...dateRange, from: e.target.value })}
-              className="bg-transparent text-white outline-none text-xs w-28"
+              className="bg-transparent text-white font-bold outline-none text-xs w-28 cursor-pointer [color-scheme:dark] [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:filter [&::-webkit-calendar-picker-indicator]:invert"
             />
-            <span className="text-slate-500">to</span>
+            <span className="text-slate-400 font-semibold px-0.5">to</span>
             <input
               type="date"
               value={dateRange.to}
               onChange={(e) => setDateRange({ ...dateRange, to: e.target.value })}
-              className="bg-transparent text-white outline-none text-xs w-28"
+              className="bg-transparent text-white font-bold outline-none text-xs w-28 cursor-pointer [color-scheme:dark] [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:filter [&::-webkit-calendar-picker-indicator]:invert"
             />
           </div>
 

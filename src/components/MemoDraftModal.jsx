@@ -992,7 +992,7 @@ ${currentCompany.name}`;
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 lg:p-6 bg-slate-950/70 backdrop-blur-md animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-2 sm:p-4 lg:p-6 pt-3 sm:pt-6 md:pt-8 bg-slate-950/70 backdrop-blur-md animate-in fade-in duration-200">
       <style>{`
         @keyframes studio-fade-in {
           0% { opacity: 0; transform: scale(0.98) translateY(12px); }
@@ -1009,7 +1009,7 @@ ${currentCompany.name}`;
       {/* ================= FULL-SCREEN FOCUS EDITOR OVERLAY ================= */}
       {isMagnified && (
         <div
-          className="fixed inset-0 z-60 flex items-center justify-center p-3 sm:p-6 bg-slate-950/75 backdrop-blur-md animate-in fade-in duration-200"
+          className="fixed inset-0 z-60 flex items-start justify-center overflow-y-auto p-3 sm:p-6 pt-4 sm:pt-6 md:pt-8 bg-slate-950/75 backdrop-blur-md animate-in fade-in duration-200"
           onClick={() => setIsMagnified(false)}
         >
           <div

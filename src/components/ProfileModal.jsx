@@ -25,7 +25,7 @@ export default function ProfileModal({
   setPasswordSaved
 }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-3 sm:p-4 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/40 p-3 sm:p-4 pt-6 sm:pt-10 backdrop-blur-sm">
       <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 text-slate-900 shadow-2xl">
         <div className="flex items-start justify-between border-b border-slate-100 pb-4">
           <div>

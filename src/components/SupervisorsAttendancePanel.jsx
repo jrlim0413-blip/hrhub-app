@@ -3051,7 +3051,7 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
       {/* ================= 5. VIEW ASSIGNED AGENTS MODAL ================= */}
       {viewingSupervisorAgents && typeof document !== "undefined" && createPortal(
         <div
-          className="fixed inset-0 z-[9990] flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-sm animate-in fade-in duration-150"
+          className="fixed inset-0 z-[9990] flex items-start justify-center overflow-y-auto p-3 sm:p-5 pt-4 sm:pt-6 md:pt-8 bg-slate-900/70 backdrop-blur-sm animate-in fade-in duration-150"
           onClick={(e) => {
             if (e.target === e.currentTarget) setViewingSupervisorAgents(null);
           }}
@@ -3135,7 +3135,7 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
       {/* ================= 6. PHOTO & GPS VERIFICATION MODAL (BOND PAPER PROPORTION) ================= */}
       {viewingPhotoRecord && typeof document !== "undefined" && createPortal(
         <div
-          className="fixed inset-0 z-[9990] flex items-center justify-center p-3 md:p-6 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-150"
+          className="fixed inset-0 z-[9990] flex items-start justify-center overflow-y-auto p-3 md:p-6 pt-4 sm:pt-6 md:pt-8 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-150"
           onClick={(e) => {
             if (e.target === e.currentTarget) setViewingPhotoRecord(null);
           }}
@@ -3325,7 +3325,7 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
 
       {/* ================= 7. FIELD CHECK-IN MODAL (BOND PAPER PROPORTION & LIVE MAP) ================= */}
       {isSimulatorOpen && typeof document !== "undefined" && createPortal(
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 md:p-6 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-150">
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-3 md:p-6 pt-4 sm:pt-6 md:pt-8 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-150">
           <div className="w-full max-w-5xl max-h-[92vh] bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col">
             {/* Header */}
             <div className="px-6 py-4 bg-gradient-to-r from-emerald-800 to-teal-900 text-white flex items-center justify-between shrink-0 border-b border-emerald-700/60">
@@ -3652,7 +3652,7 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
 
       {/* ================= 8. EDIT DTR RECORD MODAL ================= */}
       {editingRecord && typeof document !== "undefined" && createPortal(
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 pt-4 sm:pt-6 md:pt-8 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
           <div className="w-full max-w-lg bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
             <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
               <div>
@@ -3810,7 +3810,7 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
       )}
       {/* ================= FIELD MONITORING ACCOUNTS MANAGEMENT MODAL ================= */}
       {isFieldAccountsModalOpen && typeof document !== "undefined" && createPortal(
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/70 p-4 pt-4 sm:pt-6 md:pt-8 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="w-full max-w-2xl rounded-3xl border border-slate-200 bg-white shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
             {/* Header */}
             <div className="bg-gradient-to-r from-emerald-800 via-teal-800 to-slate-900 p-5 text-white flex items-center justify-between">
@@ -4060,7 +4060,7 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
 
       {/* ================= 8. ATTENDANCE REPORT MODAL (WEEKLY & SEMI-MONTHLY 15-DAY CUTOFFS) ================= */}
       {isWeeklyModalOpen && typeof document !== "undefined" && createPortal(
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-start justify-center overflow-y-auto p-2 sm:p-4 pt-3 sm:pt-5 animate-in fade-in duration-200">
           <div className="bg-white rounded-3xl shadow-2xl w-[98vw] max-w-[1680px] h-[94vh] max-h-[94vh] flex flex-col overflow-hidden border border-slate-200 animate-in zoom-in-95 duration-200">
             {/* Modal Header */}
             <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 text-white p-4 sm:p-5 flex flex-wrap items-center justify-between gap-3 shrink-0">
