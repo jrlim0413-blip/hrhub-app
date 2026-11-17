@@ -154,10 +154,15 @@ export default function ShiftAttendanceOverviewPanel({
           l.status === "In Progress" ||
           l.status === "Ongoing" ||
           l.status === "in_progress" ||
-          l.endTime === "Active";
-        if (selectedStatus === "in progress" && !isItemInProgress) return false;
+          l.endTime === "Active" ||
+          l.status === "AFK";
+        const isAfk = l.isAfk || l.status === "AFK" || (l.status || "").toLowerCase().includes("afk") || (l.progressComments || "").includes("[Idle]");
+
+        if (selectedStatus === "afk" && !isAfk) return false;
+        if (selectedStatus === "active" && (!isItemInProgress || isAfk)) return false;
         if (selectedStatus === "completed" && isItemInProgress) return false;
-        if (selectedStatus !== "in progress" && selectedStatus !== "completed") {
+        if (selectedStatus === "in progress" && !isItemInProgress) return false;
+        if (selectedStatus !== "afk" && selectedStatus !== "active" && selectedStatus !== "in progress" && selectedStatus !== "completed") {
           if ((l.status || "").toLowerCase() !== selectedStatus.toLowerCase()) return false;
         }
       }
@@ -506,8 +511,10 @@ export default function ShiftAttendanceOverviewPanel({
               className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-[11px] font-semibold text-slate-700 focus:outline-none cursor-pointer"
             >
               <option value="all">⚡ All Statuses</option>
+              <option value="active">Active (Working)</option>
+              <option value="afk">AFK (Idle)</option>
               <option value="completed">Completed</option>
-              <option value="in progress">In Progress</option>
+              <option value="in progress">All In Progress</option>
               <option value="under review">Under Review</option>
             </select>
 
@@ -658,7 +665,12 @@ export default function ShiftAttendanceOverviewPanel({
                           <div className="text-slate-600 font-mono text-[10px]">
                             {item.startTime} – {item.endTime === "Active" ? "Active" : item.endTime}
                           </div>
-                          {item.status === "In Progress" || item.status === "Ongoing" || item.endTime === "Active" ? (
+                          {item.isAfk || item.status === "AFK" || (item.status || "").toLowerCase().includes("afk") ? (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[10px] font-bold font-mono bg-rose-50 text-rose-700 border border-rose-200 animate-pulse">
+                              <span className="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
+                              <span>Idle / AFK</span>
+                            </span>
+                          ) : item.status === "In Progress" || item.status === "Ongoing" || item.endTime === "Active" ? (
                             <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[10px] font-bold font-mono bg-amber-50 text-amber-800 border border-amber-200 animate-pulse">
                               <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
                               <span>Active Now</span>
@@ -673,7 +685,12 @@ export default function ShiftAttendanceOverviewPanel({
 
                       {/* 5. Status */}
                       <td className="py-2.5 px-3 text-center whitespace-nowrap">
-                        {item.status === "In Progress" || item.status === "Ongoing" || item.endTime === "Active" ? (
+                        {item.isAfk || item.status === "AFK" || (item.status || "").toLowerCase().includes("afk") ? (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wide bg-rose-50 text-rose-700 border border-rose-300 shadow-2xs animate-pulse">
+                            <span className="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
+                            <span>AFK (IDLE)</span>
+                          </span>
+                        ) : item.status === "In Progress" || item.status === "Ongoing" || item.endTime === "Active" ? (
                           <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wide bg-amber-50 text-amber-800 border border-amber-300 shadow-2xs">
                             <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
                             <span>IN PROGRESS</span>

@@ -59,7 +59,7 @@ import {
   markThreadAsRead,
   formatMessengerTime
 } from "../lib/chatService";
-import { autoLogHRAction, logSystemActivity, getTodayDateStr } from "../lib/hrWorkLogsStorage";
+import { autoLogHRAction, logSystemActivity, updateUserPresenceStatus, isHRMDUser, getTodayDateStr } from "../lib/hrWorkLogsStorage";
 import { isHeadOffice, isGlobalAccessUser, getUserAssignedStlEntity } from "../lib/companyEntities";
 
 function formatTimeAgo(dateString) {
@@ -663,6 +663,91 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
 
     return () => clearTimeout(timer);
   }, [workspaceTab, communicationTab, activeView, currentUser, profileName, profileEmail, profileRole, profileCompany]);
+
+  // Live Inactivity / AFK Monitor
+  // Detects when the user steps away from keyboard/screen (2 mins idle or tab hidden > 60s)
+  // and updates status back to Active (Working) the moment mouse, keys, or screen are touched
+  const lastUserActivityRef = useRef(Date.now());
+  const isUserAfkRef = useRef(false);
+
+  useEffect(() => {
+    if (!currentUser || isHRMDUser(currentUser)) return;
+
+    const userPayload = {
+      name: profileName || currentUser.name || "HR Officer",
+      email: currentUser.email || profileEmail || "unknown",
+      role: profileRole || currentUser.role || "HR Administrator",
+      company: profileCompany || currentUser.company || "Simpal Group of Companies",
+      branch: currentUser.branch || "Head Office (SGC)"
+    };
+
+    const handleUserInteraction = () => {
+      lastUserActivityRef.current = Date.now();
+      if (isUserAfkRef.current) {
+        isUserAfkRef.current = false;
+        const currentMod = activeView === "communication" ? communicationTab : (workspaceTab || "home");
+        updateUserPresenceStatus({ user: userPayload, isAfk: false, currentModule: currentMod });
+      }
+    };
+
+    // Throttle interaction listeners so event handling uses 0.00% CPU
+    let lastThrottledTime = 0;
+    const throttledInteraction = () => {
+      const now = Date.now();
+      if (now - lastThrottledTime > 3000) {
+        lastThrottledTime = now;
+        handleUserInteraction();
+      }
+    };
+
+    window.addEventListener("mousemove", throttledInteraction, { passive: true });
+    window.addEventListener("keydown", handleUserInteraction, { passive: true });
+    window.addEventListener("click", handleUserInteraction, { passive: true });
+    window.addEventListener("scroll", throttledInteraction, { passive: true });
+    window.addEventListener("touchstart", handleUserInteraction, { passive: true });
+
+    // Idle check ticker runs every 15 seconds
+    const interval = setInterval(() => {
+      const now = Date.now();
+      const idleTime = now - lastUserActivityRef.current;
+      const IDLE_LIMIT = 2 * 60 * 1000; // 2 minutes
+
+      if (idleTime >= IDLE_LIMIT && !isUserAfkRef.current) {
+        isUserAfkRef.current = true;
+        const currentMod = activeView === "communication" ? communicationTab : (workspaceTab || "home");
+        updateUserPresenceStatus({ user: userPayload, isAfk: true, currentModule: currentMod });
+      }
+    }, 15000);
+
+    // Tab visibility change handler
+    let hideTimer = null;
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        hideTimer = setTimeout(() => {
+          if (!isUserAfkRef.current) {
+            isUserAfkRef.current = true;
+            const currentMod = activeView === "communication" ? communicationTab : (workspaceTab || "home");
+            updateUserPresenceStatus({ user: userPayload, isAfk: true, currentModule: currentMod });
+          }
+        }, 60000); // 60 seconds of minimized / hidden tab
+      } else {
+        if (hideTimer) clearTimeout(hideTimer);
+        handleUserInteraction();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener("mousemove", throttledInteraction);
+      window.removeEventListener("keydown", handleUserInteraction);
+      window.removeEventListener("click", handleUserInteraction);
+      window.removeEventListener("scroll", throttledInteraction);
+      window.removeEventListener("touchstart", handleUserInteraction);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      clearInterval(interval);
+      if (hideTimer) clearTimeout(hideTimer);
+    };
+  }, [currentUser, profileName, profileEmail, profileRole, profileCompany, activeView, communicationTab, workspaceTab]);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(true);
 
   // Enterprise RBAC Capabilities State for Head Office Governance

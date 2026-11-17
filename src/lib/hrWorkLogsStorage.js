@@ -160,21 +160,26 @@ export function calculateHoursWorked(startTimeStr, endTimeStr) {
  */
 function normalizeLogRecord(raw) {
   if (!raw) return null;
+  const rawStatus = String(raw.status || "");
+  const isAfk = rawStatus.toUpperCase() === "AFK" || rawStatus.toLowerCase().includes("afk") || String(raw.progress_comments || "").includes("[Idle]");
   const isOngoing =
-    raw.status === "In Progress" ||
-    raw.status === "Ongoing" ||
-    raw.status === "in_progress" ||
+    isAfk ||
+    rawStatus === "In Progress" ||
+    rawStatus === "Ongoing" ||
+    rawStatus === "in_progress" ||
     raw.end_time === "Active" ||
     raw.endTime === "Active";
 
   const numericDuration = Number(raw.hours_worked || raw.hoursWorked || 0);
-  const formattedDuration = isOngoing
-    ? "Active Now"
-    : numericDuration > 0
-      ? numericDuration % 1 === 0
-        ? `${numericDuration} hr${numericDuration === 1 ? "" : "s"}`
-        : `${numericDuration.toFixed(1)} hrs`
-      : "--";
+  const formattedDuration = isAfk
+    ? "Idle / AFK"
+    : isOngoing
+      ? "Active Now"
+      : numericDuration > 0
+        ? numericDuration % 1 === 0
+          ? `${numericDuration} hr${numericDuration === 1 ? "" : "s"}`
+          : `${numericDuration.toFixed(1)} hrs`
+        : "--";
 
   const progressText = raw.progress_comments || raw.progressComments || "";
   const isAuto = Boolean(raw.is_auto_logged || raw.isAutoLogged || progressText.includes("[Auto-Logged]"));
@@ -191,10 +196,11 @@ function normalizeLogRecord(raw) {
     category: normalizedCat,
     startTime: raw.start_time || raw.startTime || "8:00 AM",
     endTime: isOngoing ? "Active" : (raw.end_time || raw.endTime || "5:00 PM"),
-    hoursWorked: isOngoing ? "Active Now" : (raw.hours_worked_formatted || formattedDuration),
+    hoursWorked: isAfk ? "Idle / AFK" : isOngoing ? "Active Now" : (raw.hours_worked_formatted || formattedDuration),
     numericHours: numericDuration,
     progressComments: progressText.replace("[Auto-Logged] ", "").replace("[Auto-Logged]", "").trim(),
-    status: isOngoing ? "In Progress" : (raw.status || "Completed"),
+    status: isAfk ? "AFK" : isOngoing ? "In Progress" : (raw.status || "Completed"),
+    isAfk,
     isAutoLogged: isAuto,
     authorName: raw.author_name || raw.authorName || "HR Officer",
     authorEmail: (raw.author_email || raw.authorEmail || "").toLowerCase().trim(),
@@ -740,41 +746,56 @@ export async function trackUserActiveModuleSession({ user, moduleId, customDetai
       .select("*")
       .eq("author_email", userEmail)
       .eq("log_date", todayStr)
-      .in("status", ["In Progress", "Ongoing", "in_progress"]);
+      .in("status", ["In Progress", "Ongoing", "in_progress", "AFK", "afk"]);
 
-    // If an active session is already running on the same module, avoid duplicate insert
+    // If an active session row already exists for this user today, UPDATE IN-PLACE!
+    // This guarantees that tab switching and presence updates NEVER insert endless rows or consume unnecessary database storage.
     if (Array.isArray(activeRows) && activeRows.length > 0) {
-      const sameTaskRow = activeRows.find((r) => (r.task_project || "").trim() === task.trim());
-      if (sameTaskRow) {
-        return normalizeLogRecord(sameTaskRow);
+      const activeRow = activeRows[0];
+      const isAfk = Boolean(customDetails.isAfk);
+
+      await supabase
+        .from(TABLE_NAME)
+        .update({
+          task_project: task.trim(),
+          category,
+          progress_comments: comments.trim(),
+          status: isAfk ? "AFK" : "In Progress",
+          end_time: "Active",
+          hours_worked_formatted: isAfk ? "Idle / AFK" : "Active Now",
+          updated_at: new Date().toISOString()
+        })
+        .eq("id", activeRow.id);
+
+      // Clean up any extra active rows if multiple existed previously
+      if (activeRows.length > 1) {
+        const extraIds = activeRows.slice(1).map((r) => r.id);
+        await supabase.from(TABLE_NAME).delete().in("id", extraIds);
       }
 
-      // Complete previous active sessions
-      for (const row of activeRows) {
-        const { numericHours } = calculateHoursWorked(row.start_time, nowTimeStr);
-        await supabase
-          .from(TABLE_NAME)
-          .update({
-            end_time: nowTimeStr,
-            hours_worked: numericHours > 0 ? numericHours : 0.1,
-            status: "Completed",
-            updated_at: new Date().toISOString()
-          })
-          .eq("id", row.id);
-      }
+      broadcastWorkLogUpdate("work_log_updated", { id: activeRow.id, status: isAfk ? "AFK" : "In Progress" });
+      return normalizeLogRecord({
+        ...activeRow,
+        task_project: task.trim(),
+        category,
+        progress_comments: comments.trim(),
+        status: isAfk ? "AFK" : "In Progress",
+        end_time: "Active",
+        hours_worked_formatted: isAfk ? "Idle / AFK" : "Active Now"
+      });
     }
 
-    // 4. Insert new 'In Progress' active session record
+    // 4. Otherwise (first module access of the day), insert exactly 1 active session record
     const newSessionPayload = {
       date: todayStr,
       taskProject: task.trim(),
       category,
       startTime: nowTimeStr,
       endTime: "Active",
-      hoursWorked: "Active Now",
+      hoursWorked: customDetails.isAfk ? "Idle / AFK" : "Active Now",
       numericHours: 0.0,
       progressComments: comments.trim(),
-      status: "In Progress",
+      status: customDetails.isAfk ? "AFK" : "In Progress",
       authorName: userName,
       authorEmail: userEmail,
       authorRole: userRole,
@@ -790,6 +811,53 @@ export async function trackUserActiveModuleSession({ user, moduleId, customDetai
   } finally {
     activeSessionLock.inFlight = false;
   }
+}
+
+/**
+ * Real-Time Presence & AFK State Updater:
+ * Seamlessly updates the user's active session in-place when they are AFK or return.
+ * Does NOT insert new rows — purely updates the single active row in-place (0 storage consumption).
+ */
+export async function updateUserPresenceStatus({ user, isAfk, currentModule = "home" }) {
+  if (!user || isHRMDUser(user)) return null;
+
+  const userEmail = (user.email || user.authorEmail || user.author_email || "").toLowerCase().trim();
+  const todayStr = getTodayDateStr();
+  const mod = MODULE_WORKLOG_MAP[currentModule];
+  const task = mod?.task || "HR Operations";
+
+  try {
+    const { data: activeRows } = await supabase
+      .from(TABLE_NAME)
+      .select("*")
+      .eq("author_email", userEmail)
+      .eq("log_date", todayStr)
+      .in("status", ["In Progress", "Ongoing", "in_progress", "AFK", "afk"]);
+
+    if (Array.isArray(activeRows) && activeRows.length > 0) {
+      const activeRow = activeRows[0];
+      const newStatus = isAfk ? "AFK" : "In Progress";
+      const newComments = isAfk
+        ? `[Idle] Officer is currently Away From Keyboard (AFK) on ${task}.`
+        : `Active and working in ${task}.`;
+
+      await supabase
+        .from(TABLE_NAME)
+        .update({
+          status: newStatus,
+          progress_comments: newComments,
+          hours_worked_formatted: isAfk ? "Idle / AFK" : "Active Now",
+          updated_at: new Date().toISOString()
+        })
+        .eq("id", activeRow.id);
+
+      broadcastWorkLogUpdate("work_log_updated", { id: activeRow.id, status: newStatus });
+      return true;
+    }
+  } catch (err) {
+    console.warn("updateUserPresenceStatus exception:", err);
+  }
+  return false;
 }
 
 /**
