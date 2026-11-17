@@ -710,17 +710,18 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
     const currentModule = activeView === "communication" ? communicationTab : (workspaceTab || "home");
 
     const timer = setTimeout(() => {
-      logSystemActivity(userPayload, currentModule);
+      logSystemActivity(userPayload, currentModule, { isAfk: isUserAfkRef.current });
     }, 2000);
 
     return () => clearTimeout(timer);
   }, [workspaceTab, communicationTab, activeView, currentUser, profileName, profileEmail, profileRole, profileCompany]);
 
   // Live Inactivity / AFK Monitor
-  // Detects when the user steps away from keyboard/screen (2 mins idle or tab hidden > 60s)
-  // and updates status back to Active (Working) the moment mouse, keys, or screen are touched
+  // Detects when the user steps away from keyboard/screen (45s idle or tab hidden > 25s)
+  // and updates status back to Active (Working) when deliberate interaction resumes
   const lastUserActivityRef = useRef(Date.now());
   const isUserAfkRef = useRef(false);
+  const tabRefocusTimeRef = useRef(0);
 
   useEffect(() => {
     if (!currentUser) return;
@@ -746,30 +747,49 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
     let lastThrottledTime = 0;
     const throttledInteraction = () => {
       const now = Date.now();
-      if (now - lastThrottledTime > 3000) {
+      // Grace period: if user just refocused the tab, don't immediately cancel AFK on passive cursor drift
+      if (isUserAfkRef.current && (now - tabRefocusTimeRef.current < 2500)) {
+        return;
+      }
+      if (now - lastThrottledTime > 2500) {
         lastThrottledTime = now;
         handleUserInteraction();
       }
     };
 
+    // Listeners for active user input
     window.addEventListener("mousemove", throttledInteraction, { passive: true });
     window.addEventListener("keydown", handleUserInteraction, { passive: true });
     window.addEventListener("click", handleUserInteraction, { passive: true });
     window.addEventListener("scroll", throttledInteraction, { passive: true });
     window.addEventListener("touchstart", handleUserInteraction, { passive: true });
 
-    // Idle check ticker runs every 15 seconds
+    // Custom instant AFK toggle listener (for on-demand instant testing)
+    const handleCustomAfkToggle = (e) => {
+      if (typeof e.detail?.isAfk === "boolean") {
+        const nextAfk = e.detail.isAfk;
+        isUserAfkRef.current = nextAfk;
+        if (!nextAfk) {
+          lastUserActivityRef.current = Date.now();
+        }
+        const currentMod = activeView === "communication" ? communicationTab : (workspaceTab || "home");
+        updateUserPresenceStatus({ user: userPayload, isAfk: nextAfk, currentModule: currentMod });
+      }
+    };
+    window.addEventListener("hrhub_toggle_afk", handleCustomAfkToggle);
+
+    // Idle check ticker runs every 5 seconds (fast response, 0.00% CPU)
     const interval = setInterval(() => {
       const now = Date.now();
       const idleTime = now - lastUserActivityRef.current;
-      const IDLE_LIMIT = 2 * 60 * 1000; // 2 minutes
+      const IDLE_LIMIT = 45 * 1000; // 45 seconds of continuous inactivity
 
       if (idleTime >= IDLE_LIMIT && !isUserAfkRef.current) {
         isUserAfkRef.current = true;
         const currentMod = activeView === "communication" ? communicationTab : (workspaceTab || "home");
         updateUserPresenceStatus({ user: userPayload, isAfk: true, currentModule: currentMod });
       }
-    }, 15000);
+    }, 5000);
 
     // Tab visibility change handler
     let hideTimer = null;
@@ -781,10 +801,11 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
             const currentMod = activeView === "communication" ? communicationTab : (workspaceTab || "home");
             updateUserPresenceStatus({ user: userPayload, isAfk: true, currentModule: currentMod });
           }
-        }, 60000); // 60 seconds of minimized / hidden tab
+        }, 25000); // 25 seconds of minimized / hidden tab
       } else {
         if (hideTimer) clearTimeout(hideTimer);
-        handleUserInteraction();
+        // User switched back to the tab: record timestamp for grace period so AFK badge remains visible
+        tabRefocusTimeRef.current = Date.now();
       }
     };
     document.addEventListener("visibilitychange", handleVisibilityChange);
@@ -795,7 +816,8 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
       window.removeEventListener("click", handleUserInteraction);
       window.removeEventListener("scroll", throttledInteraction);
       window.removeEventListener("touchstart", handleUserInteraction);
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("hrhub_toggle_afk", handleCustomAfkToggle);
       clearInterval(interval);
       if (hideTimer) clearTimeout(hideTimer);
     };

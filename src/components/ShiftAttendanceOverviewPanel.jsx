@@ -16,6 +16,7 @@ import {
   addWorkLogEntry,
   deleteWorkLogEntry,
   subscribeToWorkLogsLive,
+  updateUserPresenceStatus,
   getTodayDateStr,
   formatDateToMMDDYYYY,
   calculateHoursWorked,
@@ -131,6 +132,33 @@ export default function ShiftAttendanceOverviewPanel({
     });
     return Array.from(map.values());
   }, [logs]);
+
+  // Active user's own live presence state
+  const myUserEmail = (currentUser?.email || currentProfile?.email || "").toLowerCase().trim();
+  const myCurrentLog = useMemo(() => {
+    return logs.find(
+      (l) =>
+        (l.authorEmail || "").toLowerCase() === myUserEmail &&
+        (l.endTime === "Active" || l.status === "In Progress" || l.status === "AFK")
+    );
+  }, [logs, myUserEmail]);
+  const isMyAfk = Boolean(myCurrentLog?.isAfk || myCurrentLog?.status === "AFK");
+
+  const handleToggleAfk = async () => {
+    const nextAfk = !isMyAfk;
+    window.dispatchEvent(new CustomEvent("hrhub_toggle_afk", { detail: { isAfk: nextAfk } }));
+    const userObj = {
+      name: currentProfile?.name || currentUser?.name || "HR Officer",
+      email: myUserEmail,
+      role: currentProfile?.role || currentUser?.role || "HR Administrator",
+      company: currentProfile?.company || currentUser?.company || HEAD_OFFICE,
+      branch: currentProfile?.branch || currentUser?.branch || "Head Office (SGC)"
+    };
+    await updateUserPresenceStatus({ user: userObj, isAfk: nextAfk });
+    setNotice(nextAfk ? "Presence status switched to 🌙 AFK (Idle)." : "Presence status switched back to ⚡ Active Now.");
+    setTimeout(() => setNotice(null), 3000);
+    loadData();
+  };
 
   // Date-filtered logs for synchronized subsidiary counters and metrics
   const dateLogs = useMemo(() => {
@@ -371,6 +399,20 @@ export default function ShiftAttendanceOverviewPanel({
               title="Refresh live cloud records"
             >
               <RefreshCw size={13} className={loading ? "animate-spin text-emerald-600" : ""} />
+            </button>
+
+            <button
+              type="button"
+              onClick={handleToggleAfk}
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[11px] font-bold transition cursor-pointer shadow-2xs active:scale-95 ${
+                isMyAfk
+                  ? "bg-rose-50 border-rose-300 text-rose-700 hover:bg-rose-100 ring-1 ring-rose-400"
+                  : "bg-amber-50 border-amber-300 text-amber-800 hover:bg-amber-100"
+              }`}
+              title={isMyAfk ? "Currently Idle/AFK. Click to switch back to Active Now." : "Simulate stepping away (AFK / Idle)."}
+            >
+              <span className={`w-1.5 h-1.5 rounded-full ${isMyAfk ? "bg-rose-500 animate-ping" : "bg-amber-500"}`}></span>
+              <span>{isMyAfk ? "🌙 AFK (Idle)" : "⚡ Simulate AFK"}</span>
             </button>
 
             <button

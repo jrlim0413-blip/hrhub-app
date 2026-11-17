@@ -233,9 +233,23 @@ export async function fetchAllWorkLogs() {
     if (!error && Array.isArray(data)) {
       // Client-side deduplication safeguard to guarantee single clean rows
       const seen = new Set();
+      const activeUserDates = new Set();
       const uniqueData = [];
       for (const row of data) {
-        const key = `${(row.author_email || "").toLowerCase().trim()}__${(row.task_project || "").trim()}__${row.log_date || ""}__${row.start_time || ""}`;
+        const email = (row.author_email || "").toLowerCase().trim();
+        const date = row.log_date || "";
+        const isRowActive = row.status === "In Progress" || row.status === "AFK" || row.status === "Ongoing" || row.end_time === "Active";
+
+        // Guarantee at most ONE active session per officer per date
+        if (isRowActive) {
+          const activeUserKey = `${email}__${date}`;
+          if (activeUserDates.has(activeUserKey)) {
+            continue;
+          }
+          activeUserDates.add(activeUserKey);
+        }
+
+        const key = `${email}__${(row.task_project || "").trim()}__${date}__${row.start_time || ""}`;
         if (!seen.has(key)) {
           seen.add(key);
           uniqueData.push(row);
@@ -740,25 +754,29 @@ export async function trackUserActiveModuleSession({ user, moduleId, customDetai
     const { data: activeRows } = await supabase
       .from(TABLE_NAME)
       .select("*")
-      .eq("author_email", userEmail)
+      .ilike("author_email", userEmail)
       .eq("log_date", todayStr)
-      .in("status", ["In Progress", "Ongoing", "in_progress", "AFK", "afk"]);
+      .in("status", ["In Progress", "Ongoing", "in_progress", "AFK", "afk"])
+      .order("created_at", { ascending: false });
 
     // If an active session row already exists for this user today, UPDATE IN-PLACE!
     // This guarantees that tab switching and presence updates NEVER insert endless rows or consume unnecessary database storage.
     if (Array.isArray(activeRows) && activeRows.length > 0) {
       const activeRow = activeRows[0];
       const isAfk = Boolean(customDetails.isAfk);
+      const newStatus = isAfk ? "AFK" : "In Progress";
+      const newComments = isAfk
+        ? `[Idle] Officer is currently Away From Keyboard (AFK) on ${task}.`
+        : (comments ? comments.trim() : `Active and working in ${task}.`);
 
       await supabase
         .from(TABLE_NAME)
         .update({
           task_project: task.trim(),
           category,
-          progress_comments: comments.trim(),
-          status: isAfk ? "AFK" : "In Progress",
+          progress_comments: newComments,
+          status: newStatus,
           end_time: "Active",
-          hours_worked_formatted: isAfk ? "Idle / AFK" : "Active Now",
           updated_at: new Date().toISOString()
         })
         .eq("id", activeRow.id);
@@ -769,16 +787,21 @@ export async function trackUserActiveModuleSession({ user, moduleId, customDetai
         await supabase.from(TABLE_NAME).delete().in("id", extraIds);
       }
 
-      broadcastWorkLogUpdate("work_log_updated", { id: activeRow.id, status: isAfk ? "AFK" : "In Progress" });
-      return normalizeLogRecord({
+      const updatedRecord = normalizeLogRecord({
         ...activeRow,
         task_project: task.trim(),
         category,
-        progress_comments: comments.trim(),
-        status: isAfk ? "AFK" : "In Progress",
-        end_time: "Active",
-        hours_worked_formatted: isAfk ? "Idle / AFK" : "Active Now"
+        progress_comments: newComments,
+        status: newStatus,
+        end_time: "Active"
       });
+
+      if (Array.isArray(memoryWorkLogsList)) {
+        memoryWorkLogsList = memoryWorkLogsList.map((m) => (m.id === activeRow.id ? updatedRecord : m));
+      }
+
+      broadcastWorkLogUpdate("work_log_updated", updatedRecord);
+      return updatedRecord;
     }
 
     // 4. Otherwise (first module access of the day), insert exactly 1 active session record
@@ -815,7 +838,7 @@ export async function trackUserActiveModuleSession({ user, moduleId, customDetai
  * Does NOT insert new rows — purely updates the single active row in-place (0 storage consumption).
  */
 export async function updateUserPresenceStatus({ user, isAfk, currentModule = "home" }) {
-  if (!user) return null;
+  if (!user) return false;
 
   const userEmail = (user.email || user.authorEmail || user.author_email || "").toLowerCase().trim();
   const todayStr = getTodayDateStr();
@@ -826,9 +849,10 @@ export async function updateUserPresenceStatus({ user, isAfk, currentModule = "h
     const { data: activeRows } = await supabase
       .from(TABLE_NAME)
       .select("*")
-      .eq("author_email", userEmail)
+      .ilike("author_email", userEmail)
       .eq("log_date", todayStr)
-      .in("status", ["In Progress", "Ongoing", "in_progress", "AFK", "afk"]);
+      .in("status", ["In Progress", "Ongoing", "in_progress", "AFK", "afk"])
+      .order("created_at", { ascending: false });
 
     if (Array.isArray(activeRows) && activeRows.length > 0) {
       const activeRow = activeRows[0];
@@ -842,12 +866,29 @@ export async function updateUserPresenceStatus({ user, isAfk, currentModule = "h
         .update({
           status: newStatus,
           progress_comments: newComments,
-          hours_worked_formatted: isAfk ? "Idle / AFK" : "Active Now",
+          end_time: "Active",
           updated_at: new Date().toISOString()
         })
         .eq("id", activeRow.id);
 
-      broadcastWorkLogUpdate("work_log_updated", { id: activeRow.id, status: newStatus });
+      // Clean up any extra active rows if multiple existed previously
+      if (activeRows.length > 1) {
+        const extraIds = activeRows.slice(1).map((r) => r.id);
+        await supabase.from(TABLE_NAME).delete().in("id", extraIds);
+      }
+
+      const updatedRecord = normalizeLogRecord({
+        ...activeRow,
+        status: newStatus,
+        progress_comments: newComments,
+        end_time: "Active"
+      });
+
+      if (Array.isArray(memoryWorkLogsList)) {
+        memoryWorkLogsList = memoryWorkLogsList.map((m) => (m.id === activeRow.id ? updatedRecord : m));
+      }
+
+      broadcastWorkLogUpdate("work_log_updated", updatedRecord);
       return true;
     }
   } catch (err) {
