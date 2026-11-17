@@ -612,6 +612,9 @@ export default function ShiftAttendanceOverviewPanel({
               <Download size={11} className="text-slate-500" />
               <span>Export CSV</span>
             </button>
+            <span className="text-[9px] uppercase font-bold text-teal-700 bg-teal-50 px-2 py-0.5 rounded-full border border-teal-200">
+              7-Day Retention
+            </span>
             <span className="text-[9px] uppercase font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200">
               Cloud Synchronized
             </span>

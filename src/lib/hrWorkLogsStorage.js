@@ -220,8 +220,8 @@ let memoryWorkLogsList = null;
  */
 export async function fetchAllWorkLogs() {
   try {
-    // Background auto-retention cleanup: prune records older than 15 days (1 payroll cycle)
-    autoPruneOldLogs(15);
+    // Background auto-retention cleanup: prune records older than 7 days (weekly rolling retention)
+    autoPruneOldLogs(7);
 
     // 1. Direct query to dedicated `hr_work_logs` database table
     const { data, error } = await supabase
@@ -858,10 +858,10 @@ export async function updateUserPresenceStatus({ user, isAfk, currentModule = "h
 
 /**
  * Automated Rolling Data Retention Cleaner:
- * Automatically prunes logs older than retentionDays (defaults to 15 days for standard bi-monthly payroll).
+ * Automatically prunes logs older than retentionDays (Option A: 7 days weekly rolling retention).
  * Prevents database bloat, keeping queries instant and table size razor-thin.
  */
-export async function autoPruneOldLogs(retentionDays = 15) {
+export async function autoPruneOldLogs(retentionDays = 7) {
   try {
     if (typeof window !== "undefined") {
       const todayStr = getTodayDateStr();
