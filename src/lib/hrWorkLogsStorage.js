@@ -222,7 +222,21 @@ export async function fetchAllWorkLogs() {
       .order("created_at", { ascending: false });
 
     if (!error && Array.isArray(data)) {
-      const normalized = data.map(normalizeLogRecord).filter(Boolean);
+      // Filter out any HRMD monitoring accounts
+      const nonHrmd = data.filter((r) => !isHRMDUser(r));
+
+      // Client-side deduplication safeguard to guarantee single clean rows
+      const seen = new Set();
+      const uniqueData = [];
+      for (const row of nonHrmd) {
+        const key = `${(row.author_email || "").toLowerCase().trim()}__${(row.task_project || "").trim()}__${row.log_date || ""}__${row.start_time || ""}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          uniqueData.push(row);
+        }
+      }
+
+      const normalized = uniqueData.map(normalizeLogRecord).filter(Boolean);
       memoryWorkLogsList = normalized;
       if (typeof window !== "undefined") {
         try {
@@ -240,7 +254,17 @@ export async function fetchAllWorkLogs() {
       .maybeSingle();
 
     if (settingsData?.settings_json && Array.isArray(settingsData.settings_json)) {
-      const normalized = settingsData.settings_json.map(normalizeLogRecord).filter(Boolean);
+      const nonHrmd = settingsData.settings_json.filter((r) => !isHRMDUser(r));
+      const seen = new Set();
+      const uniqueData = [];
+      for (const row of nonHrmd) {
+        const key = `${(row.author_email || "").toLowerCase().trim()}__${(row.task_project || "").trim()}__${row.log_date || ""}__${row.start_time || ""}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          uniqueData.push(row);
+        }
+      }
+      const normalized = uniqueData.map(normalizeLogRecord).filter(Boolean);
       memoryWorkLogsList = normalized;
       return normalized;
     }
@@ -419,19 +443,22 @@ const recentAutoLogs = new Map();
  */
 export function isHRMDUser(user) {
   if (!user) return false;
-  const email = String(user.email || user.authorEmail || "").toLowerCase().trim();
-  const name = String(user.name || user.authorName || "").toLowerCase().trim().replace(/\s+/g, "");
-  const role = String(user.role || user.authorRole || "").toLowerCase().trim();
+  const email = String(user.email || user.authorEmail || user.author_email || "").toLowerCase().trim();
+  const name = String(user.name || user.authorName || user.author_name || "").toLowerCase().trim().replace(/\s+/g, "");
+  const role = String(user.role || user.authorRole || user.author_role || "").toLowerCase().trim();
 
-  // ONLY exclude when specifically HRMD
+  // ONLY exclude when specifically HRMD or Master Admin
   return (
     name === "hrmd" ||
+    name.includes("hrmd") ||
     role === "hrmd director" ||
     role === "head office hrmd" ||
     role === "hrmd admin" ||
+    role.includes("hrmd") ||
+    email === "admin@hrhub.com" ||
     email === "hrmd@simpalgroup.com" ||
     email === "hrmd@hrhub.com" ||
-    (email.includes("hrmd@") && !email.includes("admin@"))
+    email.includes("hrmd@")
   );
 }
 
@@ -456,6 +483,7 @@ export async function autoLogHRAction({
   durationMinutes = 30
 }) {
   if (!user || !taskProject) return null;
+  if (isHRMDUser(user)) return null;
 
   const userEmail = (user.email || user.authorEmail || "").toLowerCase().trim();
   const userName = user.name || user.authorName || "HR Officer";
@@ -649,18 +677,51 @@ export const MODULE_WORKLOG_MAP = {
   }
 };
 
+// Synchronous in-memory lock to eliminate duplicate database writes & optimize performance
+let activeSessionLock = {
+  email: null,
+  moduleId: null,
+  timestamp: 0,
+  inFlight: false
+};
+
 /**
  * Real-Time Active Module Session Tracker:
  * Records the currently open feature or tab for an authenticated user account.
  * Closes any previous session with exact duration and sets the new module session to 'In Progress'.
+ * Master HRMD accounts are strictly excluded from logging.
  */
 export async function trackUserActiveModuleSession({ user, moduleId, customDetails = {} }) {
   if (!user || !moduleId) return null;
+  if (isHRMDUser(user)) return null;
 
-  const userEmail = (user.email || user.authorEmail || "").toLowerCase().trim();
-  const userName = user.name || user.authorName || "HR Officer";
+  const userEmail = (user.email || user.authorEmail || user.author_email || "").toLowerCase().trim();
+  const nowMs = Date.now();
+
+  // 1. Synchronous Lock: If user is already active in this module, return immediately (0ms, 0 network requests)
+  if (
+    activeSessionLock.email === userEmail &&
+    activeSessionLock.moduleId === moduleId &&
+    nowMs - activeSessionLock.timestamp < 15 * 60 * 1000
+  ) {
+    return null;
+  }
+
+  // 2. Prevent overlapping in-flight network queries for the same user
+  if (activeSessionLock.inFlight && activeSessionLock.email === userEmail) {
+    return null;
+  }
+
+  activeSessionLock = {
+    email: userEmail,
+    moduleId,
+    timestamp: nowMs,
+    inFlight: true
+  };
+
+  const userName = user.name || user.authorName || user.author_name || "HR Officer";
   const userCompany = user.company || user.authorCompany || HEAD_OFFICE;
-  const userRole = user.role || user.authorRole || "HR Officer";
+  const userRole = user.role || user.authorRole || user.author_role || "HR Officer";
   const userBranch = user.branch || user.authorBranch || "Head Office (SGC)";
 
   const mod = MODULE_WORKLOG_MAP[moduleId];
@@ -673,7 +734,7 @@ export async function trackUserActiveModuleSession({ user, moduleId, customDetai
   const todayStr = getTodayDateStr();
 
   try {
-    // 1. Fetch current active session for this user today from database
+    // 3. Fetch current active session for this user today from database
     const { data: activeRows } = await supabase
       .from(TABLE_NAME)
       .select("*")
@@ -703,7 +764,7 @@ export async function trackUserActiveModuleSession({ user, moduleId, customDetai
       }
     }
 
-    // 2. Insert new 'In Progress' active session record
+    // 4. Insert new 'In Progress' active session record
     const newSessionPayload = {
       date: todayStr,
       taskProject: task.trim(),
@@ -726,6 +787,8 @@ export async function trackUserActiveModuleSession({ user, moduleId, customDetai
   } catch (err) {
     console.warn("trackUserActiveModuleSession exception:", err);
     return null;
+  } finally {
+    activeSessionLock.inFlight = false;
   }
 }
 

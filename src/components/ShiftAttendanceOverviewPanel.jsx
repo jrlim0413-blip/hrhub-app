@@ -116,11 +116,11 @@ export default function ShiftAttendanceOverviewPanel({
     };
   }, [loadData]);
 
-  // Unique HR Officers in logs
+  // Unique HR Officers in logs (strictly excluding HRMD monitoring accounts)
   const hrOfficersList = useMemo(() => {
     const map = new Map();
     logs.forEach((l) => {
-      if (l.authorEmail) {
+      if (l.authorEmail && !isHRMDUser(l)) {
         map.set(l.authorEmail.toLowerCase(), {
           name: l.authorName || l.authorEmail.split("@")[0],
           email: l.authorEmail,
@@ -132,9 +132,9 @@ export default function ShiftAttendanceOverviewPanel({
     return Array.from(map.values());
   }, [logs]);
 
-  // Date-filtered logs for synchronized subsidiary counters and metrics
+  // Date-filtered logs for synchronized subsidiary counters and metrics (excluding HRMD)
   const dateLogs = useMemo(() => {
-    return logs.filter((l) => !selectedDate || l.date === selectedDate);
+    return logs.filter((l) => (!selectedDate || l.date === selectedDate) && !isHRMDUser(l));
   }, [logs, selectedDate]);
 
   // Filtered Logs

@@ -619,20 +619,6 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
     // Track usage count in 10-day cycle
     const nextStats = saveFrequentTabClick(targetId);
     setFrequentStats(nextStats);
-
-    // Real-Time Activity Telemetry for Live Shift & Attendance Timesheet
-    if (currentUser) {
-      logSystemActivity(
-        {
-          name: profileName || currentUser.name || "HR Officer",
-          email: currentUser.email || profileEmail || "unknown",
-          role: profileRole || currentUser.role || "HR Administrator",
-          company: profileCompany || currentUser.company || "Simpal Group of Companies",
-          branch: currentUser.branch || "Head Office (SGC)"
-        },
-        targetId
-      );
-    }
   };
 
   const handleCloseWorkspaceTab = (e, tabId) => {
@@ -653,24 +639,13 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
   const [aiGeneratedMemoDraft, setAiGeneratedMemoDraft] = useState(null);
   const [communicationTab, setCommunicationTab] = useState("bulletin"); // 'bulletin' | 'directory' | 'attendance' | 'policies'
 
-  // Live Activity Telemetry for Communication Tabs (Directory, Policies, Bulletin, Attendance)
+  // Communication tab selection handler
   const handleSelectCommunicationTab = (tabId) => {
     setCommunicationTab(tabId);
-    if (currentUser) {
-      logSystemActivity(
-        {
-          name: profileName || currentUser.name || "HR Officer",
-          email: currentUser.email || profileEmail || "unknown",
-          role: profileRole || currentUser.role || "HR Administrator",
-          company: profileCompany || currentUser.company || "Simpal Group of Companies",
-          branch: currentUser.branch || "Head Office (SGC)"
-        },
-        tabId
-      );
-    }
   };
 
   // Automatic Live Telemetry & Active Module Session Tracking for all tabs and modules
+  // Debounced by 2000ms: Single authority to eliminate rapid click strain and prevent duplicate database writes
   useEffect(() => {
     if (!currentUser) return;
     const userPayload = {
@@ -681,7 +656,12 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
       branch: currentUser.branch || "Head Office (SGC)"
     };
     const currentModule = activeView === "communication" ? communicationTab : (workspaceTab || "home");
-    logSystemActivity(userPayload, currentModule);
+
+    const timer = setTimeout(() => {
+      logSystemActivity(userPayload, currentModule);
+    }, 2000);
+
+    return () => clearTimeout(timer);
   }, [workspaceTab, communicationTab, activeView, currentUser, profileName, profileEmail, profileRole, profileCompany]);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(true);
 
