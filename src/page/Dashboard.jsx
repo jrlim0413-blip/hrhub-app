@@ -59,7 +59,7 @@ import {
   markThreadAsRead,
   formatMessengerTime
 } from "../lib/chatService";
-import { autoLogHRAction, getTodayDateStr } from "../lib/hrWorkLogsStorage";
+import { autoLogHRAction, logSystemActivity, getTodayDateStr } from "../lib/hrWorkLogsStorage";
 import { isHeadOffice, isGlobalAccessUser, getUserAssignedStlEntity } from "../lib/companyEntities";
 
 function formatTimeAgo(dateString) {
@@ -619,6 +619,20 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
     // Track usage count in 10-day cycle
     const nextStats = saveFrequentTabClick(targetId);
     setFrequentStats(nextStats);
+
+    // Real-Time Activity Telemetry for Live Shift & Attendance Timesheet
+    if (currentUser) {
+      logSystemActivity(
+        {
+          name: profileName || currentUser.name || "HR Officer",
+          email: currentUser.email || profileEmail || "unknown",
+          role: profileRole || currentUser.role || "HR Administrator",
+          company: profileCompany || currentUser.company || "Simpal Group of Companies",
+          branch: currentUser.branch || "Head Office (SGC)"
+        },
+        targetId
+      );
+    }
   };
 
   const handleCloseWorkspaceTab = (e, tabId) => {
@@ -638,6 +652,40 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
   const [aiDrawerOpen, setAiDrawerOpen] = useState(false);
   const [aiGeneratedMemoDraft, setAiGeneratedMemoDraft] = useState(null);
   const [communicationTab, setCommunicationTab] = useState("bulletin"); // 'bulletin' | 'directory' | 'attendance' | 'policies'
+
+  // Live Activity Telemetry for Communication Tabs (Directory, Policies, Bulletin, Attendance)
+  const handleSelectCommunicationTab = (tabId) => {
+    setCommunicationTab(tabId);
+    if (currentUser) {
+      logSystemActivity(
+        {
+          name: profileName || currentUser.name || "HR Officer",
+          email: currentUser.email || profileEmail || "unknown",
+          role: profileRole || currentUser.role || "HR Administrator",
+          company: profileCompany || currentUser.company || "Simpal Group of Companies",
+          branch: currentUser.branch || "Head Office (SGC)"
+        },
+        tabId
+      );
+    }
+  };
+
+  // Automatic Live Telemetry Sync for all tabs and modules
+  useEffect(() => {
+    if (!currentUser) return;
+    const userPayload = {
+      name: profileName || currentUser.name || "HR Officer",
+      email: currentUser.email || profileEmail || "unknown",
+      role: profileRole || currentUser.role || "HR Administrator",
+      company: profileCompany || currentUser.company || "Simpal Group of Companies",
+      branch: currentUser.branch || "Head Office (SGC)"
+    };
+    if (activeView === "workspace" && workspaceTab) {
+      logSystemActivity(userPayload, workspaceTab);
+    } else if (activeView === "communication" && communicationTab) {
+      logSystemActivity(userPayload, communicationTab);
+    }
+  }, [workspaceTab, communicationTab, activeView]);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(true);
 
   // Enterprise RBAC Capabilities State for Head Office Governance
@@ -840,7 +888,7 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
             branch: currentUser.branch || "Head Office (SGC)"
           },
           taskProject: "Daily HR Shift Login & Station Portal Check-in",
-          category: "General HR Admin",
+          category: "Shift Attendance & Station Check-in",
           progressComments: `Initiated active operational shift and workstation session at ${profileCompany || currentUser.company}.`,
           status: "Completed",
           durationMinutes: 15
@@ -1663,7 +1711,7 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
       {communicationTab !== "directory" ? (
         <button
           type="button"
-          onClick={() => setCommunicationTab("directory")}
+          onClick={() => handleSelectCommunicationTab("directory")}
           className="w-full mt-2 py-2 px-3 text-center text-xs font-bold text-emerald-800 bg-white border border-slate-200 hover:border-emerald-300 hover:bg-emerald-50/60 rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5 shadow-2xs"
         >
           <Users size={14} className="text-emerald-600" />
@@ -1672,7 +1720,7 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
       ) : (
         <button
           type="button"
-          onClick={() => setCommunicationTab("bulletin")}
+          onClick={() => handleSelectCommunicationTab("bulletin")}
           className="w-full mt-2 py-2 px-3 text-center text-xs font-bold text-slate-700 bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5 shadow-2xs"
         >
           <Megaphone size={14} className="text-emerald-600" />
@@ -1973,10 +2021,10 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
                   if (view === "communication" && !isCommWorkspaceAllowed) return;
                   setActiveView(view);
                   if (view === "sop") {
-                    setWorkspaceTab(tab || "home");
+                    handleOpenWorkspaceTab(tab || "home");
                     setIsSidebarCollapsed(true);
                   } else if (view === "communication") {
-                    if (tab) setCommunicationTab(tab);
+                    if (tab) handleSelectCommunicationTab(tab);
                   }
                   setViewSwitcherOpen(false);
                 }}
@@ -2081,7 +2129,7 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
                       disabled={!allowed}
                       onClick={() => {
                         if (allowed) {
-                          setCommunicationTab(id);
+                          handleSelectCommunicationTab(id);
                         }
                       }}
                       title={!allowed ? "Restricted by Head Office" : label}
@@ -2115,7 +2163,7 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
                 profileName={profileName}
                 onNavigateTab={(targetTab) => {
                   if (targetTab === "bulletin" || targetTab === "directory" || targetTab === "attendance" || targetTab === "policies") {
-                    setCommunicationTab(targetTab);
+                    handleSelectCommunicationTab(targetTab);
                   } else {
                     handleOpenWorkspaceTab(targetTab);
                   }
@@ -2274,9 +2322,9 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
                       key={tabId}
                       role="button"
                       tabIndex={0}
-                      onClick={() => setWorkspaceTab(tabId)}
+                      onClick={() => handleOpenWorkspaceTab(tabId)}
                       onKeyDown={(e) => {
-                        if (e.key === "Enter" || e.key === " ") setWorkspaceTab(tabId);
+                        if (e.key === "Enter" || e.key === " ") handleOpenWorkspaceTab(tabId);
                       }}
                       className={`group inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[11px] font-semibold transition-all shadow-2xs cursor-pointer shrink-0 animate-in fade-in slide-in-from-right-4 duration-200 ${
                         isActive
@@ -2403,7 +2451,7 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
               onSwitchToDocStudio={() => handleOpenWorkspaceTab("doc_studio")}
               onNavigateToDirectory={() => {
                 setActiveView("communication");
-                setCommunicationTab("directory");
+                handleSelectCommunicationTab("directory");
               }}
             />
           )}
@@ -2642,7 +2690,7 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
         isEmbedded={false}
         onInsertMemoIntoGenerator={(memoData) => {
           setActiveView("sop");
-          setWorkspaceTab("memo");
+          handleOpenWorkspaceTab("memo");
           setAiGeneratedMemoDraft(memoData);
           setAiDrawerOpen(false);
         }}

@@ -5,7 +5,7 @@ import {
   AlertCircle, Sparkles, ShieldAlert, Trash2, Calendar,
   Briefcase, Heart, Plus, ExternalLink, RefreshCw, Eye, Paperclip,
   Check, Download, Cloud, Fuel, Coins, Search, CheckCheck,
-  ArrowRight, Shield, ChevronDown, KeyRound, Lock
+  ArrowRight, Shield, ChevronDown, KeyRound, Lock, Cake
 } from "lucide-react";
 import {
   HEAD_OFFICE,
@@ -125,6 +125,7 @@ export default function AddEmployeeProfileModal({
     phone: "",
     employmentStatus: "Regular Full-Time",
     dateHired: new Date().toISOString().split("T")[0],
+    birthday: "",
     emergencyName: "",
     emergencyPhone: "",
     // Statutory Numbers
@@ -168,6 +169,7 @@ export default function AddEmployeeProfileModal({
         phone: initialData.phone || meta.phone || "",
         employmentStatus: meta.employment_status || "Regular Full-Time",
         dateHired: meta.date_hired || new Date().toISOString().split("T")[0],
+        birthday: initialData.birthday || initialData.birthdate || initialData.birth_date || meta.birthday || "",
         emergencyName: meta.emergency_contact_name || "",
         emergencyPhone: meta.emergency_contact_phone || "",
         sssNumber: meta.sss_number || "",
@@ -388,6 +390,7 @@ export default function AddEmployeeProfileModal({
       role: formData.role || "Team Member",
       branch: formData.branch || defaultBranchMap[formData.company] || "Branch Office",
       phone: formData.phone || "",
+      birthday: formData.birthday || "",
       is_approved: typeof formData.is_approved === "boolean" ? formData.is_approved : true,
       login_enabled: Boolean(formData.login_enabled),
       metadata: {
@@ -399,6 +402,7 @@ export default function AddEmployeeProfileModal({
         department: formData.department,
         employment_status: formData.employmentStatus,
         date_hired: formData.dateHired,
+        birthday: formData.birthday || "",
         emergency_contact_name: formData.emergencyName,
         emergency_contact_phone: formData.emergencyPhone,
         sss_number: formData.sssNumber,
@@ -952,6 +956,24 @@ export default function AddEmployeeProfileModal({
                         value={formData.dateHired}
                         onChange={(e) => setFormData({ ...formData, dateHired: e.target.value })}
                         className="w-full border-0 bg-transparent text-slate-800 font-semibold focus:outline-none cursor-pointer"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Birthday / Date of Birth */}
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                      <Cake size={13} className="text-rose-500" />
+                      <span>Birthday / Date of Birth</span>
+                    </label>
+                    <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-xs focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-100 transition shadow-2xs">
+                      <Calendar size={14} className="text-slate-400 shrink-0" />
+                      <input
+                        type="date"
+                        value={formData.birthday || ""}
+                        onChange={(e) => setFormData({ ...formData, birthday: e.target.value })}
+                        className="w-full border-0 bg-transparent text-slate-800 font-semibold focus:outline-none cursor-pointer"
+                        placeholder="YYYY-MM-DD"
                       />
                     </div>
                   </div>

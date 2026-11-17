@@ -6,7 +6,7 @@ import {
   Sparkles, X, Edit3, MapPin,
   Sliders, LayoutGrid, List, User, UserCog, Send,
   FileText, Paperclip, KeyRound, Lock,
-  ChevronLeft, ChevronRight, Fuel
+  ChevronLeft, ChevronRight, Fuel, Cake, Calendar
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import PreRegisterInviteModal from "./PreRegisterInviteModal";
@@ -117,6 +117,7 @@ export default function EmployeeDirectoryPanel({
   }, [onRefresh]);
 
   const [searchQuery, setSearchQuery] = useState("");
+  const [birthdayFilter, setBirthdayFilter] = useState("");
   const [selectedFilter, setSelectedFilter] = useState("all"); // 'all' | 'entity_enrolled' | 'online' | 'pending' | 'approved'
   const [selectedSubsidiary, setSelectedSubsidiary] = useState("all");
   const [selectedBranchFilter, setSelectedBranchFilter] = useState("all");
@@ -163,6 +164,7 @@ export default function EmployeeDirectoryPanel({
     company: "Simpal Group of Companies",
     role: "Team Member",
     branch: "",
+    birthday: "",
     isApproved: true
   });
 
@@ -396,14 +398,16 @@ export default function EmployeeDirectoryPanel({
       const branch = (p.branch || "").toLowerCase();
       const isOnline = (currentEmail && email === currentEmail) || onlineEmails.has(email);
 
-      // Search matching (matches name, email, company, role, or branch)
+      // Search matching (matches name, email, company, role, branch, or birthday)
       const query = searchQuery.toLowerCase().trim();
+      const empBday = String(p.birthday || p.birthdate || p.birth_date || p.metadata?.birthday || "").toLowerCase().trim();
       const matchesSearch = !query ||
         email.includes(query) ||
         name.includes(query) ||
         company.includes(query) ||
         role.includes(query) ||
-        branch.includes(query);
+        branch.includes(query) ||
+        empBday.includes(query);
 
       // Tab filter
       let matchesFilter = true;
@@ -430,7 +434,11 @@ export default function EmployeeDirectoryPanel({
       // Branch filter
       const matchesBranch = selectedBranchFilter === "all" || (p.branch || "").trim().toLowerCase() === selectedBranchFilter.toLowerCase().trim();
 
-      return matchesSearch && matchesFilter && matchesSubsidiary && matchesBranch;
+      // Birthday filter
+      const bdayTerm = birthdayFilter.trim().toLowerCase();
+      const matchesBirthday = !bdayTerm || empBday.includes(bdayTerm);
+
+      return matchesSearch && matchesFilter && matchesSubsidiary && matchesBranch && matchesBirthday;
     }).sort((a, b) => {
       const aEmail = a.email?.toLowerCase() || "";
       const bEmail = b.email?.toLowerCase() || "";
@@ -577,6 +585,7 @@ export default function EmployeeDirectoryPanel({
       company: defComp,
       role: "Team Member",
       branch: defBranch,
+      birthday: "",
       isApproved: true
     });
     setIsAddModalOpen(true);
@@ -646,12 +655,14 @@ export default function EmployeeDirectoryPanel({
         company: newEmployee.company,
         role: newEmployee.role,
         branch: assignedBranch,
+        birthday: newEmployee.birthday || "",
         is_preregistered: true,
         login_enabled: true,
         created_by: "admin@hrhub.com",
         created_by_email: "admin@hrhub.com",
         metadata: {
           created_by: "admin@hrhub.com",
+          birthday: newEmployee.birthday || "",
           pre_registered: true,
           is_preregistered: true,
           login_enabled: true
@@ -1143,6 +1154,26 @@ export default function EmployeeDirectoryPanel({
             </div>
           </div>
 
+          {/* Birthday Textbox Filter */}
+          <div className="w-full md:w-52 shrink-0">
+            <div className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs text-slate-800 focus-within:border-emerald-500 focus-within:bg-white focus-within:ring-2 focus-within:ring-emerald-100 transition shadow-2xs">
+              <Cake size={13} className="text-rose-500 shrink-0" />
+              <input
+                type="text"
+                value={birthdayFilter}
+                onChange={(e) => setBirthdayFilter(e.target.value)}
+                placeholder="Birthday (e.g. 1995, Nov, 24)..."
+                title="Search or filter employees by birthday"
+                className="w-full border-0 bg-transparent text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none font-medium"
+              />
+              {birthdayFilter && (
+                <button type="button" onClick={() => setBirthdayFilter("")} className="text-slate-400 hover:text-slate-600 cursor-pointer">
+                  <X size={12} />
+                </button>
+              )}
+            </div>
+          </div>
+
           {/* Dropdown Filters and View Mode Switcher */}
           <div className="flex items-center gap-1.5 flex-wrap sm:flex-nowrap shrink-0">
             {/* Status Filter Dropdown */}
@@ -1441,6 +1472,10 @@ export default function EmployeeDirectoryPanel({
                       <MapPin size={12} className="text-emerald-600 shrink-0" />
                       <span className="truncate">{branch}</span>
                     </p>
+                    <p className="text-slate-600 truncate flex items-center gap-1.5 font-medium">
+                      <Cake size={12} className="text-rose-500 shrink-0" />
+                      <span className="truncate">Birthday: <strong className={prof.birthday || prof.birthdate || prof.metadata?.birthday ? "text-slate-800" : "text-slate-400 font-normal italic"}>{prof.birthday || prof.birthdate || prof.metadata?.birthday || "Not set (Click Edit)"}</strong></span>
+                    </p>
                     {requirementsCount > 0 && (
                       <div className="pt-0.5 flex items-center gap-1.5">
                         <span className="inline-flex items-center gap-1 text-[9px] font-bold text-emerald-800 bg-emerald-50 px-1.5 py-0.2 rounded-full border border-emerald-200">
@@ -1561,6 +1596,7 @@ export default function EmployeeDirectoryPanel({
                   <th className="py-2 px-3">Employee</th>
                   <th className="py-2 px-3">Organization & Branch</th>
                   <th className="py-2 px-3">Role</th>
+                  <th className="py-2 px-3">Birthday</th>
                   <th className="py-2 px-3">Status</th>
                   <th className="py-2 px-3">Access</th>
                   <th className="py-2 px-3 text-right">Actions</th>
@@ -1643,6 +1679,17 @@ export default function EmployeeDirectoryPanel({
                             </span>
                           )}
                         </div>
+                      </td>
+
+                      <td className="py-2 px-3 whitespace-nowrap text-slate-600">
+                        {prof.birthday || prof.birthdate || prof.metadata?.birthday ? (
+                          <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-rose-800 bg-rose-50 border border-rose-200/60 px-2 py-0.5 rounded-md">
+                            <Cake size={11} className="text-rose-500 shrink-0" />
+                            <span>{prof.birthday || prof.birthdate || prof.metadata?.birthday}</span>
+                          </span>
+                        ) : (
+                          <span className="text-[10px] text-slate-400 italic">Not set</span>
+                        )}
                       </td>
 
                       <td className="py-2 px-3 whitespace-nowrap">
@@ -1864,6 +1911,23 @@ export default function EmployeeDirectoryPanel({
                     <option key={br} value={br}>{br}</option>
                   ))}
                 </select>
+              </div>
+
+              {/* Birthday */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                  <Cake size={13} className="text-rose-500" />
+                  <span>Birthday / Date of Birth</span>
+                </label>
+                <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-xs focus-within:border-emerald-500 focus-within:bg-white focus-within:ring-2 focus-within:ring-emerald-100 transition">
+                  <Calendar size={14} className="text-slate-400 shrink-0" />
+                  <input
+                    type="date"
+                    value={newEmployee.birthday || ""}
+                    onChange={(e) => setNewEmployee({ ...newEmployee, birthday: e.target.value })}
+                    className="w-full border-0 bg-transparent text-slate-800 font-medium focus:outline-none cursor-pointer"
+                  />
+                </div>
               </div>
 
               <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-3 flex items-start gap-2.5">

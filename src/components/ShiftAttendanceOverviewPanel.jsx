@@ -19,7 +19,8 @@ import {
   getTodayDateStr,
   formatDateToMMDDYYYY,
   calculateHoursWorked,
-  HR_WORK_CATEGORIES
+  HR_WORK_CATEGORIES,
+  isHRMDUser
 } from "../lib/hrWorkLogsStorage.js";
 
 // Helper to get formatted current time e.g. "09:30 AM"
@@ -58,7 +59,7 @@ export default function ShiftAttendanceOverviewPanel({
   // New Work Log Entry Form State
   const [newEntry, setNewEntry] = useState({
     taskProject: "",
-    category: "General HR Admin",
+    category: "Shift Attendance & Station Check-in",
     startTime: "08:00 AM",
     endTime: getCurrentFormattedTime(),
     progressComments: "",
@@ -115,10 +116,13 @@ export default function ShiftAttendanceOverviewPanel({
     };
   }, [loadData]);
 
-  // Unique HR Officers in logs
+  // Unique HR Officers in logs (Excluding specifically Head Office HRMD Master Account who serves as the monitor)
   const hrOfficersList = useMemo(() => {
     const map = new Map();
     logs.forEach((l) => {
+      if (isHRMDUser({ role: l.authorRole, name: l.authorName, email: l.authorEmail })) {
+        return; // Exclude HRMD Master Account
+      }
       if (l.authorEmail) {
         map.set(l.authorEmail.toLowerCase(), {
           name: l.authorName || l.authorEmail.split("@")[0],
@@ -134,12 +138,19 @@ export default function ShiftAttendanceOverviewPanel({
   // Filtered Logs
   const filteredLogs = useMemo(() => {
     return logs.filter((l) => {
+      // Exclude specifically HRMD Master Account from staff logs (HRMD monitors the records)
+      if (isHRMDUser({ role: l.authorRole, name: l.authorName, email: l.authorEmail })) {
+        return false;
+      }
       if (selectedDate && l.date !== selectedDate) return false;
       if (selectedSubsidiary !== "all") {
         if (!matchesCompanyEntity(l.company, selectedSubsidiary)) return false;
       }
       if (selectedCategory !== "all") {
-        if (l.category !== selectedCategory) return false;
+        const itemCat = (l.category === "General HR Admin" || !l.category || (l.taskProject || "").toLowerCase().includes("shift login") || (l.taskProject || "").toLowerCase().includes("check-in") || (l.taskProject || "").toLowerCase().includes("station portal"))
+          ? "Shift Attendance & Station Check-in"
+          : (l.category || "Corporate Policy & Administrative");
+        if (itemCat !== selectedCategory) return false;
       }
       if (selectedStatus !== "all") {
         if ((l.status || "").toLowerCase() !== selectedStatus.toLowerCase()) return false;
@@ -153,7 +164,10 @@ export default function ShiftAttendanceOverviewPanel({
         const commMatch = (l.progressComments || "").toLowerCase().includes(q);
         const nameMatch = (l.authorName || "").toLowerCase().includes(q);
         const compMatch = (l.company || "").toLowerCase().includes(q);
-        const catMatch = (l.category || "").toLowerCase().includes(q);
+        const effectiveCat = (l.category === "General HR Admin" || !l.category || (l.taskProject || "").toLowerCase().includes("shift login") || (l.taskProject || "").toLowerCase().includes("check-in") || (l.taskProject || "").toLowerCase().includes("station portal"))
+          ? "Shift Attendance & Station Check-in"
+          : (l.category || "Corporate Policy & Administrative");
+        const catMatch = effectiveCat.toLowerCase().includes(q);
         if (!taskMatch && !commMatch && !nameMatch && !compMatch && !catMatch) return false;
       }
       return true;
@@ -162,7 +176,8 @@ export default function ShiftAttendanceOverviewPanel({
 
   // Live Executive KPI Metrics
   const stats = useMemo(() => {
-    const todayLogs = logs.filter((l) => l.date === selectedDate);
+    const nonAdminLogs = logs.filter((l) => !isHRMDUser({ role: l.authorRole, name: l.authorName, email: l.authorEmail }));
+    const todayLogs = nonAdminLogs.filter((l) => l.date === selectedDate);
     const totalEntries = todayLogs.length;
 
     let totalMinutes = 0;
@@ -620,9 +635,19 @@ export default function ShiftAttendanceOverviewPanel({
 
                       {/* 3. Category */}
                       <td className="py-2.5 px-3">
-                        <span className="inline-block px-2 py-0.5 rounded-md text-[10px] font-semibold bg-slate-100 text-slate-700 border border-slate-200/80 leading-tight">
-                          {item.category || "General HR Admin"}
-                        </span>
+                        {(() => {
+                          const catName = (item.category === "General HR Admin" || !item.category || (item.taskProject || "").toLowerCase().includes("shift login") || (item.taskProject || "").toLowerCase().includes("check-in") || (item.taskProject || "").toLowerCase().includes("station portal"))
+                            ? "Shift Attendance & Station Check-in"
+                            : (item.category || "Corporate Policy & Administrative");
+                          const catObj = HR_WORK_CATEGORIES.find(c => c.label.toLowerCase() === catName.toLowerCase()) || {
+                            color: "bg-teal-50 text-teal-800 border-teal-200"
+                          };
+                          return (
+                            <span className={`inline-block px-2 py-0.5 rounded-md text-[10px] font-semibold border leading-tight ${catObj.color || "bg-teal-50 text-teal-800 border-teal-200"}`}>
+                              {catName}
+                            </span>
+                          );
+                        })()}
                       </td>
 
                       {/* 4. Time & Duration */}
@@ -695,7 +720,7 @@ export default function ShiftAttendanceOverviewPanel({
       {/* ============================================================ */}
       {isAddModalOpen && (
         <div
-          className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-2xs flex items-center justify-center p-3 animate-in fade-in"
+          className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-2xs flex items-start justify-center p-3 pt-6 sm:pt-10 overflow-y-auto animate-in fade-in"
           onClick={() => setIsAddModalOpen(false)}
         >
           <div

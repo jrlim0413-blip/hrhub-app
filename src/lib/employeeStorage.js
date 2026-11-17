@@ -47,9 +47,13 @@ const INITIAL_DIRECTORY = [
     name: "Remark Joy Gaviola",
     company: "Lucky Betplay Corporation",
     role: "Team Member",
+    birthday: "1994-08-16",
     is_approved: true,
     login_enabled: false,
-    created_at: "2026-10-15T00:00:00.000Z"
+    created_at: "2026-10-15T00:00:00.000Z",
+    metadata: {
+      birthday: "1994-08-16"
+    }
   },
   {
     id: "e159a891-36ad-444c-b7d1-a991a2e0a8a7",
@@ -57,9 +61,13 @@ const INITIAL_DIRECTORY = [
     name: "Caquennie6",
     company: "Simpal Group of Companies",
     role: "Team Member",
+    birthday: "1996-05-24",
     is_approved: true,
     login_enabled: true,
-    created_at: "2026-10-09T13:45:51.365Z"
+    created_at: "2026-10-09T13:45:51.365Z",
+    metadata: {
+      birthday: "1996-05-24"
+    }
   },
   {
     id: "admin-hrmd-master",
@@ -67,9 +75,13 @@ const INITIAL_DIRECTORY = [
     name: "H R M D",
     company: "Simpal Group of Companies",
     role: "HR Administrator",
+    birthday: "1990-01-01",
     is_approved: true,
     login_enabled: true,
-    created_at: "2026-08-01T00:00:00.000Z"
+    created_at: "2026-08-01T00:00:00.000Z",
+    metadata: {
+      birthday: "1990-01-01"
+    }
   }
 ];
 
@@ -391,17 +403,26 @@ function ensureHrmdAdmin(storeMap) {
       name: "H R M D",
       company: "Simpal Group of Companies",
       role: "HR Administrator",
+      birthday: "1990-01-01",
       is_approved: true,
       login_enabled: true,
-      created_at: new Date().toISOString()
+      created_at: new Date().toISOString(),
+      metadata: {
+        birthday: "1990-01-01"
+      }
     });
   } else {
     storeMap.set(HRMD_ADMIN_EMAIL, {
       ...existing,
       name: "H R M D",
       role: "HR Administrator",
+      birthday: existing.birthday || "1990-01-01",
       is_approved: true,
-      login_enabled: true
+      login_enabled: true,
+      metadata: {
+        ...(existing.metadata || {}),
+        birthday: existing.birthday || existing.metadata?.birthday || "1990-01-01"
+      }
     });
   }
 }
@@ -455,9 +476,12 @@ export async function saveStoredEmployee(employee) {
         ? employee.metadata.login_enabled
         : targetEmail === "admin@hrhub.com";
 
+  const bday = employee.birthday || existing.birthday || employee.birthdate || employee.metadata?.birthday || existing.metadata?.birthday || "";
+
   const meta = {
     ...(existing.metadata || {}),
     ...(employee.metadata || {}),
+    birthday: bday,
     login_enabled: isLogin,
     created_by: employee.created_by || existing.created_by || employee.metadata?.created_by || existing.metadata?.created_by || "",
     branch: employee.branch || existing.branch || "",
@@ -475,6 +499,7 @@ export async function saveStoredEmployee(employee) {
     role: employee.role || existing.role || "Team Member",
     branch: employee.branch || existing.branch || meta.branch || "",
     phone: employee.phone || existing.phone || meta.phone || "",
+    birthday: bday,
     created_by: createdBy,
     created_by_email: createdBy,
     login_enabled: isLogin,
@@ -857,6 +882,12 @@ export function mergeProfilesWithStored(supabaseProfiles = []) {
       isApproved = sp.is_approved;
     }
 
+    const bday = sp.birthday || sp.birthdate || sp.birth_date || existing?.birthday || meta.birthday || "";
+    const mergedMeta = {
+      ...meta,
+      birthday: bday
+    };
+
     mergedMap.set(emailKey, {
       id: sp.id || existing?.id || `db-${Date.now()}`,
       email: sp.email.trim(),
@@ -865,9 +896,10 @@ export function mergeProfilesWithStored(supabaseProfiles = []) {
       role: existing?.role || sp.role || "Team Member",
       branch: sp.branch || existing?.branch || meta.branch || "",
       phone: sp.phone || existing?.phone || meta.phone || "",
+      birthday: bday,
       created_by: createdBy,
       created_by_email: createdBy,
-      metadata: meta,
+      metadata: mergedMeta,
       is_approved: isApproved,
       created_at: sp.created_at || existing?.created_at || new Date().toISOString()
     });
@@ -883,14 +915,20 @@ export function mergeProfilesWithStored(supabaseProfiles = []) {
         name: "Remark Joy Gaviola",
         company: "Lucky Betplay Corporation",
         role: "Team Member",
+        birthday: "1994-08-16",
         is_approved: true,
-        created_at: "2026-10-15T00:00:00.000Z"
+        created_at: "2026-10-15T00:00:00.000Z",
+        metadata: {
+          birthday: "1994-08-16"
+        }
       });
     } else {
       const remark = mergedMap.get(REMARK_EMAIL);
       if (!remark.name || remark.name === "Remarkjoymark") remark.name = "Remark Joy Gaviola";
       if (!remark.company) remark.company = "Lucky Betplay Corporation";
       if (!remark.role) remark.role = "Team Member";
+      if (!remark.birthday) remark.birthday = "1994-08-16";
+      if (remark.metadata) remark.metadata.birthday = remark.birthday || "1994-08-16";
       remark.is_approved = true;
     }
   }

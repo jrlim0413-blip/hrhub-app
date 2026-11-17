@@ -298,7 +298,7 @@ export default function AgentsPanel({ onClose, currentUser = null }) {
             <Bot size={18} />
           </div>
           <div>
-            <h3 className="text-base font-bold text-slate-900 tracking-tight leading-tight">Agents & Field Tellers Directory</h3>
+            <h3 className="text-base font-bold text-slate-900 tracking-tight leading-tight">Agents Directory</h3>
             <p className="text-[11px] text-slate-500 mt-0.5">
               {loaded ? (
                 <>
