@@ -185,16 +185,49 @@ const App = () => {
       }
     }
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (session?.user) {
         const email = session.user.email || "admin@hrhub.com";
         const isDefaultAdmin = email.toLowerCase() === "admin@hrhub.com";
-        const name = isDefaultAdmin ? "H R M D" : email.split("@")[0].replace(/[._]/g, " ").replace(/\b\w/g, (l) => l.toUpperCase());
+        let resolvedName = isDefaultAdmin ? "H R M D" : email.split("@")[0].replace(/[._]/g, " ").replace(/\b\w/g, (l) => l.toUpperCase());
+        let resolvedCompany = isDefaultAdmin ? "Simpal Group of Companies" : "";
+        let resolvedRole = isDefaultAdmin ? "HR Administrator" : "Team Member";
+        let resolvedBranch = isDefaultAdmin ? "Head Office (SGC)" : "";
+
+        try {
+          const { data: emp } = await supabase
+            .from("employees")
+            .select("*")
+            .ilike("email", email)
+            .maybeSingle();
+
+          const dbProf = emp || (await supabase.from("profiles").select("*").ilike("email", email).maybeSingle()).data;
+          if (dbProf) {
+            if (dbProf.name && dbProf.name !== "Admin" && dbProf.name !== "Super Administrator") resolvedName = dbProf.name;
+            if (dbProf.company) resolvedCompany = dbProf.company;
+            if (dbProf.role && dbProf.role !== "Super Administrator") resolvedRole = dbProf.role;
+            if (dbProf.branch) resolvedBranch = dbProf.branch;
+          } else {
+            const stored = getStoredEmployees();
+            const localEmp = stored.find((e) => (e.email || "").toLowerCase() === email.toLowerCase());
+            if (localEmp) {
+              if (localEmp.name && localEmp.name !== "Admin") resolvedName = localEmp.name;
+              if (localEmp.company) resolvedCompany = localEmp.company;
+              if (localEmp.role) resolvedRole = localEmp.role;
+              if (localEmp.branch) resolvedBranch = localEmp.branch;
+            }
+          }
+        } catch (err) {
+          console.warn("getSession user lookup notice:", err);
+        }
+
         const userObj = {
           id: session.user.id,
           email,
-          name,
-          role: "HR Administrator",
+          name: resolvedName,
+          role: resolvedRole,
+          company: resolvedCompany || (isDefaultAdmin ? "Simpal Group of Companies" : "Lucky Betplay Corporation"),
+          branch: resolvedBranch || (isDefaultAdmin ? "Head Office (SGC)" : "Branch Station"),
           is_approved: true,
           source: "supabase"
         };
@@ -280,9 +313,7 @@ const App = () => {
           return;
         }
 
-        let empRole = trimmedEmail.toLowerCase() === "admin@hrhub.com" ? "HR Administrator" : "Team Member";
-        let empCompany = "Simpal Group of Companies";
-        let empName = name;
+        const isDefaultAdmin = trimmedEmail.toLowerCase() === "admin@hrhub.com";
         let empRecord = null;
         try {
           const { data: empInfo } = await supabase
@@ -290,20 +321,35 @@ const App = () => {
             .select("*")
             .ilike("email", trimmedEmail)
             .maybeSingle();
-          if (empInfo) {
-            empRecord = empInfo;
-            if (empInfo.role) empRole = empInfo.role;
-            if (empInfo.company) empCompany = empInfo.company;
-            if (empInfo.name) empName = empInfo.name;
-          }
+          if (empInfo) empRecord = empInfo;
         } catch {}
+
+        if (!empRecord) {
+          try {
+            const { data: profInfo } = await supabase
+              .from("profiles")
+              .select("*")
+              .ilike("email", trimmedEmail)
+              .maybeSingle();
+            if (profInfo) empRecord = profInfo;
+          } catch {}
+        }
 
         if (!empRecord) {
           const stored = getStoredEmployees();
           empRecord = stored.find((e) => (e.email || "").toLowerCase() === trimmedEmail.toLowerCase());
         }
 
-        if (trimmedEmail.toLowerCase() !== "admin@hrhub.com" && empRecord && !isEmployeeLoginEnabled(empRecord)) {
+        let empName = (empRecord?.name && empRecord.name !== "Admin" && empRecord.name !== "Super Administrator")
+          ? empRecord.name
+          : (isDefaultAdmin ? "H R M D" : trimmedEmail.split("@")[0].replace(/[._]/g, " ").replace(/\b\w/g, (l) => l.toUpperCase()));
+        let empRole = (empRecord?.role && empRecord.role !== "Super Administrator")
+          ? empRecord.role
+          : (isDefaultAdmin ? "HR Administrator" : "Team Member");
+        let empCompany = empRecord?.company || (isDefaultAdmin ? "Simpal Group of Companies" : "");
+        let empBranch = empRecord?.branch || (isDefaultAdmin ? "Head Office (SGC)" : "");
+
+        if (!isDefaultAdmin && empRecord && !isEmployeeLoginEnabled(empRecord)) {
           setLoginError("Login access is not enabled for this employee profile. This account is currently configured for HR profiling only. Please contact Central HRMD or Head Office to grant portal access.");
           setIsSubmittingAuth(false);
           return;
@@ -315,6 +361,7 @@ const App = () => {
           name: empName,
           role: empRole,
           company: empCompany,
+          branch: empBranch,
           is_approved: profile ? profile.is_approved : true,
           source: "supabase"
         };
@@ -338,8 +385,9 @@ const App = () => {
         let isApprovedStatus = true;
         let isDefaultAdmin = trimmedEmail.toLowerCase() === "admin@hrhub.com";
         let effectiveName = isDefaultAdmin ? "H R M D" : trimmedEmail.split("@")[0].replace(/[._]/g, " ").replace(/\b\w/g, (l) => l.toUpperCase());
-        let effectiveCompany = "Simpal Group of Companies";
+        let effectiveCompany = isDefaultAdmin ? "Simpal Group of Companies" : "";
         let effectiveRole = isDefaultAdmin ? "HR Administrator" : "Team Member";
+        let effectiveBranch = isDefaultAdmin ? "Head Office (SGC)" : "";
         let effectiveId = `act-${Date.now()}`;
         let dbProf = null;
 
@@ -368,6 +416,7 @@ const App = () => {
             if (dbProf.name && dbProf.name !== "Admin" && dbProf.name !== "Super Administrator") effectiveName = dbProf.name;
             if (dbProf.company) effectiveCompany = dbProf.company;
             if (dbProf.role && dbProf.role !== "Super Administrator") effectiveRole = dbProf.role;
+            if (dbProf.branch) effectiveBranch = dbProf.branch;
             if (dbProf.id) effectiveId = dbProf.id;
           } else {
             const stored = getStoredEmployees();
@@ -378,6 +427,7 @@ const App = () => {
               if (effective.name && effective.name !== "Admin" && effective.name !== "Super Administrator") effectiveName = effective.name;
               if (effective.company) effectiveCompany = effective.company;
               if (effective.role && effective.role !== "Super Administrator") effectiveRole = effective.role;
+              if (effective.branch) effectiveBranch = effective.branch;
               if (effective.id) effectiveId = effective.id;
             }
           }
@@ -402,7 +452,8 @@ const App = () => {
           email: trimmedEmail,
           name: effectiveName,
           role: effectiveRole,
-          company: effectiveCompany,
+          company: effectiveCompany || (isDefaultAdmin ? "Simpal Group of Companies" : "Lucky Betplay Corporation"),
+          branch: effectiveBranch || (isDefaultAdmin ? "Head Office (SGC)" : "Branch Station"),
           is_approved: true,
           source: "activated"
         };

@@ -46,7 +46,7 @@ const INITIAL_DIRECTORY = [
     email: "remarkjoymark@gmail.com",
     name: "Remark Joy Gaviola",
     company: "Lucky Betplay Corporation",
-    role: "Team Member",
+    role: "CUSTOMER SERVICE REPRESENTATIVE",
     birthday: "1994-08-16",
     is_approved: true,
     login_enabled: false,
@@ -914,7 +914,7 @@ export function mergeProfilesWithStored(supabaseProfiles = []) {
         email: REMARK_EMAIL,
         name: "Remark Joy Gaviola",
         company: "Lucky Betplay Corporation",
-        role: "Team Member",
+        role: "CUSTOMER SERVICE REPRESENTATIVE",
         birthday: "1994-08-16",
         is_approved: true,
         created_at: "2026-10-15T00:00:00.000Z",
@@ -926,7 +926,7 @@ export function mergeProfilesWithStored(supabaseProfiles = []) {
       const remark = mergedMap.get(REMARK_EMAIL);
       if (!remark.name || remark.name === "Remarkjoymark") remark.name = "Remark Joy Gaviola";
       if (!remark.company) remark.company = "Lucky Betplay Corporation";
-      if (!remark.role) remark.role = "Team Member";
+      if (!remark.role || remark.role === "Team Member") remark.role = "CUSTOMER SERVICE REPRESENTATIVE";
       if (!remark.birthday) remark.birthday = "1994-08-16";
       if (remark.metadata) remark.metadata.birthday = remark.birthday || "1994-08-16";
       remark.is_approved = true;

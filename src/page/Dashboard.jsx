@@ -536,6 +536,58 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
     }
   }, [currentUser]);
 
+  // Direct database profile sync: guarantee logged-in user profile, company, and role match the official Employee Directory
+  useEffect(() => {
+    if (!currentUser?.email) return;
+    const targetEmail = currentUser.email.toLowerCase().trim();
+
+    const syncProfileFromDatabase = async () => {
+      try {
+        const { data: emp } = await supabase
+          .from("employees")
+          .select("*")
+          .ilike("email", targetEmail)
+          .maybeSingle();
+
+        const dbUser = emp || (await supabase.from("profiles").select("*").ilike("email", targetEmail).maybeSingle()).data;
+
+        if (dbUser) {
+          const isDefaultHrmd =
+            targetEmail === "admin@hrhub.com" ||
+            dbUser.name === "Admin" ||
+            dbUser.name === "Super Administrator" ||
+            dbUser.name?.toLowerCase() === "hrmd";
+
+          const effName = isDefaultHrmd ? "H R M D" : (dbUser.name || currentUser.name);
+          const effCompany = isDefaultHrmd ? "Simpal Group of Companies" : (dbUser.company || currentUser.company);
+          const effRole = isDefaultHrmd ? "HR Administrator" : (dbUser.role || currentUser.role);
+
+          if (effName) setProfileName(effName);
+          if (effCompany) setProfileCompany(effCompany);
+          if (effRole) setProfileRole(effRole);
+
+          try {
+            const raw = localStorage.getItem("hrhub_auth_user");
+            if (raw) {
+              const current = JSON.parse(raw);
+              localStorage.setItem("hrhub_auth_user", JSON.stringify({
+                ...current,
+                name: effName,
+                company: effCompany,
+                role: effRole,
+                branch: dbUser.branch || current.branch
+              }));
+            }
+          } catch {}
+        }
+      } catch (err) {
+        console.warn("syncProfileFromDatabase notice:", err);
+      }
+    };
+
+    syncProfileFromDatabase();
+  }, [currentUser?.email]);
+
   const userInitials = profileName
     ? (profileName.replace(/\s+/g, "").toLowerCase() === "hrmd"
         ? "HR"
