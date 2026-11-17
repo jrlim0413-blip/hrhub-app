@@ -156,50 +156,88 @@ export function calculateHoursWorked(startTimeStr, endTimeStr) {
 }
 
 /**
- * Normalizes a record from the database to clean frontend camelCase format
+ * Normalizes a record from the database to clean frontend camelCase format.
+ * Features Smart Heartbeat Inactivity Detection:
+ * - If elapsed time since last active heartbeat is > 7 minutes (laptop closed / off),
+ *   it dynamically transitions to 'Completed' with the last known active time as end_time.
+ * - If elapsed time is between 2 and 7 minutes, it dynamically displays as 'AFK (IDLE)'.
  */
 function normalizeLogRecord(raw) {
   if (!raw) return null;
   const rawStatus = String(raw.status || "");
-  const isAfk = rawStatus.toUpperCase() === "AFK" || rawStatus.toLowerCase().includes("afk") || String(raw.progress_comments || "").includes("[Idle]");
-  const isOngoing =
-    isAfk ||
+  const isReportedActive =
     rawStatus === "In Progress" ||
     rawStatus === "Ongoing" ||
     rawStatus === "in_progress" ||
+    rawStatus === "AFK" ||
+    rawStatus === "afk" ||
     raw.end_time === "Active" ||
     raw.endTime === "Active";
 
-  const numericDuration = Number(raw.hours_worked || raw.hoursWorked || 0);
-  const formattedDuration = isAfk
-    ? "Idle / AFK"
-    : isOngoing
-      ? "Active Now"
-      : numericDuration > 0
-        ? numericDuration % 1 === 0
-          ? `${numericDuration} hr${numericDuration === 1 ? "" : "s"}`
-          : `${numericDuration.toFixed(1)} hrs`
-        : "--";
+  // Calculate elapsed minutes since last active heartbeat
+  const lastActiveTimestamp = raw.updated_at || raw.created_at;
+  let elapsedMinutes = 0;
+  if (lastActiveTimestamp) {
+    const lastActiveMs = new Date(lastActiveTimestamp).getTime();
+    if (!isNaN(lastActiveMs)) {
+      elapsedMinutes = Math.max(0, (Date.now() - lastActiveMs) / (60 * 1000));
+    }
+  }
 
-  const progressText = raw.progress_comments || raw.progressComments || "";
-  const isAuto = Boolean(raw.is_auto_logged || raw.isAutoLogged || progressText.includes("[Auto-Logged]"));
+  // If last heartbeat is > 7 minutes old, laptop is closed / user is offline
+  const isStaleExpired = isReportedActive && elapsedMinutes > 7;
+
+  // Active AFK: either explicitly AFK, or inactive for 2-7 minutes
+  const isAfk = !isStaleExpired && isReportedActive && (
+    rawStatus.toUpperCase() === "AFK" ||
+    rawStatus.toLowerCase().includes("afk") ||
+    String(raw.progress_comments || "").includes("[Idle]") ||
+    elapsedMinutes >= 2
+  );
+
+  const isOngoing = isReportedActive && !isStaleExpired;
+
   const taskTitle = raw.task_project || raw.taskProject || "General HR Task";
   let normalizedCat = raw.category || "";
   if (!normalizedCat || normalizedCat === "General HR Admin" || taskTitle.toLowerCase().includes("shift login") || taskTitle.toLowerCase().includes("check-in")) {
     normalizedCat = "Shift Attendance & Station Check-in";
   }
 
+  const effectiveStartTime = raw.start_time || raw.startTime || "8:00 AM";
+  const effectiveEndTime = isOngoing
+    ? "Active"
+    : raw.end_time && raw.end_time !== "Active"
+      ? raw.end_time
+      : lastActiveTimestamp
+        ? formatTimeAMPM(new Date(lastActiveTimestamp))
+        : "5:00 PM";
+
+  const calc = calculateHoursWorked(effectiveStartTime, effectiveEndTime);
+  const numericDuration = isOngoing ? 0 : (Number(raw.hours_worked || raw.hoursWorked || 0) || calc.numericHours);
+  const formattedDuration = isAfk
+    ? "Idle / AFK"
+    : isOngoing
+      ? "Active Now"
+      : calc.formatted !== "--"
+        ? calc.formatted
+        : numericDuration > 0
+          ? numericDuration % 1 === 0 ? `${numericDuration} hrs` : `${numericDuration.toFixed(1)} hrs`
+          : "--";
+
+  const progressText = raw.progress_comments || raw.progressComments || "";
+  const isAuto = Boolean(raw.is_auto_logged || raw.isAutoLogged || progressText.includes("[Auto-Logged]"));
+
   return {
     id: String(raw.id || `log_${Date.now()}`),
     date: raw.log_date || raw.date || getTodayDateStr(),
     taskProject: taskTitle,
     category: normalizedCat,
-    startTime: raw.start_time || raw.startTime || "8:00 AM",
-    endTime: isOngoing ? "Active" : (raw.end_time || raw.endTime || "5:00 PM"),
-    hoursWorked: isAfk ? "Idle / AFK" : isOngoing ? "Active Now" : (raw.hours_worked_formatted || formattedDuration),
+    startTime: effectiveStartTime,
+    endTime: effectiveEndTime,
+    hoursWorked: formattedDuration,
     numericHours: numericDuration,
     progressComments: progressText.replace("[Auto-Logged] ", "").replace("[Auto-Logged]", "").trim(),
-    status: isAfk ? "AFK" : isOngoing ? "In Progress" : (raw.status || "Completed"),
+    status: isAfk ? "AFK" : isOngoing ? "In Progress" : (raw.status === "In Progress" ? "Completed" : (raw.status || "Completed")),
     isAfk,
     isAutoLogged: isAuto,
     authorName: raw.author_name || raw.authorName || "HR Officer",
@@ -207,7 +245,8 @@ function normalizeLogRecord(raw) {
     authorRole: raw.author_role || raw.authorRole || "HR Administrator",
     company: raw.company || HEAD_OFFICE,
     branch: raw.branch || "Head Office (SGC)",
-    createdAt: raw.created_at || raw.createdAt || new Date().toISOString()
+    createdAt: raw.created_at || raw.createdAt || new Date().toISOString(),
+    updatedAt: raw.updated_at || raw.updatedAt || raw.created_at || new Date().toISOString()
   };
 }
 
@@ -258,6 +297,9 @@ export async function fetchAllWorkLogs() {
 
       const normalized = uniqueData.map(normalizeLogRecord).filter(Boolean);
       memoryWorkLogsList = normalized;
+
+      // Asynchronously heal database: reconcile stale sessions where laptop was closed / off (> 7 mins)
+      autoReconcileStaleSessions(data);
       if (typeof window !== "undefined") {
         try {
           window.localStorage.setItem(FALLBACK_SETTINGS_KEY, JSON.stringify(normalized));
@@ -285,6 +327,9 @@ export async function fetchAllWorkLogs() {
       }
       const normalized = uniqueData.map(normalizeLogRecord).filter(Boolean);
       memoryWorkLogsList = normalized;
+
+      // Asynchronously heal database: reconcile stale sessions where laptop was closed / off (> 7 mins)
+      autoReconcileStaleSessions(data);
       return normalized;
     }
 
@@ -936,4 +981,121 @@ export function logSystemActivity(user, moduleId, customDetails = {}) {
   if (!user) return null;
   return trackUserActiveModuleSession({ user, moduleId, customDetails });
 }
+
+/**
+ * Auto-Reconciles Stale Expired Sessions in Database:
+ * Detects sessions where the laptop was closed or powered off without checking out (> 7 mins inactive).
+ * Auto-closes them in the database with the last active time as end_time.
+ */
+export async function autoReconcileStaleSessions(rawRows) {
+  if (!Array.isArray(rawRows) || rawRows.length === 0) return;
+  const nowMs = Date.now();
+  const staleRows = [];
+
+  for (const row of rawRows) {
+    const isReportedActive =
+      row.status === "In Progress" ||
+      row.status === "Ongoing" ||
+      row.status === "in_progress" ||
+      row.status === "AFK" ||
+      row.status === "afk" ||
+      row.end_time === "Active";
+
+    if (!isReportedActive) continue;
+
+    const lastActive = row.updated_at || row.created_at;
+    if (!lastActive) continue;
+    const elapsedMinutes = (nowMs - new Date(lastActive).getTime()) / (60 * 1000);
+
+    if (elapsedMinutes > 7) {
+      staleRows.push(row);
+    }
+  }
+
+  if (staleRows.length === 0) return;
+
+  for (const row of staleRows) {
+    const lastActive = row.updated_at || row.created_at;
+    const endTimeStr = formatTimeAMPM(new Date(lastActive));
+    const calc = calculateHoursWorked(row.start_time, endTimeStr);
+
+    try {
+      await supabase
+        .from(TABLE_NAME)
+        .update({
+          status: "Completed",
+          end_time: endTimeStr,
+          hours_worked: calc.numericHours,
+          updated_at: new Date().toISOString()
+        })
+        .eq("id", row.id);
+    } catch (e) {
+      console.warn("Auto-reconcile session update notice:", e);
+    }
+  }
+}
+
+/**
+ * Live User Presence Heartbeat:
+ * Refreshes updated_at timestamp every 45s while user is active on the dashboard.
+ * When laptop is closed, heartbeats stop and session automatically expires after 7 minutes.
+ */
+export async function sendUserHeartbeat({ user, isAfk = false, currentModule = "home" }) {
+  if (!user) return;
+  const userEmail = (user.email || user.authorEmail || user.author_email || "").toLowerCase().trim();
+  const todayStr = getTodayDateStr();
+
+  try {
+    await supabase
+      .from(TABLE_NAME)
+      .update({
+        status: isAfk ? "AFK" : "In Progress",
+        updated_at: new Date().toISOString()
+      })
+      .ilike("author_email", userEmail)
+      .eq("log_date", todayStr)
+      .in("status", ["In Progress", "Ongoing", "in_progress", "AFK", "afk"]);
+  } catch (err) {
+    console.warn("sendUserHeartbeat notice:", err);
+  }
+}
+
+/**
+ * Closes the active session on intentional window unload or logout
+ */
+export async function closeActiveModuleSession({ user }) {
+  if (!user) return;
+  const userEmail = (user.email || user.authorEmail || user.author_email || "").toLowerCase().trim();
+  const todayStr = getTodayDateStr();
+  const now = new Date();
+  const nowTimeStr = formatTimeAMPM(now);
+
+  try {
+    const { data: activeRows } = await supabase
+      .from(TABLE_NAME)
+      .select("*")
+      .ilike("author_email", userEmail)
+      .eq("log_date", todayStr)
+      .in("status", ["In Progress", "Ongoing", "in_progress", "AFK", "afk"]);
+
+    if (Array.isArray(activeRows) && activeRows.length > 0) {
+      for (const row of activeRows) {
+        const dur = calculateHoursWorked(row.start_time, nowTimeStr);
+        await supabase
+          .from(TABLE_NAME)
+          .update({
+            status: "Completed",
+            end_time: nowTimeStr,
+            hours_worked: dur.numericHours,
+            updated_at: now.toISOString()
+          })
+          .eq("id", row.id);
+      }
+      broadcastWorkLogUpdate("work_log_updated");
+    }
+  } catch (err) {
+    console.warn("closeActiveModuleSession notice:", err);
+  }
+}
+
 

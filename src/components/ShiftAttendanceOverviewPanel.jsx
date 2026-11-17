@@ -344,8 +344,8 @@ export default function ShiftAttendanceOverviewPanel({
     <div className="space-y-3 antialiased text-slate-800">
       {/* 1. EXECUTIVE COMPACT HEADER & CONTROL BAR */}
       <div className="bg-white rounded-2xl border border-slate-200/80 p-3 sm:p-4 shadow-2xs space-y-3">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-3 border-b border-slate-100">
-          <div>
+        <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+          <div className="min-w-0">
             <div className="flex items-center gap-1.5 mb-1 flex-wrap">
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 text-[10px] font-bold tracking-tight">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
@@ -371,9 +371,9 @@ export default function ShiftAttendanceOverviewPanel({
             </p>
           </div>
 
-          <div className="flex items-center gap-1.5 flex-wrap shrink-0">
+          <div className="flex items-center gap-1.5 flex-wrap w-full xl:w-auto justify-start xl:justify-end">
             {/* Date Picker */}
-            <div className="flex items-center gap-1 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 shadow-2xs">
+            <div className="flex items-center gap-1 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 shadow-2xs shrink-0">
               <Calendar size={13} className="text-slate-400" />
               <input
                 type="date"
@@ -386,7 +386,7 @@ export default function ShiftAttendanceOverviewPanel({
             <button
               type="button"
               onClick={() => setSelectedDate(getTodayDateStr())}
-              className="px-2 py-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-[11px] font-semibold text-slate-700 transition cursor-pointer"
+              className="px-2.5 py-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-[11px] font-semibold text-slate-700 transition cursor-pointer shrink-0"
             >
               Today
             </button>
@@ -395,7 +395,7 @@ export default function ShiftAttendanceOverviewPanel({
               type="button"
               onClick={loadData}
               disabled={loading}
-              className="p-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 transition cursor-pointer"
+              className="p-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 transition cursor-pointer shrink-0"
               title="Refresh live cloud records"
             >
               <RefreshCw size={13} className={loading ? "animate-spin text-emerald-600" : ""} />
@@ -404,21 +404,21 @@ export default function ShiftAttendanceOverviewPanel({
             <button
               type="button"
               onClick={handleToggleAfk}
-              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[11px] font-bold transition cursor-pointer shadow-2xs active:scale-95 ${
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[11px] font-bold transition cursor-pointer shadow-2xs active:scale-95 whitespace-nowrap shrink-0 ${
                 isMyAfk
                   ? "bg-rose-50 border-rose-300 text-rose-700 hover:bg-rose-100 ring-1 ring-rose-400"
                   : "bg-amber-50 border-amber-300 text-amber-800 hover:bg-amber-100"
               }`}
               title={isMyAfk ? "Currently Idle/AFK. Click to switch back to Active Now." : "Simulate stepping away (AFK / Idle)."}
             >
-              <span className={`w-1.5 h-1.5 rounded-full ${isMyAfk ? "bg-rose-500 animate-ping" : "bg-amber-500"}`}></span>
+              <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isMyAfk ? "bg-rose-500 animate-ping" : "bg-amber-500"}`}></span>
               <span>{isMyAfk ? "🌙 AFK (Idle)" : "⚡ Simulate AFK"}</span>
             </button>
 
             <button
               type="button"
               onClick={handlePrint}
-              className="inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-[11px] font-semibold text-slate-700 transition cursor-pointer"
+              className="inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-[11px] font-semibold text-slate-700 transition cursor-pointer whitespace-nowrap shrink-0"
             >
               <Printer size={12} className="text-slate-500" />
               <span>Print DTR</span>
@@ -427,7 +427,7 @@ export default function ShiftAttendanceOverviewPanel({
             <button
               type="button"
               onClick={() => setIsAddModalOpen(true)}
-              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-bold text-[11px] transition cursor-pointer shadow-2xs active:scale-95"
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-bold text-[11px] transition cursor-pointer shadow-2xs active:scale-95 whitespace-nowrap shrink-0"
             >
               <Plus size={13} className="text-emerald-400" />
               <span>+ Log Task</span>

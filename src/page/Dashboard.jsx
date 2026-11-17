@@ -59,7 +59,7 @@ import {
   markThreadAsRead,
   formatMessengerTime
 } from "../lib/chatService";
-import { autoLogHRAction, logSystemActivity, updateUserPresenceStatus, isHRMDUser, getTodayDateStr } from "../lib/hrWorkLogsStorage";
+import { autoLogHRAction, logSystemActivity, updateUserPresenceStatus, isHRMDUser, getTodayDateStr, sendUserHeartbeat, closeActiveModuleSession } from "../lib/hrWorkLogsStorage";
 import { isHeadOffice, isGlobalAccessUser, getUserAssignedStlEntity } from "../lib/companyEntities";
 
 function formatTimeAgo(dateString) {
@@ -810,6 +810,24 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
     };
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
+    // Continuous Presence Heartbeat ticker: keeps updated_at fresh every 45s while active.
+    // When laptop lid is closed or machine powers off, heartbeats stop and system marks offline in 7 mins.
+    const heartbeatInterval = setInterval(() => {
+      const currentMod = activeView === "communication" ? communicationTab : (workspaceTab || "home");
+      sendUserHeartbeat({
+        user: userPayload,
+        isAfk: isUserAfkRef.current,
+        currentModule: currentMod
+      });
+    }, 45000);
+
+    // Handle tab / browser close gracefully
+    const handleUnload = () => {
+      closeActiveModuleSession({ user: userPayload });
+    };
+    window.addEventListener("beforeunload", handleUnload);
+    window.addEventListener("pagehide", handleUnload);
+
     return () => {
       window.removeEventListener("mousemove", throttledInteraction);
       window.removeEventListener("keydown", handleUserInteraction);
@@ -818,7 +836,10 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
       window.removeEventListener("touchstart", handleUserInteraction);
       window.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("hrhub_toggle_afk", handleCustomAfkToggle);
+      window.removeEventListener("beforeunload", handleUnload);
+      window.removeEventListener("pagehide", handleUnload);
       clearInterval(interval);
+      clearInterval(heartbeatInterval);
       if (hideTimer) clearTimeout(hideTimer);
     };
   }, [currentUser, profileName, profileEmail, profileRole, profileCompany, activeView, communicationTab, workspaceTab]);
