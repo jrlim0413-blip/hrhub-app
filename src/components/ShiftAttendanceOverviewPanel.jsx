@@ -116,13 +116,10 @@ export default function ShiftAttendanceOverviewPanel({
     };
   }, [loadData]);
 
-  // Unique HR Officers in logs (Excluding specifically Head Office HRMD Master Account who serves as the monitor)
+  // Unique HR Officers in logs
   const hrOfficersList = useMemo(() => {
     const map = new Map();
     logs.forEach((l) => {
-      if (isHRMDUser({ role: l.authorRole, name: l.authorName, email: l.authorEmail })) {
-        return; // Exclude HRMD Master Account
-      }
       if (l.authorEmail) {
         map.set(l.authorEmail.toLowerCase(), {
           name: l.authorName || l.authorEmail.split("@")[0],
@@ -135,14 +132,14 @@ export default function ShiftAttendanceOverviewPanel({
     return Array.from(map.values());
   }, [logs]);
 
+  // Date-filtered logs for synchronized subsidiary counters and metrics
+  const dateLogs = useMemo(() => {
+    return logs.filter((l) => !selectedDate || l.date === selectedDate);
+  }, [logs, selectedDate]);
+
   // Filtered Logs
   const filteredLogs = useMemo(() => {
-    return logs.filter((l) => {
-      // Exclude specifically HRMD Master Account from staff logs (HRMD monitors the records)
-      if (isHRMDUser({ role: l.authorRole, name: l.authorName, email: l.authorEmail })) {
-        return false;
-      }
-      if (selectedDate && l.date !== selectedDate) return false;
+    return dateLogs.filter((l) => {
       if (selectedSubsidiary !== "all") {
         if (!matchesCompanyEntity(l.company, selectedSubsidiary)) return false;
       }
@@ -153,7 +150,16 @@ export default function ShiftAttendanceOverviewPanel({
         if (itemCat !== selectedCategory) return false;
       }
       if (selectedStatus !== "all") {
-        if ((l.status || "").toLowerCase() !== selectedStatus.toLowerCase()) return false;
+        const isItemInProgress =
+          l.status === "In Progress" ||
+          l.status === "Ongoing" ||
+          l.status === "in_progress" ||
+          l.endTime === "Active";
+        if (selectedStatus === "in progress" && !isItemInProgress) return false;
+        if (selectedStatus === "completed" && isItemInProgress) return false;
+        if (selectedStatus !== "in progress" && selectedStatus !== "completed") {
+          if ((l.status || "").toLowerCase() !== selectedStatus.toLowerCase()) return false;
+        }
       }
       if (selectedHrEmail !== "all") {
         if ((l.authorEmail || "").toLowerCase() !== selectedHrEmail.toLowerCase()) return false;
@@ -172,22 +178,20 @@ export default function ShiftAttendanceOverviewPanel({
       }
       return true;
     });
-  }, [logs, selectedDate, selectedSubsidiary, selectedCategory, selectedStatus, selectedHrEmail, searchQuery]);
+  }, [dateLogs, selectedSubsidiary, selectedCategory, selectedStatus, selectedHrEmail, searchQuery]);
 
   // Live Executive KPI Metrics
   const stats = useMemo(() => {
-    const nonAdminLogs = logs.filter((l) => !isHRMDUser({ role: l.authorRole, name: l.authorName, email: l.authorEmail }));
-    const todayLogs = nonAdminLogs.filter((l) => l.date === selectedDate);
-    const totalEntries = todayLogs.length;
+    const totalEntries = dateLogs.length;
 
     let totalMinutes = 0;
     const activeOfficersSet = new Set();
     const activeEntitiesSet = new Set();
 
-    todayLogs.forEach((l) => {
+    dateLogs.forEach((l) => {
       if (l.numericHours) {
         totalMinutes += l.numericHours * 60;
-      } else if (l.startTime && l.endTime) {
+      } else if (l.startTime && l.endTime && l.endTime !== "Active") {
         const dur = calculateHoursWorked(l.startTime, l.endTime);
         totalMinutes += dur.numericHours * 60;
       }
@@ -206,7 +210,7 @@ export default function ShiftAttendanceOverviewPanel({
       activeOfficersCount,
       activeEntitiesCount
     };
-  }, [logs, selectedDate]);
+  }, [dateLogs]);
 
   // Calculate live modal hours preview
   const modalDuration = useMemo(() => {
@@ -423,15 +427,13 @@ export default function ShiftAttendanceOverviewPanel({
                     : "bg-slate-50 border border-slate-200 text-slate-700 hover:bg-slate-100"
                 }`}
               >
-                All Subsidiaries ({logs.filter((l) => !selectedDate || l.date === selectedDate).length})
+                All Subsidiaries ({dateLogs.length})
               </button>
 
               {ALL_SUBSIDIARIES.map((comp) => {
                 const meta = ENTITY_METADATA[comp] || {};
                 const isSelected = selectedSubsidiary === comp;
-                const count = logs.filter(
-                  (l) => (!selectedDate || l.date === selectedDate) && matchesCompanyEntity(l.company, comp)
-                ).length;
+                const count = dateLogs.filter((l) => matchesCompanyEntity(l.company, comp)).length;
 
                 return (
                   <button
@@ -654,21 +656,34 @@ export default function ShiftAttendanceOverviewPanel({
                       <td className="py-2.5 px-3 text-center whitespace-nowrap">
                         <div className="space-y-0.5">
                           <div className="text-slate-600 font-mono text-[10px]">
-                            {item.startTime} – {item.endTime}
+                            {item.startTime} – {item.endTime === "Active" ? "Active" : item.endTime}
                           </div>
-                          <span className="inline-block px-1.5 py-0.2 rounded text-[10px] font-bold font-mono bg-emerald-50 text-emerald-800 border border-emerald-200">
-                            {item.hoursWorked || "--"}
-                          </span>
+                          {item.status === "In Progress" || item.status === "Ongoing" || item.endTime === "Active" ? (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[10px] font-bold font-mono bg-amber-50 text-amber-800 border border-amber-200 animate-pulse">
+                              <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                              <span>Active Now</span>
+                            </span>
+                          ) : (
+                            <span className="inline-block px-1.5 py-0.2 rounded text-[10px] font-bold font-mono bg-emerald-50 text-emerald-800 border border-emerald-200">
+                              {item.hoursWorked || "--"}
+                            </span>
+                          )}
                         </div>
                       </td>
 
                       {/* 5. Status */}
                       <td className="py-2.5 px-3 text-center whitespace-nowrap">
-                        <span
-                          className={`inline-block px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wide border ${statusBadgeClass}`}
-                        >
-                          {item.status || "Completed"}
-                        </span>
+                        {item.status === "In Progress" || item.status === "Ongoing" || item.endTime === "Active" ? (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wide bg-amber-50 text-amber-800 border border-amber-300 shadow-2xs">
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+                            <span>IN PROGRESS</span>
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wide bg-emerald-50 text-emerald-800 border border-emerald-300 shadow-2xs">
+                            <CheckCircle2 size={11} className="text-emerald-600" />
+                            <span>COMPLETED</span>
+                          </span>
+                        )}
                       </td>
 
                       {/* 6. Accomplishments & Progress */}

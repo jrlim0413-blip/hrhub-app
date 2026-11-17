@@ -670,7 +670,7 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
     }
   };
 
-  // Automatic Live Telemetry Sync for all tabs and modules
+  // Automatic Live Telemetry & Active Module Session Tracking for all tabs and modules
   useEffect(() => {
     if (!currentUser) return;
     const userPayload = {
@@ -680,12 +680,9 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
       company: profileCompany || currentUser.company || "Simpal Group of Companies",
       branch: currentUser.branch || "Head Office (SGC)"
     };
-    if (activeView === "workspace" && workspaceTab) {
-      logSystemActivity(userPayload, workspaceTab);
-    } else if (activeView === "communication" && communicationTab) {
-      logSystemActivity(userPayload, communicationTab);
-    }
-  }, [workspaceTab, communicationTab, activeView]);
+    const currentModule = activeView === "communication" ? communicationTab : (workspaceTab || "home");
+    logSystemActivity(userPayload, currentModule);
+  }, [workspaceTab, communicationTab, activeView, currentUser, profileName, profileEmail, profileRole, profileCompany]);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(true);
 
   // Enterprise RBAC Capabilities State for Head Office Governance

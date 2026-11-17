@@ -160,9 +160,17 @@ export function calculateHoursWorked(startTimeStr, endTimeStr) {
  */
 function normalizeLogRecord(raw) {
   if (!raw) return null;
+  const isOngoing =
+    raw.status === "In Progress" ||
+    raw.status === "Ongoing" ||
+    raw.status === "in_progress" ||
+    raw.end_time === "Active" ||
+    raw.endTime === "Active";
+
   const numericDuration = Number(raw.hours_worked || raw.hoursWorked || 0);
-  const formattedDuration =
-    numericDuration > 0
+  const formattedDuration = isOngoing
+    ? "Active Now"
+    : numericDuration > 0
       ? numericDuration % 1 === 0
         ? `${numericDuration} hr${numericDuration === 1 ? "" : "s"}`
         : `${numericDuration.toFixed(1)} hrs`
@@ -182,11 +190,11 @@ function normalizeLogRecord(raw) {
     taskProject: taskTitle,
     category: normalizedCat,
     startTime: raw.start_time || raw.startTime || "8:00 AM",
-    endTime: raw.end_time || raw.endTime || "5:00 PM",
-    hoursWorked: raw.hours_worked_formatted || formattedDuration,
+    endTime: isOngoing ? "Active" : (raw.end_time || raw.endTime || "5:00 PM"),
+    hoursWorked: isOngoing ? "Active Now" : (raw.hours_worked_formatted || formattedDuration),
     numericHours: numericDuration,
     progressComments: progressText.replace("[Auto-Logged] ", "").replace("[Auto-Logged]", "").trim(),
-    status: raw.status || "Completed",
+    status: isOngoing ? "In Progress" : (raw.status || "Completed"),
     isAutoLogged: isAuto,
     authorName: raw.author_name || raw.authorName || "HR Officer",
     authorEmail: (raw.author_email || raw.authorEmail || "").toLowerCase().trim(),
@@ -438,9 +446,6 @@ export const isHRAdminUser = isHRMDUser;
  * - Resolving or reviewing an Incident Report
  * - Publishing a company announcement
  * - Daily shift portal access
- * 
- * Note: Specifically HRMD Master Account is excluded as they monitor the logs.
- * All other per-user personnel (Remark Joy Gaviola, branch staff, supervisors) are logged.
  */
 export async function autoLogHRAction({
   user,
@@ -452,33 +457,33 @@ export async function autoLogHRAction({
 }) {
   if (!user || !taskProject) return null;
 
-  // Specifically HRMD Master Account is excluded since they monitor the logs
-  if (isHRMDUser(user)) {
-    return null;
-  }
-
   const userEmail = (user.email || user.authorEmail || "").toLowerCase().trim();
   const userName = user.name || user.authorName || "HR Officer";
   const userCompany = user.company || user.authorCompany || HEAD_OFFICE;
   const userRole = user.role || user.authorRole || "HR Officer";
   const userBranch = user.branch || user.authorBranch || "Head Office (SGC)";
 
-  // Debounce duplicate events within 10 seconds
-  const debounceKey = `${userEmail}_${taskProject}`;
+  // Debounce duplicate events within 5 seconds
+  const debounceKey = `${userEmail}_${taskProject}_${status}`;
   const lastLogged = recentAutoLogs.get(debounceKey);
   const nowMs = Date.now();
-  if (lastLogged && nowMs - lastLogged < 10000) {
+  if (lastLogged && nowMs - lastLogged < 5000) {
     return null;
   }
   recentAutoLogs.set(debounceKey, nowMs);
 
   const now = new Date();
-  const endTimeStr = formatTimeAMPM(now);
+  const isOngoing = status === "In Progress" || status === "Ongoing";
+  const endTimeStr = isOngoing ? "Active" : formatTimeAMPM(now);
   const startTimeObj = new Date(now.getTime() - durationMinutes * 60 * 1000);
   const startTimeStr = formatTimeAMPM(startTimeObj);
 
-  const durationHours = parseFloat((durationMinutes / 60).toFixed(2));
-  const formattedDuration = durationHours % 1 === 0 ? `${durationHours} hr${durationHours === 1 ? "" : "s"}` : `${durationHours} hrs`;
+  const durationHours = isOngoing ? 0 : parseFloat((durationMinutes / 60).toFixed(2));
+  const formattedDuration = isOngoing
+    ? "Active Now"
+    : durationHours % 1 === 0
+      ? `${durationHours} hr${durationHours === 1 ? "" : "s"}`
+      : `${durationHours} hrs`;
 
   return await addWorkLogEntry({
     date: getTodayDateStr(),
@@ -645,29 +650,92 @@ export const MODULE_WORKLOG_MAP = {
 };
 
 /**
- * System-Wide Activity Logger:
- * Automatically records actual operations performed by authenticated staff users.
- * Does NOT generate artificial telemetry for offline users.
+ * Real-Time Active Module Session Tracker:
+ * Records the currently open feature or tab for an authenticated user account.
+ * Closes any previous session with exact duration and sets the new module session to 'In Progress'.
  */
-export function logSystemActivity(user, moduleId, customDetails = {}) {
-  // Only actual logged-in users who are NOT the HRMD master monitor generate work logs
-  if (!user || isHRMDUser(user)) return null;
+export async function trackUserActiveModuleSession({ user, moduleId, customDetails = {} }) {
+  if (!user || !moduleId) return null;
+
+  const userEmail = (user.email || user.authorEmail || "").toLowerCase().trim();
+  const userName = user.name || user.authorName || "HR Officer";
+  const userCompany = user.company || user.authorCompany || HEAD_OFFICE;
+  const userRole = user.role || user.authorRole || "HR Officer";
+  const userBranch = user.branch || user.authorBranch || "Head Office (SGC)";
 
   const mod = MODULE_WORKLOG_MAP[moduleId];
-  if (!mod && !customDetails.task) return null;
-
   const task = customDetails.task || mod?.task || `Operated in ${moduleId}`;
   const category = customDetails.category || mod?.category || "Corporate Policy & Administrative";
-  const comments = customDetails.comments || mod?.comments || `Active session in ${moduleId} module.`;
-  const durationMinutes = customDetails.durationMinutes || 20;
+  const comments = customDetails.comments || mod?.comments || `Currently viewing and active in the ${task} module.`;
 
-  return autoLogHRAction({
-    user,
-    taskProject: task,
-    category,
-    progressComments: comments,
-    status: "Completed",
-    durationMinutes
-  });
+  const now = new Date();
+  const nowTimeStr = formatTimeAMPM(now);
+  const todayStr = getTodayDateStr();
+
+  try {
+    // 1. Fetch current active session for this user today from database
+    const { data: activeRows } = await supabase
+      .from(TABLE_NAME)
+      .select("*")
+      .eq("author_email", userEmail)
+      .eq("log_date", todayStr)
+      .in("status", ["In Progress", "Ongoing", "in_progress"]);
+
+    // If an active session is already running on the same module, avoid duplicate insert
+    if (Array.isArray(activeRows) && activeRows.length > 0) {
+      const sameTaskRow = activeRows.find((r) => (r.task_project || "").trim() === task.trim());
+      if (sameTaskRow) {
+        return normalizeLogRecord(sameTaskRow);
+      }
+
+      // Complete previous active sessions
+      for (const row of activeRows) {
+        const { numericHours } = calculateHoursWorked(row.start_time, nowTimeStr);
+        await supabase
+          .from(TABLE_NAME)
+          .update({
+            end_time: nowTimeStr,
+            hours_worked: numericHours > 0 ? numericHours : 0.1,
+            status: "Completed",
+            updated_at: new Date().toISOString()
+          })
+          .eq("id", row.id);
+      }
+    }
+
+    // 2. Insert new 'In Progress' active session record
+    const newSessionPayload = {
+      date: todayStr,
+      taskProject: task.trim(),
+      category,
+      startTime: nowTimeStr,
+      endTime: "Active",
+      hoursWorked: "Active Now",
+      numericHours: 0.0,
+      progressComments: comments.trim(),
+      status: "In Progress",
+      authorName: userName,
+      authorEmail: userEmail,
+      authorRole: userRole,
+      company: userCompany,
+      branch: userBranch,
+      isAutoLogged: true
+    };
+
+    return await addWorkLogEntry(newSessionPayload);
+  } catch (err) {
+    console.warn("trackUserActiveModuleSession exception:", err);
+    return null;
+  }
+}
+
+/**
+ * System-Wide Activity Logger:
+ * Automatically records actual operations performed by authenticated staff users.
+ * Ensures active tab sessions are recorded as 'In Progress'.
+ */
+export function logSystemActivity(user, moduleId, customDetails = {}) {
+  if (!user) return null;
+  return trackUserActiveModuleSession({ user, moduleId, customDetails });
 }
 
