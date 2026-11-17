@@ -220,6 +220,9 @@ let memoryWorkLogsList = null;
  */
 export async function fetchAllWorkLogs() {
   try {
+    // Background auto-retention cleanup: prune records older than 15 days (1 payroll cycle)
+    autoPruneOldLogs(15);
+
     // 1. Direct query to dedicated `hr_work_logs` database table
     const { data, error } = await supabase
       .from(TABLE_NAME)
@@ -228,13 +231,10 @@ export async function fetchAllWorkLogs() {
       .order("created_at", { ascending: false });
 
     if (!error && Array.isArray(data)) {
-      // Filter out any HRMD monitoring accounts
-      const nonHrmd = data.filter((r) => !isHRMDUser(r));
-
       // Client-side deduplication safeguard to guarantee single clean rows
       const seen = new Set();
       const uniqueData = [];
-      for (const row of nonHrmd) {
+      for (const row of data) {
         const key = `${(row.author_email || "").toLowerCase().trim()}__${(row.task_project || "").trim()}__${row.log_date || ""}__${row.start_time || ""}`;
         if (!seen.has(key)) {
           seen.add(key);
@@ -260,10 +260,9 @@ export async function fetchAllWorkLogs() {
       .maybeSingle();
 
     if (settingsData?.settings_json && Array.isArray(settingsData.settings_json)) {
-      const nonHrmd = settingsData.settings_json.filter((r) => !isHRMDUser(r));
       const seen = new Set();
       const uniqueData = [];
-      for (const row of nonHrmd) {
+      for (const row of settingsData.settings_json) {
         const key = `${(row.author_email || "").toLowerCase().trim()}__${(row.task_project || "").trim()}__${row.log_date || ""}__${row.start_time || ""}`;
         if (!seen.has(key)) {
           seen.add(key);
@@ -489,7 +488,6 @@ export async function autoLogHRAction({
   durationMinutes = 30
 }) {
   if (!user || !taskProject) return null;
-  if (isHRMDUser(user)) return null;
 
   const userEmail = (user.email || user.authorEmail || "").toLowerCase().trim();
   const userName = user.name || user.authorName || "HR Officer";
@@ -694,12 +692,10 @@ let activeSessionLock = {
 /**
  * Real-Time Active Module Session Tracker:
  * Records the currently open feature or tab for an authenticated user account.
- * Closes any previous session with exact duration and sets the new module session to 'In Progress'.
- * Master HRMD accounts are strictly excluded from logging.
+ * Updates the user's active session in-place with zero table bloat and sets status to 'In Progress'.
  */
 export async function trackUserActiveModuleSession({ user, moduleId, customDetails = {} }) {
   if (!user || !moduleId) return null;
-  if (isHRMDUser(user)) return null;
 
   const userEmail = (user.email || user.authorEmail || user.author_email || "").toLowerCase().trim();
   const nowMs = Date.now();
@@ -819,7 +815,7 @@ export async function trackUserActiveModuleSession({ user, moduleId, customDetai
  * Does NOT insert new rows — purely updates the single active row in-place (0 storage consumption).
  */
 export async function updateUserPresenceStatus({ user, isAfk, currentModule = "home" }) {
-  if (!user || isHRMDUser(user)) return null;
+  if (!user) return null;
 
   const userEmail = (user.email || user.authorEmail || user.author_email || "").toLowerCase().trim();
   const todayStr = getTodayDateStr();
@@ -858,6 +854,36 @@ export async function updateUserPresenceStatus({ user, isAfk, currentModule = "h
     console.warn("updateUserPresenceStatus exception:", err);
   }
   return false;
+}
+
+/**
+ * Automated Rolling Data Retention Cleaner:
+ * Automatically prunes logs older than retentionDays (defaults to 15 days for standard bi-monthly payroll).
+ * Prevents database bloat, keeping queries instant and table size razor-thin.
+ */
+export async function autoPruneOldLogs(retentionDays = 15) {
+  try {
+    if (typeof window !== "undefined") {
+      const todayStr = getTodayDateStr();
+      const lastPruned = window.localStorage.getItem("hrhub_last_prune_date");
+      if (lastPruned === todayStr) {
+        return; // Already checked and cleaned today
+      }
+      window.localStorage.setItem("hrhub_last_prune_date", todayStr);
+    }
+
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - retentionDays);
+    const cutoffDateStr = cutoffDate.toISOString().slice(0, 10); // YYYY-MM-DD
+    const cutoffIso = cutoffDate.toISOString();
+
+    await supabase
+      .from(TABLE_NAME)
+      .delete()
+      .or(`log_date.lt.${cutoffDateStr},created_at.lt.${cutoffIso}`);
+  } catch (err) {
+    console.warn("autoPruneOldLogs notice:", err);
+  }
 }
 
 /**

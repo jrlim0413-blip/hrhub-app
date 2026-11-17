@@ -671,7 +671,7 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
   const isUserAfkRef = useRef(false);
 
   useEffect(() => {
-    if (!currentUser || isHRMDUser(currentUser)) return;
+    if (!currentUser) return;
 
     const userPayload = {
       name: profileName || currentUser.name || "HR Officer",

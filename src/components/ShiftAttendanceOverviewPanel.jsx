@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import {
-  Calendar, Clock, Building2, User, Search, Plus, Printer,
+  Calendar, Clock, Building2, User, Search, Plus, Printer, Download,
   RefreshCw, CheckCircle2, AlertCircle, Trash2, X, ChevronLeft,
   ChevronRight, ShieldCheck, Briefcase, FileText, Tag,
   TrendingUp, UserCheck, CheckCircle, ArrowUpRight
@@ -116,11 +116,11 @@ export default function ShiftAttendanceOverviewPanel({
     };
   }, [loadData]);
 
-  // Unique HR Officers in logs (strictly excluding HRMD monitoring accounts)
+  // Unique HR Officers in logs
   const hrOfficersList = useMemo(() => {
     const map = new Map();
     logs.forEach((l) => {
-      if (l.authorEmail && !isHRMDUser(l)) {
+      if (l.authorEmail) {
         map.set(l.authorEmail.toLowerCase(), {
           name: l.authorName || l.authorEmail.split("@")[0],
           email: l.authorEmail,
@@ -132,9 +132,9 @@ export default function ShiftAttendanceOverviewPanel({
     return Array.from(map.values());
   }, [logs]);
 
-  // Date-filtered logs for synchronized subsidiary counters and metrics (excluding HRMD)
+  // Date-filtered logs for synchronized subsidiary counters and metrics
   const dateLogs = useMemo(() => {
-    return logs.filter((l) => (!selectedDate || l.date === selectedDate) && !isHRMDUser(l));
+    return logs.filter((l) => !selectedDate || l.date === selectedDate);
   }, [logs, selectedDate]);
 
   // Filtered Logs
@@ -261,6 +261,55 @@ export default function ShiftAttendanceOverviewPanel({
   // Print Executive Summary
   const handlePrint = () => {
     window.print();
+  };
+
+  // One-click CSV Export for Timesheet Records
+  const handleExportCSV = () => {
+    if (!filteredLogs || filteredLogs.length === 0) {
+      alert("No work logs available to export for the selected date.");
+      return;
+    }
+
+    const headers = [
+      "Date",
+      "Employee / Officer",
+      "Email",
+      "Role",
+      "Subsidiary",
+      "Task / Project",
+      "Category",
+      "Start Time",
+      "End Time",
+      "Duration",
+      "Status",
+      "Accomplishments & Notes"
+    ];
+
+    const rows = filteredLogs.map((l) => [
+      `"${l.date || ""}"`,
+      `"${(l.authorName || "").replace(/"/g, '""')}"`,
+      `"${l.authorEmail || ""}"`,
+      `"${l.authorRole || ""}"`,
+      `"${(l.company || "").replace(/"/g, '""')}"`,
+      `"${(l.taskProject || "").replace(/"/g, '""')}"`,
+      `"${(l.category || "").replace(/"/g, '""')}"`,
+      `"${l.startTime || ""}"`,
+      `"${l.endTime || ""}"`,
+      `"${l.hoursWorked || ""}"`,
+      `"${l.status || ""}"`,
+      `"${(l.progressComments || "").replace(/"/g, '""')}"`
+    ]);
+
+    const csvContent = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", `HR_Activity_Timesheet_${selectedDate || "all"}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   return (
@@ -553,9 +602,20 @@ export default function ShiftAttendanceOverviewPanel({
             </span>
           </div>
 
-          <span className="text-[9px] uppercase font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200">
-            Cloud Synchronized
-          </span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleExportCSV}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 transition shadow-2xs cursor-pointer"
+              title="Download timesheet records as CSV"
+            >
+              <Download size={11} className="text-slate-500" />
+              <span>Export CSV</span>
+            </button>
+            <span className="text-[9px] uppercase font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200">
+              Cloud Synchronized
+            </span>
+          </div>
         </div>
 
         {/* Tabular Roster Grid */}
