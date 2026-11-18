@@ -764,20 +764,6 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
     window.addEventListener("scroll", throttledInteraction, { passive: true });
     window.addEventListener("touchstart", handleUserInteraction, { passive: true });
 
-    // Custom instant AFK toggle listener (for on-demand instant testing)
-    const handleCustomAfkToggle = (e) => {
-      if (typeof e.detail?.isAfk === "boolean") {
-        const nextAfk = e.detail.isAfk;
-        isUserAfkRef.current = nextAfk;
-        if (!nextAfk) {
-          lastUserActivityRef.current = Date.now();
-        }
-        const currentMod = activeView === "communication" ? communicationTab : (workspaceTab || "home");
-        updateUserPresenceStatus({ user: userPayload, isAfk: nextAfk, currentModule: currentMod });
-      }
-    };
-    window.addEventListener("hrhub_toggle_afk", handleCustomAfkToggle);
-
     // Idle check ticker runs every 5 seconds (fast response, 0.00% CPU)
     const interval = setInterval(() => {
       const now = Date.now();
@@ -834,8 +820,7 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
       window.removeEventListener("click", handleUserInteraction);
       window.removeEventListener("scroll", throttledInteraction);
       window.removeEventListener("touchstart", handleUserInteraction);
-      window.removeEventListener("visibilitychange", handleVisibilityChange);
-      window.removeEventListener("hrhub_toggle_afk", handleCustomAfkToggle);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("beforeunload", handleUnload);
       window.removeEventListener("pagehide", handleUnload);
       clearInterval(interval);
