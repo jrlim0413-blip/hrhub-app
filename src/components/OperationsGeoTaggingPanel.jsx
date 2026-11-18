@@ -1052,6 +1052,7 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
   const [isPickingNavOrigin, setIsPickingNavOrigin] = useState(false);
   const isPickingNavOriginRef = useRef(false);
   const focusedBoothRef = useRef(null);
+  const activeNavRouteRef = useRef(null);
   const [isNavStepsExpanded, setIsNavStepsExpanded] = useState(false);
   const [isLiveGpsTracking, setIsLiveGpsTracking] = useState(false);
   const [navErrorNotice, setNavErrorNotice] = useState("");
@@ -1082,6 +1083,23 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
   useEffect(() => {
     focusedBoothRef.current = focusedBooth;
   }, [focusedBooth]);
+
+  useEffect(() => {
+    activeNavRouteRef.current = activeNavRoute;
+    // Refresh Leaflet canvas bounds cleanly when switching between full GeoTagging & pure Google Maps Navigation mode
+    const t = setTimeout(() => {
+      try {
+        leafletMapRef.current?.invalidateSize();
+        if (activeNavRoute?.coordinates?.length > 1 && window.L && leafletMapRef.current) {
+          const bounds = window.L.latLngBounds(activeNavRoute.coordinates);
+          if (activeNavRoute.startCoords) bounds.extend(activeNavRoute.startCoords);
+          if (activeNavRoute.targetBooth?.coords) bounds.extend(activeNavRoute.targetBooth.coords);
+          leafletMapRef.current.fitBounds(bounds, { padding: [90, 90], maxZoom: 17 });
+        }
+      } catch { }
+    }, 140);
+    return () => clearTimeout(t);
+  }, [activeNavRoute]);
 
   // Top Agent Search Bar states (replaces the sub-navigation pills)
   const [topAgentSearchQuery, setTopAgentSearchQuery] = useState("");
@@ -2605,6 +2623,19 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
       };
       setActiveNavRoute(payload);
       setFocusedBooth({ booth: targetBooth, agentName: agentName || targetBooth.tellerName || "" });
+      // Enter clean Google Maps Navigation Mode: clear distractions, popups, measurements & patrol sim
+      setClickedPoint(null);
+      setMeasuringSourceKiosk(null);
+      setMeasuredPair(null);
+      setIsDistanceModalOpen(false);
+      setIsCityDriving(false);
+      setIsBrgyDriving(false);
+      if (measureLineGroupRef.current) {
+        try { measureLineGroupRef.current.clearLayers(); } catch { }
+      }
+      if (leafletMapRef.current) {
+        try { leafletMapRef.current.closePopup(); } catch { }
+      }
       drawNavRouteOnMap(payload, shouldFitBounds);
 
       if (!isLiveUpdate) {
@@ -2839,6 +2870,8 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
         computeAndDisplayNavRoute([lat, lng], booth, agentName, "Picked Map Point", false, true, false);
         return;
       }
+      // Do not drop random coordinate pins while in pure Google Maps Navigation Mode
+      if (activeNavRouteRef.current) return;
       setClickedPoint({ lat, lng });
     });
 
@@ -2973,6 +3006,66 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
     const map = leafletMapRef.current;
     const group = layersGroupRef.current;
     group.clearLayers();
+
+    // ================= PURE GOOGLE MAPS / WAZE NAVIGATION MODE =================
+    // Hide all perimeter boundaries, edge checkpoints, POIs, patrol car & unrelated kiosks;
+    // render ONLY the clean Destination Kiosk pin alongside the active route!
+    if (activeNavRoute?.targetBooth?.coords) {
+      const targetBooth = activeNavRoute.targetBooth;
+      const displayName = targetBooth.name || "001";
+      const destKioskIcon = window.L.divIcon({
+        className: "yellow-booth-pin",
+        html: `
+          <div style="
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-end;
+            width: 170px;
+            height: 102px;
+            user-select: none;
+            filter: drop-shadow(0 6px 14px rgba(0,0,0,0.55));
+            position: relative;
+          ">
+            <div style="
+              display: inline-flex;
+              align-items: center;
+              gap: 5px;
+              background: #047857;
+              color: #ffffff;
+              border: 2.5px solid #34d399;
+              border-radius: 9999px;
+              padding: 3px 11px;
+              font-family: Inter, system-ui, sans-serif;
+              font-size: 11.5px;
+              font-weight: 800;
+              letter-spacing: 0.3px;
+              white-space: nowrap;
+              box-shadow: 0 4px 12px rgba(0,0,0,0.65);
+              margin-bottom: 2px;
+              max-width: 170px;
+              overflow: hidden;
+              text-overflow: ellipsis;
+            ">
+              <span>🏁</span>
+              <span style="overflow:hidden;text-overflow:ellipsis;">Booth ${displayName}</span>
+            </div>
+            <div style="width: 48px; height: 62px; display:flex; align-items:center; justify-content:center;">
+              ${getKioskSvgHtml(48, 62)}
+            </div>
+            <div style="display:flex;flex-direction:column;align-items:center;margin-top:-4px;">
+              <div style="width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:6px solid #0f172a;"></div>
+              <div style="width:10px;height:10px;border-radius:50%;background:#10b981;border:2px solid #ffffff;box-shadow:0 0 10px #10b981;margin-top:-1px;"></div>
+            </div>
+          </div>
+        `,
+        iconSize: [170, 102],
+        iconAnchor: [85, 102],
+        popupAnchor: [0, -102]
+      });
+      window.L.marker(targetBooth.coords, { icon: destKioskIcon, zIndexOffset: 950 }).addTo(group);
+      return;
+    }
 
     // ================= MODE 1: TERRITORY PERIMETER VIEW =================
     if (viewMode === "city") {
@@ -3711,7 +3804,7 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
       `);
     });
 
-  }, [leafletLoaded, viewMode, selectedTerritory, activeCheckpoints, activeRouteCoords, activeSectorsList, activeBarangayCircuit, selectedEdgeBarangay, cityRouteIndex, brgyRouteIndex, showTerminals, showFactories, brgyInspectorTab, activeBarangayAgents, taggedAgentCoords, territoryTaggedBooths, activeBarangayTaggedBooths, measuringSourceKiosk]);
+  }, [leafletLoaded, viewMode, selectedTerritory, activeCheckpoints, activeRouteCoords, activeSectorsList, activeBarangayCircuit, selectedEdgeBarangay, cityRouteIndex, brgyRouteIndex, showTerminals, showFactories, brgyInspectorTab, activeBarangayAgents, taggedAgentCoords, territoryTaggedBooths, activeBarangayTaggedBooths, measuringSourceKiosk, activeNavRoute]);
 
   // City/Territory-Level Driving Animation
   useEffect(() => {
@@ -3972,9 +4065,12 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
     ? getSectorPerimeterRoute(activeBarangayCircuit.id, BARANGAY_PERIMETER_ROUTES)
     : null;
 
+  const isNavFocusMode = Boolean(activeNavRoute);
+
   return (
     <div className="space-y-3 antialiased">
       {/* ================= OPERATING TERRITORY & SUBSIDIARY SELECTOR ================= */}
+      {!isNavFocusMode && (
       <div className="bg-white rounded-xl border border-slate-200/80 p-1.5 sm:p-2 shadow-2xs flex items-center gap-1.5 overflow-x-auto custom-scrollbar">
         <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 pl-1 pr-1 shrink-0 flex items-center gap-1">
           <Globe size={11} className="text-emerald-600" />
@@ -4011,6 +4107,7 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
           )
         )}
       </div>
+      )}
 
       {userEntityScope?.isNonStl ? (
         <div className="p-12 text-center rounded-2xl border border-slate-200 bg-slate-50 text-slate-600 space-y-3 shadow-2xs my-4">
@@ -4024,6 +4121,7 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
         <>
 
       {/* ================= TOP SUB-NAVIGATION BAR REPLACING 3 PILLS WITH AGENT SEARCH BAR ================= */}
+      {!isNavFocusMode && (
       <div className="flex items-center justify-between border-b border-slate-200 pb-3 flex-wrap gap-2.5">
         {/* Agent Search Bar */}
         <div ref={searchContainerRef} className="relative flex-1 min-w-[260px] sm:min-w-[340px] max-w-md">
@@ -4153,9 +4251,10 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
           </span>
         </div>
       </div>
+      )}
 
       {/* ================= MAP CANVAS CONTAINER ================= */}
-      <div className="h-[720px] md:h-[780px] rounded-3xl overflow-hidden border border-slate-800 shadow-2xl flex flex-col relative bg-slate-950 text-white font-sans select-none">
+      <div className={`${isNavFocusMode ? "h-[calc(100vh-110px)] min-h-[640px]" : "h-[720px] md:h-[780px]"} rounded-3xl overflow-hidden border border-slate-800 shadow-2xl flex flex-col relative bg-slate-950 text-white font-sans select-none transition-all duration-200`}>
         {/* ================= 100% PURE FULL-SCREEN MAP CANVAS ================= */}
       <div
         ref={mapContainerRef}
@@ -4203,7 +4302,7 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
 
       {/* ================= WAZE / GOOGLE MAPS TOP TURN-BY-TURN NAVIGATION BANNER (WITH VOICE & TRAFFIC) ================= */}
       {activeNavRoute && !isPickingNavOrigin && (
-        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-40 w-[94%] max-w-xl animate-in fade-in slide-in-from-top-2 duration-200">
+        <div className="absolute top-3.5 left-1/2 -translate-x-1/2 z-40 w-[94%] max-w-xl animate-in fade-in slide-in-from-top-2 duration-200">
           {(() => {
             const currentStep = activeNavRoute.steps?.[activeNavStepIdx] || activeNavRoute.steps?.[0];
             const traffic = activeNavRoute.traffic;
@@ -4601,7 +4700,7 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
       )}
 
       {/* ================= ACTIVE MEASURING MODE HUD BANNER ================= */}
-      {measuringSourceKiosk && (
+      {!isNavFocusMode && measuringSourceKiosk && (
         <div className="absolute top-24 left-1/2 -translate-x-1/2 z-50 bg-slate-900/95 backdrop-blur-xl border-2 border-teal-400 rounded-2xl shadow-2xl p-3 px-5 flex items-center gap-4 animate-in fade-in slide-in-from-top-2 duration-200 max-w-[94vw] border-teal-400 shadow-teal-950/60">
           <div className="w-10 h-10 rounded-2xl bg-teal-500/20 text-teal-400 border border-teal-400/40 flex items-center justify-center shrink-0 animate-pulse">
             <Ruler size={22} />
@@ -4634,7 +4733,7 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
       )}
 
       {/* ================= FLOATING MEASURED DISTANCE BAR (When measurement line is on map) ================= */}
-      {measuredPair && !isDistanceModalOpen && (
+      {!isNavFocusMode && measuredPair && !isDistanceModalOpen && (
         <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-40 bg-slate-900/95 backdrop-blur-xl border border-teal-500/80 rounded-2xl shadow-2xl p-2.5 px-4 flex items-center gap-3 animate-in fade-in slide-in-from-bottom-2 duration-150 max-w-[94vw]">
           <div className="w-8 h-8 rounded-xl bg-teal-600 flex items-center justify-center text-white shadow-md shrink-0">
             <Ruler size={16} />
@@ -4672,7 +4771,7 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
       )}
 
       {/* ================= FLOATING GOOGLE MAPS DIALOG FOR CLICKED COORDINATES ================= */}
-      {clickedPoint && (
+      {!isNavFocusMode && clickedPoint && (
         <div className="absolute top-28 left-4 right-4 sm:left-auto sm:right-4 z-40 bg-slate-900/95 backdrop-blur-xl border border-sky-500/80 rounded-2xl shadow-2xl p-3 flex items-center justify-between gap-3 animate-in fade-in slide-in-from-top-2 duration-150">
           <div className="flex items-center gap-2.5">
             <div className="w-9 h-9 rounded-xl bg-sky-600 flex items-center justify-center text-white shadow-md shrink-0">
@@ -4741,6 +4840,7 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
       )}
 
       {/* ================= TOP DYNAMIC HUD: CITY VIEW vs BARANGAY PERIMETER VIEW ================= */}
+      {!isNavFocusMode && (
       <div className="absolute top-3 left-3 right-3 md:left-4 md:right-4 z-20 pointer-events-auto space-y-2">
         {/* VIEW MODE 1: WHOLE CITY PERIMETER HUD */}
         {viewMode === "city" && (
@@ -4967,9 +5067,10 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
           })}
         </div>
       </div>
+      )}
 
       {/* ================= FLOATING ZOOM & FOLLOW CONTROLS (RIGHT SIDE) ================= */}
-      <div className="absolute top-36 right-4 z-20 flex flex-col gap-2 pointer-events-auto">
+      <div className={`absolute ${isNavFocusMode ? "top-28 right-3.5" : "top-36 right-4"} z-20 flex flex-col gap-2 pointer-events-auto`}>
         <button
           type="button"
           onClick={() => {
@@ -4994,7 +5095,12 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
           type="button"
           onClick={() => {
             if (leafletMapRef.current) {
-              if (viewMode === "barangay" && activeBarangayCircuit) {
+              if (isNavFocusMode && activeNavRoute?.coordinates?.length > 1 && window.L) {
+                const bounds = window.L.latLngBounds(activeNavRoute.coordinates);
+                if (activeNavRoute.startCoords) bounds.extend(activeNavRoute.startCoords);
+                if (activeNavRoute.targetBooth?.coords) bounds.extend(activeNavRoute.targetBooth.coords);
+                leafletMapRef.current.fitBounds(bounds, { padding: [90, 90], maxZoom: 17 });
+              } else if (viewMode === "barangay" && activeBarangayCircuit) {
                 const bRoute = BARANGAY_PERIMETER_ROUTES[activeBarangayCircuit.id];
                 if (bRoute && bRoute.points) {
                   leafletMapRef.current.panTo(bRoute.points[brgyRouteIndex] || activeBarangayCircuit.coords, { animate: true });
@@ -5004,14 +5110,17 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
               }
             }
           }}
-          className="w-8 h-8 rounded-xl bg-emerald-600 text-white shadow-xl flex items-center justify-center hover:bg-emerald-500 transition cursor-pointer"
-          title="Center on Patrol Vehicle"
+          className={`w-8 h-8 rounded-xl text-white shadow-xl flex items-center justify-center transition cursor-pointer ${
+            isNavFocusMode ? "bg-blue-600 hover:bg-blue-500" : "bg-emerald-600 hover:bg-emerald-500"
+          }`}
+          title={isNavFocusMode ? "Recenter Navigation Route" : "Center on Patrol Vehicle"}
         >
           <Crosshair size={15} />
         </button>
       </div>
 
       {/* ================= BOTTOM-LEFT LEGEND ================= */}
+      {!isNavFocusMode && (
       <div className="absolute bottom-3 left-3 z-20 bg-slate-900/90 backdrop-blur-md p-2.5 rounded-2xl border border-slate-800 shadow-2xl max-w-xs text-xs pointer-events-auto space-y-1">
         <div className="flex items-center justify-between border-b border-slate-800 pb-1">
           <span className="font-black text-slate-300 uppercase text-[9px] tracking-wider flex items-center gap-1.5">
@@ -5062,8 +5171,10 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
           </div>
         </div>
       </div>
+      )}
 
       {/* ================= BOTTOM-RIGHT INSPECTOR CARD ================= */}
+      {!isNavFocusMode && (
       <div className="absolute bottom-3 right-3 left-3 sm:left-auto sm:w-[430px] max-h-[390px] z-30 pointer-events-auto bg-slate-900/95 backdrop-blur-xl border border-slate-700/80 rounded-2xl shadow-2xl p-3.5 text-xs animate-in slide-in-from-bottom duration-200 flex flex-col gap-2 overflow-hidden">
         {viewMode === "barangay" && activeBarangayCircuit ? (
           <>
@@ -5694,6 +5805,7 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
           </>
         )}
       </div>
+      )}
 
       {/* ================= MODAL: TAG YELLOW BOOTH (COORDINATES, DETECT BARANGAY & BOOTH ADDRESS) ================= */}
       {isBoothModalOpen && (
