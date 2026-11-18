@@ -10,7 +10,6 @@ import { fetchIncidentReports } from "../lib/incidentReportStorage";
 import SOURCE_AGENTS_CACHE from "../data/sourceApiAgentsCache.json";
 import { fetchCentralBooths } from "../services/geoBoothsService";
 
-// Format currency
 const currency = new Intl.NumberFormat("en-PH", {
   style: "currency",
   currency: "PHP",
@@ -25,8 +24,6 @@ export default function HrAnalyticsPanel({
   onNavigate,
   onOpenAiBuddy
 }) {
-  // Navigation tabs inside Analytics
-  // 'overview' | 'disciplinary' | 'workforce' | 'attendance' | 'compliance'
   const [activeTab, setActiveTab] = useState(() => {
     try {
       return localStorage.getItem("hrhub_analytics_active_subview") || "overview";
@@ -35,7 +32,6 @@ export default function HrAnalyticsPanel({
     }
   });
 
-  // Listen to external subview changes (from sidebar items)
   useEffect(() => {
     const handleSubViewChange = (e) => {
       if (e.detail) setActiveTab(e.detail);
@@ -44,7 +40,6 @@ export default function HrAnalyticsPanel({
     return () => window.removeEventListener("hrhub_analytics_subview_change", handleSubViewChange);
   }, []);
 
-  // Time range filter: 'all' | 'month' | '30days' | '7days' | 'today'
   const [timeRange, setTimeRange] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -52,29 +47,24 @@ export default function HrAnalyticsPanel({
     new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
   );
 
-  // Live data states
   const [incidentReports, setIncidentReports] = useState([]);
   const [booths, setBooths] = useState([]);
   const [memosCount, setMemosCount] = useState(0);
   const [savedDocsCount, setSavedDocsCount] = useState(0);
 
-  // Load all primary datasets
   const loadAllData = async () => {
     setIsRefreshing(true);
     try {
-      // 1. Incident Reports & NTE cases
       const reports = await fetchIncidentReports();
       if (Array.isArray(reports)) {
         setIncidentReports(reports);
       }
 
-      // 2. Geotagged Booths & Kiosks
       const boothsData = await fetchCentralBooths();
       if (Array.isArray(boothsData)) {
         setBooths(boothsData);
       }
 
-      // 3. Saved Memos count
       try {
         const rawMemos = localStorage.getItem("hrhub_memos_v2");
         if (rawMemos) {
@@ -83,7 +73,6 @@ export default function HrAnalyticsPanel({
         }
       } catch {}
 
-      // 4. Saved Documents & Certificates count
       try {
         const rawDocs = localStorage.getItem("hrhub_saved_documents_store_v1");
         if (rawDocs) {
@@ -104,9 +93,6 @@ export default function HrAnalyticsPanel({
     loadAllData();
   }, []);
 
-  // -------------------------------------------------------------
-  // 1. WORKFORCE & HEADCOUNT METRICS
-  // -------------------------------------------------------------
   const workforceMetrics = useMemo(() => {
     const rawAgents = Array.isArray(SOURCE_AGENTS_CACHE?.agents)
       ? SOURCE_AGENTS_CACHE.agents
@@ -142,19 +128,16 @@ export default function HrAnalyticsPanel({
 
     const activeRate = totalAgents > 0 ? ((activeAgents / totalAgents) * 100).toFixed(1) : "0.0";
 
-    // Sort supervisors by headcount
     const topSupervisors = Object.entries(supervisorMap)
       .map(([name, count]) => ({ name, count }))
       .sort((a, b) => b.count - a.count)
       .slice(0, 7);
 
-    // Kiosks / Booths metrics
     const totalBooths = booths.length || 0;
     const assignedBooths = booths.filter((b) => Boolean(b.agentId || b.tellerName)).length;
     const vacantBooths = totalBooths - assignedBooths;
     const boothCoverageRate = totalBooths > 0 ? ((assignedBooths / totalBooths) * 100).toFixed(1) : "0.0";
 
-    // Internal Profiles (Central HR, Supervisors, Operations)
     const centralHrCount = profiles.filter((p) =>
       ["central_hr", "hr_manager", "hr", "admin"].includes(String(p.role).toLowerCase())
     ).length;
@@ -178,18 +161,15 @@ export default function HrAnalyticsPanel({
     };
   }, [booths, profiles]);
 
-  // -------------------------------------------------------------
-  // 2. DISCIPLINARY & DUE PROCESS (NTE CASES) METRICS
-  // -------------------------------------------------------------
   const disciplinaryMetrics = useMemo(() => {
     const list = incidentReports || [];
     const totalCases = list.length;
 
-    let submitted = 0; // Awaiting Head Office review
-    let nteIssued = 0; // Awaiting employee written explanation (5-day window)
-    let hearingScheduled = 0; // Administrative conference scheduled
-    let decisionIssued = 0; // Decision / sanction rendered
-    let closedAndArchived = 0; // Closed / archived in 201 file
+    let submitted = 0;
+    let nteIssued = 0;
+    let hearingScheduled = 0;
+    let decisionIssued = 0;
+    let closedAndArchived = 0;
     let totalCashShortage = 0;
     let overdueExplanationCount = 0;
     let activeFiveDayExplanationCount = 0;
@@ -223,13 +203,11 @@ export default function HrAnalyticsPanel({
       else if (status === "DECISION_ISSUED" || status === "SANCTIONED") decisionIssued++;
       else if (status === "RESOLVED" || status === "CLOSED_AND_ARCHIVED") closedAndArchived++;
 
-      // Cash Shortage Sum
       if (r.cashShortageAmount) {
         const val = parseFloat(String(r.cashShortageAmount).replace(/[^0-9.-]+/g, ""));
         if (!isNaN(val)) totalCashShortage += val;
       }
 
-      // Check 5-day DOLE Explanation SLA
       if (status === "NTE_ISSUED") {
         const servedDate = r.nteServedAt ? new Date(r.nteServedAt).getTime() : 0;
         const createdDate = r.createdAt ? new Date(r.createdAt).getTime() : 0;
@@ -248,7 +226,6 @@ export default function HrAnalyticsPanel({
         }
       }
 
-      // Categorize Violations
       const vText = `${r.typeOfIncident || ""} ${r.incidentCategory || ""} ${Array.isArray(r.violations) ? r.violations.join(" ") : ""}`.toLowerCase();
       if (vText.includes("shortage") || vText.includes("cash") || vText.includes("money") || vText.includes("remittance")) {
         violationCategories["Cash Shortage & Discrepancies"]++;
@@ -264,7 +241,6 @@ export default function HrAnalyticsPanel({
         violationCategories["Other Infractions"]++;
       }
 
-      // Penalties
       const pText = `${r.adminDecisionPenalty || ""} ${r.warningNoticePenalty || ""}`.toLowerCase();
       if (pText.includes("termination") || pText.includes("dismissal")) {
         penaltyBreakdown["Termination / Dismissal"]++;
@@ -301,11 +277,7 @@ export default function HrAnalyticsPanel({
     };
   }, [incidentReports]);
 
-  // -------------------------------------------------------------
-  // 3. ATTENDANCE & DTR METRICS (SUPERVISORS & FIELD)
-  // -------------------------------------------------------------
   const attendanceMetrics = useMemo(() => {
-    // Check localStorage for today's supervisor attendance records
     const todayIso = new Date().toISOString().split("T")[0];
     let todayRecords = [];
     try {
@@ -319,10 +291,9 @@ export default function HrAnalyticsPanel({
     const absentCount = todayRecords.filter((r) => r.status === "absent").length || 0;
 
     const onTimeRate = totalLogged > 0 ? ((onTimeCount / totalLogged) * 100).toFixed(1) : "95.8";
-    const gpsComplianceRate = "98.2"; // GPS geo-fence verified check-ins
-    const photoComplianceRate = "99.0"; // Selfie timestamp verified check-ins
+    const gpsComplianceRate = "98.2";
+    const photoComplianceRate = "99.0";
 
-    // 7-day trend sample data
     const last7DaysTrend = [
       { day: "Mon", rate: 96, count: 24, late: 1 },
       { day: "Tue", rate: 98, count: 25, late: 0 },
@@ -345,11 +316,7 @@ export default function HrAnalyticsPanel({
     };
   }, []);
 
-  // -------------------------------------------------------------
-  // 4. DOLE 201 FILE & STATUTORY COMPLIANCE SCORECARD
-  // -------------------------------------------------------------
   const complianceScorecard = useMemo(() => {
-    // Philippine Labor Code Standard Benchmarks
     const items = [
       {
         title: "Twin-Notice Procedural Due Process (NTE + Notice of Decision)",
@@ -403,7 +370,6 @@ export default function HrAnalyticsPanel({
     };
   }, []);
 
-  // Filtered recent cases for the Disciplinary table
   const filteredCases = useMemo(() => {
     let list = incidentReports || [];
     if (searchTerm) {
@@ -420,16 +386,13 @@ export default function HrAnalyticsPanel({
     return list.slice(0, 15);
   }, [incidentReports, searchTerm]);
 
-  // Print Executive Summary
   const handlePrintSummary = () => {
     window.print();
   };
 
   return (
     <div className="space-y-6 animate-in fade-in pb-12 font-['Figtree','Inter',sans-serif]">
-      {/* ================= 1. EXECUTIVE HEADER BANNER ================= */}
       <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xs relative overflow-hidden">
-        {/* Subtle decorative purple/emerald gradient accent */}
         <div className="absolute top-0 right-0 w-96 h-96 bg-gradient-to-br from-purple-100/40 via-emerald-100/20 to-transparent rounded-full blur-3xl pointer-events-none -mr-20 -mt-20" />
 
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -446,7 +409,6 @@ export default function HrAnalyticsPanel({
             </p>
           </div>
 
-          {/* Quick Actions & Controls */}
           <div className="flex flex-wrap items-center gap-2 shrink-0">
             <button
               type="button"
@@ -494,7 +456,6 @@ export default function HrAnalyticsPanel({
           </div>
         </div>
 
-        {/* Real-time sync timestamp bar */}
         <div className="mt-4 pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-500">
           <div className="flex items-center gap-2">
             <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
@@ -511,9 +472,7 @@ export default function HrAnalyticsPanel({
         </div>
       </div>
 
-      {/* ================= 2. FOUR HIGH-LEVEL EXECUTIVE KPI CARDS ================= */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* KPI 1: Active Workforce */}
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs relative overflow-hidden group hover:border-purple-300 transition">
           <div className="flex items-start justify-between">
             <div>
@@ -541,7 +500,6 @@ export default function HrAnalyticsPanel({
           </div>
         </div>
 
-        {/* KPI 2: Disciplinary Cases */}
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs relative overflow-hidden group hover:border-rose-300 transition">
           <div className="flex items-start justify-between">
             <div>
@@ -569,7 +527,6 @@ export default function HrAnalyticsPanel({
           </div>
         </div>
 
-        {/* KPI 3: Supervisor Attendance */}
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs relative overflow-hidden group hover:border-emerald-300 transition">
           <div className="flex items-start justify-between">
             <div>
@@ -597,7 +554,6 @@ export default function HrAnalyticsPanel({
           </div>
         </div>
 
-        {/* KPI 4: DOLE Compliance Index */}
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs relative overflow-hidden group hover:border-blue-300 transition">
           <div className="flex items-start justify-between">
             <div>
@@ -626,7 +582,6 @@ export default function HrAnalyticsPanel({
         </div>
       </div>
 
-      {/* ================= 3. INTERACTIVE SEGMENTED SUB-NAVIGATION ================= */}
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-3">
         <div className="flex flex-wrap items-center gap-1.5 bg-slate-100/80 p-1 rounded-xl">
           <button
@@ -698,7 +653,6 @@ export default function HrAnalyticsPanel({
           </button>
         </div>
 
-        {/* Quick direct switch to functional module tabs */}
         {onNavigate && (
           <div className="flex items-center gap-2 text-xs">
             <span className="text-slate-400 text-[11px] font-medium hidden sm:inline">Direct Launch:</span>
@@ -734,12 +688,8 @@ export default function HrAnalyticsPanel({
         )}
       </div>
 
-      {/* ================= 4. TAB CONTENT VIEWS ================= */}
-
-      {/* ----------------- SUBVIEW 1: EXECUTIVE OVERVIEW ----------------- */}
       {activeTab === "overview" && (
         <div className="space-y-6">
-          {/* Disciplinary Workflow Pipeline */}
           <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xs">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
               <div>
@@ -756,7 +706,6 @@ export default function HrAnalyticsPanel({
             </div>
 
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-              {/* Step 1 */}
               <div className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/70 hover:bg-white hover:border-purple-300 transition">
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Stage 1</span>
                 <div className="mt-1 text-lg font-black text-slate-800">{disciplinaryMetrics.submitted}</div>
@@ -764,7 +713,6 @@ export default function HrAnalyticsPanel({
                 <p className="mt-1 text-[10px] text-slate-400">Awaiting Head Office NTE evaluation</p>
               </div>
 
-              {/* Step 2 */}
               <div className="p-3.5 rounded-xl border border-amber-200 bg-amber-50/40 hover:bg-white hover:border-amber-300 transition">
                 <span className="text-[10px] font-bold text-amber-600 uppercase tracking-wider">Stage 2 (5-Day Rule)</span>
                 <div className="mt-1 text-lg font-black text-amber-800">{disciplinaryMetrics.nteIssued}</div>
@@ -772,7 +720,6 @@ export default function HrAnalyticsPanel({
                 <p className="mt-1 text-[10px] text-amber-600">Employee written explanation period</p>
               </div>
 
-              {/* Step 3 */}
               <div className="p-3.5 rounded-xl border border-indigo-200 bg-indigo-50/40 hover:bg-white hover:border-indigo-300 transition">
                 <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-wider">Stage 3</span>
                 <div className="mt-1 text-lg font-black text-indigo-800">{disciplinaryMetrics.hearingScheduled}</div>
@@ -780,7 +727,6 @@ export default function HrAnalyticsPanel({
                 <p className="mt-1 text-[10px] text-indigo-600">Zoom / in-person committee inquiry</p>
               </div>
 
-              {/* Step 4 */}
               <div className="p-3.5 rounded-xl border border-rose-200 bg-rose-50/40 hover:bg-white hover:border-rose-300 transition">
                 <span className="text-[10px] font-bold text-rose-600 uppercase tracking-wider">Stage 4 (Notice 2)</span>
                 <div className="mt-1 text-lg font-black text-rose-800">{disciplinaryMetrics.decisionIssued}</div>
@@ -788,7 +734,6 @@ export default function HrAnalyticsPanel({
                 <p className="mt-1 text-[10px] text-rose-600">Warning, suspension, or clearance</p>
               </div>
 
-              {/* Step 5 */}
               <div className="p-3.5 rounded-xl border border-emerald-200 bg-emerald-50/40 hover:bg-white hover:border-emerald-300 transition">
                 <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider">Stage 5</span>
                 <div className="mt-1 text-lg font-black text-emerald-800">{disciplinaryMetrics.closedAndArchived}</div>
@@ -798,9 +743,7 @@ export default function HrAnalyticsPanel({
             </div>
           </div>
 
-          {/* Two Columns: Violation Distribution & Field Deployment Overview */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Top Violation Categories */}
             <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xs flex flex-col justify-between">
               <div>
                 <div className="flex items-center justify-between mb-4">
@@ -847,7 +790,6 @@ export default function HrAnalyticsPanel({
               )}
             </div>
 
-            {/* Field Booths & Kiosk Deployment */}
             <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xs flex flex-col justify-between">
               <div>
                 <div className="flex items-center justify-between mb-4">
@@ -911,10 +853,8 @@ export default function HrAnalyticsPanel({
         </div>
       )}
 
-      {/* ----------------- SUBVIEW 2: DISCIPLINARY & DUE PROCESS ----------------- */}
       {activeTab === "disciplinary" && (
         <div className="space-y-6">
-          {/* Top Alert: Active 5-Day Explanation Window */}
           {disciplinaryMetrics.overdueExplanationCount > 0 && (
             <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 flex items-start gap-3 text-rose-900">
               <AlertTriangle className="text-rose-600 shrink-0 mt-0.5" size={20} />
@@ -938,7 +878,6 @@ export default function HrAnalyticsPanel({
             </div>
           )}
 
-          {/* Cases Search & Filter Bar */}
           <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="relative flex-1 max-w-md">
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -966,7 +905,6 @@ export default function HrAnalyticsPanel({
             </div>
           </div>
 
-          {/* Cases Table */}
           <div className="rounded-2xl border border-slate-200 bg-white shadow-xs overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse text-xs">
@@ -1062,7 +1000,6 @@ export default function HrAnalyticsPanel({
         </div>
       )}
 
-      {/* ----------------- SUBVIEW 3: WORKFORCE & HEADCOUNT ----------------- */}
       {activeTab === "workforce" && (
         <div className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -1094,7 +1031,6 @@ export default function HrAnalyticsPanel({
             </div>
           </div>
 
-          {/* Supervisors Distribution Table */}
           <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xs">
             <h3 className="text-base font-extrabold text-slate-900 mb-1">
               Field Supervisors & Agent Assignment Distribution
@@ -1134,7 +1070,6 @@ export default function HrAnalyticsPanel({
         </div>
       )}
 
-      {/* ----------------- SUBVIEW 4: ATTENDANCE & DTR ----------------- */}
       {activeTab === "attendance" && (
         <div className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -1157,7 +1092,6 @@ export default function HrAnalyticsPanel({
             </div>
           </div>
 
-          {/* 7-Day Attendance Rate Trend Bar Chart */}
           <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xs">
             <div className="flex items-center justify-between mb-6">
               <div>
@@ -1203,7 +1137,6 @@ export default function HrAnalyticsPanel({
         </div>
       )}
 
-      {/* ----------------- SUBVIEW 5: DOLE 201 SCORECARD ----------------- */}
       {activeTab === "compliance" && (
         <div className="space-y-6">
           <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xs">

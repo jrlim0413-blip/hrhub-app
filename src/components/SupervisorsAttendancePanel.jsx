@@ -43,10 +43,8 @@ import {
   matchStlCanonicalName
 } from "../lib/stlApiLiveService";
 
-// Real STL supervisors pulled directly from live source APIs
 const FALLBACK_SUPERVISORS = getStlSupervisors();
 
-// Areas filter reference
 const AREAS = [
   { id: "all", label: "All Sectors" },
   { id: "Mandaue City", label: "Mandaue City" },
@@ -56,7 +54,6 @@ const AREAS = [
   { id: "4", label: "Area 4 - Tipolo & Guiso" }
 ];
 
-// Shift slots for STL operations
 const SHIFTS = [
   "Morning Draw (06:00 AM - 02:30 PM)",
   "Afternoon Draw (01:00 PM - 09:30 PM)",
@@ -64,7 +61,6 @@ const SHIFTS = [
   "Full Day Field Operations (07:00 AM - 05:00 PM)"
 ];
 
-// Helper to format ISO date to YYYY-MM-DD
 function getTodayString() {
   const d = new Date();
   const year = d.getFullYear();
@@ -73,7 +69,6 @@ function getTodayString() {
   return `${year}-${month}-${day}`;
 }
 
-// Helper to get Monday date string of a given date (YYYY-MM-DD)
 function getMondayOfDate(dateStr) {
   const [y, m, d] = (dateStr || getTodayString()).split("-").map(Number);
   const date = new Date(y, m - 1, d);
@@ -86,7 +81,6 @@ function getMondayOfDate(dateStr) {
   return `${year}-${month}-${dayNum}`;
 }
 
-// Helper to compute 7 consecutive week days starting from Monday
 function getWeekDaysFromMonday(mondayStr) {
   const [y, m, d] = (mondayStr || getTodayString()).split("-").map(Number);
   const base = new Date(y, m - 1, d);
@@ -118,12 +112,11 @@ function getWeekDaysFromMonday(mondayStr) {
   return days;
 }
 
-// Helper to compute consecutive dates for any period: Weekly (7 Days) or Semi-Monthly (1st–15th or 16th–End)
 function getDaysForPeriod(periodType, baseDateStr) {
   const [y, m, d] = (baseDateStr || getTodayString()).split("-").map(Number);
   const baseDate = new Date(y, m - 1, d);
   const year = baseDate.getFullYear();
-  const monthIdx = baseDate.getMonth(); // 0 to 11
+  const monthIdx = baseDate.getMonth();
   const daysInMonth = new Date(year, monthIdx + 1, 0).getDate();
   const monthName = baseDate.toLocaleDateString("en-US", { month: "short" });
   const fullMonthName = baseDate.toLocaleDateString("en-US", { month: "long" });
@@ -132,7 +125,6 @@ function getDaysForPeriod(periodType, baseDateStr) {
   const dayNamesFull = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
   if (periodType === "first_half") {
-    // 1st to 15th (15 Days)
     const days = [];
     for (let dayNum = 1; dayNum <= 15; dayNum++) {
       const cur = new Date(year, monthIdx, dayNum);
@@ -163,7 +155,6 @@ function getDaysForPeriod(periodType, baseDateStr) {
       shortLabel: `1st Cutoff (1st–15th)`
     };
   } else if (periodType === "second_half") {
-    // 16th to End of Month (13 to 16 Days)
     const days = [];
     for (let dayNum = 16; dayNum <= daysInMonth; dayNum++) {
       const cur = new Date(year, monthIdx, dayNum);
@@ -194,7 +185,6 @@ function getDaysForPeriod(periodType, baseDateStr) {
       shortLabel: `2nd Cutoff (16th–${daysInMonth}th)`
     };
   } else {
-    // Discretionary 7 Consecutive Days: starts on whatever date is picked by the user!
     const cleanBaseStr = baseDateStr || getTodayString();
     const [by, bm, bd] = cleanBaseStr.split("-").map(Number);
     const startDateObj = new Date(by, bm - 1, bd);
@@ -263,7 +253,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
   const [loading, setLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // Search & Filter State
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [areaFilter, setAreaFilter] = useState("all");
@@ -271,25 +260,20 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
     const scope = getUserAssignedStlEntity(activeUser);
     return scope && !scope.isNonStl ? scope.canonicalName : "all";
   });
-  const [viewMode, setViewMode] = useState("table"); // 'table' | 'cards'
+  const [viewMode, setViewMode] = useState("table");
 
-  // Enforce entity locking for scoped branch users
   useEffect(() => {
     if (userEntityScope && !userEntityScope.isNonStl && selectedEntity !== userEntityScope.canonicalName) {
       setSelectedEntity(userEntityScope.canonicalName);
     }
   }, [userEntityScope, selectedEntity]);
 
-  // Viewing Agents Modal State (view tellers under a supervisor)
   const [viewingSupervisorAgents, setViewingSupervisorAgents] = useState(null);
 
-  // Photo & Geo Verification Modal State
   const [viewingPhotoRecord, setViewingPhotoRecord] = useState(null);
 
-  // Cloud Database Sync State ('synced' | 'syncing' | 'offline')
   const [cloudSyncStatus, setCloudSyncStatus] = useState("syncing");
 
-  // Field Check-In Modal State
   const [isSimulatorOpen, setIsSimulatorOpen] = useState(false);
   const [simSupervisorId, setSimSupervisorId] = useState("");
   const [simLat, setSimLat] = useState("");
@@ -301,11 +285,9 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
   const [isGettingGps, setIsGettingGps] = useState(false);
   const [isSubmittingCheckIn, setIsSubmittingCheckIn] = useState(false);
 
-  // Mobile PWA Link State
   const [copiedSupervisorId, setCopiedSupervisorId] = useState(null);
   const [copiedPwaNotice, setCopiedPwaNotice] = useState("");
 
-  // Field Monitoring Accounts State (System Discretion Accounts)
   const [fieldAccounts, setFieldAccounts] = useState(() => getCachedFieldMonitoringAccounts());
   const [isFieldAccountsModalOpen, setIsFieldAccountsModalOpen] = useState(false);
   const [fieldAccountForm, setFieldAccountForm] = useState({
@@ -318,20 +300,17 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
   const [fieldAccountFormError, setFieldAccountFormError] = useState("");
   const [fieldAccountShowPasswords, setFieldAccountShowPasswords] = useState({});
   const [isSubmittingFieldAccount, setIsSubmittingFieldAccount] = useState(false);
-  const [rosterCategoryFilter, setRosterCategoryFilter] = useState("all"); // "all" | "supervisors" | "monitoring"
+  const [rosterCategoryFilter, setRosterCategoryFilter] = useState("all");
 
-  // Attendance Report State (Supports Weekly 7-Days & Semi-Monthly 15-Days Cutoffs)
   const [isWeeklyModalOpen, setIsWeeklyModalOpen] = useState(false);
-  const [reportPeriodType, setReportPeriodType] = useState("weekly"); // 'weekly' | 'first_half' | 'second_half'
+  const [reportPeriodType, setReportPeriodType] = useState("weekly");
   const [reportBaseDate, setReportBaseDate] = useState(() => getTodayString());
   const [isWeeklyLoading, setIsWeeklyLoading] = useState(false);
   const [weeklyRecords, setWeeklyRecords] = useState([]);
-  const [weeklyCategoryFilter, setWeeklyCategoryFilter] = useState("all"); // "all" | "supervisors" | "monitoring"
+  const [weeklyCategoryFilter, setWeeklyCategoryFilter] = useState("all");
   const [weeklySearchTerm, setWeeklySearchTerm] = useState("");
   const [autoPurgeNotice, setAutoPurgeNotice] = useState("");
 
-  // Storage Protection: Automatically purge photo proofs from previous days on mount
-  // Guarantees all official time_in, status, coordinates, and remarks are preserved permanently!
   useEffect(() => {
     const today = getTodayString();
     autoPurgePastPhotos(today)
@@ -357,7 +336,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
     }
   };
 
-  // Fetch Field Monitoring Accounts from Supabase Table & Realtime listener
   const refreshFieldAccounts = async () => {
     try {
       const accs = await loadFieldMonitoringAccounts();
@@ -487,7 +465,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
     const roleParam = isFm ? "field_monitoring" : "supervisor";
     const pwaUrl = `${origin}/?pwa=supervisor&id=${spvrId}&username=${encodeURIComponent(spvrUsername)}&name=${encodeURIComponent(spvrName)}&role=${roleParam}&area=${encodeURIComponent(spvrArea)}`;
 
-    // Retrieve registered password if this is a Field Monitoring account
     const fmMatch = fieldAccounts.find((f) =>
       String(f.id).toLowerCase() === String(spvrId).toLowerCase() ||
       String(f.username).toLowerCase() === String(spvrUsername).toLowerCase()
@@ -499,7 +476,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
       : `📱 HRHub Field Operations • Daily Login Portal`;
     const roleLabel = isFm ? `FIELD MONITOR` : `SUPERVISOR`;
 
-    // Enhanced executive message package with clear installation instructions ready for Messenger / Viber / SMS
     const formattedMessage = [
       titleText,
       `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
@@ -552,15 +528,13 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
     }, 7000);
   };
 
-  // Strict Live Camera State (Live Video Viewfinder - No File Uploads)
   const [isCameraActive, setIsCameraActive] = useState(false);
-  const [cameraFacingMode, setCameraFacingMode] = useState("user"); // 'user' (selfie) | 'environment' (area)
+  const [cameraFacingMode, setCameraFacingMode] = useState("user");
   const [cameraError, setCameraError] = useState("");
   const videoRef = useRef(null);
   const mediaStreamRef = useRef(null);
   const mobileCameraInputRef = useRef(null);
 
-  // Edit DTR Modal State
   const [editingRecord, setEditingRecord] = useState(null);
   const [editFormData, setEditFormData] = useState({
     status: "Present",
@@ -574,14 +548,12 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
     remarks: ""
   });
 
-  // Toast alert
   const [toastMessage, setToastMessage] = useState("");
   const showToast = (msg) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(""), 3500);
   };
 
-  // 1. Fetch Real Supervisors AND Real Agents from Live Database APIs
   const fetchLiveData = async () => {
     setLoading(true);
 
@@ -613,7 +585,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
     fetchLiveData();
   }, []);
 
-  // 2. Compute Real Agent Counts Per Supervisor from API Data
   const agentStatsBySupervisor = useMemo(() => {
     const map = {};
     supervisorsList.forEach((s) => {
@@ -659,7 +630,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
     return agentStatsBySupervisor[key] || agentStatsBySupervisor[String(rec.supervisorId)] || { total: 0, active: 0, inactive: 0, agents: [] };
   }, [agentStatsBySupervisor]);
 
-  // 3. Load or Initialize Attendance Records for Selected Date & Sync with Supabase Cloud
   useEffect(() => {
     if (supervisorsList.length === 0) return;
 
@@ -667,7 +637,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
     const storageKey = `hrhub_spvr_attendance_v3_${selectedDate}`;
     const cached = localStorage.getItem(storageKey);
 
-    // Initialize clean attendance records from real API data + registered Field Monitoring accounts
     const supervisorRecords = supervisorsList.map((spvr, index) => {
       const canonicalComp = matchStlCanonicalName(spvr.company);
       const uniqueKey = `${canonicalComp}_${spvr.id}`;
@@ -740,14 +709,13 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
               validMap.set(String(r.supervisorId), r);
             });
 
-            // Merge cache into initialRecords, preserving role and field monitoring identity
             currentWorkingRecords = initialRecords.map((initRec) => {
               const saved = validMap.get(initRec.uniqueKey) || validMap.get(String(initRec.supervisorId));
               if (saved) {
                 return {
                   ...initRec,
                   ...saved,
-                  role: initRec.role, // Always preserve authoritative role
+                  role: initRec.role,
                   password: initRec.password || saved.password,
                   fullName: initRec.fullName || saved.fullName,
                   username: initRec.username || saved.username,
@@ -763,7 +731,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
 
     setAttendanceRecords(currentWorkingRecords);
 
-    // Asynchronously sync with Supabase Cloud Database
     async function syncCloudData() {
       setCloudSyncStatus("syncing");
       const { data, error, isCloudAvailable } = await fetchCloudAttendance(selectedDate);
@@ -778,7 +745,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
           });
 
           setAttendanceRecords((prev) => {
-            // Guarantee baseList has all initialRecords (Supervisors + Field Monitors)
             const prevMap = new Map();
             (prev || []).forEach((r) => prevMap.set(String(r.supervisorId), r));
 
@@ -817,14 +783,12 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
           });
         }
       } else {
-        // Table not ready or network offline, gracefully maintain local storage
         setCloudSyncStatus("offline");
       }
     }
 
     syncCloudData();
 
-    // Subscribe to Realtime Supabase notifications for immediate live updates
     const unsubscribe = subscribeToAttendanceRealtime(selectedDate, (payload) => {
       const row = payload?.new;
       if (!row || !row.supervisor_id) return;
@@ -885,7 +849,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
     };
   }, [selectedDate, supervisorsList, fieldAccounts]);
 
-  // Save current records to localStorage
   const saveRecordsToStorage = (updated) => {
     setAttendanceRecords(updated);
     try {
@@ -896,7 +859,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
     }
   };
 
-  // Date Navigation Handlers
   const handlePrevDay = () => {
     const cur = new Date(selectedDate + "T00:00:00");
     cur.setDate(cur.getDate() - 1);
@@ -913,7 +875,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
     setSelectedDate(getTodayString());
   };
 
-  // Quick Status Toggle for a Supervisor
   const handleQuickStatusChange = (supervisorId, newStatus) => {
     const nowTime = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
     let changedRec = null;
@@ -952,7 +913,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
     showToast(`Updated attendance status to ${newStatus}`);
   };
 
-  // Clock In Now Timestamp
   const handleClockInNow = (supervisorId) => {
     const nowTime = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
     let changedRec = null;
@@ -976,7 +936,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
     showToast(`Time In recorded at ${nowTime}`);
   };
 
-  // Batch: Mark All Active as Present
   const handleMarkAllPresent = () => {
     if (!window.confirm(`Mark all active supervisors as "Present" with Time In for ${selectedDate}?`)) return;
 
@@ -994,7 +953,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
     showToast("All active supervisors marked as Present & synced!");
   };
 
-  // Grab Live GPS from Browser / Phone with High Accuracy
   const handleGetBrowserGps = () => {
     if (!navigator.geolocation) {
       alert("Geolocation is not supported by your browser/device.");
@@ -1021,7 +979,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
     );
   };
 
-  // Start In-App Live Camera Stream (Strict Live Capture)
   const startLiveCamera = async (facing = cameraFacingMode) => {
     setCameraError("");
     try {
@@ -1059,7 +1016,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
     }
   };
 
-  // Stop Live Camera Stream
   const stopLiveCamera = () => {
     if (mediaStreamRef.current) {
       mediaStreamRef.current.getTracks().forEach((t) => t.stop());
@@ -1071,7 +1027,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
     setIsCameraActive(false);
   };
 
-  // Capture Frame directly from Live Camera Viewfinder
   const capturePhotoFromLiveCamera = () => {
     if (!videoRef.current) return;
     const video = videoRef.current;
@@ -1083,7 +1038,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
     canvas.height = height;
     const ctx = canvas.getContext("2d");
 
-    // Mirror horizontal when using selfie camera
     if (cameraFacingMode === "user") {
       ctx.translate(width, 0);
       ctx.scale(-1, 1);
@@ -1103,7 +1057,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
     );
   };
 
-  // Switch between Selfie (user) and Rear Area Camera (environment)
   const switchCameraFacingMode = () => {
     const nextMode = cameraFacingMode === "user" ? "environment" : "user";
     setCameraFacingMode(nextMode);
@@ -1112,7 +1065,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
     }
   };
 
-  // Mobile Device Camera Fallback (Strict Camera Intent via capture="user")
   const handleMobileCameraCapture = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -1134,7 +1086,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
     }
   };
 
-  // Watch modal open/close to auto-trigger camera & GPS
   useEffect(() => {
     if (isSimulatorOpen) {
       startLiveCamera("user");
@@ -1149,7 +1100,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
     };
   }, [isSimulatorOpen]);
 
-  // Submit Mobile Check-In with Cloud Storage & Database Upsert
   const handleSubmitMobileCheckin = async (e) => {
     e.preventDefault();
     if (!simSupervisorId) return;
@@ -1167,7 +1117,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
 
     let finalPhotoUrl = simPhotoUrl;
 
-    // 1. Direct Upload to Supabase Storage Bucket 'supervisor-attendance'
     if (simPhotoFile) {
       try {
         const uploadResult = await uploadAttendancePhoto(simPhotoFile, simSupervisorId, selectedDate);
@@ -1198,7 +1147,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
       lastUpdated: nowTime
     };
 
-    // 2. Direct Await Upsert into Supabase Table 'supervisor_attendance'
     const cloudRes = await upsertCloudAttendance(updatedRec, selectedDate);
 
     if (cloudRes.success) {
@@ -1238,7 +1186,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
     setSimLocationName("");
   };
 
-  // Open Edit DTR Modal
   const openEditModal = (record) => {
     setEditingRecord(record);
     setEditFormData({
@@ -1254,7 +1201,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
     });
   };
 
-  // Save Edit DTR with Cloud Upsert
   const handleSaveEdit = async (e) => {
     e.preventDefault();
     if (!editingRecord) return;
@@ -1289,7 +1235,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
     setEditingRecord(null);
   };
 
-  // Export CSV for Daily Attendance (Supervisors + Field Monitoring)
   const handleExportCSV = () => {
     if (attendanceRecords.length === 0) return;
 
@@ -1348,12 +1293,10 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
     showToast("Downloaded daily attendance CSV file");
   };
 
-  // Print Official Daily DTR Sheet
   const handlePrint = () => {
     window.print();
   };
 
-  // ================= ATTENDANCE REPORT LOGIC (WEEKLY & SEMI-MONTHLY 15-DAY CUTOFFS) =================
   const handleOpenWeeklyReport = () => {
     setReportBaseDate(selectedDate || getTodayString());
     setIsWeeklyModalOpen(true);
@@ -1406,11 +1349,9 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
     const endStr = periodInfo.endDate;
 
     try {
-      // 1. Fetch from Supabase Cloud for this full date range
       const { data: cloudRows } = await fetchRangeCloudAttendance(startStr, endStr);
       const combined = Array.isArray(cloudRows) ? [...cloudRows] : [];
 
-      // 2. Also check local storage caches for each day within the period
       periodInfo.days.forEach((d) => {
         try {
           const raw = localStorage.getItem(`hrhub_spvr_attendance_v3_${d.date}`);
@@ -1480,7 +1421,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
       }))
     ];
 
-    // Quick lookup map: `${id.toLowerCase()}_${date}`
     const recMap = new Map();
     weeklyRecords.forEach((r) => {
       if (r.supervisor_id && r.attendance_date) {
@@ -1554,7 +1494,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
     });
   }, [periodRosterMatrix, weeklyCategoryFilter, weeklySearchTerm]);
 
-  // Download Formatted & Colored Excel Spreadsheet (.xls with HTML styles, badges, and signatures)
   const handleDownloadFormattedExcel = () => {
     if (filteredPeriodMatrix.length === 0) return;
 
@@ -1629,7 +1568,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
       `;
     }).join("");
 
-    // Detailed Verification Rows
     const detailRowsHtml = [];
     filteredPeriodMatrix.forEach((item) => {
       item.days.forEach((d) => {
@@ -1812,7 +1750,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
     showToast(`Downloaded Formatted Excel Report (${fileName})!`);
   };
 
-  // Download Standard CSV File (Excel / Payroll Compatible)
   const handleDownloadCSV = () => {
     if (filteredPeriodMatrix.length === 0) return;
 
@@ -1857,7 +1794,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
       ].join(",");
     });
 
-    // Detailed Location & Timestamp Verification Log
     const detailHeader = [
       "Date",
       "Personnel ID",
@@ -1919,7 +1855,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
     showToast("Downloaded Attendance CSV!");
   };
 
-  // Print or Save as Official PDF Report
   const handlePrintReport = () => {
     if (filteredPeriodMatrix.length === 0) return;
 
@@ -2095,7 +2030,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
     printWindow.document.close();
   };
 
-  // Computed Metrics
   const stats = useMemo(() => {
     const activeRecords = attendanceRecords.filter((r) => {
       if (selectedEntity !== "all" && !matchesCompanyEntity(r.company, selectedEntity)) {
@@ -2126,8 +2060,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
     return { totalSupervisors, totalAgentsManaged, present, late, ob, leave, pending };
   }, [attendanceRecords, selectedEntity, getSupervisorAgentStats]);
 
-  // Filtered Records
-  // Dynamic Areas / Sectors list based on selected entity & real attendance records
   const dynamicAreas = useMemo(() => {
     const set = new Set();
     attendanceRecords.forEach((r) => {
@@ -2143,11 +2075,9 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
 
   const filteredRecords = useMemo(() => {
     return attendanceRecords.filter((r) => {
-      // Category filter (Source API Supervisors vs Field Monitoring)
       if (rosterCategoryFilter === "supervisors" && r.role === "Field Monitoring") return false;
       if (rosterCategoryFilter === "monitoring" && r.role !== "Field Monitoring") return false;
 
-      // Kung inactive ang naka-assigned na agent sa kanila o walang active agent, huwag nang i-display
       if (r.role !== "Field Monitoring") {
         const spvrStats = getSupervisorAgentStats(r);
         if (!spvrStats || spvrStats.active === 0) return false;
@@ -2183,7 +2113,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
     });
   }, [attendanceRecords, searchTerm, statusFilter, areaFilter, rosterCategoryFilter, selectedEntity, getSupervisorAgentStats]);
 
-  // Entities tabs calculation (STL Subsidiaries Only)
   const entityTabList = useMemo(() => {
     const targetSubs = userEntityScope && !userEntityScope.isNonStl
       ? [userEntityScope.canonicalName]
@@ -2209,7 +2138,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
     });
   }, [attendanceRecords, getSupervisorAgentStats, userEntityScope]);
 
-  // Formatted date header
   const formattedDateTitle = useMemo(() => {
     try {
       const d = new Date(selectedDate + "T00:00:00");
@@ -2226,7 +2154,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
 
   return (
     <div className="space-y-3 font-['Figtree','Inter',sans-serif] antialiased">
-      {/* Toast Alert Notification */}
       {toastMessage && (
         <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-xl bg-slate-900 text-white px-4 py-3 shadow-xl border border-slate-700 animate-in fade-in slide-in-from-bottom-3 duration-200">
           <CheckCircle2 size={16} className="text-emerald-400 shrink-0" />
@@ -2234,7 +2161,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
         </div>
       )}
 
-      {/* ================= 1. HEADER & DATE CONTROLS ================= */}
       <div className="rounded-2xl border border-slate-200/80 bg-white p-3.5 sm:p-4 shadow-2xs">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
           <div className="space-y-1">
@@ -2274,7 +2200,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
             </p>
           </div>
 
-          {/* Date Selector Navigation Bar */}
           <div className="flex flex-wrap items-center gap-1.5 bg-slate-50/90 p-1.5 rounded-xl border border-slate-200/80">
             <button
               type="button"
@@ -2315,7 +2240,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
               <ChevronRight size={14} />
             </button>
 
-            {/* Re-sync Live API */}
             <button
               type="button"
               onClick={() => {
@@ -2333,7 +2257,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
           </div>
         </div>
 
-        {/* Action Toolbar */}
         <div className="mt-3 pt-2.5 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2.5 text-xs">
           <div className="flex flex-wrap items-center gap-2 text-slate-700 font-medium">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
@@ -2384,7 +2307,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
         </div>
       </div>
 
-      {/* Multi-Entity Carousel / Tabs Bar (STL Subsidiaries Only) */}
       <div className="bg-white rounded-xl border border-slate-200/80 p-2 shadow-2xs flex items-center gap-1.5 overflow-x-auto custom-scrollbar">
         {isGlobalUser ? (
           <button
@@ -2454,9 +2376,7 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
         </div>
       )}
 
-      {/* ================= 2. METRIC STATS CARDS ================= */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-        {/* Total Active Supervisors */}
         <div className="rounded-2xl border border-slate-200/90 bg-white p-3.5 shadow-2xs">
           <div className="flex items-center justify-between text-slate-500 mb-1">
             <span className="text-[11px] font-bold uppercase tracking-wider">Supervisors</span>
@@ -2466,7 +2386,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
           <div className="mt-1 text-[10px] text-slate-500 font-medium">Active area leads</div>
         </div>
 
-        {/* Total Agents Handled */}
         <div className="rounded-2xl border border-sky-200/90 bg-gradient-to-br from-sky-50/70 to-white p-3.5 shadow-2xs">
           <div className="flex items-center justify-between text-sky-700 mb-1">
             <span className="text-[11px] font-bold uppercase tracking-wider">Assigned Agents</span>
@@ -2476,7 +2395,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
           <div className="mt-1 text-[10px] text-sky-700 font-semibold">Total across all supervisors</div>
         </div>
 
-        {/* Present Today */}
         <div className="rounded-2xl border border-emerald-200/90 bg-gradient-to-br from-emerald-50/70 to-white p-3.5 shadow-2xs">
           <div className="flex items-center justify-between text-emerald-700 mb-1">
             <span className="text-[11px] font-bold uppercase tracking-wider">Checked In</span>
@@ -2486,7 +2404,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
           <div className="mt-1 text-[10px] text-emerald-700 font-semibold">Time In recorded</div>
         </div>
 
-        {/* Late Check-in */}
         <div className="rounded-2xl border border-amber-200/90 bg-gradient-to-br from-amber-50/70 to-white p-3.5 shadow-2xs">
           <div className="flex items-center justify-between text-amber-700 mb-1">
             <span className="text-[11px] font-bold uppercase tracking-wider">Late Check-in</span>
@@ -2496,7 +2413,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
           <div className="mt-1 text-[10px] text-amber-700 font-medium">Shift grace exceeded</div>
         </div>
 
-        {/* Official Business / On Leave */}
         <div className="rounded-2xl border border-indigo-200/90 bg-gradient-to-br from-indigo-50/70 to-white p-3.5 shadow-2xs">
           <div className="flex items-center justify-between text-indigo-700 mb-1">
             <span className="text-[11px] font-bold uppercase tracking-wider">OB / On Leave</span>
@@ -2506,7 +2422,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
           <div className="mt-1 text-[10px] text-indigo-700 font-medium">Audit or approved leave</div>
         </div>
 
-        {/* Pending Check-In */}
         <div className="rounded-2xl border border-slate-200/90 bg-slate-50 p-3.5 shadow-2xs">
           <div className="flex items-center justify-between text-slate-500 mb-1">
             <span className="text-[11px] font-bold uppercase tracking-wider">Awaiting Time In</span>
@@ -2517,9 +2432,7 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
         </div>
       </div>
 
-      {/* ================= 3. SEARCH & FILTER TOOLBAR ================= */}
       <div className="rounded-2xl border border-slate-200/90 bg-white p-4 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-3">
-        {/* Search input */}
         <div className="relative flex-1 max-w-md">
           <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
@@ -2531,7 +2444,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
           />
         </div>
 
-        {/* Category Pill: All vs Supervisors vs Field Monitoring */}
         <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200 shrink-0">
           <button
             type="button"
@@ -2560,7 +2472,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
           </button>
         </div>
 
-        {/* Area dropdown & View Toggle */}
         <div className="flex items-center gap-2 shrink-0">
           <select
             value={areaFilter}
@@ -2597,7 +2508,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
         </div>
       </div>
 
-      {/* ================= 4. ATTENDANCE CONTENT (TABLE OR GRID) ================= */}
       {filteredRecords.length === 0 ? (
         <div className="rounded-2xl border border-slate-200 bg-white p-12 text-center">
           <AlertCircle className="mx-auto text-slate-300 mb-3" size={40} />
@@ -2626,7 +2536,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
           </button>
         </div>
       ) : viewMode === "table" ? (
-        /* TABLE / DTR LEDGER VIEW */
         <div className="rounded-2xl border border-slate-200/90 bg-white overflow-hidden shadow-sm">
           <div className="overflow-x-auto custom-scrollbar">
             <table className="w-full text-left border-collapse text-xs">
@@ -2647,7 +2556,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
 
                   return (
                     <tr key={record.uniqueKey || `${record.company}_${record.supervisorId}`} className="hover:bg-slate-50/70 transition">
-                      {/* Name & ID */}
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-3">
                           <div className="w-8 h-8 rounded-full bg-slate-100 border border-slate-200/80 flex items-center justify-center font-bold text-slate-700 text-xs shrink-0">
@@ -2675,7 +2583,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
                         </div>
                       </td>
 
-                      {/* Assigned Agents (Real Count from API) */}
                       <td className="py-3 px-3">
                         {record.role === "Field Monitoring" ? (
                           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-teal-50/70 text-teal-800 text-xs font-semibold border border-teal-200/50">
@@ -2699,7 +2606,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
                         )}
                       </td>
 
-                      {/* Status Badge */}
                       <td className="py-3 px-3">
                         <span
                           className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold ${record.status === "Present"
@@ -2731,7 +2637,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
                         </span>
                       </td>
 
-                      {/* Time In (ONLY) */}
                       <td className="py-3 px-3">
                         <span
                           className={`inline-flex items-center gap-1.5 font-mono font-bold text-xs px-2.5 py-1 rounded-lg ${record.timeIn !== "--"
@@ -2744,7 +2649,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
                         </span>
                       </td>
 
-                      {/* Field Photo Proof */}
                       <td className="py-3 px-3">
                         {record.photoProof ? (
                           <button
@@ -2769,7 +2673,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
                         )}
                       </td>
 
-                      {/* GPS Location & Coordinates */}
                       <td className="py-3 px-3 max-w-xs">
                         {record.latitude && record.longitude ? (
                           <div>
@@ -2796,7 +2699,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
                           </span>
                         )}
                       </td>
-                      {/* Mobile PWA Link with Auto-Login */}
                       <td className="py-3 px-4 text-center">
                         <div className="flex items-center justify-center gap-1.5">
                           <button
@@ -2839,7 +2741,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
           </div>
         </div>
       ) : (
-        /* CARDS / GRID VIEW */
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredRecords.map((record) => {
             const spvrStats = getSupervisorAgentStats(record);
@@ -2850,7 +2751,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
                 className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm hover:shadow-md transition flex flex-col justify-between"
               >
                 <div>
-                  {/* Top card bar */}
                   <div className="flex items-start justify-between gap-2 mb-3">
                     <div className="flex items-center gap-2.5">
                       <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-500 text-white font-extrabold flex items-center justify-center text-sm shadow-2xs">
@@ -2882,7 +2782,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
                     </span>
                   </div>
 
-                  {/* Assigned Agents Card Badge */}
                   <div className="mb-3 p-2.5 rounded-xl bg-sky-50/70 border border-sky-100 flex items-center justify-between">
                     <div>
                       <span className="text-[10px] font-bold uppercase tracking-wider text-sky-700 block">
@@ -2905,7 +2804,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
                     </button>
                   </div>
 
-                  {/* Time In & Area Badge */}
                   <div className="grid grid-cols-2 gap-2 mb-3">
                     <div className="bg-emerald-50/70 border border-emerald-100 rounded-xl p-2 text-center">
                       <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 block">
@@ -2926,7 +2824,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
                     </div>
                   </div>
 
-                  {/* Photo Proof Thumbnail on Card */}
                   {record.photoProof && (
                     <div className="mb-3 flex items-center justify-between gap-2.5 p-2 bg-emerald-50/60 border border-emerald-200/80 rounded-xl">
                       <div className="flex items-center gap-2.5 min-w-0">
@@ -2953,7 +2850,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
                     </div>
                   )}
 
-                  {/* GPS & Photo if available */}
                   {record.latitude && record.longitude ? (
                     <div className="p-2.5 rounded-xl bg-emerald-50/50 border border-emerald-100 mb-3 flex items-center justify-between text-[11px]">
                       <div>
@@ -2975,7 +2871,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
                     </div>
                   ) : null}
 
-                  {/* Remarks */}
                   {record.remarks && (
                     <p className="text-xs text-slate-600 bg-slate-50/60 p-2.5 rounded-xl border border-slate-100 italic">
                       "{record.remarks}"
@@ -2983,7 +2878,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
                   )}
                 </div>
 
-                {/* Bottom Quick Action Buttons */}
                 <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between gap-1">
                   <div className="flex items-center gap-1">
                     <button
@@ -3048,7 +2942,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
         </div>
       )}
 
-      {/* ================= 5. VIEW ASSIGNED AGENTS MODAL ================= */}
       {viewingSupervisorAgents && typeof document !== "undefined" && createPortal(
         <div
           className="fixed inset-0 z-[9990] flex items-start justify-center overflow-y-auto p-3 sm:p-5 pt-4 sm:pt-6 md:pt-8 bg-slate-900/70 backdrop-blur-sm animate-in fade-in duration-150"
@@ -3079,7 +2972,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
               </button>
             </div>
 
-            {/* Agents List Body */}
             <div className="p-4 overflow-y-auto custom-scrollbar space-y-2 flex-1">
               {viewingSupervisorAgents.stats.agents.length === 0 ? (
                 <div className="text-center py-8 text-slate-400 text-xs">
@@ -3132,7 +3024,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
         document.body
       )}
 
-      {/* ================= 6. PHOTO & GPS VERIFICATION MODAL (BOND PAPER PROPORTION) ================= */}
       {viewingPhotoRecord && typeof document !== "undefined" && createPortal(
         <div
           className="fixed inset-0 z-[9990] flex items-start justify-center overflow-y-auto p-3 md:p-6 pt-4 sm:pt-6 md:pt-8 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-150"
@@ -3144,7 +3035,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
             className="w-full max-w-5xl max-h-[92vh] bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col animate-in zoom-in-95 duration-150"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Header */}
             <div className="px-6 py-4 bg-slate-900 text-white flex items-center justify-between shrink-0 border-b border-slate-800">
               <div className="flex items-center gap-3">
                 <div className="w-9 h-9 rounded-xl bg-emerald-500/20 border border-emerald-400/40 flex items-center justify-center text-emerald-400 font-bold">
@@ -3168,9 +3058,7 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
               </button>
             </div>
 
-            {/* Bond Paper 2-Column Body */}
             <div className="overflow-y-auto p-6 md:p-8 grid grid-cols-1 lg:grid-cols-2 gap-6 bg-slate-50/50">
-              {/* Left Column: Visual Photo Proof */}
               <div className="flex flex-col space-y-3">
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
@@ -3212,7 +3100,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
                   </div>
                 )}
 
-                {/* Supervisor details bar */}
                 <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs space-y-2 text-xs">
                   <div className="flex items-center justify-between py-1 border-b border-slate-100">
                     <span className="text-slate-500 font-medium">Supervisor:</span>
@@ -3236,7 +3123,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
                 </div>
               </div>
 
-              {/* Right Column: Live Interactive Map Pin */}
               <div className="flex flex-col space-y-3">
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
@@ -3250,7 +3136,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
                   )}
                 </div>
 
-                {/* Map Embed or No GPS State */}
                 {viewingPhotoRecord.latitude && viewingPhotoRecord.longitude ? (
                   <div className="relative rounded-2xl overflow-hidden border-2 border-slate-200 shadow-md aspect-4/3 max-h-[380px] bg-slate-100">
                     <iframe
@@ -3270,7 +3155,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
                   </div>
                 )}
 
-                {/* Geotag Details Box */}
                 <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs space-y-2 text-xs">
                   {viewingPhotoRecord.latitude && viewingPhotoRecord.longitude ? (
                     <>
@@ -3323,11 +3207,9 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
         document.body
       )}
 
-      {/* ================= 7. FIELD CHECK-IN MODAL (BOND PAPER PROPORTION & LIVE MAP) ================= */}
       {isSimulatorOpen && typeof document !== "undefined" && createPortal(
         <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-3 md:p-6 pt-4 sm:pt-6 md:pt-8 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-150">
           <div className="w-full max-w-5xl max-h-[92vh] bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col">
-            {/* Header */}
             <div className="px-6 py-4 bg-gradient-to-r from-emerald-800 to-teal-900 text-white flex items-center justify-between shrink-0 border-b border-emerald-700/60">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-2xl bg-white/10 border border-white/20 flex items-center justify-center text-white">
@@ -3351,9 +3233,7 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
               </button>
             </div>
 
-            {/* Bond Paper 2-Column Form Body */}
             <form onSubmit={handleSubmitMobileCheckin} className="flex-1 overflow-y-auto p-6 md:p-8 grid grid-cols-1 lg:grid-cols-2 gap-6 bg-slate-50/50">
-              {/* Left Column: Live Camera Viewfinder & Snapshot Preview */}
               <div className="flex flex-col space-y-3">
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
@@ -3374,7 +3254,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
                   )}
                 </div>
 
-                {/* Hidden input strictly for direct mobile hardware camera intent */}
                 <input
                   type="file"
                   ref={mobileCameraInputRef}
@@ -3384,9 +3263,7 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
                   className="hidden"
                 />
 
-                {/* Viewfinder Window */}
                 <div className="relative rounded-2xl overflow-hidden bg-slate-950 aspect-4/3 max-h-[360px] flex items-center justify-center border-2 border-slate-800 shadow-inner">
-                  {/* Live Video Feed */}
                   <video
                     ref={videoRef}
                     playsInline
@@ -3396,7 +3273,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
                       } ${isCameraActive && !simPhotoUrl ? "block" : "hidden"}`}
                   />
 
-                  {/* Captured Photo Preview */}
                   {simPhotoUrl && !isCameraActive && (
                     <div className="relative w-full h-full flex items-center justify-center bg-black">
                       <img
@@ -3411,7 +3287,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
                     </div>
                   )}
 
-                  {/* Inactive State */}
                   {!isCameraActive && !simPhotoUrl && (
                     <div className="text-center p-6 text-slate-400 space-y-2">
                       <VideoOff size={36} className="mx-auto text-slate-500" />
@@ -3428,7 +3303,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
                     </div>
                   )}
 
-                  {/* Live Shutter Button on top of video */}
                   {isCameraActive && (
                     <div className="absolute bottom-4 inset-x-0 flex items-center justify-center">
                       <button
@@ -3443,7 +3317,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
                   )}
                 </div>
 
-                {/* Viewfinder Controls & Mobile Trigger */}
                 <div className="flex flex-wrap items-center justify-between gap-2 bg-white p-3 rounded-2xl border border-slate-200 shadow-2xs">
                   {simPhotoUrl ? (
                     <div className="flex items-center justify-between w-full">
@@ -3498,7 +3371,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
                 </div>
               </div>
 
-              {/* Right Column: GPS Location & Live Interactive Map Pin */}
               <div className="flex flex-col space-y-3">
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
@@ -3517,7 +3389,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
                   </button>
                 </div>
 
-                {/* Select Supervisor */}
                 <div>
                   <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1">
                     Supervisor Identity
@@ -3549,7 +3420,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
                   </select>
                 </div>
 
-                {/* LIVE INTERACTIVE MAP DISPLAY */}
                 <div className="relative rounded-2xl overflow-hidden border-2 border-slate-200 shadow-md aspect-4/3 max-h-[260px] bg-slate-100 flex items-center justify-center">
                   {simLat && simLng ? (
                     <iframe
@@ -3579,7 +3449,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
                   )}
                 </div>
 
-                {/* GPS Coordinates pill */}
                 {simLat && simLng && (
                   <div className="flex items-center justify-between text-xs bg-emerald-50/80 px-3 py-2 rounded-xl border border-emerald-200">
                     <span className="font-mono text-emerald-950 font-bold">
@@ -3597,7 +3466,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
                   </div>
                 )}
 
-                {/* Landmark Input */}
                 <div>
                   <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1">
                     Location Landmark / Area Note
@@ -3611,7 +3479,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
                   />
                 </div>
 
-                {/* Action Buttons */}
                 <div className="pt-3 flex items-center justify-end gap-2 border-t border-slate-200/80">
                   <button
                     type="button"
@@ -3650,7 +3517,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
         document.body
       )}
 
-      {/* ================= 8. EDIT DTR RECORD MODAL ================= */}
       {editingRecord && typeof document !== "undefined" && createPortal(
         <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 pt-4 sm:pt-6 md:pt-8 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
           <div className="w-full max-w-lg bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
@@ -3674,7 +3540,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
             </div>
 
             <form onSubmit={handleSaveEdit} className="p-6 space-y-4">
-              {/* Status Select */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
                   Attendance Status
@@ -3693,7 +3558,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
                 </select>
               </div>
 
-              {/* Time In */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
                   Time In (e.g. 06:45 AM)
@@ -3710,7 +3574,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
                 </div>
               </div>
 
-              {/* GPS Coordinates */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
@@ -3739,7 +3602,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
                 </div>
               </div>
 
-              {/* Location Name & Area */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
@@ -3772,7 +3634,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
                 </div>
               </div>
 
-              {/* Remarks / Field Note */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
                   Supervisor Remarks / Field Activity
@@ -3786,7 +3647,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
                 />
               </div>
 
-              {/* Modal Buttons */}
               <div className="pt-2 flex items-center justify-end gap-2">
                 <button
                   type="button"
@@ -3808,11 +3668,9 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
         </div>,
         document.body
       )}
-      {/* ================= FIELD MONITORING ACCOUNTS MANAGEMENT MODAL ================= */}
       {isFieldAccountsModalOpen && typeof document !== "undefined" && createPortal(
         <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/70 p-4 pt-4 sm:pt-6 md:pt-8 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="w-full max-w-2xl rounded-3xl border border-slate-200 bg-white shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
-            {/* Header */}
             <div className="bg-gradient-to-r from-emerald-800 via-teal-800 to-slate-900 p-5 text-white flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-2xl bg-emerald-500/20 border border-emerald-400/30 flex items-center justify-center text-emerald-300">
@@ -3840,9 +3698,7 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
               </button>
             </div>
 
-            {/* Content Body */}
             <div className="p-5 overflow-y-auto space-y-5 custom-scrollbar flex-1">
-              {/* Add / Edit Form Box */}
               <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-3">
                 <div className="flex items-center justify-between">
                   <h4 className="text-xs font-black uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
@@ -3950,7 +3806,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
                 </form>
               </div>
 
-              {/* Registered Accounts List */}
               <div className="space-y-2.5">
                 <div className="flex items-center justify-between">
                   <h4 className="text-xs font-black uppercase tracking-wider text-slate-800">
@@ -4003,7 +3858,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
                           </div>
                         </div>
 
-                        {/* Actions */}
                         <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-center">
                           <button
                             type="button"
@@ -4040,7 +3894,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
               </div>
             </div>
 
-            {/* Footer */}
             <div className="bg-slate-50 border-t border-slate-200 px-5 py-3 flex items-center justify-between text-xs text-slate-500">
               <p className="text-[11px]">
                 💡 Ang mga account na ito ay awtomatikong makakapag-login sa <strong>HRHub Mobile PWA</strong>.
@@ -4058,11 +3911,9 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
         document.body
       )}
 
-      {/* ================= 8. ATTENDANCE REPORT MODAL (WEEKLY & SEMI-MONTHLY 15-DAY CUTOFFS) ================= */}
       {isWeeklyModalOpen && typeof document !== "undefined" && createPortal(
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-start justify-center overflow-y-auto p-2 sm:p-4 pt-3 sm:pt-5 animate-in fade-in duration-200">
           <div className="bg-white rounded-3xl shadow-2xl w-[98vw] max-w-[1680px] h-[94vh] max-h-[94vh] flex flex-col overflow-hidden border border-slate-200 animate-in zoom-in-95 duration-200">
-            {/* Modal Header */}
             <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 text-white p-4 sm:p-5 flex flex-wrap items-center justify-between gap-3 shrink-0">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-2xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center border border-indigo-500/30 shrink-0">
@@ -4082,7 +3933,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
-                {/* Download Formatted Excel (.xls with Colors & Badges) */}
                 <button
                   type="button"
                   onClick={handleDownloadFormattedExcel}
@@ -4094,7 +3944,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
                   <span>Download Excel (.xls)</span>
                 </button>
 
-                {/* Download Raw CSV */}
                 <button
                   type="button"
                   onClick={handleDownloadCSV}
@@ -4106,7 +3955,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
                   <span>Download CSV</span>
                 </button>
 
-                {/* Print / Save as PDF */}
                 <button
                   type="button"
                   onClick={handlePrintReport}
@@ -4129,11 +3977,8 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
               </div>
             </div>
 
-            {/* Controls Bar: Period Tabs + Period Navigator + Role Filter + Search */}
             <div className="bg-slate-50 border-b border-slate-200 px-5 py-3 flex flex-wrap items-center justify-between gap-3 shrink-0 text-xs">
-              {/* Left group: Period Type Tabs & Navigation */}
               <div className="flex flex-wrap items-center gap-2">
-                {/* Period Mode Selector Tabs */}
                 <div className="flex items-center gap-1 bg-slate-200/80 p-0.5 rounded-xl shadow-2xs">
                   <button
                     type="button"
@@ -4173,7 +4018,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
 
                 <div className="h-4 w-px bg-slate-300 mx-1 hidden sm:block" />
 
-                {/* Period Navigator & Discretionary Date Picker */}
                 <div className="flex flex-wrap items-center gap-1.5">
                   <button
                     type="button"
@@ -4184,7 +4028,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
                     <ChevronLeft size={15} />
                   </button>
 
-                  {/* Discretionary Date Picker Input */}
                   <div className="flex items-center gap-1.5 px-2.5 py-1 bg-white rounded-xl border border-slate-200 font-bold text-slate-900 shadow-2xs">
                     <Calendar size={14} className="text-indigo-600 shrink-0" />
                     <span className="text-[11px] font-semibold text-slate-500 whitespace-nowrap">
@@ -4201,7 +4044,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
                     />
                   </div>
 
-                  {/* Current Period Span Display */}
                   <div className="flex items-center gap-1.5 px-3 py-1 bg-indigo-50/80 border border-indigo-200/80 rounded-xl text-indigo-900 font-bold text-xs shadow-2xs">
                     <span>{currentPeriodInfo.title}</span>
                   </div>
@@ -4236,9 +4078,7 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
                 </div>
               </div>
 
-              {/* Right group: Role Filters & Search */}
               <div className="flex flex-wrap items-center gap-2">
-                {/* Role filter buttons */}
                 <div className="flex items-center gap-1 bg-slate-200/70 p-0.5 rounded-xl">
                   <button
                     type="button"
@@ -4269,7 +4109,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
                   </button>
                 </div>
 
-                {/* Search input */}
                 <div className="relative">
                   <Search size={13} className="absolute left-2.5 top-2.5 text-slate-400" />
                   <input
@@ -4283,7 +4122,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
               </div>
             </div>
 
-            {/* Storage Policy Notice (100% English) */}
             <div className="bg-emerald-50/80 border-b border-emerald-100 px-5 py-2 flex items-center justify-between text-[11px] text-emerald-900 shrink-0">
               <span className="flex items-center gap-1.5 font-medium">
                 <Sparkles size={12} className="text-emerald-600 shrink-0" />
@@ -4298,7 +4136,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
               </button>
             </div>
 
-            {/* Modal Body: Landscape Matrix Table */}
             <div className="flex-1 overflow-x-auto overflow-y-auto p-4 sm:p-5">
               {isWeeklyLoading ? (
                 <div className="py-24 text-center space-y-3">
@@ -4394,7 +4231,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
               )}
             </div>
 
-            {/* Modal Footer */}
             <div className="bg-slate-50 border-t border-slate-200 px-5 py-3 flex items-center justify-between text-xs text-slate-500 shrink-0">
               <span className="text-[11px]">
                 Showing <strong>{filteredPeriodMatrix.length}</strong> personnel • {currentPeriodInfo.title} ({currentPeriodInfo.subtitle})
@@ -4412,7 +4248,6 @@ export default function SupervisorsAttendancePanel({ onClose, currentUser = null
         document.body
       )}
 
-      {/* ================= FLOATING TOAST: COPIED PWA NOTICE ================= */}
       {copiedPwaNotice && (
         <div className="fixed bottom-6 right-6 z-50 max-w-md bg-slate-900 text-white px-4 py-3 rounded-2xl shadow-2xl border border-emerald-500/50 flex items-center gap-3 animate-in fade-in slide-in-from-bottom-4 duration-200">
           <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">

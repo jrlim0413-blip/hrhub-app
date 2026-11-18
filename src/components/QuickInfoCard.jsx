@@ -9,10 +9,6 @@ import {
   saveQuickInfoBroadcastToDb
 } from "../lib/bulletinPostsStorage.js";
 
-/**
- * Computes the real-time upcoming payroll schedule based on the current calendar date.
- * (In the Philippines / Simpal Group: 15th and End-of-Month)
- */
 function getUpcomingPayrollSchedule() {
   const now = new Date();
   const day = now.getDate();
@@ -30,7 +26,6 @@ function getUpcomingPayrollSchedule() {
   if (day <= 15) {
     targetDay = 15;
   } else {
-    // End of the current month
     targetDay = new Date(year, month + 1, 0).getDate();
   }
 
@@ -57,10 +52,8 @@ export default function QuickInfoCard({
   const [isSaving, setIsSaving] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
 
-  // Compute live payroll info
   const payrollInfo = useMemo(() => getUpcomingPayrollSchedule(), []);
 
-  // Fetch latest bulletin memo & custom broadcast from database
   useEffect(() => {
     let isMounted = true;
     async function loadData() {
@@ -73,7 +66,6 @@ export default function QuickInfoCard({
         if (!isMounted) return;
 
         if (feedRes?.posts && Array.isArray(feedRes.posts)) {
-          // Take up to 2 latest announcements / official memos / HR reminders
           const importantPosts = feedRes.posts
             .filter((p) => p.pinned || p.category === "Official Memo" || p.category === "HR Reminder" || p.category === "HR Motivation")
             .slice(0, 2);
@@ -95,11 +87,9 @@ export default function QuickInfoCard({
     };
   }, []);
 
-  // Build the dynamic items list based on real-time data & new system features
   const items = useMemo(() => {
     const list = [];
 
-    // 1. Custom Broadcast from HRMD (if present)
     if (customBroadcast?.text) {
       list.push({
         id: "custom_broadcast",
@@ -113,7 +103,6 @@ export default function QuickInfoCard({
       });
     }
 
-    // 2. Real-time Payroll Schedule (Always accurate, never stale)
     list.push({
       id: "payroll_schedule",
       category: "PAYROLL SCHEDULE",
@@ -125,7 +114,6 @@ export default function QuickInfoCard({
       linkTab: "salary_compensation"
     });
 
-    // 3. Latest Cloud Database Bulletin Notice / Reminder
     if (bulletinItems.length > 0) {
       bulletinItems.forEach((post, idx) => {
         list.push({
@@ -143,7 +131,6 @@ export default function QuickInfoCard({
       });
     }
 
-    // 4. What's New in System: Video Bulletin & Motivations
     list.push({
       id: "system_video_feed",
       category: "SYSTEM UPDATE",
@@ -155,7 +142,6 @@ export default function QuickInfoCard({
       linkTab: "bulletin"
     });
 
-    // 5. What's New in System: Cash Advance (CA) Tracking
     list.push({
       id: "system_ca_tracking",
       category: "SYSTEM UPDATE",
@@ -170,7 +156,6 @@ export default function QuickInfoCard({
     return list;
   }, [customBroadcast, payrollInfo, bulletinItems]);
 
-  // Auto-cycle through items every 6.5 seconds unless hovered or editing
   useEffect(() => {
     if (isPaused || isEditing || items.length <= 1) return;
     const interval = setInterval(() => {
@@ -193,7 +178,6 @@ export default function QuickInfoCard({
 
   const handleSaveBroadcast = async () => {
     if (!editText.trim()) {
-      // Clear broadcast
       setIsSaving(true);
       await saveQuickInfoBroadcastToDb({ text: "", tag: "" });
       setCustomBroadcast(null);
@@ -222,7 +206,6 @@ export default function QuickInfoCard({
       onMouseLeave={() => setIsPaused(false)}
       className="bg-[#101d2d] text-white rounded-2xl p-4 shadow-md space-y-2.5 text-xs border border-slate-800/80 transition relative group"
     >
-      {/* Header Row */}
       <div className="flex items-center justify-between text-[10px] tracking-wider uppercase font-extrabold">
         <div className="flex items-center gap-1.5">
           <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
@@ -234,7 +217,6 @@ export default function QuickInfoCard({
           )}
         </div>
 
-        {/* Carousel controls & HRMD edit */}
         <div className="flex items-center gap-1">
           {isHRMD && (
             <button
@@ -273,7 +255,6 @@ export default function QuickInfoCard({
         </div>
       </div>
 
-      {/* Body: Editing Mode vs Normal Display */}
       {isEditing ? (
         <div className="space-y-2 pt-1 animate-in fade-in">
           <textarea
@@ -322,7 +303,6 @@ export default function QuickInfoCard({
             {currentItem?.suffix && <span>{currentItem.suffix}</span>}
           </p>
 
-          {/* Dot progress indicator */}
           {items.length > 1 && (
             <div className="pt-2 flex items-center justify-between">
               <div className="flex items-center gap-1">

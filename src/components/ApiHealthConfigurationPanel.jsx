@@ -61,9 +61,8 @@ export default function ApiHealthConfigurationPanel() {
   const [areas, setAreas] = useState(() => getAreaConfigs());
   const [activeAreaId, setActiveAreaId] = useState(() => getSelectedAreaId());
   const [searchTerm, setSearchTerm] = useState("");
-  const [activeViewTab, setActiveViewTab] = useState("areas"); // 'areas' | 'health'
+  const [activeViewTab, setActiveViewTab] = useState("areas");
 
-  // Modal State
   const [modalOpen, setModalOpen] = useState(false);
   const [editingArea, setEditingArea] = useState(null);
   const [modalForm, setModalForm] = useState(getEmptyForm());
@@ -71,12 +70,10 @@ export default function ApiHealthConfigurationPanel() {
   const [formTestResult, setFormTestResult] = useState(null);
   const [saveLoading, setSaveLoading] = useState(false);
 
-  // Health / Latency State
   const [healthResults, setHealthResults] = useState({});
   const [testingAll, setTestingAll] = useState(false);
   const [copiedKey, setCopiedKey] = useState(null);
 
-  // Listen to external area config updates
   useEffect(() => {
     const handleUpdate = (e) => {
       if (e.detail && Array.isArray(e.detail)) {
@@ -92,7 +89,6 @@ export default function ApiHealthConfigurationPanel() {
     window.addEventListener("hrhub_area_configs_updated", handleUpdate);
     window.addEventListener("hrhub_selected_area_changed", handleAreaChange);
 
-    // Initial cloud load
     loadAreaConfigsFromCloud().then((cloudAreas) => {
       if (cloudAreas && cloudAreas.length > 0) {
         setAreas(cloudAreas);
@@ -218,7 +214,6 @@ export default function ApiHealthConfigurationPanel() {
     setActiveAreaId(id);
   };
 
-  // Run health check on a specific endpoint
   const checkSingleEndpoint = async (key, { url, token, method = "GET", accountantId = null }) => {
     setHealthResults((prev) => ({
       ...prev,
@@ -238,41 +233,34 @@ export default function ApiHealthConfigurationPanel() {
     }));
   };
 
-  // Run full system diagnostics
   const handleTestAllEndpoints = async () => {
     setTestingAll(true);
     const selectedArea = getAreaConfigById(activeAreaId);
 
     const tasks = [
-      // 1. Supabase Database
       checkSingleEndpoint("supabase_db", {
         url: `${API_CONFIG.SUPABASE_URL}/rest/v1/user_settings?select=user_id&limit=1`,
         token: API_CONFIG.SUPABASE_ANON
       }),
-      // 2. Supabase Storage
       checkSingleEndpoint("supabase_storage", {
         url: `${API_CONFIG.SUPABASE_URL}/storage/v1/bucket`,
         token: API_CONFIG.SUPABASE_ANON
       }),
-      // 3. Current Area: Gross Report API
       checkSingleEndpoint("gross_api", {
         url: selectedArea.grossReportUrl,
         token: selectedArea.grossReportToken,
         accountantId: selectedArea.accountantId
       }),
-      // 4. Current Area: Active Tellers API
       checkSingleEndpoint("tellers_api", {
         url: selectedArea.activeTellersUrl,
         token: selectedArea.activeTellersToken || selectedArea.grossReportToken,
         accountantId: selectedArea.accountantId
       }),
-      // 5. Current Area: Supervisors API
       checkSingleEndpoint("supervisors_api", {
         url: selectedArea.supervisorUrl,
         token: selectedArea.supervisorToken || selectedArea.grossReportToken,
         accountantId: selectedArea.accountantId
       }),
-      // 6. Current Area: Teller Bet API
       checkSingleEndpoint("bets_api", {
         url: String(selectedArea.tellerBetUrl || "").trim(),
         token: selectedArea.tellerBetToken || selectedArea.grossReportToken
@@ -302,7 +290,6 @@ export default function ApiHealthConfigurationPanel() {
 
   return (
     <div className="space-y-6 font-['Figtree','Inter',sans-serif]">
-      {/* Top Banner / Title Header */}
       <div className="rounded-3xl border border-slate-200/90 bg-gradient-to-br from-slate-900 via-slate-800 to-emerald-950 p-6 text-white shadow-xl shadow-slate-900/10 relative overflow-hidden">
         <div className="absolute right-0 top-0 -mt-10 -mr-10 h-64 w-64 rounded-full bg-emerald-500/10 blur-3xl pointer-events-none" />
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -351,7 +338,6 @@ export default function ApiHealthConfigurationPanel() {
         </div>
       </div>
 
-      {/* KPI Status Strip */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
           <div className="flex items-center justify-between text-slate-500">
@@ -406,7 +392,6 @@ export default function ApiHealthConfigurationPanel() {
         </div>
       </div>
 
-      {/* Navigation Tabs (Areas vs System Latency) */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 pb-3">
         <div className="inline-flex rounded-xl bg-slate-100 p-1 border border-slate-200 text-xs font-bold text-slate-600">
           <button
@@ -450,7 +435,6 @@ export default function ApiHealthConfigurationPanel() {
         )}
       </div>
 
-      {/* ================= VIEW 1: AREA CONFIGURATIONS ================= */}
       {activeViewTab === "areas" && (
         <div className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -467,7 +451,6 @@ export default function ApiHealthConfigurationPanel() {
                   }`}
                 >
                   <div>
-                    {/* Header: Area Name & Company */}
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <div className="flex items-center gap-2">
@@ -517,7 +500,6 @@ export default function ApiHealthConfigurationPanel() {
                       </p>
                     )}
 
-                    {/* API Endpoints Summary */}
                     <div className="mt-4 space-y-2 text-[11px] bg-slate-50/70 p-3 rounded-xl border border-slate-200/80">
                       <div className="flex items-center justify-between text-slate-500">
                         <span className="font-bold flex items-center gap-1.5">
@@ -572,7 +554,6 @@ export default function ApiHealthConfigurationPanel() {
                     </div>
                   </div>
 
-                  {/* Card Bottom Actions */}
                   <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
                     <button
                       type="button"
@@ -635,7 +616,6 @@ export default function ApiHealthConfigurationPanel() {
         </div>
       )}
 
-      {/* ================= VIEW 2: SYSTEM HEALTH & LATENCY ================= */}
       {activeViewTab === "health" && (
         <div className="space-y-4">
           <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
@@ -781,7 +761,6 @@ export default function ApiHealthConfigurationPanel() {
         </div>
       )}
 
-      {/* ================= MODAL: ADD / EDIT AREA API CONFIGURATION ================= */}
       {modalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-xs">
           <div className="w-full max-w-2xl rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl max-h-[90vh] overflow-y-auto custom-scrollbar animate-in fade-in zoom-in-95 duration-200">
@@ -810,7 +789,6 @@ export default function ApiHealthConfigurationPanel() {
             </div>
 
             <form onSubmit={handleSaveModalForm} className="mt-4 space-y-4 text-xs">
-              {/* Row 1: Area Name & Company Name */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-[11px] font-bold text-slate-700 mb-1">
@@ -842,7 +820,6 @@ export default function ApiHealthConfigurationPanel() {
                 </div>
               </div>
 
-              {/* Row 2: Accountant ID & Description */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="block text-[11px] font-bold text-slate-700 mb-1">
@@ -871,7 +848,6 @@ export default function ApiHealthConfigurationPanel() {
                 </div>
               </div>
 
-              {/* Section 1: Gross Report API */}
               <div className="rounded-2xl border border-emerald-100 bg-emerald-50/40 p-3.5 space-y-2.5">
                 <div className="flex items-center gap-1.5 font-black text-slate-900">
                   <BarChart3 size={14} className="text-emerald-700" />
@@ -906,7 +882,6 @@ export default function ApiHealthConfigurationPanel() {
                 </div>
               </div>
 
-              {/* Section 2: Active Tellers & Supervisors */}
               <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-3.5 space-y-2.5">
                 <div className="flex items-center gap-1.5 font-black text-slate-900">
                   <Users size={14} className="text-indigo-600" />
@@ -942,7 +917,6 @@ export default function ApiHealthConfigurationPanel() {
                 </div>
               </div>
 
-              {/* Section 3: Live Bets (Wagers) */}
               <div className="rounded-2xl border border-amber-200/80 bg-amber-50/40 p-3.5 space-y-2.5">
                 <div className="flex items-center gap-1.5 font-black text-slate-900">
                   <Radio size={14} className="text-amber-600" />
@@ -976,7 +950,6 @@ export default function ApiHealthConfigurationPanel() {
                 </div>
               </div>
 
-              {/* Form Test Result Bar */}
               {formTestResult && (
                 <div
                   className={`p-3 rounded-xl border flex items-center justify-between text-xs ${
@@ -1000,7 +973,6 @@ export default function ApiHealthConfigurationPanel() {
                 </div>
               )}
 
-              {/* Modal Buttons */}
               <div className="flex items-center justify-between pt-3 border-t border-slate-100">
                 <button
                   type="button"

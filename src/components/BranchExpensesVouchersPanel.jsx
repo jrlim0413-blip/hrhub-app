@@ -7,7 +7,6 @@ import {
 } from "lucide-react";
 import { COMPANIES } from "./MemoGeneratorPanel";
 
-// Format Philippine Peso Currency
 const currency = new Intl.NumberFormat("en-PH", {
   style: "currency",
   currency: "PHP",
@@ -16,9 +15,8 @@ const currency = new Intl.NumberFormat("en-PH", {
 });
 
 const STORAGE_KEY = "hrhub_branch_expenses_v1";
-const PCF_CEILING_DEFAULT = 30000; // ₱30,000 standard petty cash revolving fund ceiling
+const PCF_CEILING_DEFAULT = 30000;
 
-// Realistic initial branch expenses and vouchers for betting kiosks, branch offices, and operations
 const DEFAULT_EXPENSES_LIST = [
   {
     id: "PCV-2026-081",
@@ -146,7 +144,6 @@ export default function BranchExpensesVouchersPanel({
   onClose,
   onNavigate
 }) {
-  // Master expenses list with persistence
   const [expenses, setExpenses] = useState(() => {
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
@@ -167,7 +164,6 @@ export default function BranchExpensesVouchersPanel({
     }
   };
 
-  // Fund Ceiling & Replenishment
   const [pcfCeiling, setPcfCeiling] = useState(() => {
     try {
       const val = localStorage.getItem("hrhub_pcf_ceiling_v1");
@@ -177,18 +173,15 @@ export default function BranchExpensesVouchersPanel({
     }
   });
 
-  // Filter States
   const [categoryFilter, setCategoryFilter] = useState("ALL");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [companyFilter, setCompanyFilter] = useState("ALL");
   const [searchQuery, setSearchQuery] = useState("");
 
-  // Modal States
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [selectedVoucherForPrint, setSelectedVoucherForPrint] = useState(null);
   const [isReplenishModalOpen, setIsReplenishModalOpen] = useState(false);
 
-  // New Voucher Form
   const [newVoucher, setNewVoucher] = useState({
     id: `PCV-2026-${String(expenses.length + 82).padStart(3, "0")}`,
     date: new Date().toISOString().split("T")[0],
@@ -207,7 +200,6 @@ export default function BranchExpensesVouchersPanel({
     remarks: ""
   });
 
-  // Categories list
   const EXPENSE_CATEGORIES = [
     "Thermal Paper & Stationery",
     "Branch Utilities & Electrical",
@@ -218,9 +210,6 @@ export default function BranchExpensesVouchersPanel({
     "Emergency & Miscellaneous"
   ];
 
-  // -------------------------------------------------------------
-  // REVOLVING PETTY CASH FUND COMPUTATIONS
-  // -------------------------------------------------------------
   const fundMetrics = useMemo(() => {
     let totalDisbursed = 0;
     let pendingApprovalSum = 0;
@@ -237,7 +226,7 @@ export default function BranchExpensesVouchersPanel({
 
     const cashOnHand = Math.max(0, pcfCeiling - totalDisbursed);
     const depletionPercent = pcfCeiling > 0 ? (totalDisbursed / pcfCeiling) * 100 : 0;
-    const isReplenishmentNeeded = cashOnHand <= pcfCeiling * 0.30; // Alert if cash on hand is <= 30%
+    const isReplenishmentNeeded = cashOnHand <= pcfCeiling * 0.30;
 
     return {
       pcfCeiling,
@@ -252,7 +241,6 @@ export default function BranchExpensesVouchersPanel({
     };
   }, [expenses, pcfCeiling]);
 
-  // Filtered List
   const filteredExpenses = useMemo(() => {
     return expenses.filter((item) => {
       if (categoryFilter !== "ALL" && item.category !== categoryFilter) return false;
@@ -273,7 +261,6 @@ export default function BranchExpensesVouchersPanel({
     });
   }, [expenses, categoryFilter, statusFilter, companyFilter, searchQuery]);
 
-  // Create Voucher
   const handleCreateVoucher = (e) => {
     e.preventDefault();
     if (!newVoucher.payee.trim() || !newVoucher.particulars.trim()) {
@@ -296,7 +283,6 @@ export default function BranchExpensesVouchersPanel({
     saveExpenses(updated);
     setIsAddModalOpen(false);
 
-    // Reset Form
     setNewVoucher({
       id: `PCV-2026-${String(updated.length + 82).padStart(3, "0")}`,
       date: new Date().toISOString().split("T")[0],
@@ -316,7 +302,6 @@ export default function BranchExpensesVouchersPanel({
     });
   };
 
-  // Status Toggles
   const handleApprove = (id) => {
     const updated = expenses.map((item) => {
       if (item.id === id) {
@@ -350,10 +335,8 @@ export default function BranchExpensesVouchersPanel({
     }
   };
 
-  // Replenish Fund Handler
   const handleReplenishFund = () => {
     if (window.confirm("Confirm Petty Cash Fund Replenishment? This will archive disbursed vouchers and restore available cash on hand.")) {
-      // Mark all approved vouchers as liquidated and replenish
       const updated = expenses.map((item) => ({ ...item, status: "Liquidated" }));
       saveExpenses(updated);
       setIsReplenishModalOpen(false);
@@ -361,7 +344,6 @@ export default function BranchExpensesVouchersPanel({
     }
   };
 
-  // Export CSV
   const handleExportCsv = () => {
     const headers = [
       "Voucher Number",
@@ -407,7 +389,6 @@ export default function BranchExpensesVouchersPanel({
 
   return (
     <div className="space-y-6 animate-in fade-in pb-16 font-['Figtree','Inter',sans-serif]">
-      {/* ================= 1. HEADER BANNER ================= */}
       <div className="rounded-2xl border border-emerald-200 bg-white p-6 shadow-xs relative overflow-hidden">
         <div className="absolute top-0 right-0 w-96 h-96 bg-gradient-to-br from-emerald-100/40 via-teal-100/20 to-transparent rounded-full blur-3xl pointer-events-none -mr-20 -mt-20" />
 
@@ -425,7 +406,6 @@ export default function BranchExpensesVouchersPanel({
             </p>
           </div>
 
-          {/* Quick Header Actions */}
           <div className="flex flex-wrap items-center gap-2 shrink-0">
             <button
               type="button"
@@ -469,7 +449,6 @@ export default function BranchExpensesVouchersPanel({
           </div>
         </div>
 
-        {/* Warning Banner if Fund Depleted */}
         {fundMetrics.isReplenishmentNeeded && (
           <div className="mt-4 p-3 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-between text-amber-900 text-xs">
             <div className="flex items-center gap-2">
@@ -489,9 +468,7 @@ export default function BranchExpensesVouchersPanel({
         )}
       </div>
 
-      {/* ================= 2. REVOLVING FUND METRICS ================= */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Metric 1: Cash on Hand */}
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
           <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Available Cash on Hand</p>
           <h3 className={`mt-1 text-2xl font-black ${fundMetrics.cashOnHand < 5000 ? "text-rose-600" : "text-emerald-700"}`}>
@@ -510,7 +487,6 @@ export default function BranchExpensesVouchersPanel({
           </p>
         </div>
 
-        {/* Metric 2: Total Disbursed */}
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
           <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Total Vouchers Disbursed</p>
           <h3 className="mt-1 text-2xl font-black text-slate-900">
@@ -521,7 +497,6 @@ export default function BranchExpensesVouchersPanel({
           </p>
         </div>
 
-        {/* Metric 3: Approved & Awaiting Liquidation */}
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
           <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Approved for Liquidation</p>
           <h3 className="mt-1 text-2xl font-black text-blue-700">
@@ -532,7 +507,6 @@ export default function BranchExpensesVouchersPanel({
           </p>
         </div>
 
-        {/* Metric 4: Pending Approval */}
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
           <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Pending Supervisor Audit</p>
           <h3 className="mt-1 text-2xl font-black text-amber-700">
@@ -544,7 +518,6 @@ export default function BranchExpensesVouchersPanel({
         </div>
       </div>
 
-      {/* ================= 3. SEARCH & CATEGORY FILTERS ================= */}
       <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3">
         <div className="relative flex-1 max-w-md">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -558,7 +531,6 @@ export default function BranchExpensesVouchersPanel({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {/* Category Filter */}
           <select
             value={categoryFilter}
             onChange={(e) => setCategoryFilter(e.target.value)}
@@ -572,7 +544,6 @@ export default function BranchExpensesVouchersPanel({
             ))}
           </select>
 
-          {/* Company Filter */}
           <select
             value={companyFilter}
             onChange={(e) => setCompanyFilter(e.target.value)}
@@ -586,7 +557,6 @@ export default function BranchExpensesVouchersPanel({
             ))}
           </select>
 
-          {/* Status Filter */}
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
@@ -600,7 +570,6 @@ export default function BranchExpensesVouchersPanel({
         </div>
       </div>
 
-      {/* ================= 4. MASTER EXPENSES & VOUCHERS TABLE ================= */}
       <div className="rounded-2xl border border-slate-200 bg-white shadow-xs overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse text-xs">
@@ -626,7 +595,6 @@ export default function BranchExpensesVouchersPanel({
               ) : (
                 filteredExpenses.map((v) => (
                   <tr key={v.id} className="hover:bg-slate-50/80 transition">
-                    {/* Voucher ID */}
                     <td className="py-3 px-4">
                       <span className="font-extrabold text-emerald-800 tracking-tight font-mono">
                         {v.id}
@@ -634,12 +602,10 @@ export default function BranchExpensesVouchersPanel({
                       <span className="block text-[10px] text-slate-400">{v.paymentMode}</span>
                     </td>
 
-                    {/* Date */}
                     <td className="py-3 px-4 text-slate-600 font-medium whitespace-nowrap">
                       {v.date}
                     </td>
 
-                    {/* Payee & Branch */}
                     <td className="py-3 px-4">
                       <div className="font-bold text-slate-900">{v.payee}</div>
                       <div className="text-[10px] text-slate-500 truncate max-w-[180px]">
@@ -647,7 +613,6 @@ export default function BranchExpensesVouchersPanel({
                       </div>
                     </td>
 
-                    {/* Category & Particulars */}
                     <td className="py-3 px-4 max-w-xs">
                       <span className="inline-block px-2 py-0.5 rounded bg-slate-100 text-slate-700 text-[10px] font-bold mb-0.5">
                         {v.category}
@@ -657,19 +622,16 @@ export default function BranchExpensesVouchersPanel({
                       </p>
                     </td>
 
-                    {/* Official Receipt # */}
                     <td className="py-3 px-4 text-slate-600">
                       <span className="font-mono text-[11px] bg-slate-50 px-2 py-0.5 rounded border border-slate-200">
                         {v.receiptNo || "Awaiting Attachment"}
                       </span>
                     </td>
 
-                    {/* Amount */}
                     <td className="py-3 px-3 text-right font-black text-slate-900 text-sm whitespace-nowrap">
                       {currency.format(v.amount)}
                     </td>
 
-                    {/* Status Badge */}
                     <td className="py-3 px-3 text-center whitespace-nowrap">
                       <span
                         className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
@@ -684,7 +646,6 @@ export default function BranchExpensesVouchersPanel({
                       </span>
                     </td>
 
-                    {/* Actions */}
                     <td className="py-3 px-4 text-right whitespace-nowrap">
                       <div className="flex items-center justify-end gap-1.5">
                         <button
@@ -736,7 +697,6 @@ export default function BranchExpensesVouchersPanel({
         </div>
       </div>
 
-      {/* ================= 5. MODAL: CREATE NEW EXPENSE VOUCHER ================= */}
       {isAddModalOpen && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in">
           <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl border border-slate-200 max-h-[90vh] overflow-y-auto">
@@ -909,7 +869,6 @@ export default function BranchExpensesVouchersPanel({
         </div>
       )}
 
-      {/* ================= 6. MODAL: OFFICIAL ACCOUNTING PRINTABLE VOUCHER ================= */}
       {selectedVoucherForPrint && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in">
           <div className="bg-white rounded-2xl max-w-2xl w-full p-8 shadow-2xl border border-slate-200 max-h-[90vh] overflow-y-auto">
@@ -936,7 +895,6 @@ export default function BranchExpensesVouchersPanel({
               </div>
             </div>
 
-            {/* Printable Voucher Format */}
             <div className="space-y-6 text-slate-800">
               <div className="text-center pb-4 border-b border-slate-200">
                 <h2 className="text-lg font-black tracking-wide text-slate-900 uppercase">
@@ -953,7 +911,6 @@ export default function BranchExpensesVouchersPanel({
                 </p>
               </div>
 
-              {/* Header Info */}
               <div className="grid grid-cols-2 gap-4 text-xs bg-slate-50 p-4 rounded-xl border border-slate-200">
                 <div>
                   <span className="text-slate-400 block text-[10px] uppercase font-bold">Payee / Claimant:</span>
@@ -975,7 +932,6 @@ export default function BranchExpensesVouchersPanel({
                 </div>
               </div>
 
-              {/* Expense Table */}
               <table className="w-full text-xs border border-slate-200 rounded-xl overflow-hidden">
                 <thead className="bg-slate-100 text-slate-700 font-bold">
                   <tr>
@@ -1007,7 +963,6 @@ export default function BranchExpensesVouchersPanel({
                 </tbody>
               </table>
 
-              {/* Accounting Signatures Grid */}
               <div className="grid grid-cols-4 gap-4 pt-6 text-center text-xs">
                 <div>
                   <div className="border-b border-slate-300 pb-8 font-semibold text-slate-700">
@@ -1039,7 +994,6 @@ export default function BranchExpensesVouchersPanel({
         </div>
       )}
 
-      {/* ================= 7. MODAL: FUND REPLENISHMENT ================= */}
       {isReplenishModalOpen && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in">
           <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-200">

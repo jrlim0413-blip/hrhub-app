@@ -20,7 +20,7 @@ const EMOJI_REACTIONS = [
 export default function TeamChatMessengerModal({
   activeUser,
   currentUser,
-  presenceStatus = "offline", // 'active' | 'away' | 'offline'
+  presenceStatus = "offline",
   isRecipientTyping = false,
   onTypingSignal,
   messages = [],
@@ -51,7 +51,6 @@ export default function TeamChatMessengerModal({
   const recipientCompany = activeUser?.company || "Simpal Group";
   const recipientInitials = recipientName.split(" ").filter(Boolean).map(p => p[0]).join("").slice(0, 2).toUpperCase() || "HR";
 
-  // Handle typing debounce
   const handleInputChange = (e) => {
     const val = e.target.value;
     setInputText(val);
@@ -65,12 +64,10 @@ export default function TeamChatMessengerModal({
     }
   };
 
-  // Auto-scroll to bottom on new messages
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isRecipientTyping, imagePreview]);
 
-  // Handle image file selection with automatic compression
   const handleImageSelect = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -86,7 +83,6 @@ export default function TeamChatMessengerModal({
     }
 
     try {
-      // Auto-compress image down to ~40KB - 80KB WebP
       const compressed = await compressImageFile(file, 1200, 0.75);
       setImagePreview(compressed.dataUrl);
       setSelectedImage(compressed.dataUrl);
@@ -102,7 +98,6 @@ export default function TeamChatMessengerModal({
       reader.readAsDataURL(file);
     }
 
-    // Reset input
     e.target.value = "";
   };
 
@@ -112,7 +107,6 @@ export default function TeamChatMessengerModal({
     setImagePreview(null);
   };
 
-  // Submit message
   const handleSubmit = async (e) => {
     if (e) e.preventDefault();
     if (!inputText.trim() && !selectedImage) return;
@@ -124,7 +118,6 @@ export default function TeamChatMessengerModal({
 
     let finalImageUrl = selectedImage;
 
-    // Upload compressed blob to Supabase Storage if available
     if (selectedImageBlob) {
       setIsUploadingImage(true);
       try {
@@ -159,7 +152,6 @@ export default function TeamChatMessengerModal({
     if (inputRef.current) inputRef.current.focus();
   };
 
-  // Instant Thumbs Up (Messenger style)
   const handleSendQuickThumbsUp = () => {
     if (onTypingSignal && recipientEmail) {
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
@@ -194,7 +186,6 @@ export default function TeamChatMessengerModal({
   return (
     <>
       <div className="fixed bottom-0 sm:bottom-4 left-0 sm:left-auto right-0 sm:right-6 z-50 w-full sm:max-w-[420px] max-h-[90vh] sm:max-h-none bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl border border-slate-200/90 overflow-hidden flex flex-col animate-in slide-in-from-bottom-5 duration-200">
-        {/* Messenger Header */}
         <div className="bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 text-white p-3.5 px-4 flex items-center justify-between border-b border-slate-800">
           <div className="flex items-center gap-3 min-w-0">
             <div className="relative shrink-0">
@@ -240,7 +231,6 @@ export default function TeamChatMessengerModal({
           </div>
         </div>
 
-        {/* Chat Messages Body */}
         <div className="p-3.5 bg-slate-50/80 h-80 overflow-y-auto space-y-3 custom-scrollbar flex flex-col relative">
           <div className="text-center my-1">
             <span className="text-[10px] font-bold text-slate-500 bg-white border border-slate-200/80 px-3 py-1 rounded-full shadow-2xs">
@@ -274,7 +264,6 @@ export default function TeamChatMessengerModal({
                   }}
                   className={`group relative flex flex-col ${isMe ? "items-end" : "items-start"}`}
                 >
-                  {/* Quoted Reply Reference */}
                   {msg.replyTo && (
                     <div
                       className={`mb-1 max-w-[78%] text-[10.5px] px-2.5 py-1 rounded-xl flex items-center gap-1.5 border ${
@@ -296,9 +285,7 @@ export default function TeamChatMessengerModal({
                     </div>
                   )}
 
-                  {/* Message Bubble + Action Buttons Row */}
                   <div className={`flex items-end gap-1.5 max-w-[85%] ${isMe ? "flex-row-reverse" : "flex-row"}`}>
-                    {/* Message Bubble */}
                     <div
                       className={`relative px-3.5 py-2.5 rounded-2xl text-xs shadow-2xs transition ${
                         isMe
@@ -306,7 +293,6 @@ export default function TeamChatMessengerModal({
                           : "bg-white border border-slate-200 text-slate-800 rounded-bl-xs"
                       }`}
                     >
-                      {/* Attached Image inside Bubble */}
                       {msg.image && (
                         <div className="mb-2 relative rounded-xl overflow-hidden border border-black/10 group/img">
                           <img
@@ -326,14 +312,12 @@ export default function TeamChatMessengerModal({
                         </div>
                       )}
 
-                      {/* Text Content */}
                       {msg.text && (
                         <p className={`leading-relaxed whitespace-pre-wrap break-words ${msg.text === "👍" ? "text-3xl py-0.5" : ""}`}>
                           {msg.text}
                         </p>
                       )}
 
-                      {/* Reaction Badges on Bubble Bottom */}
                       {hasReactions && (
                         <div
                           className={`absolute -bottom-2.5 flex items-center gap-0.5 bg-white border border-slate-200 shadow-xs px-1.5 py-0.5 rounded-full text-[10px] ${
@@ -355,13 +339,11 @@ export default function TeamChatMessengerModal({
                       )}
                     </div>
 
-                    {/* Hover Messenger Actions (React, Reply, Delete) */}
                     <div
                       className={`flex items-center gap-1 opacity-0 group-hover:opacity-100 transition duration-150 relative ${
                         isHovered ? "opacity-100" : ""
                       }`}
                     >
-                      {/* React Button */}
                       <button
                         type="button"
                         onClick={() => setActiveReactionPickerId(activeReactionPickerId === msg.id ? null : msg.id)}
@@ -371,7 +353,6 @@ export default function TeamChatMessengerModal({
                         <Smile size={14} />
                       </button>
 
-                      {/* Reply Button */}
                       <button
                         type="button"
                         onClick={() => {
@@ -384,7 +365,6 @@ export default function TeamChatMessengerModal({
                         <Reply size={14} />
                       </button>
 
-                      {/* Delete Button (if sender is me) */}
                       {isMe && onDeleteMessage && (
                         <button
                           type="button"
@@ -396,7 +376,6 @@ export default function TeamChatMessengerModal({
                         </button>
                       )}
 
-                      {/* Emoji Reaction Floating Picker */}
                       {activeReactionPickerId === msg.id && (
                         <div className={`absolute bottom-full mb-1 z-30 flex items-center gap-1 p-1 bg-white rounded-full shadow-lg border border-slate-200 animate-in zoom-in-90 ${
                           isMe ? "right-0" : "left-0"
@@ -420,7 +399,6 @@ export default function TeamChatMessengerModal({
                     </div>
                   </div>
 
-                  {/* Timestamp & Status */}
                   <div className={`flex items-center gap-1 text-[9px] text-slate-400 mt-1 px-1 ${isMe ? "self-end" : "self-start"}`}>
                     <span>{msg.time}</span>
                     {isMe && <CheckCheck size={12} className="text-emerald-600" />}
@@ -429,7 +407,6 @@ export default function TeamChatMessengerModal({
               );
             })
           )}
-          {/* Animated Messenger Typing Bubble */}
           {isRecipientTyping && (
             <div className="flex items-center gap-2 self-start animate-in fade-in slide-in-from-bottom-2 duration-150 my-1">
               <div className="w-7 h-7 rounded-full bg-slate-900 text-emerald-400 font-extrabold text-[9px] flex items-center justify-center shrink-0 shadow-2xs">
@@ -446,7 +423,6 @@ export default function TeamChatMessengerModal({
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Replying Banner */}
         {replyingTo && (
           <div className="bg-emerald-50/90 border-t border-emerald-200 px-3 py-1.5 flex items-center justify-between text-xs text-emerald-950 animate-in slide-in-from-bottom-2">
             <div className="flex items-center gap-2 min-w-0">
@@ -465,7 +441,6 @@ export default function TeamChatMessengerModal({
           </div>
         )}
 
-        {/* Selected Image Attachment Preview Bar */}
         {imagePreview && (
           <div className="bg-slate-100 border-t border-slate-200 p-2 px-3 flex items-center justify-between animate-in slide-in-from-bottom-2">
             <div className="flex items-center gap-2.5">
@@ -488,7 +463,6 @@ export default function TeamChatMessengerModal({
           </div>
         )}
 
-        {/* Quick Suggestion Chips */}
         <div className="px-3 pt-2 pb-1 bg-white border-t border-slate-100 flex items-center gap-1.5 overflow-x-auto custom-scrollbar text-[10.5px]">
           {[
             "👋 Kumusta po?",
@@ -510,9 +484,7 @@ export default function TeamChatMessengerModal({
           ))}
         </div>
 
-        {/* Chat Input & Media Bar */}
         <form onSubmit={handleSubmit} className="p-2.5 px-3 bg-white flex items-center gap-2">
-          {/* Image Attach Button */}
           <input
             type="file"
             ref={fileInputRef}
@@ -529,7 +501,6 @@ export default function TeamChatMessengerModal({
             <Image size={18} />
           </button>
 
-          {/* Text Input */}
           <input
             ref={inputRef}
             type="text"
@@ -539,7 +510,6 @@ export default function TeamChatMessengerModal({
             className="flex-1 bg-slate-100/90 border border-slate-200 rounded-2xl px-3.5 py-2 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-emerald-500 focus:bg-white transition"
           />
 
-          {/* Dynamic Send / Quick Thumbs Up button */}
           {inputText.trim() || selectedImage ? (
             <button
               type="submit"
@@ -562,7 +532,6 @@ export default function TeamChatMessengerModal({
         </form>
       </div>
 
-      {/* Lightbox Modal for Full Image Viewing */}
       {lightboxImage && (
         <div
           onClick={() => setLightboxImage(null)}

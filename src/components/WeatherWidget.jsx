@@ -72,19 +72,17 @@ export default function WeatherWidget() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isExpanded, setIsExpanded] = useState(true);
-  const [viewMode, setViewMode] = useState("cards"); // 'cards' | 'map'
+  const [viewMode, setViewMode] = useState("cards");
   const [branchDropdownOpen, setBranchDropdownOpen] = useState(false);
   const [locationSearch, setLocationSearch] = useState("");
 
   const dropdownRef = useRef(null);
 
-  // Tropical Cyclone Tracker state
   const [activeCyclone, setActiveCyclone] = useState(() => {
     try {
       const saved = localStorage.getItem("hrhub_active_cyclone");
       if (saved) return JSON.parse(saved);
     } catch {
-      // Ignore
     }
     return RECENT_CYCLONES_PAGASA[0];
   });
@@ -92,7 +90,6 @@ export default function WeatherWidget() {
   const [customCycloneName, setCustomCycloneName] = useState("");
   const [customSignal, setCustomSignal] = useState(1);
 
-  // Click outside listener to close dropdown
   useEffect(() => {
     function handleClickOutside(event) {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
@@ -117,7 +114,6 @@ export default function WeatherWidget() {
     }
   }, []);
 
-  // 1. AUTO-DETECT GPS ON MOUNT
   useEffect(() => {
     if (!navigator.geolocation) {
       setGpsLoading(false);
@@ -165,7 +161,6 @@ export default function WeatherWidget() {
     );
   }, [loadWeather]);
 
-  // Compute nearby locations sorted by distance
   const nearbyAreas = getNearbyAreasSorted(selectedLocation.lat, selectedLocation.lon).filter((area) => {
     if (!locationSearch.trim()) return true;
     const query = locationSearch.toLowerCase();
@@ -245,14 +240,11 @@ export default function WeatherWidget() {
 
   return (
     <div className="relative mb-6 rounded-3xl border border-white/60 bg-white/70 backdrop-blur-2xl shadow-[0_16px_40px_-12px_rgba(15,23,42,0.08),inset_0_1px_1px_rgba(255,255,255,0.95)] transition-all duration-300">
-      {/* Ambient Optical Glow Orbs */}
       <div className="pointer-events-none absolute -top-24 -left-20 h-72 w-72 rounded-full bg-emerald-400/15 blur-3xl" />
       <div className="pointer-events-none absolute top-12 -right-16 h-80 w-80 rounded-full bg-sky-400/15 blur-3xl" />
       <div className="pointer-events-none absolute -bottom-16 left-1/3 h-64 w-64 rounded-full bg-amber-400/10 blur-3xl" />
 
-      {/* SINGLE UNIFIED EXECUTIVE HEADER BAR (Clean, Non-cluttered) */}
       <div className="relative z-20 bg-slate-900/90 backdrop-blur-xl text-white px-4 py-3 sm:px-6 flex flex-wrap items-center justify-between gap-3 border-b border-white/10 rounded-t-3xl">
-        {/* Left Side: Title & Smart PAGASA Status Pill */}
         <div className="flex items-center gap-3 min-w-0">
           <div className="w-9 h-9 rounded-2xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center backdrop-blur-md shadow-xs shrink-0">
             <Umbrella size={17} />
@@ -264,7 +256,6 @@ export default function WeatherWidget() {
                 Operations & Weather Pulse
               </span>
 
-              {/* Seamless Integrated PAGASA Badge / Status Pill */}
               <button
                 type="button"
                 onClick={() => setCycloneModalOpen(true)}
@@ -300,9 +291,7 @@ export default function WeatherWidget() {
           </div>
         </div>
 
-        {/* Right Side: View Mode Toggle, Location Dropdown, Refresh, and Collapse Toggle */}
         <div className="flex items-center gap-2 shrink-0">
-          {/* VIEW MODE TOGGLE (Cards vs TV News Radar Map) */}
           <div className="flex items-center p-0.5 rounded-xl bg-slate-800/90 border border-slate-700 shadow-inner">
             <button
               type="button"
@@ -331,7 +320,6 @@ export default function WeatherWidget() {
             </button>
           </div>
 
-          {/* LOCATION DROPDOWN (Solid High-Contrast Floating Card) */}
           <div className="relative" ref={dropdownRef}>
             <button
               type="button"
@@ -351,10 +339,8 @@ export default function WeatherWidget() {
               <ChevronDown size={13} className="text-slate-300 ml-0.5" />
             </button>
 
-            {/* SOLID OPAQUE DARK EXECUTIVE DROPDOWN MENU */}
             {branchDropdownOpen && (
               <div className="absolute right-0 mt-2 w-84 bg-[#0d1b2a] border border-slate-700 rounded-2xl shadow-2xl p-3 text-white z-50 animate-fade-in divide-y divide-slate-800">
-                {/* Section A: Active Device GPS Option */}
                 <div className="pb-2.5">
                   <div className="flex items-center justify-between mb-1.5 px-1">
                     <span className="text-[10px] font-black uppercase tracking-wider text-emerald-400 flex items-center gap-1">
@@ -391,7 +377,6 @@ export default function WeatherWidget() {
                   </button>
                 </div>
 
-                {/* Section B: Nearby Areas & Branches */}
                 <div className="pt-2.5 space-y-2">
                   <div className="flex items-center justify-between px-1">
                     <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 flex items-center gap-1">
@@ -399,7 +384,6 @@ export default function WeatherWidget() {
                     </span>
                   </div>
 
-                  {/* Search Bar within dropdown */}
                   <div className="relative">
                     <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
                     <input
@@ -411,7 +395,6 @@ export default function WeatherWidget() {
                     />
                   </div>
 
-                  {/* Scrollable list of nearby locations with distance in km */}
                   <div className="max-h-56 overflow-y-auto custom-scrollbar space-y-1 pr-1">
                     {nearbyAreas.map((area) => {
                       const isSelected = selectedLocation.id === area.id && !selectedLocation.isGps;
@@ -449,7 +432,6 @@ export default function WeatherWidget() {
             )}
           </div>
 
-          {/* Refresh Button */}
           <button
             type="button"
             onClick={() => loadWeather(selectedLocation.lat, selectedLocation.lon, true)}
@@ -460,7 +442,6 @@ export default function WeatherWidget() {
             <RefreshCw size={13} className={loading ? "animate-spin text-emerald-400" : ""} />
           </button>
 
-          {/* Toggle Expand/Collapse */}
           <button
             type="button"
             onClick={() => setIsExpanded(!isExpanded)}
@@ -472,7 +453,6 @@ export default function WeatherWidget() {
         </div>
       </div>
 
-      {/* EMERGENCY CYCLONE ALERT BANNER (Only renders if an active cyclone Signal >= 1 is active) */}
       {activeCyclone.signal > 0 && (
         <div className="relative z-10 mx-4 sm:mx-6 mt-4 p-3.5 rounded-2xl bg-rose-500/15 border border-rose-500/30 backdrop-blur-md text-rose-950 flex flex-wrap items-center justify-between gap-3 shadow-xs">
           <div className="flex items-center gap-3">
@@ -504,7 +484,6 @@ export default function WeatherWidget() {
         </div>
       )}
 
-      {/* MAIN WIDGET CONTENT: Frosted Glass Surfaces OR TV News Radar Map */}
       {isExpanded && (
         viewMode === "map" ? (
           <div className="p-3 sm:p-4">
@@ -533,9 +512,7 @@ export default function WeatherWidget() {
         </div>
       ) : (
         <div className="relative z-10 p-4 sm:p-6 space-y-5">
-          {/* ROW A: CURRENT METRICS & TOMORROW'S RAIN HORIZON */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
-            {/* Current Conditions Card */}
             <div className="lg:col-span-5 rounded-2xl bg-white/55 backdrop-blur-xl border border-white/80 p-5 shadow-[0_8px_24px_-6px_rgba(0,0,0,0.04),inset_0_1px_1px_rgba(255,255,255,0.9)] flex flex-col justify-between transition hover:bg-white/65">
               <div className="flex items-start justify-between">
                 <div>
@@ -567,7 +544,6 @@ export default function WeatherWidget() {
                 </div>
               </div>
 
-              {/* Rain time summary for today */}
               <div className="mt-4 p-3 rounded-xl bg-white/60 backdrop-blur-md border border-white/80 text-xs flex items-start gap-2.5 shadow-2xs">
                 <Clock size={15} className="text-emerald-600 shrink-0 mt-0.5" />
                 <div>
@@ -576,7 +552,6 @@ export default function WeatherWidget() {
                 </div>
               </div>
 
-              {/* Mini weather stats */}
               <div className="mt-4 pt-3.5 border-t border-slate-200/50 grid grid-cols-2 gap-2 text-xs">
                 <div className="flex items-center gap-2 text-slate-600 font-medium">
                   <Droplets size={14} className="text-sky-500" />
@@ -589,7 +564,6 @@ export default function WeatherWidget() {
               </div>
             </div>
 
-            {/* Tomorrow's Rain Horizon Card */}
             <div className="lg:col-span-7 rounded-2xl bg-gradient-to-br from-white/65 via-sky-50/25 to-white/45 backdrop-blur-xl border border-blue-200/60 p-5 shadow-[0_8px_24px_-6px_rgba(59,130,246,0.06),inset_0_1px_1px_rgba(255,255,255,0.9)] flex flex-col justify-between transition hover:bg-white/70">
               <div className="flex items-start justify-between gap-3">
                 <div>
@@ -629,7 +603,6 @@ export default function WeatherWidget() {
                 </div>
               </div>
 
-              {/* Rain Timing Callout for Tomorrow */}
               <div className="mt-3 p-2.5 rounded-xl bg-blue-500/10 border border-blue-200/60 backdrop-blur-md text-[11px] text-blue-950 flex items-center gap-2 shadow-2xs">
                 <Clock size={14} className="text-blue-600 shrink-0" />
                 <span>
@@ -637,7 +610,6 @@ export default function WeatherWidget() {
                 </span>
               </div>
 
-              {/* Frosted Progress Bar for Rain Probability */}
               <div className="my-2.5 space-y-1">
                 <div className="w-full bg-white/70 backdrop-blur-sm rounded-full h-2 overflow-hidden border border-white/80 shadow-inner">
                   <div
@@ -655,7 +627,6 @@ export default function WeatherWidget() {
                 </div>
               </div>
 
-              {/* HR / Operations Advisory Alert Box */}
               <div className={`p-3 rounded-xl border backdrop-blur-md text-xs flex items-start gap-2.5 shadow-2xs ${tomorrow?.advisory?.bgColor}`}>
                 <AlertTriangle size={15} className="shrink-0 mt-0.5" />
                 <div className="space-y-0.5 min-w-0">
@@ -670,7 +641,6 @@ export default function WeatherWidget() {
             </div>
           </div>
 
-          {/* ROW B: HOURLY RAIN TIMELINE */}
           {isExpanded && (
             <div className="pt-2 border-t border-slate-200/50 space-y-2.5">
               <div className="flex items-center justify-between">
@@ -709,7 +679,6 @@ export default function WeatherWidget() {
                         {h.temp}°C
                       </span>
 
-                      {/* Rain Probability Pill */}
                       <div
                         className={`mt-1.5 w-full py-0.5 rounded-lg text-[9px] font-black shadow-2xs ${
                           isHigh
@@ -735,7 +704,6 @@ export default function WeatherWidget() {
             </div>
           )}
 
-          {/* ROW C: 5-DAY WORKWEEK FORECAST STRIP */}
           {isExpanded && (
             <div className="pt-2 border-t border-slate-200/50">
               <div className="flex items-center justify-between mb-2.5">
@@ -777,7 +745,6 @@ export default function WeatherWidget() {
                         <p className="text-[10px] text-slate-500 truncate">{day.condition.label}</p>
                       </div>
 
-                      {/* Rain Probability Badge */}
                       <div className="pt-2 border-t border-slate-200/50 flex items-center justify-between text-[10px]">
                         <span className="flex items-center gap-1 text-slate-500 font-semibold">
                           <Droplets size={11} className={isHighRain ? "text-rose-500" : isModerateRain ? "text-amber-500" : "text-sky-400"} />
@@ -804,7 +771,6 @@ export default function WeatherWidget() {
         </div>
       ))}
 
-      {/* MODAL: UPDATE TROPICAL CYCLONE STATUS */}
       {cycloneModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 backdrop-blur-md p-4 animate-fade-in">
           <div className="w-full max-w-md bg-white/95 backdrop-blur-2xl rounded-3xl p-5 shadow-2xl border border-white/80 text-slate-900 space-y-4">
@@ -828,7 +794,6 @@ export default function WeatherWidget() {
               Select an active cyclone preset or input a custom typhoon name announced by PAGASA to broadcast immediate safety protocols across the workspace.
             </p>
 
-            {/* Presets */}
             <div className="space-y-1.5">
               <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Quick Presets:</span>
               <div className="space-y-1">
@@ -861,7 +826,6 @@ export default function WeatherWidget() {
               </div>
             </div>
 
-            {/* Custom Typhoon Form */}
             <form onSubmit={handleCustomCycloneSubmit} className="pt-2 border-t border-slate-200/60 space-y-2">
               <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Or Broadcast Custom Storm:</span>
               <div className="flex gap-2">

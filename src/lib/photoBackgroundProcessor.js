@@ -1,34 +1,12 @@
-/**
- * photoBackgroundProcessor.js
- * 
- * Studio-grade, automatic 2x2 portrait photo background removal and solid pure white (#FFFFFF) replacement.
- * 
- * Powered by Google MediaPipe Neural Portrait Segmentation (running 100% locally & offline via WebAssembly)
- * with an automatic fallback to an advanced perimeter-seeded canvas processor:
- * 
- * 1. AI Portrait Segmentation (Primary):
- *    - Neural network precisely segments human subject (hair, ears, shoulders, clothing).
- *    - Entire backdrop (wall, room, colored studio backdrops, shadows, uneven lighting) is completely
- *      replaced with 100.0% SOLID PURE WHITE (#FFFFFF, RGB 255, 255, 255).
- *    - Preserves white clothes (barong tagalog, white polo, uniform) and fine hair contours.
- * 
- * 2. High-Precision Canvas Fallback (Secondary):
- *    - Perimeter-seeded flood fill & color space analysis in case WebGL / WASM is unavailable.
- */
 
-// Singleton instance of MediaPipe SelfieSegmentation
 let segmenterInstance = null;
 let segmenterLoadingPromise = null;
 
-/**
- * Loads and initializes the local MediaPipe SelfieSegmentation instance.
- */
 async function getSelfieSegmentationInstance() {
   if (segmenterInstance) return segmenterInstance;
   if (segmenterLoadingPromise) return segmenterLoadingPromise;
 
   segmenterLoadingPromise = (async () => {
-    // 1. Ensure window.SelfieSegmentation is defined
     if (typeof window !== "undefined" && !window.SelfieSegmentation) {
       await new Promise((resolve, reject) => {
         const script = document.createElement("script");
@@ -36,7 +14,6 @@ async function getSelfieSegmentationInstance() {
         script.async = true;
         script.onload = () => resolve();
         script.onerror = () => {
-          // CDN fallback if local path fails
           const cdnScript = document.createElement("script");
           cdnScript.src = "https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation@0.1.1675465747/selfie_segmentation.js";
           cdnScript.async = true;
@@ -52,12 +29,10 @@ async function getSelfieSegmentationInstance() {
       throw new Error("SelfieSegmentation library not available on window object");
     }
 
-    // 2. Instantiate with local WASM / tflite asset paths
     const segmenter = new window.SelfieSegmentation({
       locateFile: (file) => `/mediapipe/${file}`
     });
 
-    // Model 1 = Landscape/Full body (higher precision on shoulders & chest for 2x2 ID portrait)
     segmenter.setOptions({
       modelSelection: 1,
       selfieMode: false
@@ -71,12 +46,9 @@ async function getSelfieSegmentationInstance() {
   return segmenterLoadingPromise;
 }
 
-/**
- * Executes AI Portrait Segmentation to produce a 100% pure white background (#FFFFFF).
- */
 async function processWithMediaPipe(canvas, targetSize, options = {}) {
   const {
-    cleanliness = 45 // 20 (softer edges) to 75 (crisper cutout)
+    cleanliness = 45
   } = options;
 
   const segmenter = await getSelfieSegmentationInstance();
@@ -101,7 +73,6 @@ async function processWithMediaPipe(canvas, targetSize, options = {}) {
           return reject(new Error("No segmentation mask returned by AI model"));
         }
 
-        // 1. Draw segmentation mask to an offscreen canvas to process thresholding
         const maskCanvas = document.createElement("canvas");
         maskCanvas.width = targetSize;
         maskCanvas.height = targetSize;
@@ -111,25 +82,20 @@ async function processWithMediaPipe(canvas, targetSize, options = {}) {
         const maskImgData = maskCtx.getImageData(0, 0, targetSize, targetSize);
         const maskData = maskImgData.data;
 
-        // Cleanliness calibration:
-        // Adjust cutoff thresholds so NO background shadows or dirty wall remnants survive
-        // Normalized slider: 20 -> soft, 45 -> balanced standard, 70 -> sharp/aggressive
         const norm = Math.max(0.15, Math.min(0.85, cleanliness / 100));
-        const lowCut = Math.max(0.12, norm * 0.60);  // Confidence below this is GUARANTEED 100% background (pure white)
-        const highCut = Math.min(0.92, lowCut + 0.35); // Confidence above this is 100% human subject
+        const lowCut = Math.max(0.12, norm * 0.60);
+        const highCut = Math.min(0.92, lowCut + 0.35);
         const range = Math.max(0.01, highCut - lowCut);
 
         for (let i = 0; i < maskData.length; i += 4) {
-          // MediaPipe confidence is stored in red channel and alpha
           const rawConf = Math.max(maskData[i], maskData[i + 3]) / 255;
 
           let alpha;
           if (rawConf <= lowCut) {
-            alpha = 0; // Pure white background
+            alpha = 0;
           } else if (rawConf >= highCut) {
-            alpha = 255; // Solid human subject
+            alpha = 255;
           } else {
-            // Smooth cubic Hermite curve for natural anti-aliased hair strands
             const t = (rawConf - lowCut) / range;
             alpha = Math.round((t * t * (3 - 2 * t)) * 255);
           }
@@ -141,30 +107,24 @@ async function processWithMediaPipe(canvas, targetSize, options = {}) {
         }
         maskCtx.putImageData(maskImgData, 0, 0);
 
-        // 2. Prepare final canvas with 100% PURE WHITE (#FFFFFF) base
         const outCanvas = document.createElement("canvas");
         outCanvas.width = targetSize;
         outCanvas.height = targetSize;
         const outCtx = outCanvas.getContext("2d");
 
-        // Fill background with solid pure white
         outCtx.fillStyle = "#FFFFFF";
         outCtx.fillRect(0, 0, targetSize, targetSize);
 
-        // 3. Cut out subject onto an intermediate canvas using destination-in
         const fgCanvas = document.createElement("canvas");
         fgCanvas.width = targetSize;
         fgCanvas.height = targetSize;
         const fgCtx = fgCanvas.getContext("2d");
 
-        // Draw original cropped photo
         fgCtx.drawImage(canvas, 0, 0);
 
-        // Mask only the human subject
         fgCtx.globalCompositeOperation = "destination-in";
         fgCtx.drawImage(maskCanvas, 0, 0);
 
-        // 4. Composite subject over the pure white canvas
         outCtx.drawImage(fgCanvas, 0, 0);
 
         resolve({
@@ -186,9 +146,6 @@ async function processWithMediaPipe(canvas, targetSize, options = {}) {
   });
 }
 
-// ===========================================================================
-// FALLBACK ENGINE: High-Precision Perimeter Flood Fill & Color Matting
-// ===========================================================================
 function perceptualColorDistance(r1, g1, b1, r2, g2, b2) {
   const rmean = (r1 + r2) * 0.5;
   const dr = r1 - r2;
@@ -227,7 +184,6 @@ function processWithCanvasFallback(canvas, targetSize, options = {}) {
   const height = targetSize;
   const totalPixels = width * height;
 
-  // Sample perimeter colors
   const bgSamples = [];
   const sampleStep = 4;
   for (let y = 0; y < Math.floor(height * 0.15); y += sampleStep) {
@@ -328,13 +284,6 @@ function processWithCanvasFallback(canvas, targetSize, options = {}) {
   };
 }
 
-/**
- * Master processor: Converts any uploaded portrait/2x2 photo to 100% PURE SOLID WHITE (#FFFFFF).
- * 
- * @param {File|Blob|string} fileOrDataUrl - Input 2x2 photo
- * @param {Object} options - Configuration overrides (cleanliness, targetSize, etc.)
- * @returns {Promise<{ dataUrl: string, originalUrl: string, backdropType: string }>}
- */
 export async function processPhotoToWhiteBackground(fileOrDataUrl, options = {}) {
   const {
     targetSize = 800,
@@ -354,13 +303,11 @@ export async function processPhotoToWhiteBackground(fileOrDataUrl, options = {})
           return reject(new Error("Invalid image dimensions"));
         }
 
-        // Standard 1:1 square canvas (standard 2" x 2" ID photo)
         const canvas = document.createElement("canvas");
         canvas.width = targetSize;
         canvas.height = targetSize;
         const ctx = canvas.getContext("2d", { willReadFrequently: true });
 
-        // Calculate aspect-ratio preserving center crop with slight top bias to keep head and hair fully visible
         const cropSize = Math.min(srcW, srcH);
         const cropX = Math.max(0, Math.floor((srcW - cropSize) * 0.5));
         const cropY = Math.max(0, Math.floor((srcH - cropSize) * 0.18));
@@ -368,9 +315,6 @@ export async function processPhotoToWhiteBackground(fileOrDataUrl, options = {})
         ctx.drawImage(img, cropX, cropY, cropSize, cropSize, 0, 0, targetSize, targetSize);
         const originalUrl = canvas.toDataURL("image/jpeg", 0.96);
 
-        // -------------------------------------------------------------------
-        // PRIMARY ENGINE: Google MediaPipe AI Portrait Segmentation
-        // -------------------------------------------------------------------
         try {
           const aiResult = await processWithMediaPipe(canvas, targetSize, {
             cleanliness: options.tolerance || cleanliness
@@ -384,9 +328,6 @@ export async function processPhotoToWhiteBackground(fileOrDataUrl, options = {})
           console.warn("AI segmentation unavailable or timed out, using high-precision fallback:", aiError);
         }
 
-        // -------------------------------------------------------------------
-        // SECONDARY FALLBACK: Perimeter Flood Fill & Color Matting
-        // -------------------------------------------------------------------
         const fallbackResult = processWithCanvasFallback(canvas, targetSize, options);
         return resolve({
           dataUrl: fallbackResult.dataUrl,

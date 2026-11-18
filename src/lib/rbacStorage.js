@@ -1,11 +1,3 @@
-/**
- * rbacStorage.js
- * Enterprise Role-Based Access Control (RBAC) & Capabilities Management Service.
- *
- * Dynamically queries real database accounts from Supabase ('employees' & 'profiles' tables),
- * eliminates hardcoded mock accounts, and strictly maps all authentic workspace tabs and
- * in-tab operational tools across the entire HR Hub ecosystem.
- */
 
 import { supabase } from "./supabase";
 import { fetchEmployeesFromDatabase } from "./employeeStorage";
@@ -13,7 +5,6 @@ import { fetchEmployeesFromDatabase } from "./employeeStorage";
 const STORAGE_KEY = "hrhub_rbac_capabilities_matrix_enterprise_v3";
 const CLOUD_SETTINGS_KEY = "hrhub_rbac_matrix_master";
 
-// Enterprise Role Tier Definitions
 export const STANDARD_ROLE_TIERS = [
   {
     id: "system_admin",
@@ -45,7 +36,6 @@ export const STANDARD_ROLE_TIERS = [
   }
 ];
 
-// Authentic Workspace Tabs & Modules matching the entire HR Hub project
 export const WORKSPACE_TABS_CONFIG = [
   {
     id: "communication",
@@ -247,9 +237,7 @@ export const WORKSPACE_TABS_CONFIG = [
   }
 ];
 
-// Authentic In-Tab Features matching operations and tools inside workspaces
 export const IN_TAB_FEATURES_CONFIG = [
-  // 0. Enterprise Communication & Employee Portal Features
   {
     id: "comm_bulletin",
     label: "Access Company Bulletin & Announcements Feed",
@@ -363,7 +351,6 @@ export const IN_TAB_FEATURES_CONFIG = [
     description: "Authority to publish Knowledge Center guides, post official Suggestion Box responses, grant Leaderboard Awards, and create or close Polls & Surveys."
   },
 
-  // 1. Home & Meetings Features
   {
     id: "schedule_corporate_meetings",
     label: "Schedule Executive Operational Meetings",
@@ -372,7 +359,6 @@ export const IN_TAB_FEATURES_CONFIG = [
     description: "Allows scheduling corporate meetings, setting agendas, and coordinating inter-departmental sessions."
   },
 
-  // 2. Task Board & Weather Features
   {
     id: "manage_sop_tasks",
     label: "Post, Assign & Approve Task Board Submissions (HR Admin)",
@@ -388,7 +374,6 @@ export const IN_TAB_FEATURES_CONFIG = [
     description: "Displays live satellite weather maps and regional hazard alerts for field branch operations."
   },
 
-  // 3. Incident Reports & Due Process Features
   {
     id: "investigate_and_issue_ir",
     label: "Investigate & Transmit Branch Incident Report (IR)",
@@ -432,7 +417,6 @@ export const IN_TAB_FEATURES_CONFIG = [
     description: "Produces printable audit-ready IR and NTE case dockets with legal certification and signature blocks."
   },
 
-  // 4. Official Corporate Memorandum Generator Features
   {
     id: "formulate_official_memo",
     label: "Formulate & Issue Corporate Memorandums",
@@ -448,7 +432,6 @@ export const IN_TAB_FEATURES_CONFIG = [
     description: "Utilizes HR AI Buddy intelligence to formulate articulate, legally sound policy documentation."
   },
 
-  // 5. Gross Revenue & Financial Remittance Reports Features
   {
     id: "inspect_financial_ledgers",
     label: "Audit Daily Gross Draw Revenue & Cashier Turnovers",
@@ -471,7 +454,6 @@ export const IN_TAB_FEATURES_CONFIG = [
     description: "Generates official remittance receipts, supervisor commission statements, and payment authorizations."
   },
 
-  // 6. Enterprise Personnel Directory & 201 Registry Features
   {
     id: "provision_employee_records",
     label: "Provision & Modify Employee 201 Master Files",
@@ -494,7 +476,6 @@ export const IN_TAB_FEATURES_CONFIG = [
     description: "Authorizes the Pre-Register Employee button and access to the onboarding modal. Exclusively enabled for HR Administrator by default, with per-account override support."
   },
 
-  // 7. Supervisors Attendance Log Features
   {
     id: "log_supervisor_checkin",
     label: "Record Field Supervisor Biometric Check-In",
@@ -510,7 +491,6 @@ export const IN_TAB_FEATURES_CONFIG = [
     description: "Exports comprehensive attendance sheets for payroll computation and DOLE regulatory audits."
   },
 
-  // 8. Role & Capabilities Access Control Matrix Features
   {
     id: "reconfigure_rbac_policies",
     label: "Reconfigure Enterprise Security Policies",
@@ -527,10 +507,8 @@ export const IN_TAB_FEATURES_CONFIG = [
   }
 ];
 
-// Baseline factory capabilities configuration
 export const FACTORY_ROLE_TIER_PERMISSIONS = {
   system_admin: {
-    // Workspace Tabs & Modules (All 21)
     communication: true,
     home: true,
     overview: true,
@@ -554,7 +532,6 @@ export const FACTORY_ROLE_TIER_PERMISSIONS = {
     hr_analytics: true,
     permission_matrix: true,
     api_health: true,
-    // Features
     comm_bulletin: true,
     comm_post_bulletin: true,
     comm_directory: true,
@@ -594,7 +571,6 @@ export const FACTORY_ROLE_TIER_PERMISSIONS = {
     synchronize_cloud_security: true
   },
   hr_admin: {
-    // Workspace Tabs & Modules
     communication: true,
     home: true,
     overview: true,
@@ -618,7 +594,6 @@ export const FACTORY_ROLE_TIER_PERMISSIONS = {
     hr_analytics: true,
     permission_matrix: false,
     api_health: false,
-    // Features
     comm_bulletin: true,
     comm_post_bulletin: true,
     comm_directory: true,
@@ -639,10 +614,10 @@ export const FACTORY_ROLE_TIER_PERMISSIONS = {
     manage_sop_tasks: false,
     access_weather_radar: true,
     investigate_and_issue_ir: true,
-    issue_official_nte: false, // Head Office exclusive
+    issue_official_nte: false,
     serve_nte_on_site: true,
     record_written_defense: true,
-    render_case_disposition: false, // Head Office exclusive
+    render_case_disposition: false,
     print_due_process_docket: true,
     formulate_official_memo: true,
     ai_smart_memo_drafting: true,
@@ -658,7 +633,6 @@ export const FACTORY_ROLE_TIER_PERMISSIONS = {
     synchronize_cloud_security: false
   },
   operations_supervisor: {
-    // Workspace Tabs & Modules
     communication: true,
     home: true,
     overview: true,
@@ -682,7 +656,6 @@ export const FACTORY_ROLE_TIER_PERMISSIONS = {
     hr_analytics: false,
     permission_matrix: false,
     api_health: false,
-    // Features
     comm_bulletin: true,
     comm_post_bulletin: false,
     comm_directory: true,
@@ -722,7 +695,6 @@ export const FACTORY_ROLE_TIER_PERMISSIONS = {
     synchronize_cloud_security: false
   },
   finance_cashier: {
-    // Workspace Tabs & Modules
     communication: true,
     home: true,
     overview: true,
@@ -746,7 +718,6 @@ export const FACTORY_ROLE_TIER_PERMISSIONS = {
     hr_analytics: false,
     permission_matrix: false,
     api_health: false,
-    // Features
     comm_bulletin: true,
     comm_post_bulletin: false,
     comm_directory: true,
@@ -787,15 +758,11 @@ export const FACTORY_ROLE_TIER_PERMISSIONS = {
   }
 };
 
-/**
- * Classifies a real database employee record into its appropriate enterprise role tier
- */
 export function classifyEmployeeRoleTier(employee) {
   const email = (employee?.email || "").toLowerCase().trim();
   const role = (employee?.role || "").toLowerCase().trim();
   const company = (employee?.company || "").toLowerCase().trim();
 
-  // 1. System Administrator / Head Office Executive
   if (
     email === "admin@hrhub.com" ||
     email === "jay@simpalgroup.com" ||
@@ -806,7 +773,6 @@ export function classifyEmployeeRoleTier(employee) {
     return "system_admin";
   }
 
-  // 2. Branch HR & Compliance Administrator
   if (
     role.includes("hr") ||
     role.includes("compliance") ||
@@ -820,7 +786,6 @@ export function classifyEmployeeRoleTier(employee) {
     return "hr_admin";
   }
 
-  // 3. Finance & Cashier Operations
   if (
     role.includes("cashier") ||
     role.includes("teller") ||
@@ -830,17 +795,12 @@ export function classifyEmployeeRoleTier(employee) {
     return "finance_cashier";
   }
 
-  // 4. Default: Operations & Area Supervisor
   return "operations_supervisor";
 }
 
-/**
- * Fetch and construct dynamic accounts and role tiers using REAL data from the Supabase database
- */
 export async function fetchRealAccountsAndTiers() {
   const employees = await fetchEmployeesFromDatabase();
 
-  // Map real database records
   const realAccounts = employees.map((emp) => {
     const email = (emp.email || "").trim().toLowerCase();
     const roleTier = classifyEmployeeRoleTier(emp);
@@ -863,7 +823,6 @@ export async function fetchRealAccountsAndTiers() {
     };
   });
 
-  // Dynamically group real accounts into role tiers
   const dynamicTiers = STANDARD_ROLE_TIERS.map((tier) => {
     const tierAccounts = realAccounts.filter((a) => a.roleTier === tier.id);
     return {
@@ -876,16 +835,12 @@ export async function fetchRealAccountsAndTiers() {
   return { realAccounts, dynamicTiers };
 }
 
-/**
- * Load complete matrix data (from Supabase cloud first, with local fallback)
- */
 export function getRbacMatrixData() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
       if (parsed && parsed.roleTiers) {
-        // Backfill any newly added capability keys from factory defaults
         Object.keys(FACTORY_ROLE_TIER_PERMISSIONS).forEach((tierId) => {
           if (!parsed.roleTiers[tierId]) {
             parsed.roleTiers[tierId] = { ...FACTORY_ROLE_TIER_PERMISSIONS[tierId] };
@@ -904,7 +859,6 @@ export function getRbacMatrixData() {
     console.warn("[rbacStorage] Local storage parse notice:", err);
   }
 
-  // Generate initial state
   const initial = {
     roleTiers: JSON.parse(JSON.stringify(FACTORY_ROLE_TIER_PERMISSIONS)),
     accountOverrides: {},
@@ -914,9 +868,6 @@ export function getRbacMatrixData() {
   return initial;
 }
 
-/**
- * Fetch matrix asynchronously from Supabase Database
- */
 export async function loadRbacMatrixFromCloud() {
   try {
     if (supabase) {
@@ -928,7 +879,6 @@ export async function loadRbacMatrixFromCloud() {
 
       if (!error && data?.settings_json?.roleTiers) {
         const cloudData = data.settings_json;
-        // Backfill any newly added capability keys from factory defaults
         Object.keys(FACTORY_ROLE_TIER_PERMISSIONS).forEach((tierId) => {
           if (!cloudData.roleTiers[tierId]) {
             cloudData.roleTiers[tierId] = { ...FACTORY_ROLE_TIER_PERMISSIONS[tierId] };
@@ -951,9 +901,6 @@ export async function loadRbacMatrixFromCloud() {
   return getRbacMatrixData();
 }
 
-/**
- * Save matrix data to localStorage and dispatch update event
- */
 export function saveRbacMatrixData(matrixData) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(matrixData));
@@ -963,9 +910,6 @@ export function saveRbacMatrixData(matrixData) {
   }
 }
 
-/**
- * Reset matrix to factory defaults
- */
 export function resetRbacMatrixToDefaults() {
   const defaults = {
     roleTiers: JSON.parse(JSON.stringify(FACTORY_ROLE_TIER_PERMISSIONS)),
@@ -976,9 +920,6 @@ export function resetRbacMatrixToDefaults() {
   return defaults;
 }
 
-/**
- * Normalize legacy or aliased workspace tab keys so enforcement is always consistent
- */
 export function normalizeTabKey(key) {
   if (!key) return key;
   const k = String(key).trim();
@@ -987,28 +928,20 @@ export function normalizeTabKey(key) {
   return k;
 }
 
-/**
- * Case-insensitive helper to retrieve an account's override object
- */
 function getAccountOverrideMap(matrixData, targetEmail) {
   if (!matrixData?.accountOverrides || !targetEmail) return null;
   const norm = String(targetEmail).toLowerCase().trim();
   if (matrixData.accountOverrides[norm]) return matrixData.accountOverrides[norm];
-  // Fallback scan in case an existing key was stored with mixed casing
   const matchedKey = Object.keys(matrixData.accountOverrides).find(
     (k) => k.toLowerCase().trim() === norm
   );
   return matchedKey ? matrixData.accountOverrides[matchedKey] : null;
 }
 
-/**
- * Resolve effective capability for a specific role tier or account
- */
 export function getEffectiveCapability(type, targetId, capId, matrixData = null, accountsList = []) {
   const data = matrixData || getRbacMatrixData();
   const normCapId = normalizeTabKey(capId);
 
-  // If this capability is an in-tab feature, check if its parent workspace tab is allowed first
   const featureDef = IN_TAB_FEATURES_CONFIG.find((f) => f.id === normCapId);
   if (featureDef && featureDef.parentTab) {
     const parentAllowed = getEffectiveCapability(type, targetId, featureDef.parentTab, data, accountsList);
@@ -1030,7 +963,6 @@ export function getEffectiveCapability(type, targetId, capId, matrixData = null,
       if (normCapId === "home" && typeof override.overview === "boolean") return override.overview;
     }
 
-    // Fall back to account's resolved role tier
     const matchedAccount = accountsList.find(
       (a) =>
         String(a.id || "").toLowerCase() === normEmail ||
@@ -1045,9 +977,6 @@ export function getEffectiveCapability(type, targetId, capId, matrixData = null,
   return false;
 }
 
-/**
- * Toggle single capability switch
- */
 export function toggleCapability(type, targetId, capId, nextValue) {
   const data = getRbacMatrixData();
   const normCapId = normalizeTabKey(capId);
@@ -1060,7 +989,6 @@ export function toggleCapability(type, targetId, capId, nextValue) {
     data.roleTiers[targetId][normCapId] = nextValue;
     if (normCapId === "home") data.roleTiers[targetId].overview = nextValue;
 
-    // If parent tab toggled OFF, toggle OFF dependent child features
     const tabItem = WORKSPACE_TABS_CONFIG.find((t) => t.id === normCapId);
     if (tabItem && !nextValue) {
       const childFeatures = IN_TAB_FEATURES_CONFIG.filter((f) => f.parentTab === normCapId);
@@ -1069,7 +997,6 @@ export function toggleCapability(type, targetId, capId, nextValue) {
       });
     }
 
-    // If enabling a child feature, ensure its parent tab is enabled too
     const featureItem = IN_TAB_FEATURES_CONFIG.find((f) => f.id === normCapId);
     if (featureItem && nextValue && featureItem.parentTab) {
       data.roleTiers[targetId][featureItem.parentTab] = true;
@@ -1091,7 +1018,6 @@ export function toggleCapability(type, targetId, capId, nextValue) {
       });
     }
 
-    // If enabling a child feature, ensure its parent tab is enabled too
     const featureItem = IN_TAB_FEATURES_CONFIG.find((f) => f.id === normCapId);
     if (featureItem && nextValue && featureItem.parentTab) {
       data.accountOverrides[normEmail][featureItem.parentTab] = true;
@@ -1100,16 +1026,10 @@ export function toggleCapability(type, targetId, capId, nextValue) {
 
   data.lastSyncedAt = new Date().toISOString();
   saveRbacMatrixData(data);
-  // Instantly auto-sync to cloud so changes take effect globally across all workstations
   syncMatrixToCloud().catch((err) => console.debug("[rbacStorage] Auto-sync notice:", err?.message));
   return data;
 }
 
-/**
- * Tag-Based Helper: Add (+ Grant) or Remove (x Disable) a module or feature tag on a user account.
- * When adding a module tag, optionally enables its standard read features if the user has none.
- * When adding a feature tag, automatically enables its parent module tag so it works immediately.
- */
 export function setAccountCapabilityTag(email, capId, isEnabled) {
   const normEmail = String(email || "").toLowerCase().trim();
   if (!normEmail || !capId) return getRbacMatrixData();
@@ -1130,7 +1050,6 @@ export function setAccountCapabilityTag(email, capId, isEnabled) {
         data.accountOverrides[normEmail][f.id] = false;
       });
     } else {
-      // When enabling Communication Portal via tag, make sure at least Bulletin is accessible if all child features were false
       if (normCapId === "communication") {
         const anyCommChildEnabled = childFeatures.some((f) => data.accountOverrides[normEmail][f.id] === true);
         if (!anyCommChildEnabled) {
@@ -1152,11 +1071,6 @@ export function setAccountCapabilityTag(email, capId, isEnabled) {
   return data;
 }
 
-/**
- * Single-Module / Restricted Whitelist Mode:
- * Locks ALL workspace tabs & in-tab features for a user account EXCEPT the specified allowedCapIds.
- * Makes creating single-module or strict limited-access user accounts effortless in 1 click.
- */
 export function setAccountRestrictedOnlyMode(email, allowedCapIds = []) {
   const normEmail = String(email || "").toLowerCase().trim();
   if (!normEmail) return getRbacMatrixData();
@@ -1167,13 +1081,11 @@ export function setAccountRestrictedOnlyMode(email, allowedCapIds = []) {
   const allowedSet = new Set(allowedCapIds.map(normalizeTabKey));
   const nextOverrides = { overview: false };
 
-  // Set every tab to false unless explicitly in allowedSet
   WORKSPACE_TABS_CONFIG.forEach((t) => {
     nextOverrides[t.id] = allowedSet.has(t.id);
   });
   if (nextOverrides.home) nextOverrides.overview = true;
 
-  // Set every feature to false unless explicitly in allowedSet
   IN_TAB_FEATURES_CONFIG.forEach((f) => {
     const granted = allowedSet.has(f.id);
     nextOverrides[f.id] = granted;
@@ -1190,9 +1102,6 @@ export function setAccountRestrictedOnlyMode(email, allowedCapIds = []) {
   return data;
 }
 
-/**
- * Grant all operational modules & features to a specific user account
- */
 export function grantAllAccountCapabilities(email, excludeAdminOnly = true) {
   const normEmail = String(email || "").toLowerCase().trim();
   if (!normEmail) return getRbacMatrixData();
@@ -1223,9 +1132,6 @@ export function grantAllAccountCapabilities(email, excludeAdminOnly = true) {
   return data;
 }
 
-/**
- * Clear all custom overrides for a specific user account so it reverts to its Role Tier defaults
- */
 export function clearAccountOverrides(email) {
   const normEmail = String(email || "").toLowerCase().trim();
   if (!normEmail) return getRbacMatrixData();
@@ -1245,18 +1151,12 @@ export function clearAccountOverrides(email) {
   return data;
 }
 
-/**
- * Check if a user account has custom per-account overrides active
- */
 export function hasAccountCustomOverrides(email, matrixData = null) {
   const data = matrixData || getRbacMatrixData();
   const override = getAccountOverrideMap(data, email);
   return Boolean(override && Object.keys(override).length > 0);
 }
 
-/**
- * Synchronize matrix directly with Supabase Database
- */
 export async function syncMatrixToCloud() {
   const data = getRbacMatrixData();
   try {
@@ -1274,9 +1174,6 @@ export async function syncMatrixToCloud() {
   }
 }
 
-/**
- * Verify whether a logged-in user is authorized to view a specific workspace tab
- */
 export function isUserTabAllowed(user, tabKey, passedMatrix = null) {
   if (!user) return true;
 
@@ -1284,12 +1181,10 @@ export function isUserTabAllowed(user, tabKey, passedMatrix = null) {
   const normTab = normalizeTabKey(tabKey);
   const matrix = passedMatrix || getRbacMatrixData();
 
-  // Safety protection: ensure master administrator can always access permission matrix to avoid self-lockout
   if (normTab === "permission_matrix" && (email === "admin@hrhub.com" || email === "jay@simpalgroup.com")) {
     return true;
   }
 
-  // 1. Check account override first (individual account policy / tags set by Head Office)
   const override = getAccountOverrideMap(matrix, email);
   if (override) {
     if (typeof override[normTab] === "boolean") {
@@ -1300,21 +1195,16 @@ export function isUserTabAllowed(user, tabKey, passedMatrix = null) {
     }
   }
 
-  // 2. Fall back to user's assigned role tier
   const roleTier = classifyEmployeeRoleTier(user);
   return getEffectiveCapability("role", roleTier, normTab, matrix);
 }
 
-/**
- * Verify whether a logged-in user is authorized to perform a specific in-tab feature
- */
 export function isUserFeatureAllowed(user, featureKey, passedMatrix = null) {
   if (!user) return true;
 
   const email = (user.email || "").toLowerCase().trim();
   const matrix = passedMatrix || getRbacMatrixData();
 
-  // Enforce parent tab requirement: if parent workspace tab is disabled, child features are disabled
   const featureDef = IN_TAB_FEATURES_CONFIG.find((f) => f.id === featureKey);
   if (featureDef && featureDef.parentTab) {
     if (!isUserTabAllowed(user, featureDef.parentTab, matrix)) {
@@ -1322,13 +1212,11 @@ export function isUserFeatureAllowed(user, featureKey, passedMatrix = null) {
     }
   }
 
-  // 1. Check account override first
   const override = getAccountOverrideMap(matrix, email);
   if (override && typeof override[featureKey] === "boolean") {
     return override[featureKey];
   }
 
-  // 2. Fall back to user's assigned role tier
   const roleTier = classifyEmployeeRoleTier(user);
   return getEffectiveCapability("role", roleTier, featureKey, matrix);
 }

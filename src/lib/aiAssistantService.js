@@ -1,12 +1,5 @@
-// HRHub Ai Buddy Engine & Intelligence Service
-// Simpal Group of Companies • HR & Operations Knowledge Engine
 import { API_CONFIG } from "../config/apiConfig";
 
-/**
- * Determines whether the logged-in account is an HR Administrator assigned to
- * Simpal Group of Companies / Head Office (keeps Head Office HR dialog/MP3 AS-IS),
- * vs. a Subsidiary / STL Branch account (uses STL Gross, Winnings, AWOL Agent dialog/MP3).
- */
 export function isHeadOfficeHrAdminUser(user, isHRMDFlag = null) {
   if (!user) return true;
   const email = String(user.email || "").toLowerCase().trim();
@@ -58,12 +51,7 @@ export function isHeadOfficeHrAdminUser(user, isHRMDFlag = null) {
   return isHoCompany && isHrAdminRole;
 }
 
-/**
- * Complete Interactive Navigation Directory for HRHub App Modules & Sub-Tabs.
- * Powers AI Buddy's App Guide & Clickable Direct Routing Buttons.
- */
 export const HRHUB_MODULE_CATALOG = [
-  // Communication Portal Tabs
   {
     id: "comm:bulletin",
     routeType: "comm",
@@ -196,7 +184,6 @@ export const HRHUB_MODULE_CATALOG = [
     description: "Vote in active company polls, employee pulse surveys, and view live vote results.",
     keywords: ["poll", "polls", "survey", "surveys", "vote", "boto", "pulse survey"]
   },
-  // Operations Workspace Tabs
   {
     id: "tab:home",
     routeType: "workspace",
@@ -408,18 +395,11 @@ export const HRHUB_MODULE_CATALOG = [
   }
 ];
 
-/**
- * Strip raw [[NAV:...]] syntax markers from visible AI text
- */
 export function stripNavMarkers(text) {
   if (!text) return "";
   return text.replace(/\[\[NAV:[^\]]+\]\]/g, "").replace(/\n{3,}/g, "\n\n").trim();
 }
 
-/**
- * Extract clickable module navigation routes from explicit [[NAV:...]] markers
- * and contextual keyword intent in both user prompt and AI reply.
- */
 export function extractSuggestedRoutes(aiText = "", userPrompt = "") {
   const routes = [];
   const addedIds = new Set();
@@ -430,7 +410,6 @@ export function extractSuggestedRoutes(aiText = "", userPrompt = "") {
     routes.push(mod);
   };
 
-  // 1. Parse explicit [[NAV:targetId|Optional Label]] markers emitted by AI
   const navRegex = /\[\[NAV:([a-zA-Z0-9_:-]+)(?:\|([^\]]+))?\]\]/g;
   let match;
   while ((match = navRegex.exec(aiText || "")) !== null) {
@@ -441,7 +420,6 @@ export function extractSuggestedRoutes(aiText = "", userPrompt = "") {
     if (found) pushModule(found);
   }
 
-  // 2. Contextual intent detection so navigation buttons ALWAYS appear when relevant
   const combined = `${userPrompt || ""} ${aiText || ""}`.toLowerCase();
   const isAskingAppTour =
     combined.includes("paano gamitin") ||
@@ -459,7 +437,6 @@ export function extractSuggestedRoutes(aiText = "", userPrompt = "") {
     return routes.slice(0, 8);
   }
 
-  // Score keyword hits from userPrompt primarily (higher signal) then aiText
   const promptLower = (userPrompt || "").toLowerCase();
   const wantsNavigation =
     promptLower.includes("punta") ||
@@ -480,7 +457,6 @@ export function extractSuggestedRoutes(aiText = "", userPrompt = "") {
     }
   }
 
-  // If user asked for navigation/help and we still have room, scan AI text for strong module mentions
   if (wantsNavigation && routes.length < 4) {
     const aiLower = (aiText || "").toLowerCase();
     for (const mod of HRHUB_MODULE_CATALOG) {
@@ -532,7 +508,6 @@ Style & Persona:
 
   Do NOT use numbered lists or bullet points in the memorandum body. Always end the directives body with "Strict compliance is expected." Use clean corporate narrative paragraphs.
 
-
 Simpal Group of Companies Knowledge:
 1. Simpal Group of Companies (SGC) - Corporate parent company. Code: SGC. Managing Director: CHARMIE JEAN M. SIMPAL.
 2. Simpal Construction (SIMCON) - Infrastructure and construction operations. Code: SIMCON. VP Engineering: ENG'R. MARK ANTHONY V.
@@ -571,7 +546,6 @@ ACTIVE LOGGED-IN USER CONTEXT (SUBSIDIARY OPERATIONS MODE):
 
 const DEFAULT_GEMINI_KEY = API_CONFIG.GEMINI_API_KEY;
 
-// Helper: Clean markdown formatting (asterisks, backticks, leading/trailing punctuation)
 export function cleanMarkdownValue(val) {
   if (!val) return "";
   return val
@@ -580,7 +554,6 @@ export function cleanMarkdownValue(val) {
     .trim();
 }
 
-// Helper: Parse structured memo content, separating all metadata fields from pure body directives
 export function extractMemoFromText(text) {
   if (!text) return null;
   const isMemo =
@@ -592,7 +565,6 @@ export function extractMemoFromText(text) {
 
   if (!isMemo) return null;
 
-  // 1. Extract Header Fields with explicit word boundaries
   const refMatch = text.match(/(?:^|\n)\s*\*{0,2}\b(?:REF(?:\s*NUMBER|\s*NO\.?|\s*CODE)?|MEMO\s*REF(?:\s*NO\.?|\s*#)?)\b\*{0,2}\s*[:\-]\s*([^\n\r]+)/i);
   const dateMatch = text.match(/(?:^|\n)\s*\*{0,2}\bDATE\b\*{0,2}\s*[:\-]\s*([^\n\r]+)/i);
   const toMatch = text.match(/(?:^|\n)\s*\*{0,2}\bTO\b\*{0,2}\s*[:\-]\s*([^\n\r]+)/i);
@@ -607,7 +579,6 @@ export function extractMemoFromText(text) {
   const subject = cleanMarkdownValue(subjMatch?.[1]) || "Official Memorandum";
   const classification = cleanMarkdownValue(classMatch?.[1]);
 
-  // 2. Identify Company Code
   let companyCode = "SGC";
   const upperRef = (ref || "").toUpperCase();
   if (upperRef.startsWith("SIMCON") || upperRef.startsWith("SIM-") || /\bSIMCON\b/i.test(text) || /Simpal Construction/i.test(text)) {
@@ -624,7 +595,6 @@ export function extractMemoFromText(text) {
     companyCode = "SGC";
   }
 
-  // 3. Extract Signatories (Issued By / Noted & Approved By or Authentic HRMD Signature)
   let signatoryName = "";
   let signatoryTitle = "";
   let approverName = "";
@@ -642,7 +612,6 @@ export function extractMemoFromText(text) {
     approverTitle = cleanMarkdownValue(approvedMatch[2]);
   }
 
-  // Fallback to official corporate HRMD signatory if Jevince Jaye S. Jubay is detected or default
   if (!signatoryName) {
     const jubayMatch = text.match(/JEVINCE\s+JAYE\s+S\.?\s+JUBAY(?:,\s*CHRP)?/i);
     if (jubayMatch || isMemo) {
@@ -651,8 +620,6 @@ export function extractMemoFromText(text) {
     }
   }
 
-  // 4. Extract Pure Memorandum Body Directives
-  // Strip conversational intro, header table block, and dividing rules
   let body = text;
   const headerKeys = [
     "CLASSIFICATION",
@@ -688,7 +655,6 @@ export function extractMemoFromText(text) {
     body = body.replace(/^(?:[\s\S]*?)(?:MEMORANDUM[\s\S]*?(?:[-*_]{3,}|\={3,}))/i, "");
   }
 
-  // Strip trailing signatory block, Jubay signature, and HRMD footer from pure body
   body = body
     .replace(/(?:^|\n)\s*\*{0,2}\b(?:ISSUED BY|PREPARED BY|SIGNED BY|APPROVED BY|NOTED BY|JEVINCE JAYE S\. JUBAY|HUMAN RESOURCE MANAGEMENT DIVISION)\b[\s\S]*$/i, "")
     .replace(/(?:Please let me know|Let me know if|Sana nakatulong|May kailangan ka pa|I hope this helps)[\s\S]*$/i, "")
@@ -710,7 +676,6 @@ export function extractMemoFromText(text) {
   };
 }
 
-// Smart Local Corporate Directives & Guidelines Engine
 function generateLocalMemoDirectives(userPrompt, isPolish = false) {
   const subjMatch = userPrompt.match(/SUBJECT:\s*([^\n\r]+)/i);
   const subject = subjMatch ? subjMatch[1].trim() : "";
@@ -724,7 +689,6 @@ function generateLocalMemoDirectives(userPrompt, isPolish = false) {
   const hintMatch = userPrompt.match(/INSTRUCTIONS:\s*([^\n\r]+)/i);
   const hint = hintMatch ? hintMatch[1].trim() : "";
 
-  // If Polish requested and existing body was passed:
   if (isPolish) {
     const parts = userPrompt.split(/executive-level:\s*/i);
     const rawContent = parts.length > 1
@@ -753,10 +717,8 @@ function generateLocalMemoDirectives(userPrompt, isPolish = false) {
     }
   }
 
-  // Generation based on Subject, Category and Hint:
   const textToScan = `${subject} ${classification} ${hint}`.toLowerCase();
 
-  // 1. Immediate Response / Communication Accessibility
   if (textToScan.includes("communicat") || textToScan.includes("response") || textToScan.includes("reachab") || textToScan.includes("accessib") || textToScan.includes("contact")) {
     return `All officers, unit coordinators, and concerned personnel are reminded to remain reachable and strictly responsive to all official calls, corporate messages, and dispatch transmissions, particularly during designated operational hours and live draw schedules.
 
@@ -767,7 +729,6 @@ All personnel are expected to maintain active and accessible communication lines
 Strict compliance is expected.`;
   }
 
-  // 2. Attendance / Biometrics / Timekeeping / Punctuality
   if (textToScan.includes("biometric") || textToScan.includes("attendance") || textToScan.includes("punctual") || textToScan.includes("late") || textToScan.includes("tardiness") || textToScan.includes("cutoff") || textToScan.includes("timekeeping")) {
     return `1. NOTICE IS HEREBY GIVEN to all active employees and branch personnel regarding strict adherence to standard daily biometric timekeeping, shift punctuality, and attendance log integrity.
 
@@ -782,7 +743,6 @@ Strict compliance is expected.`;
 Compliance with these directives is strictly mandatory.`;
   }
 
-  // 3. Holiday / Special Non-Working Day
   if (textToScan.includes("holiday") || textToScan.includes("non-working") || textToScan.includes("proclamation") || textToScan.includes("skeleton")) {
     return `1. In accordance with official national proclamations, please be advised that the upcoming scheduled date has been declared an Official Non-Working Holiday across all relevant operating jurisdictions.
 
@@ -797,7 +757,6 @@ Compliance with these directives is strictly mandatory.`;
 Strict compliance is expected.`;
   }
 
-  // 4. Shift Handover / Turnover / Draw Reconciliation
   if (textToScan.includes("turnover") || textToScan.includes("handover") || textToScan.includes("draw") || textToScan.includes("teller") || textToScan.includes("remittance") || textToScan.includes("cash")) {
     return `1. In line with management's ongoing effort to streamline branch workflow and ensure complete accountability, all operational units, field coordinators, and branch tellers are instructed to implement the updated shift transition and draw cutoff protocol effective immediately.
 
@@ -812,7 +771,6 @@ Strict compliance is expected.`;
 Compliance with these directives is strictly mandatory.`;
   }
 
-  // 5. Safety, Health, PPE & Emergency Weather Readiness
   if (textToScan.includes("safety") || textToScan.includes("ppe") || textToScan.includes("health") || textToScan.includes("hazard") || textToScan.includes("weather") || textToScan.includes("incident") || textToScan.includes("emergency")) {
     return `1. The safety, physical security, and well-being of our workforce remain the paramount priority of the management. In view of operational conditions, all personnel are required to uphold standard safety precautions at all times.
 
@@ -827,7 +785,6 @@ Compliance with these directives is strictly mandatory.`;
 Stay alert and observe all safety protocols at all times.`;
   }
 
-  // 6. Universal Executive Directives Generation (for any custom subject or policy)
   const formattedSubject = subject || "Administrative and Operational Directives";
   return `1. This Memorandum serves to promulgate official management directives regarding ${formattedSubject.toUpperCase()} across all concerned departments and regional operating branches.
 
@@ -842,11 +799,9 @@ Stay alert and observe all safety protocols at all times.`;
 Strict compliance is expected.`;
 }
 
-// Built-in Smart HR & Operations Knowledge Engine (when no external API key is configured)
 function generateLocalAiResponse(userPrompt, conversationHistory = [], currentUser = null, isHRMD = null) {
   const query = userPrompt.toLowerCase().trim();
 
-  // Check if this is a request for Memorandum Body Directives or Polish
   const isDirectivesRequest =
     query.includes("memorandum body directives") ||
     query.includes("memorandum directives") ||
@@ -862,7 +817,6 @@ function generateLocalAiResponse(userPrompt, conversationHistory = [], currentUs
     return generateLocalMemoDirectives(userPrompt, isPolishRequest);
   }
 
-  // 0. Special Profile: Jay Ryan Lim (Creator & Developer)
   if (
     query.includes("jay ryan") ||
     query.includes("jay lim") ||
@@ -881,7 +835,6 @@ Si **Jay Ryan Lim** ang magaling at mahusay na **IT Professional** na nagdisenyo
 * 🛠️ **Propesyon:** Isang napakagaling na IT specialist at software engineer na nagdala ng modernong inobasyon para sa Simpal Group of Companies.`;
   }
 
-  // 0. Special Profile: Quennie Capuyan Lim (HR Employee and Labor Relations)
   if (
     query.includes("quennie") ||
     query.includes("quenie") ||
@@ -899,7 +852,6 @@ Si **Quennie Capuyan Lim** ay ang ating iginagalang na **HR Employee and Labor R
 * 💖 **Espesyal na Pagkakakilanlan:** Siya ang **mabait at napakagandang asawa ni Jay Ryan Lim**, ang ating magaling na IT professional na gumawa sa akin at sa buong sistemang ito!`;
   }
 
-  // 1. Holiday Memo Draft
   if (query.includes("holiday") && (query.includes("memo") || query.includes("draft") || query.includes("gawan"))) {
     return `### 📄 DRAFT MEMORANDUM: DECLARED SPECIAL NON-WORKING HOLIDAY
 
@@ -923,7 +875,6 @@ HRMD Manager
 HUMAN RESOURCE MANAGEMENT DIVISION`;
   }
 
-  // 2. Tardiness / Biometrics / Notice of Explanation
   if (query.includes("tardiness") || query.includes("late") || query.includes("punctuality") || query.includes("attendance warning") || query.includes("notice of explanation")) {
     return `### ⚠️ DRAFT NOTICE OF EXPLANATION (NOE): ATTENDANCE & BIOMETRIC COMPLIANCE
 
@@ -956,7 +907,6 @@ Office of the Human Resources & People Operations
 Simpal Group of Companies`;
   }
 
-  // 3. DOLE Holiday Pay Rules & Calculation
   if (query.includes("holiday pay") || query.includes("dole") || (query.includes("compute") && query.includes("pay"))) {
     return `### ⚖️ PHILIPPINE LABOR CODE & DOLE HOLIDAY PAY COMPUTATION GUIDE
 
@@ -983,7 +933,6 @@ Batay sa mga opisyal na panuntunan ng **Department of Labor and Employment (DOLE
 *💡 Paalala mula sa HR: Para sa mga STL on-duty tellers o SIMCON field staff na may shifting sa araw ng holiday, tiyaking naipasa ang aprubadong attendance log sa imsoroglohr@gmail.com para sa payroll processing.*`;
   }
 
-  // 3B. App Walkthrough & Direct Module Routing ("paano gamitin ang app", "pumunta sa", "link ng module")
   if (
     query.includes("paano gamitin") ||
     query.includes("how to use") ||
@@ -1021,7 +970,6 @@ Puwede kitang dalhin nang direkta sa kahit anong module sa isang click lang sa m
 [[NAV:tab:gross|Open Gross Report]] [[NAV:tab:revenue_trends|Open Revenue Trends]] [[NAV:tab:agents|Open Agents Directory]] [[NAV:tab:incident_reports|Open Incident Reports & NTE]] [[NAV:tab:geotagging|Open GeoTagging Map]] [[NAV:comm:directory|Open Employee Directory]]`;
   }
 
-  // 3C. AWOL Agent Step-by-Step Operational & DOLE Due Process Guide
   if (
     query.includes("awol") ||
     query.includes("nag-awol") ||
@@ -1058,7 +1006,6 @@ Kapag ang isang **STL Agent / Teller** ay biglang hindi pumasok nang walang paal
 [[NAV:tab:incident_reports|File Incident Report (AWOL)]] [[NAV:tab:agents|Check Agents Directory]] [[NAV:tab:gross|Verify Agent Remittance]] [[NAV:tab:memo|Open Memo Generator]]`;
   }
 
-  // 3D. How to Compute STL Winnings / Panalo (Hits & Payouts)
   if (
     query.includes("panalo") ||
     query.includes("winning") ||
@@ -1100,7 +1047,6 @@ Narito ang malinaw na formula at halimbawa kung paano kino-compute ang **Panalo 
 [[NAV:tab:gross|Open Gross & Hits Report]] [[NAV:tab:revenue_trends|Check Betting Ratio Trends]]`;
   }
 
-  // 4. STL Gross Study, Up/Down Diagnostics & Sales-Boosting Suggestions
   if (
     query.includes("gross") ||
     query.includes("hits") ||
@@ -1138,7 +1084,6 @@ Narito ang gabay sa pag-study ng inyong **STL Gross** (2:00 PM, 5:00 PM, 9:00 PM
 [[NAV:tab:gross|Open Gross Report]] [[NAV:tab:revenue_trends|Open Revenue Trends]] [[NAV:tab:geotagging|Open GeoTagging Map]] [[NAV:tab:weather|Check Weather Radar]] [[NAV:tab:agents|Open Agents Directory]]`;
   }
 
-  // 5. SOP Generation
   if (query.includes("sop") || query.includes("workflow") || query.includes("standard operating procedure") || query.includes("step")) {
     return `### 📋 STANDARD OPERATING PROCEDURE (SOP): CASH REMITTANCE & TELLER DRAW CLOSURE
 
@@ -1176,7 +1121,6 @@ To standardize cash collection, minimize discrepancies, ensure physical ticket r
 [[NAV:tab:sops|Open Task Board]] [[NAV:tab:gross|Open Gross Report]]`;
   }
 
-  // 6. General / Default Response (Account-Aware: Head Office HR Admin vs Subsidiary)
   if (!isHeadOfficeHrAdminUser(currentUser, isHRMD)) {
     const compName = currentUser?.company || "inyong Subsidiary Branch";
     return `### 👋 Kumusta! Ako ang iyong **HRHub AI Buddy** para sa **${compName}**!
@@ -1208,7 +1152,6 @@ Mayroon ka bang gustong ipagawa o itanong ngayon?
 [[NAV:tab:memo|Open Memo Generator]] [[NAV:tab:incident_reports|Open Incident Reports]] [[NAV:comm:directory|Open Employee Directory]] [[NAV:comm:attendance|Open Shift & Attendance]]`;
 }
 
-// Main AI Completion Handler: Dual Engine with automatic Smart Local fallback
 export async function sendAiChatMessage({
   messages,
   userPrompt,
@@ -1244,13 +1187,12 @@ export async function sendAiChatMessage({
     (activeApiKey.startsWith("AQ.") || activeApiKey.startsWith("AIzaSy") ? activeApiKey : "") ||
     DEFAULT_GEMINI_KEY;
 
-  // Priority 1: Google Gemini Multi-Model Pool (Live-Verified Active Models)
   if (geminiApiKey) {
     const candidateModels = [
-      "gemini-3.5-flash-lite",   // Primary: High-quota fast free-tier model (live verified)
-      "gemini-3.8-flash",        // Flagship Flash reasoning fallback (live verified)
-      "gemini-flash-lite-latest",// Always-current Flash-Lite alias (live verified)
-      "gemini-flash-latest"      // Always-current Flash alias
+      "gemini-3.5-flash-lite",
+      "gemini-3.8-flash",
+      "gemini-flash-lite-latest",
+      "gemini-flash-latest"
     ];
     for (const gModel of candidateModels) {
       try {
@@ -1305,7 +1247,6 @@ export async function sendAiChatMessage({
     }
   }
 
-  // Priority 2: Direct OpenAI Engine (if valid key is provided)
   if (activeApiKey && !activeApiKey.startsWith("AQ.") && !activeApiKey.startsWith("AIzaSy")) {
     try {
       const response = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -1346,7 +1287,6 @@ export async function sendAiChatMessage({
     }
   }
 
-  // Tier 2: Real Live Engine (Powered via live intelligence gateway)
   try {
     const controller = new AbortController();
     const timeoutTimer = setTimeout(() => controller.abort(), 6000);
@@ -1381,7 +1321,6 @@ export async function sendAiChatMessage({
           responseText = parsed.choices[0].message.content;
         }
       } catch {
-        // It's plain text/markdown string
       }
 
       if (responseText && responseText.length > 0) {
@@ -1392,7 +1331,6 @@ export async function sendAiChatMessage({
     console.warn("Live gateway unavailable or timed out, falling back to local HR brain:", liveErr);
   }
 
-  // Tier 3 Fallback: Smart Local HR & Operations Knowledge Engine
   const localReply = generateLocalAiResponse(userPrompt, messages, currentUser, isHRMD);
   return finalizeReply(localReply, "local_brain", "HRHub Ai Buddy");
 }

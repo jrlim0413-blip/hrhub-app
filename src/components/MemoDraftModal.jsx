@@ -8,7 +8,6 @@ import {
   Wand2, Edit3
 } from "lucide-react";
 
-// Standard Company Directory with default Signatory: Jevince Jaye S. Jubay, CHRP (HRMD Manager)
 const COMPANIES = [
   {
     id: "lucky_betplay",
@@ -120,7 +119,6 @@ const LANGUAGES = [
   { id: "taglish", label: "Taglish", desc: "Corporate Taglish" }
 ];
 
-// Authentic Company Presets following official HR paragraph structure
 const DEFAULT_TOPIC_PRESETS = [
   {
     id: "preset-communication",
@@ -224,7 +222,6 @@ export function loadSavedTopics() {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed)) {
         if (parsed.length > 0) {
-          // If no item explicitly has isDefault, mark the first one as default
           const hasDefault = parsed.some((t) => t.isDefault);
           if (!hasDefault) {
             parsed[0].isDefault = true;
@@ -271,7 +268,6 @@ const RECIPIENT_CHECKBOXES = [
   { id: "skeletal", label: "Designated Skeletal Force on Shift", text: "ALL DESIGNATED SKELETAL FORCE PERSONNEL ON SHIFT" }
 ];
 
-// Smart AI Classification Analyzer
 export function analyzeTopicClassification(topicText = "", subjectText = "") {
   const combined = `${topicText} ${subjectText}`.toLowerCase();
 
@@ -374,7 +370,6 @@ export function analyzeTopicClassification(topicText = "", subjectText = "") {
   };
 }
 
-// Smart Topic Analyzer: Generates formal uppercase Subject Line and authentic 4-paragraph memo directives
 export function generateTopicDetails(rawTopic = "", lang = "english") {
   const text = (rawTopic || "").trim();
   const lower = text.toLowerCase();
@@ -523,7 +518,6 @@ export function generateTopicDetails(rawTopic = "", lang = "english") {
       "All concerned personnel are expected to maintain composure at all times, address player inquiries respectfully, and immediately escalate unresolved disputes to the Branch Supervisor.\n\n" +
       "Strict compliance is expected.";
   } else {
-    // Intelligent corporate formatting matching the exact 4-paragraph corporate structure
     const cleaned = text.replace(/[^a-zA-Z0-9\s]/g, " ").trim();
     const words = cleaned.split(/\s+/).filter(Boolean);
     const upperTitle = words.map(w => w.toUpperCase()).join(" ");
@@ -554,10 +548,8 @@ export default function MemoDraftModal({
 }) {
   const [currentStep, setCurrentStep] = useState(1);
 
-  // Persistent Topics (presets + custom saved in localStorage)
   const [topics, setTopics] = useState(() => loadSavedTopics());
 
-  // Form State - Dynamically defaulted to the active default topic!
   const [selectedCompanyId, setSelectedCompanyId] = useState("lucky_betplay");
   const [language, setLanguage] = useState("english");
 
@@ -593,7 +585,6 @@ export default function MemoDraftModal({
   const [memoFrom, setMemoFrom] = useState("HUMAN RESOURCES DEPARTMENT");
   const [fromPreset, setFromPreset] = useState("hr_dept");
   
-  // Default signatory requested by user
   const [signatoryLabel, setSignatoryLabel] = useState("ISSUED BY:");
   const [signatoryName, setSignatoryName] = useState("JEVINCE JAYE S. JUBAY, CHRP");
   const [signatoryTitle, setSignatoryTitle] = useState("HRMD Manager");
@@ -607,10 +598,8 @@ export default function MemoDraftModal({
     return def?.details || "";
   });
 
-  // Magnified Review & Edit State
   const [isMagnified, setIsMagnified] = useState(false);
 
-  // Add Topic & Analyzer State
   const [isAddingTopic, setIsAddingTopic] = useState(false);
   const [newTopicTitle, setNewTopicTitle] = useState("");
   const [newTopicSubject, setNewTopicSubject] = useState("");
@@ -621,7 +610,6 @@ export default function MemoDraftModal({
     return COMPANIES.find((c) => c.id === selectedCompanyId) || COMPANIES[0];
   }, [selectedCompanyId]);
 
-  // Handle AI Analyzer for Topic
   const handleAnalyzeNewTopic = () => {
     const raw = newTopicTitle.trim();
     if (!raw) {
@@ -670,11 +658,10 @@ export default function MemoDraftModal({
       classification: finalCategory,
       suggestedTo: memoTo,
       isCustom: true,
-      isDefault: true, // Saved topic automatically becomes the active default!
+      isDefault: true,
       createdAt: Date.now()
     };
 
-    // Prepend new topic to the very top and unset other isDefault flags
     const updated = [
       newTopic,
       ...topics.map((t) => ({ ...t, isDefault: false }))
@@ -690,7 +677,6 @@ export default function MemoDraftModal({
     setNewTopicDetails("");
   };
 
-  // Set any selected topic as default and move to top
   const handleSetDefaultTopic = (topicId, e) => {
     e?.stopPropagation();
     const target = topics.find((t) => t.id === topicId);
@@ -711,7 +697,6 @@ export default function MemoDraftModal({
     handleSelectTopic(target);
   };
 
-  // Delete topic handler: If default is deleted, saved topics automatically become the new default!
   const handleDeleteTopic = (topicId, e) => {
     e.stopPropagation();
     const topicToDelete = topics.find((t) => t.id === topicId);
@@ -729,13 +714,9 @@ export default function MemoDraftModal({
     let newDefaultTopic = null;
 
     if (wasDefault) {
-      // Kung na-delete ang default:
-      // Ang magiging default na is yung mga na-save na topic suggestions (isCustom)
-      // Kung wala pang saved custom, kunin ang unang natitirang topic
       const firstSavedCustom = remaining.find((t) => t.isCustom);
       newDefaultTopic = firstSavedCustom || remaining[0];
 
-      // Markahan as default at ilagay sa index 0
       updatedList = remaining.map((t) => ({
         ...t,
         isDefault: t.id === newDefaultTopic.id
@@ -747,7 +728,6 @@ export default function MemoDraftModal({
         updatedList.unshift(defItem);
       }
     } else {
-      // Panatilihing may kahit isang default
       const hasDefault = updatedList.some((t) => t.isDefault);
       if (!hasDefault) {
         const firstSavedCustom = updatedList.find((t) => t.isCustom);
@@ -762,13 +742,11 @@ export default function MemoDraftModal({
     setTopics(updatedList);
     saveTopicsToStorage(updatedList);
 
-    // Agad ilipat ang form details sa bagong default saved topic
     if (wasDefault && newDefaultTopic) {
       handleSelectTopic(newDefaultTopic);
     }
   };
 
-  // Restore presets while preserving user's saved custom topics
   const handleRestoreDefaultTopics = () => {
     const customTopics = topics.filter((t) => t.isCustom);
 
@@ -911,7 +889,7 @@ HUMAN RESOURCE MANAGEMENT DIVISION`;
     onClose?.();
   };
 
-  const [activeMobileTab, setActiveMobileTab] = useState("controls"); // "controls" | "preview"
+  const [activeMobileTab, setActiveMobileTab] = useState("controls");
   const [copied, setCopied] = useState(false);
   const [isSignatoriesExpanded, setIsSignatoriesExpanded] = useState(false);
   const [isParametersExpanded, setIsParametersExpanded] = useState(false);
@@ -964,7 +942,6 @@ ${currentCompany.name}`;
   useEffect(() => {
     if (!isOpen) return;
 
-    // Sync topics with latest localStorage saved state upon opening modal
     const currentList = loadSavedTopics();
     setTopics(currentList);
 
@@ -1006,7 +983,6 @@ ${currentCompany.name}`;
         }
       `}</style>
 
-      {/* ================= FULL-SCREEN FOCUS EDITOR OVERLAY ================= */}
       {isMagnified && (
         <div
           className="fixed inset-0 z-60 flex items-start justify-center overflow-y-auto p-3 sm:p-6 pt-4 sm:pt-6 md:pt-8 bg-slate-950/75 backdrop-blur-md animate-in fade-in duration-200"
@@ -1016,7 +992,6 @@ ${currentCompany.name}`;
             className="ai-studio-animate relative w-full max-w-4xl h-[88vh] max-h-[900px] flex flex-col rounded-2xl bg-white border border-sky-200 shadow-2xl overflow-hidden ring-1 ring-black/10"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Focus Header */}
             <div className="flex items-center justify-between px-6 py-3.5 border-b border-slate-100 bg-slate-900 text-white shrink-0">
               <div className="flex items-center gap-2.5">
                 <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-sky-500/20 text-sky-300 border border-sky-400/30 shadow-xs">
@@ -1047,7 +1022,6 @@ ${currentCompany.name}`;
               </button>
             </div>
 
-            {/* Quick Toolbar */}
             <div className="flex items-center justify-between px-6 py-2.5 bg-slate-50 border-b border-slate-100 text-xs shrink-0">
               <div className="flex items-center gap-2 text-slate-500 text-[11px]">
                 <span className="font-semibold text-slate-700">
@@ -1085,7 +1059,6 @@ ${currentCompany.name}`;
               </div>
             </div>
 
-            {/* Editor Area */}
             <div className="p-6 flex-1 overflow-y-auto space-y-3">
               <textarea
                 autoFocus
@@ -1102,7 +1075,6 @@ ${currentCompany.name}`;
               />
             </div>
 
-            {/* Footer */}
             <div className="flex items-center justify-between px-6 py-3 border-t border-slate-100 bg-slate-50 shrink-0">
               <span className="text-xs text-slate-400 hidden sm:inline">
                 Press <kbd className="px-1.5 py-0.5 rounded bg-slate-200 text-slate-700 font-mono text-[10px]">Esc</kbd> to minimize
@@ -1121,14 +1093,11 @@ ${currentCompany.name}`;
         </div>
       )}
 
-      {/* ================= MASTER STUDIO CONTAINER ================= */}
       <div
         className="ai-studio-animate relative w-full max-w-[1340px] h-[92vh] max-h-[920px] flex flex-col rounded-2xl sm:rounded-3xl bg-white border border-slate-200/90 shadow-2xl overflow-hidden ring-1 ring-black/10"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Studio Master Header */}
         <div className="bg-slate-950 text-white px-5 sm:px-6 py-3 border-b border-slate-800 flex items-center justify-between shrink-0 gap-3">
-          {/* Left Title */}
           <div className="flex items-center gap-3">
             <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-sky-500/20 text-sky-400 border border-sky-400/30 shadow-xs">
               <FileText size={16} />
@@ -1149,7 +1118,6 @@ ${currentCompany.name}`;
             </div>
           </div>
 
-          {/* Center: Quick Entity Selector Pills */}
           <div className="hidden md:flex items-center gap-1 bg-slate-900/90 p-1 rounded-xl border border-slate-800">
             {COMPANIES.map((comp) => {
               const isSel = selectedCompanyId === comp.id;
@@ -1172,9 +1140,7 @@ ${currentCompany.name}`;
             })}
           </div>
 
-          {/* Right: Language, Mobile Switcher, Close */}
           <div className="flex items-center gap-2">
-            {/* Language Segmented Control */}
             <div className="flex items-center bg-slate-900 p-0.5 rounded-lg border border-slate-800 text-[10px] font-semibold">
               {LANGUAGES.map((l) => (
                 <button
@@ -1193,7 +1159,6 @@ ${currentCompany.name}`;
               ))}
             </div>
 
-            {/* Mobile View Toggle */}
             <div className="flex lg:hidden items-center bg-slate-900 p-0.5 rounded-lg border border-slate-800 text-[10px] font-semibold">
               <button
                 type="button"
@@ -1215,7 +1180,6 @@ ${currentCompany.name}`;
               </button>
             </div>
 
-            {/* Close Button */}
             <button
               type="button"
               onClick={onClose}
@@ -1227,19 +1191,15 @@ ${currentCompany.name}`;
           </div>
         </div>
 
-        {/* Split-View Body */}
         <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-12 overflow-hidden">
           
-          {/* ================= LEFT PANE: STUDIO BUILDER CONTROLS ================= */}
           <div
             className={`lg:col-span-5 flex-col h-full overflow-hidden bg-slate-50/80 border-r border-slate-200/80 ${
               activeMobileTab === "controls" ? "flex" : "hidden lg:flex"
             }`}
           >
-            {/* Scrollable Controls */}
             <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4 text-xs">
               
-              {/* Section 1: Topic Suggestions Hub & AI Analyzer */}
               <div className="rounded-xl border border-slate-200 bg-white p-3.5 shadow-2xs space-y-3">
                 <div className="flex items-center justify-between pb-1 border-b border-slate-100">
                   <div className="flex items-center gap-1.5">
@@ -1273,7 +1233,6 @@ ${currentCompany.name}`;
                   </div>
                 </div>
 
-                {/* Inline AI Analyzer Drawer */}
                 {isAddingTopic && (
                   <div className="rounded-xl border border-sky-200 bg-sky-50/60 p-3 space-y-2.5 animate-in slide-in-from-top-1 duration-150">
                     <div className="flex items-center justify-between">
@@ -1309,7 +1268,6 @@ ${currentCompany.name}`;
                       </button>
                     </div>
 
-                    {/* Auto-filled details */}
                     <div className="space-y-1">
                       <input
                         type="text"
@@ -1342,7 +1300,6 @@ ${currentCompany.name}`;
                   </div>
                 )}
 
-                {/* Topic Pills Cloud */}
                 <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto pr-1">
                   {topics.map((t) => {
                     const isSel = subject === t.subject;
@@ -1404,7 +1361,6 @@ ${currentCompany.name}`;
                 </div>
               </div>
 
-              {/* Section 2: Subject Line & Classification */}
               <div className="rounded-xl border border-slate-200 bg-white p-3.5 shadow-2xs space-y-2.5">
                 <div className="flex items-center justify-between">
                   <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">
@@ -1441,7 +1397,6 @@ ${currentCompany.name}`;
                   className="w-full rounded-lg border border-slate-200 bg-slate-50/60 px-3 py-2 text-xs font-bold text-slate-900 focus:bg-white focus:border-sky-500 focus:ring-1 focus:ring-sky-500 focus:outline-none uppercase transition"
                 />
 
-                {/* Classification bar */}
                 <div className="flex items-center justify-between pt-1 text-[11px]">
                   <div className="flex items-center gap-1.5">
                     <span className="text-slate-400 font-medium">Classification:</span>
@@ -1466,7 +1421,6 @@ ${currentCompany.name}`;
                 </div>
               </div>
 
-              {/* Section 3: Recipients & Office (TO & FROM) */}
               <div className="rounded-xl border border-slate-200 bg-white p-3.5 shadow-2xs space-y-2.5">
                 <div className="flex items-center justify-between">
                   <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">
@@ -1481,7 +1435,6 @@ ${currentCompany.name}`;
                   </button>
                 </div>
 
-                {/* Quick Recipient Chips */}
                 {isParametersExpanded && (
                   <div className="grid grid-cols-2 gap-1.5 pb-1">
                     {RECIPIENT_CHECKBOXES.map((r) => {
@@ -1533,7 +1486,6 @@ ${currentCompany.name}`;
                 </div>
               </div>
 
-              {/* Section 4: Directives & Guidelines Editor */}
               <div className="rounded-xl border border-slate-200 bg-white p-3.5 shadow-2xs space-y-2">
                 <div className="flex items-center justify-between">
                   <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">
@@ -1574,7 +1526,6 @@ ${currentCompany.name}`;
                 />
               </div>
 
-              {/* Section 5: Signatories Summary Card */}
               <div className="rounded-xl border border-slate-200 bg-white p-3.5 shadow-2xs space-y-2">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1.5">
@@ -1661,13 +1612,11 @@ ${currentCompany.name}`;
             </div>
           </div>
 
-          {/* ================= RIGHT PANE: REAL-TIME OFFICIAL MEMO DOCUMENT ================= */}
           <div
             className={`lg:col-span-7 flex-col h-full overflow-hidden bg-slate-200/70 relative ${
               activeMobileTab === "preview" ? "flex" : "hidden lg:flex"
             }`}
           >
-            {/* Top Preview Bar */}
             <div className="px-5 py-2.5 bg-white/80 backdrop-blur border-b border-slate-200 flex items-center justify-between shrink-0">
               <div className="flex items-center gap-2 text-xs">
                 <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
@@ -1689,11 +1638,9 @@ ${currentCompany.name}`;
               </div>
             </div>
 
-            {/* Canvas with Real Paper Sheet */}
             <div className="flex-1 overflow-y-auto p-4 sm:p-7 flex justify-center items-start">
               <div className="official-memo-paper bg-white shadow-2xl rounded-sm border border-slate-300/80 p-7 sm:p-9 max-w-[620px] w-full text-slate-900 font-sans text-xs relative select-text transition-all">
                 
-                {/* Official Letterhead */}
                 <div className="flex items-center justify-between pb-2.5">
                   <img
                     src={currentCompany.logoUrl}
@@ -1719,7 +1666,6 @@ ${currentCompany.name}`;
 
                 <div className="h-0.5 bg-slate-900 my-2.5" />
 
-                {/* Document Header Banner */}
                 <div className="text-center py-1">
                   <div className="flex items-center justify-between text-[10px] text-slate-500 font-mono pb-1 border-b border-slate-200">
                     <span>REF NO: {currentCompany.code}-HRMD-{new Date().getFullYear()}-001</span>
@@ -1734,7 +1680,6 @@ ${currentCompany.name}`;
 
                 <div className="h-px bg-slate-300 my-2" />
 
-                {/* Key-Value Fields */}
                 <div className="grid grid-cols-12 gap-y-1 py-1.5 text-[11px] leading-snug">
                   <div className="col-span-2 font-bold text-slate-700 uppercase">TO:</div>
                   <div className="col-span-10 font-bold text-slate-900 uppercase">{memoTo || "ALL CONCERNED PERSONNEL"}</div>
@@ -1751,7 +1696,6 @@ ${currentCompany.name}`;
 
                 <div className="h-0.5 bg-slate-900 my-2.5" />
 
-                {/* Directives Body Paragraphs */}
                 <div className="py-2 space-y-3 text-[11px] sm:text-xs text-slate-800 font-sans leading-relaxed">
                   {directivesContent ? (
                     directivesContent.split("\n\n").map((para, idx) => (
@@ -1764,7 +1708,6 @@ ${currentCompany.name}`;
                   )}
                 </div>
 
-                {/* Signatory Block */}
                 <div className="mt-8 pt-4 grid grid-cols-2 gap-6 text-[11px]">
                   <div>
                     {signatoryLabel?.trim() ? (
@@ -1803,7 +1746,6 @@ ${currentCompany.name}`;
               </div>
             </div>
 
-            {/* Bottom Action Footer */}
             <div className="px-6 py-3 bg-white border-t border-slate-200 flex items-center justify-between shrink-0 gap-3">
               <span className="text-[11px] text-slate-400 hidden sm:inline">
                 Live sync active • Changes reflect instantly on printable A4

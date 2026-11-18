@@ -1,8 +1,3 @@
-/**
- * Dedicated Saved Documents & Certificates Storage Service
- * Purpose: Manage official saved certificates, notices, and letters (Coupon Bond studio)
- * with cloud synchronization to Supabase and resilient multi-tier fallback (localStorage & memory).
- */
 
 import { supabase } from "./supabase.js";
 import { getUserAccountKey } from "./userSettingsStorage.js";
@@ -11,16 +6,11 @@ export const SAVED_DOCS_TABLE = "saved_documents";
 export const FALLBACK_MEMOS_TABLE = "saved_memos";
 const LOCAL_STORAGE_KEY = "hrhub_saved_documents_store_v1";
 
-// Cache table availability: saved_documents table is not deployed on Supabase, so default to false to eliminate 404 console errors
 let isSavedDocsTableAvailable = false;
 
-// In-memory fallback cache
 const memoryDocsStore = new Map();
 const sessionUsedDocRefs = new Set();
 
-/**
- * Normalizes document reference string to strictly guarantee official company codes (e.g. SARG -> 5ARG).
- */
 export function normalizeDocRef(ref = "") {
   if (!ref) return "";
   return String(ref)
@@ -28,10 +18,6 @@ export function normalizeDocRef(ref = "") {
     .replace(/\bSARG\b/gi, "5ARG");
 }
 
-/**
- * Generate a unique sequential document reference code matching company code and date.
- * Format: DOC-YYYY-CODE-YYMMDD-SEQ (e.g. DOC-2026-5ARG-261105-01)
- */
 export function generateUniqueDocRef(companyCode = "LBC", allKnownRefs = []) {
   const safeCode = (companyCode === "SARG" ? "5ARG" : companyCode) || "LBC";
   const now = new Date();
@@ -73,9 +59,6 @@ export function registerUsedDocRef(ref) {
   }
 }
 
-/**
- * Read cached local documents from localStorage safely.
- */
 function getLocalCachedDocs(accountKey) {
   try {
     const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
@@ -94,9 +77,6 @@ function getLocalCachedDocs(accountKey) {
   return [];
 }
 
-/**
- * Write local documents cache to localStorage safely.
- */
 function setLocalCachedDocs(accountKey, docsList) {
   try {
     const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
@@ -108,15 +88,11 @@ function setLocalCachedDocs(accountKey, docsList) {
   }
 }
 
-/**
- * Fetch all saved official documents for a user account.
- */
 export async function getSavedDocumentsFromDb(currentUser = null) {
   const accountKey = getUserAccountKey(currentUser);
   const localList = getLocalCachedDocs(accountKey);
 
   try {
-    // 1. Primary check: check records in 'saved_memos' with category like 'DOC_STUDIO:%' across all company accounts
     const { data: memoDocs, error: memoErr } = await supabase
       .from(FALLBACK_MEMOS_TABLE)
       .select("*")
@@ -131,7 +107,6 @@ export async function getSavedDocumentsFromDb(currentUser = null) {
       return { documents: mapped, source: "supabase_memos" };
     }
 
-    // 2. Only if saved_documents is explicitly deployed and available, query it
     if (isSavedDocsTableAvailable) {
       const { data, error } = await supabase
         .from(SAVED_DOCS_TABLE)
@@ -150,7 +125,6 @@ export async function getSavedDocumentsFromDb(currentUser = null) {
     console.warn("Supabase documents query notice, falling back to local cache:", err);
   }
 
-  // Fallback to local storage or memory
   if (localList.length > 0) {
     memoryDocsStore.set(accountKey, localList);
     return { documents: localList, source: "localStorage" };
@@ -160,14 +134,10 @@ export async function getSavedDocumentsFromDb(currentUser = null) {
   return { documents: inMem, source: "memory" };
 }
 
-/**
- * Fetch all document references across all records to guarantee unique numbering sequence.
- */
 export async function getAllGlobalDocumentRefs() {
   const allRefs = [];
 
   try {
-    // Check saved_memos (which exists in Supabase)
     const { data: memoData, error: memoErr } = await supabase
       .from(FALLBACK_MEMOS_TABLE)
       .select("ref_no, category")
@@ -179,7 +149,6 @@ export async function getAllGlobalDocumentRefs() {
       });
     }
 
-    // Only query saved_documents if enabled
     if (isSavedDocsTableAvailable) {
       const { data, error } = await supabase
         .from(SAVED_DOCS_TABLE)
@@ -196,14 +165,10 @@ export async function getAllGlobalDocumentRefs() {
     console.warn("Global doc refs query fallback:", e);
   }
 
-  // Include local session refs
   sessionUsedDocRefs.forEach((r) => allRefs.push(r));
   return Array.from(new Set(allRefs));
 }
 
-/**
- * Save an official document record to Supabase and local cache.
- */
 export async function saveDocumentRecordToDb(currentUser = null, docRecord = {}) {
   const accountKey = getUserAccountKey(currentUser);
   const id = docRecord.id || `doc_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
@@ -255,7 +220,6 @@ export async function saveDocumentRecordToDb(currentUser = null, docRecord = {})
   let dbError = null;
 
   try {
-    // 1. If saved_documents table is available, attempt it
     if (isSavedDocsTableAvailable) {
       const { error } = await supabase
         .from(SAVED_DOCS_TABLE)
@@ -264,7 +228,6 @@ export async function saveDocumentRecordToDb(currentUser = null, docRecord = {})
       if (!error) syncedToSupabase = true;
     }
 
-    // 2. Otherwise save directly into saved_memos table (which exists in Supabase)
     if (!syncedToSupabase) {
       const memoPayload = {
         id,
@@ -309,7 +272,6 @@ export async function saveDocumentRecordToDb(currentUser = null, docRecord = {})
     dbError = e?.message || String(e);
   }
 
-  // Update in-memory and local storage caches
   const normalizedModel = {
     ...docRecord,
     id,
@@ -332,9 +294,6 @@ export async function saveDocumentRecordToDb(currentUser = null, docRecord = {})
   };
 }
 
-/**
- * Delete a document from Supabase and local cache.
- */
 export async function deleteDocumentRecordFromDb(currentUser = null, id) {
   const accountKey = getUserAccountKey(currentUser);
 
@@ -355,7 +314,6 @@ export async function deleteDocumentRecordFromDb(currentUser = null, id) {
   return { success: true };
 }
 
-// Helpers to map raw database rows to unified model
 function mapDocRowToModel(row) {
   const meta = row.metadata || {};
   return {

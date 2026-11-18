@@ -48,23 +48,15 @@ export { matchesCompanyEntity };
 
 const SUBSIDIARIES = ALL_SUBSIDIARIES;
 
-// As instructed: In Pre-Registration, only HR account roles appear
 const ROLES = HR_PRE_REGISTRATION_ROLES;
 
 const BRANCH_PRESETS = ALL_BRANCH_PRESETS;
 
-/**
- * Identify the assigned HR Administrator for a given company/subsidiary.
- * Strict match ONLY: An HR profile whose registered company strictly matches targetCompany.
- * Profiles from other companies (e.g. Quennie Lim who belongs to Simpal Group of Companies)
- * will NEVER be assigned to another entity.
- */
 export function getAssignedHrForCompany(targetCompany, allProfiles = []) {
   if (!targetCompany || targetCompany === "all" || targetCompany === "All Entities") {
     return null;
   }
 
-  // Strict match: An HR profile whose registered company matches targetCompany
   const direct = (allProfiles || []).find((p) => {
     if (!matchesCompanyEntity(p.company, targetCompany)) return false;
     const role = (p.role || "").toLowerCase().trim();
@@ -81,8 +73,6 @@ export function getAssignedHrForCompany(targetCompany, allProfiles = []) {
 
   return direct || null;
 }
-
-
 
 export default function EmployeeDirectoryPanel({
   profiles = [],
@@ -119,10 +109,10 @@ export default function EmployeeDirectoryPanel({
 
   const [searchQuery, setSearchQuery] = useState("");
   const [birthdayFilter, setBirthdayFilter] = useState("");
-  const [selectedFilter, setSelectedFilter] = useState("all"); // 'all' | 'entity_enrolled' | 'online' | 'pending' | 'approved'
+  const [selectedFilter, setSelectedFilter] = useState("all");
   const [selectedSubsidiary, setSelectedSubsidiary] = useState("all");
   const [selectedBranchFilter, setSelectedBranchFilter] = useState("all");
-  const [viewMode, setViewMode] = useState("grid"); // 'grid' | 'table'
+  const [viewMode, setViewMode] = useState("grid");
   const [showNonStl, setShowNonStl] = useState(false);
   const tabsScrollRef = useRef(null);
 
@@ -135,30 +125,25 @@ export default function EmployeeDirectoryPanel({
     }
   };
 
-  // If a non-STL entity is selected, automatically expand non-STL view
   useEffect(() => {
     if (NON_STL_SUBSIDIARIES.includes(selectedSubsidiary)) {
       setShowNonStl(true);
     }
   }, [selectedSubsidiary]);
 
-  // Pre-Registration Modal State (Exclusively for HRMD)
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isSubmittingAdd, setIsSubmittingAdd] = useState(false);
 
-  // Portal Login Authorization Toggle State (Exclusively for HRMD / Head Office)
   const [isTogglingLoginId, setIsTogglingLoginId] = useState(null);
 
-  // Unified Enhanced Employee Profiling Modal State (For Add & Edit across all accounts)
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
-  const [profileModalMode, setProfileModalMode] = useState("add"); // 'add' | 'edit'
+  const [profileModalMode, setProfileModalMode] = useState("add");
   const [selectedProfileForModal, setSelectedProfileForModal] = useState(null);
 
   const [notice, setNotice] = useState(null);
   const [copiedId, setCopiedId] = useState(null);
   const [inviteEmployee, setInviteEmployee] = useState(null);
 
-  // New Employee Form State (Exclusively for HRMD Pre-registration)
   const [newEmployee, setNewEmployee] = useState({
     email: "",
     name: "",
@@ -169,13 +154,11 @@ export default function EmployeeDirectoryPanel({
     isApproved: true
   });
 
-  // Current logged in HR profile
   const currentProfile = useMemo(() => {
     const curEmail = (currentEmail || "").toLowerCase().trim();
     return (profiles || []).find((p) => (p.email || "").toLowerCase().trim() === curEmail);
   }, [profiles, currentEmail]);
 
-  // Determine whether logged in account is Head Office HRMD Administrator
   const isHRMD = useMemo(() => {
     const curEmail = (currentEmail || "").toLowerCase().trim();
     const role = (currentProfile?.role || "").toLowerCase().trim();
@@ -197,14 +180,12 @@ export default function EmployeeDirectoryPanel({
   const isEntityAccount = !isHRMD;
   const userEntityCompany = currentProfile?.company || "Lucky Betplay Corporation";
 
-  // When a per-entity account logs in, automatically select their entity company tab
   useEffect(() => {
     if (!isHRMD && currentProfile?.company) {
       setSelectedSubsidiary(currentProfile.company);
     }
   }, [isHRMD, currentProfile?.company]);
 
-  // Identify the opened company and its assigned HR Administrator
   const currentOpenedCompany = useMemo(() => {
     if (selectedSubsidiary && selectedSubsidiary !== "all" && selectedSubsidiary !== "stl_all" && selectedSubsidiary !== "non_stl_all" && selectedSubsidiary !== "head_office_all") {
       return selectedSubsidiary;
@@ -225,7 +206,6 @@ export default function EmployeeDirectoryPanel({
     return getAssignedHrForCompany(userEntityCompany, profiles || []);
   }, [userEntityCompany, profiles]);
 
-  // Dedicated Entity Navigation Tabs with live counts per entity
   const entityTabs = useMemo(() => {
     const countMap = {};
     (profiles || []).forEach((p) => {
@@ -287,10 +267,6 @@ export default function EmployeeDirectoryPanel({
     ];
   }, [profiles, showNonStl]);
 
-  // Managed Personnel Profiles:
-  // - If HRMD: Full corporate personnel directory across all subsidiaries (excludes master superadmin from deletion)
-  // - If Non-HRMD Branch/Entity Account: Personnel belonging to their entity (based on company column),
-  //   plus the assigned HR administrator for their company, plus any profiles created by this user:
   const managedProfiles = useMemo(() => {
     const curEmail = (currentEmail || "").trim().toLowerCase();
 
@@ -298,7 +274,6 @@ export default function EmployeeDirectoryPanel({
       return (profiles || []).filter((p) => (p.email || "").trim().toLowerCase() !== "admin@hrhub.com");
     }
 
-    // For operating entity / subsidiary accounts:
     const myComp = (userEntityCompany || "").trim();
     const assignedHr = getAssignedHrForCompany(myComp, profiles || []);
     const assignedHrEmail = (assignedHr?.email || "").toLowerCase().trim();
@@ -307,13 +282,10 @@ export default function EmployeeDirectoryPanel({
       const email = (p.email || "").trim().toLowerCase();
       if (email === "admin@hrhub.com" && assignedHrEmail !== "admin@hrhub.com") return false;
 
-      // 1. Is this profile the assigned HR for their company?
       if (assignedHrEmail && email === assignedHrEmail) return true;
 
-      // 2. Does this employee belong to the same company? (db column `company`)
       if (myComp && matchesCompanyEntity(p.company, myComp)) return true;
 
-      // 3. Or created by this user
       const createdBy = (
         p.created_by ||
         p.created_by_email ||
@@ -328,7 +300,6 @@ export default function EmployeeDirectoryPanel({
     });
   }, [profiles, isHRMD, currentEmail, userEntityCompany]);
 
-  // Helper to determine if an employee profile was enrolled by an operating entity / subsidiary
   const isEntityEnrolledEmployee = (p) => {
     if (!p) return false;
     const email = (p.email || "").trim().toLowerCase();
@@ -339,7 +310,6 @@ export default function EmployeeDirectoryPanel({
     return true;
   };
 
-  // Calculate statistics for managed personnel
   const stats = useMemo(() => {
     let total = managedProfiles.length;
     let onlineCount = 0;
@@ -365,7 +335,6 @@ export default function EmployeeDirectoryPanel({
     company: currentProfile?.company || "Simpal Group of Companies"
   }), [currentEmail, currentProfile]);
 
-  // Pre-Registration: Strictly governed by RBAC Matrix (default ON for HRMD, customizable per account via tags/toggles)
   const canPreRegister = useMemo(() => {
     return (
       isUserFeatureAllowed(currentUserRbacObj, "pre_register_employee", matrixData) ||
@@ -373,12 +342,10 @@ export default function EmployeeDirectoryPanel({
     );
   }, [currentUserRbacObj, matrixData]);
 
-  // Add Employee Profile: Strictly governed by RBAC Matrix (comm_add_employee)
   const canAddEntityEmployee = useMemo(() => {
     return isUserFeatureAllowed(currentUserRbacObj, "comm_add_employee", matrixData);
   }, [currentUserRbacObj, matrixData]);
 
-  // Profile Administration Permission Check (Edit, Approve, Decommission): Strictly governed by RBAC Matrix
   const canManageProfiles = useMemo(() => {
     return (
       isUserFeatureAllowed(currentUserRbacObj, "comm_manage_profiles", matrixData) ||
@@ -386,11 +353,9 @@ export default function EmployeeDirectoryPanel({
     );
   }, [currentUserRbacObj, matrixData]);
 
-  // Filtered & Sorted profiles
   const filteredProfiles = useMemo(() => {
     const assignedEmail = (assignedHrForOpenedEntity?.email || "").toLowerCase().trim();
 
-    // Source list to filter
     const sourceProfiles = isHRMD
       ? (profiles || []).filter((p) => (p.email || "").trim().toLowerCase() !== "admin@hrhub.com")
       : managedProfiles;
@@ -403,7 +368,6 @@ export default function EmployeeDirectoryPanel({
       const branch = (p.branch || "").toLowerCase();
       const isOnline = (currentEmail && email === currentEmail) || onlineEmails.has(email);
 
-      // Search matching (matches name, email, company, role, branch, or birthday)
       const query = searchQuery.toLowerCase().trim();
       const empBday = String(p.birthday || p.birthdate || p.birth_date || p.metadata?.birthday || "").toLowerCase().trim();
       const matchesSearch = !query ||
@@ -414,14 +378,12 @@ export default function EmployeeDirectoryPanel({
         branch.includes(query) ||
         empBday.includes(query);
 
-      // Tab filter
       let matchesFilter = true;
       if (selectedFilter === "entity_enrolled") matchesFilter = isEntityEnrolledEmployee(p);
       else if (selectedFilter === "online") matchesFilter = isHRMD && isOnline;
       else if (selectedFilter === "approved") matchesFilter = Boolean(p.is_approved);
       else if (selectedFilter === "pending") matchesFilter = !p.is_approved;
 
-      // Subsidiary & Entity Type filter: STRICTLY match the selected entity's company
       let matchesSubsidiary = true;
       if (selectedSubsidiary === "all") {
         matchesSubsidiary = true;
@@ -432,14 +394,11 @@ export default function EmployeeDirectoryPanel({
       } else if (selectedSubsidiary === "head_office_all") {
         matchesSubsidiary = isHeadOffice(p.company);
       } else {
-        // Specific entity selected (e.g. "Lucky Betplay Corporation", "5A Royal Gaming OPC", "MC POWER GAS")
         matchesSubsidiary = matchesCompanyEntity(p.company, selectedSubsidiary);
       }
 
-      // Branch filter
       const matchesBranch = selectedBranchFilter === "all" || (p.branch || "").trim().toLowerCase() === selectedBranchFilter.toLowerCase().trim();
 
-      // Birthday filter
       const bdayTerm = birthdayFilter.trim().toLowerCase();
       const matchesBirthday = !bdayTerm || empBday.includes(bdayTerm);
 
@@ -450,7 +409,6 @@ export default function EmployeeDirectoryPanel({
       const aOnline = (currentEmail && aEmail === currentEmail) || onlineEmails.has(aEmail);
       const bOnline = (currentEmail && bEmail === currentEmail) || onlineEmails.has(bEmail);
 
-      // 0. Pin assigned HR of currently selected entity to the top!
       if (assignedEmail) {
         const aIsHr = aEmail === assignedEmail;
         const bIsHr = bEmail === assignedEmail;
@@ -458,27 +416,22 @@ export default function EmployeeDirectoryPanel({
         if (!aIsHr && bIsHr) return 1;
       }
 
-      // 1. Pending profiles first if in pending view
       if (selectedFilter === "pending") {
         return aEmail.localeCompare(bEmail);
       }
-      // 2. Active online profiles first ONLY in HRMD view
       if (isHRMD) {
         if (aOnline && !bOnline) return -1;
         if (!aOnline && bOnline) return 1;
       }
-      // 3. Alphabetical by email or name
       return (a.name || aEmail).localeCompare(b.name || bEmail);
     });
   }, [managedProfiles, profiles, assignedHrForOpenedEntity, searchQuery, selectedFilter, selectedSubsidiary, selectedBranchFilter, onlineEmails, currentEmail, isHRMD]);
 
-  // Toggle approval status
   const handleToggleApproval = async (profile) => {
     const newApprovedState = !profile.is_approved;
     const targetEmail = (profile.email || "").trim().toLowerCase();
     if (!targetEmail) return;
 
-    // 1. Save to persistent storage immediately
     updateStoredEmployeeApproval(targetEmail, newApprovedState);
     saveStoredEmployee({
       ...profile,
@@ -486,12 +439,10 @@ export default function EmployeeDirectoryPanel({
       is_approved: newApprovedState
     });
 
-    // 2. Update UI state immediately in parent
     if (onUpdateProfile) {
       onUpdateProfile(profile.id, { is_approved: newApprovedState, email: targetEmail });
     }
 
-    // 3. Sync to Supabase Database
     try {
       if (profile.id && !String(profile.id).startsWith("prof-") && !String(profile.id).startsWith("db-") && !String(profile.id).startsWith("emp-")) {
         const { error: idErr } = await supabase
@@ -520,7 +471,6 @@ export default function EmployeeDirectoryPanel({
     setTimeout(() => setNotice(null), 4000);
   };
 
-  // Toggle employee portal login authorization (Exclusively for Central HRMD / Head Office)
   const handleToggleEmployeeLogin = async (profile) => {
     if (!profile) return;
     const targetEmail = (profile.email || "").trim().toLowerCase();
@@ -565,21 +515,18 @@ export default function EmployeeDirectoryPanel({
     }
   };
 
-  // Open Enhanced Employee Profiling Modal in Edit Mode (Available for all accounts)
   const handleOpenEdit = (profile) => {
     setProfileModalMode("edit");
     setSelectedProfileForModal(profile);
     setIsProfileModalOpen(true);
   };
 
-  // Open Enhanced Employee Profiling Modal in Add Mode
   const handleOpenAddProfileModal = () => {
     setProfileModalMode("add");
     setSelectedProfileForModal(null);
     setIsProfileModalOpen(true);
   };
 
-  // Open Add / Pre-Registration Modal (HRMD Only)
   const handleOpenAddModal = () => {
     const defComp = currentProfile?.company || "Simpal Group of Companies";
     const defBranch = normalizeBranchForCompany(defComp, currentProfile?.branch || DEFAULT_BRANCH_MAP[defComp]);
@@ -596,7 +543,6 @@ export default function EmployeeDirectoryPanel({
     setIsAddModalOpen(true);
   };
 
-  // Delete employee handler
   const handleDeleteEmployee = async (profile) => {
     const targetEmail = profile.email || "this employee";
     const confirmDelete = window.confirm(
@@ -604,16 +550,13 @@ export default function EmployeeDirectoryPanel({
     );
     if (!confirmDelete) return;
 
-    // 1. Delete from local persistent storage & cloud tombstone
     if (profile.email) await deleteStoredEmployee(profile.email);
     if (profile.id) await deleteStoredEmployee(profile.id);
 
-    // 2. Notify parent dashboard
     if (onDeleteProfile) {
       await onDeleteProfile(profile.id, profile.email);
     }
 
-    // 3. Delete from Supabase
     try {
       if (profile.id && !String(profile.id).startsWith("prof-") && !String(profile.id).startsWith("db-") && !String(profile.id).startsWith("emp-")) {
         await supabase.from("profiles").delete().eq("id", profile.id);
@@ -633,7 +576,6 @@ export default function EmployeeDirectoryPanel({
     if (onRefresh) onRefresh();
   };
 
-  // Pre-Registration Submit Handler (Exclusively for HRMD)
   const handleAddEmployeeSubmit = async (e) => {
     e.preventDefault();
     if (!canPreRegister) {
@@ -675,15 +617,12 @@ export default function EmployeeDirectoryPanel({
         created_at: new Date().toISOString()
       };
 
-      // 1. Save to persistent storage immediately
       saveStoredEmployee(newRecord);
 
-      // 2. Update UI state immediately in parent
       if (onUpdateProfile) {
         onUpdateProfile(null, newRecord);
       }
 
-      // 3. Sync database approval in background if profile already registered in Supabase
       try {
         await supabase
           .from("profiles")
@@ -723,7 +662,6 @@ export default function EmployeeDirectoryPanel({
     }
   };
 
-  // Save Handler for Enhanced Employee Profile Modal (Handles both Add & Edit)
   const handleSaveProfileModal = async (record) => {
     try {
       const creatorEmail = (currentEmail || "").trim().toLowerCase();
@@ -745,7 +683,6 @@ export default function EmployeeDirectoryPanel({
 
       await saveStoredEmployee(fullRecord);
 
-      // Also sync to profiles table if it's an existing registered user
       try {
         if (selectedProfileForModal?.id && !String(selectedProfileForModal.id).startsWith("prof-") && !String(selectedProfileForModal.id).startsWith("db-") && !String(selectedProfileForModal.id).startsWith("emp-")) {
           await supabase.from("profiles").update({
@@ -789,7 +726,6 @@ export default function EmployeeDirectoryPanel({
     }
   };
 
-  // Direct Incident Report Filing Trigger - Links directly to Workspace and automatically opens IR process
   const handleFileIncidentReportForEmployee = (employee) => {
     if (!employee) return;
     try {
@@ -845,7 +781,6 @@ export default function EmployeeDirectoryPanel({
 
   return (
     <div className="space-y-3 antialiased text-slate-800">
-      {/* Top Banner Notice */}
       {notice && (
         <div className={`p-2.5 rounded-xl border text-xs font-semibold flex items-center justify-between gap-2.5 shadow-2xs animate-in fade-in slide-in-from-top-2 ${notice.type === "success"
           ? "bg-emerald-50 border-emerald-200 text-emerald-900"
@@ -861,7 +796,6 @@ export default function EmployeeDirectoryPanel({
         </div>
       )}
 
-      {/* Main Corporate Header */}
       <div className="bg-white border border-slate-200/80 rounded-2xl p-3 sm:p-4 shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-3">
         <div>
           <div className="flex items-center gap-1.5">
@@ -886,7 +820,6 @@ export default function EmployeeDirectoryPanel({
             <RefreshCw size={13} className={loading ? "animate-spin text-emerald-600" : ""} />
           </button>
 
-          {/* Permissions Matrix: Exclusively for Head Office HR Administrator */}
           {isHeadOffice && onOpenPermissions && (
             <button
               type="button"
@@ -899,7 +832,6 @@ export default function EmployeeDirectoryPanel({
             </button>
           )}
 
-          {/* Head Office: Pre-Register System Login Account (HRMD Only) */}
           {isHeadOffice && (
             <button
               type="button"
@@ -912,7 +844,6 @@ export default function EmployeeDirectoryPanel({
             </button>
           )}
 
-          {/* Add Employee Profile: Available for both HRMD & Branch/Entity Accounts */}
           <button
             type="button"
             onClick={handleOpenAddProfileModal}
@@ -925,10 +856,8 @@ export default function EmployeeDirectoryPanel({
         </div>
       </div>
 
-      {/* Metric KPI Cards (3 Cards for HRMD, 2 Cards for Branch/Entity Accounts) */}
       {isHRMD ? (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-          {/* Card 1: Total Personnel */}
           <div className="bg-slate-50/70 border border-slate-200/70 rounded-xl px-3.5 py-2 flex items-center justify-between shadow-2xs">
             <div>
               <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 block">Total Personnel</span>
@@ -942,7 +871,6 @@ export default function EmployeeDirectoryPanel({
             </div>
           </div>
 
-          {/* Card 2: Active Online (Exclusively for HRMD) */}
           <div className="bg-slate-50/70 border border-slate-200/70 rounded-xl px-3.5 py-2 flex items-center justify-between shadow-2xs">
             <div>
               <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 block">Active Online</span>
@@ -960,7 +888,6 @@ export default function EmployeeDirectoryPanel({
             </div>
           </div>
 
-          {/* Card 3: Pending Review */}
           <div className={`border rounded-xl px-3.5 py-2 flex items-center justify-between shadow-2xs transition ${stats.pendingCount > 0
             ? "bg-amber-50/60 border-amber-200"
             : "bg-slate-50/70 border-slate-200/70"
@@ -985,7 +912,6 @@ export default function EmployeeDirectoryPanel({
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-          {/* Card 1: Entity Personnel */}
           <div className="bg-slate-50/70 border border-slate-200/70 rounded-xl px-3.5 py-2 flex items-center justify-between shadow-2xs">
             <div>
               <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 block truncate max-w-[140px]">
@@ -1001,7 +927,6 @@ export default function EmployeeDirectoryPanel({
             </div>
           </div>
 
-          {/* Card 2: Active Profiles */}
           <div className="bg-slate-50/70 border border-slate-200/70 rounded-xl px-3.5 py-2 flex items-center justify-between shadow-2xs">
             <div>
               <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 block">Active Profiles</span>
@@ -1015,7 +940,6 @@ export default function EmployeeDirectoryPanel({
             </div>
           </div>
 
-          {/* Card 3: Assigned Entity HR */}
           <div className="bg-emerald-50/40 border border-emerald-200/80 rounded-xl px-3.5 py-2 flex items-center justify-between shadow-2xs">
             <div className="min-w-0 pr-1">
               <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-900 block">
@@ -1032,12 +956,9 @@ export default function EmployeeDirectoryPanel({
         </div>
       )}
 
-      {/* Unified Corporate Toolbar: Entity Navigation & Controls */}
       <div className="bg-white border border-slate-200/90 rounded-2xl shadow-xs overflow-hidden stagger-4">
-        {/* Tier 1: Dedicated Entity Tabs Bar with Interactive Navigation Controls - Exclusively for Central HR Administrator (HRMD) */}
         {isHRMD && (
           <div className="px-2.5 sm:px-3 py-1.5 bg-slate-50/80 border-b border-slate-200/70 flex items-center justify-between gap-1.5 overflow-hidden">
-            {/* Scroll Left Button */}
             <button
               type="button"
               onClick={() => scrollTabs("left")}
@@ -1047,7 +968,6 @@ export default function EmployeeDirectoryPanel({
               <ChevronLeft size={12} />
             </button>
 
-            {/* Scrollable Tabs Container */}
             <div
               ref={tabsScrollRef}
               className="flex-1 flex items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden py-0.5 scroll-smooth"
@@ -1095,7 +1015,6 @@ export default function EmployeeDirectoryPanel({
               })}
             </div>
 
-            {/* Scroll Right Button */}
             <button
               type="button"
               onClick={() => scrollTabs("right")}
@@ -1105,7 +1024,6 @@ export default function EmployeeDirectoryPanel({
               <ChevronRight size={12} />
             </button>
 
-            {/* Non-STL Interactive Toggle */}
             <button
               type="button"
               onClick={() => setShowNonStl((prev) => !prev)}
@@ -1120,7 +1038,6 @@ export default function EmployeeDirectoryPanel({
               <span className="sm:hidden">{showNonStl ? "STL" : "+2"}</span>
             </button>
 
-            {/* Quick Reset if filters active */}
             {(selectedSubsidiary !== "all" || selectedBranchFilter !== "all" || searchQuery || selectedFilter !== "all") && (
               <button
                 type="button"
@@ -1138,9 +1055,7 @@ export default function EmployeeDirectoryPanel({
           </div>
         )}
 
-        {/* Tier 2: Search Bar, Status Filter, Branch Filter, and View Mode */}
         <div className="p-2 sm:p-2.5 bg-white flex flex-col md:flex-row items-stretch md:items-center justify-between gap-1.5 sm:gap-2">
-          {/* Search Bar */}
           <div className="flex-1 min-w-[160px]">
             <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs text-slate-800 focus-within:border-emerald-500 focus-within:bg-white focus-within:ring-2 focus-within:ring-emerald-100 transition shadow-2xs">
               <Search size={13} className="text-slate-400 shrink-0" />
@@ -1159,7 +1074,6 @@ export default function EmployeeDirectoryPanel({
             </div>
           </div>
 
-          {/* Birthday Textbox Filter */}
           <div className="w-full md:w-52 shrink-0">
             <div className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs text-slate-800 focus-within:border-emerald-500 focus-within:bg-white focus-within:ring-2 focus-within:ring-emerald-100 transition shadow-2xs">
               <Cake size={13} className="text-rose-500 shrink-0" />
@@ -1179,9 +1093,7 @@ export default function EmployeeDirectoryPanel({
             </div>
           </div>
 
-          {/* Dropdown Filters and View Mode Switcher */}
           <div className="flex items-center gap-1.5 flex-wrap sm:flex-nowrap shrink-0">
-            {/* Status Filter Dropdown */}
             <select
               value={selectedFilter}
               onChange={(e) => setSelectedFilter(e.target.value)}
@@ -1198,7 +1110,6 @@ export default function EmployeeDirectoryPanel({
               <option value="pending">⏳ Pending Review ({stats.pendingCount})</option>
             </select>
 
-            {/* Branch Filter Dropdown */}
             <select
               value={selectedBranchFilter}
               onChange={(e) => setSelectedBranchFilter(e.target.value)}
@@ -1210,7 +1121,6 @@ export default function EmployeeDirectoryPanel({
               ))}
             </select>
 
-            {/* View Mode Switcher */}
             <div className="flex rounded-lg border border-slate-200 bg-slate-100 p-0.5 shrink-0 ml-auto sm:ml-0">
               <button
                 type="button"
@@ -1237,7 +1147,6 @@ export default function EmployeeDirectoryPanel({
         </div>
       </div>
 
-      {/* Entity-Enrolled Focus Notice (For Central HRMD) */}
       {isHRMD && selectedFilter === "entity_enrolled" && (
         <div className="p-4 rounded-2xl bg-emerald-50/70 border border-emerald-200 text-xs text-emerald-950 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-in fade-in shadow-2xs">
           <div className="flex items-start sm:items-center gap-3">
@@ -1257,7 +1166,6 @@ export default function EmployeeDirectoryPanel({
         </div>
       )}
 
-      {/* Assigned HR Administrator for Opened Entity Banner */}
       {currentOpenedCompany && assignedHrForOpenedEntity && (
         <div className="bg-slate-900 text-white rounded-2xl p-4 border border-emerald-500/20 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-in fade-in">
           <div className="flex items-center gap-3 min-w-0">
@@ -1286,7 +1194,6 @@ export default function EmployeeDirectoryPanel({
         </div>
       )}
 
-      {/* Directory Content */}
       {filteredProfiles.length === 0 ? (
         !isHRMD && managedProfiles.length === 0 ? (
           <div className="bg-white border border-slate-200/90 rounded-3xl p-12 text-center space-y-3.5 shadow-xs">
@@ -1332,7 +1239,6 @@ export default function EmployeeDirectoryPanel({
           </div>
         )
       ) : viewMode === "grid" ? (
-        /* Executive Card Grid View with Cascading Reveal */
         <div key={`${selectedSubsidiary}_${selectedFilter}_grid`} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-3.5 stagger-children">
           {filteredProfiles.map((prof) => {
             const email = prof.email?.toLowerCase() || "";
@@ -1375,7 +1281,6 @@ export default function EmployeeDirectoryPanel({
                       : "border-slate-200/80 hover:border-slate-300 hover:shadow-2xs"
                   }`}
               >
-                {/* Optional Executive Cover Banner */}
                 {hasCover && (
                   customCoverUrl ? (
                     <div
@@ -1389,11 +1294,8 @@ export default function EmployeeDirectoryPanel({
                   )
                 )}
 
-                {/* Card Header & Identity */}
                 <div className="p-3 sm:p-3.5 pb-2.5 space-y-2 bg-white">
-                  {/* Top Row: Floating Avatar overlapping cover + Status Badges on the right */}
                   <div className={`flex items-end justify-between gap-2 ${hasCover ? "-mt-6" : ""}`}>
-                    {/* Avatar */}
                     <div className="relative shrink-0">
                       {avatarUrl ? (
                         <img
@@ -1414,7 +1316,6 @@ export default function EmployeeDirectoryPanel({
                       )}
                     </div>
 
-                    {/* Status Badges */}
                     <div className="flex flex-col items-end gap-1 shrink-0 pb-0.5">
                       {isProfAssignedHr ? (
                         <span className="inline-flex items-center gap-1 text-[9px] font-bold text-teal-900 bg-teal-100/90 px-2 py-0.5 rounded-full border border-teal-300 shadow-2xs" title="Assigned HR Administrator for this Entity">
@@ -1446,7 +1347,6 @@ export default function EmployeeDirectoryPanel({
                     </div>
                   </div>
 
-                  {/* Name & Role */}
                   <div className="min-w-0 pt-0.5">
                     <h4 className="text-xs sm:text-sm font-bold text-slate-900 tracking-tight truncate flex items-center gap-1.5" title={displayName}>
                       <span className="truncate">{displayName}</span>
@@ -1463,7 +1363,6 @@ export default function EmployeeDirectoryPanel({
                     </div>
                   </div>
 
-                  {/* Metadata List */}
                   <div className="pt-2 border-t border-slate-100 space-y-1 text-[11px]">
                     <p className="text-slate-500 truncate flex items-center gap-1.5">
                       <Mail size={12} className="text-slate-400 shrink-0" />
@@ -1492,7 +1391,6 @@ export default function EmployeeDirectoryPanel({
                   </div>
                 </div>
 
-                {/* Portal Login Authorization Switch (Exclusive for Central HRMD Administrator when reviewing entity-enrolled profiles) */}
                 {isHRMD && !isProfAssignedHr && (selectedFilter === "entity_enrolled" || isEntityEnrolledEmployee(prof)) && (
                   <div className={`px-3.5 py-1.5 border-t flex items-center justify-between text-[11px] transition ${isLoginEnabled ? "bg-emerald-50/60 border-emerald-100" : "bg-slate-50 border-slate-100"
                     }`}>
@@ -1520,7 +1418,6 @@ export default function EmployeeDirectoryPanel({
                   </div>
                 )}
 
-                {/* Card Action Footer */}
                 <div className="px-3.5 py-2 bg-white border-t border-slate-100 flex items-center justify-between gap-1.5">
                   {isProfAssignedHr ? (
                     <span className="inline-flex items-center gap-1 py-1 px-2.5 rounded-lg text-[11px] font-bold text-teal-800 bg-teal-50 border border-teal-200/80 shadow-2xs">
@@ -1562,7 +1459,6 @@ export default function EmployeeDirectoryPanel({
                       </button>
                     )}
 
-                    {/* Invite Setup instructions ONLY appear if account has portal login access! */}
                     {isLoginEnabled && !isProfAssignedHr && (
                       <button
                         type="button"
@@ -1592,7 +1488,6 @@ export default function EmployeeDirectoryPanel({
           })}
         </div>
       ) : (
-        /* Detailed Table View with Fade-In Up */
         <div key={`${selectedSubsidiary}_${selectedFilter}_table`} className="bg-white border border-slate-200/90 rounded-xl overflow-hidden shadow-2xs animate-tab-fade-in">
           <div className="overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
             <table className="w-full text-left text-xs border-collapse table-auto">
@@ -1803,9 +1698,6 @@ export default function EmployeeDirectoryPanel({
         </div>
       )}
 
-
-
-      {/* Pre-Register / Profiling Modal */}
       {isAddModalOpen && (
         <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/60 backdrop-blur-sm p-4 pt-4 sm:pt-8">
           <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto animate-in fade-in zoom-in-95">
@@ -1904,7 +1796,6 @@ export default function EmployeeDirectoryPanel({
                 </div>
               </div>
 
-              {/* Branch / Location */}
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-slate-700">Branch / Location</label>
                 <select
@@ -1918,7 +1809,6 @@ export default function EmployeeDirectoryPanel({
                 </select>
               </div>
 
-              {/* Birthday */}
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
                   <Cake size={13} className="text-rose-500" />
@@ -1978,7 +1868,6 @@ export default function EmployeeDirectoryPanel({
         </div>
       )}
 
-      {/* Comprehensive Bond Paper Sized Employee Profile Modal (Used for both Add and Edit across all accounts) */}
       <AddEmployeeProfileModal
         isOpen={isProfileModalOpen}
         onClose={() => {
@@ -1996,7 +1885,6 @@ export default function EmployeeDirectoryPanel({
         initialData={selectedProfileForModal}
       />
 
-      {/* Pre-Registered Account Branded Invite Studio (w/ HRHub Logo) */}
       <PreRegisterInviteModal
         key={inviteEmployee?.email || inviteEmployee?.id || "closed"}
         employee={inviteEmployee}

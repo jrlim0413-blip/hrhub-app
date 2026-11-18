@@ -27,8 +27,6 @@ import {
   normalizeDocRef
 } from "../lib/savedDocumentsStorage";
 
-// ================= BOND PAPER SIZES WITH VISIBLE FRONTEND DIMENSIONS =================
-// Physical paper dimensions tuned to match viewer 1:1 and eliminate 2nd page spillover!
 export const PAPER_SIZES = [
   {
     id: "letter",
@@ -87,7 +85,6 @@ export const FONT_FAMILIES = [
   { id: "georgia", label: "Executive Serif (Georgia)", css: "Georgia, Cambria, serif" }
 ];
 
-// ================= PALETTE LIBRARY: PURE MODULAR BUILDING BLOCKS =================
 export const resolveCompanyTokens = (text, company) => {
   if (!text || typeof text !== "string" || !company) return text || "";
   return text
@@ -100,7 +97,6 @@ export const resolveCompanyTokens = (text, company) => {
 };
 
 export const MODULAR_BLOCK_PRESETS = [
-  // 1. HEADERS (Corporate Letterhead Templates)
   {
     category: "header",
     categoryLabel: "1. Header Designs",
@@ -167,7 +163,6 @@ export const MODULAR_BLOCK_PRESETS = [
     ]
   },
 
-  // 2. ADDRESSING & METADATA (Addressing & Routing Layouts)
   {
     category: "addressing",
     categoryLabel: "2. Addressing & Metadata",
@@ -279,7 +274,6 @@ export const MODULAR_BLOCK_PRESETS = [
     ]
   },
 
-  // 3. DIRECTIVES & BODY (Directives & Certification Templates)
   {
     category: "body",
     categoryLabel: "3. Directives & Body",
@@ -434,7 +428,6 @@ MANDATORY DIRECTIVES & TURNOVER PROTOCOLS:
     ]
   },
 
-  // 4. SIGNATORIES (Signatory & Certification Layouts)
   {
     category: "signatory",
     categoryLabel: "4. Signatory Blocks",
@@ -534,7 +527,6 @@ MANDATORY DIRECTIVES & TURNOVER PROTOCOLS:
     ]
   },
 
-  // 5. FOOTERS & LEGAL INSTRUMENTS (Footer & Legal Blocks)
   {
     category: "footer",
     categoryLabel: "5. Footers & Notarial",
@@ -587,12 +579,9 @@ MANDATORY DIRECTIVES & TURNOVER PROTOCOLS:
   }
 ];
 
-// ================= VISUAL PREVIEW COMPONENT FOR HOVER =================
-// Renders an authentic, full-scale, crystal-clear 1:1 replica of the element!
 function ElementVisualPreview({ item, selectedCompany, docRef, docDate }) {
   if (!item) return null;
 
-  // Header Previews (1:1 with bond paper output)
   if (item.category === "header") {
     if (item.variant === "header_dual_logo") {
       return (
@@ -735,7 +724,6 @@ function ElementVisualPreview({ item, selectedCompany, docRef, docDate }) {
     }
   }
 
-  // Addressing Previews (1:1 with bond paper output, borderless)
   if (item.category === "addressing") {
     if (item.variant === "address_termination_agency") {
       return (
@@ -880,7 +868,6 @@ function ElementVisualPreview({ item, selectedCompany, docRef, docDate }) {
     }
   }
 
-  // Directives & Body Previews (1:1 with bond paper output)
   if (item.category === "body") {
     if (item.variant === "body_rewards_voucher") {
       return (
@@ -1082,7 +1069,6 @@ function ElementVisualPreview({ item, selectedCompany, docRef, docDate }) {
     );
   }
 
-  // Signatory Previews (1:1 with bond paper output, borderless)
   if (item.category === "signatory") {
     if (item.variant === "sig_dual_executive") {
       return (
@@ -1256,7 +1242,6 @@ function ElementVisualPreview({ item, selectedCompany, docRef, docDate }) {
     }
   }
 
-  // Footer Previews (1:1 with bond paper output)
   if (item.category === "footer") {
     if (item.variant === "footer_division_center") {
       return (
@@ -1320,7 +1305,6 @@ function ElementVisualPreview({ item, selectedCompany, docRef, docDate }) {
   return null;
 }
 
-// ================= CUSTOM REUSABLE TEMPLATES STORAGE =================
 export const CUSTOM_TEMPLATES_STORAGE_KEY = "hrhub_doc_studio_custom_templates";
 
 export function getStoredCustomTemplates() {
@@ -1340,9 +1324,6 @@ export function saveStoredCustomTemplates(templates = []) {
   }
 }
 
-
-// ================= MODAL: EXECUTIVE TEMPLATE STUDIO & CUSTOMIZER =================
-// Full-featured, spacious, highly presentable customizer for all element categories
 function TemplateEditorModal({
   isOpen,
   initialData,
@@ -1402,7 +1383,6 @@ function TemplateEditorModal({
     }
   };
 
-  // Live preview representation
   const previewItem = {
     category,
     variant,
@@ -1413,7 +1393,6 @@ function TemplateEditorModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-3 sm:p-6 backdrop-blur-md animate-in fade-in duration-200">
       <div className="w-full max-w-6xl xl:max-w-7xl rounded-3xl border border-slate-200/90 bg-white p-6 sm:p-8 shadow-2xl space-y-5 max-h-[95vh] flex flex-col">
-        {/* Modal Top Header */}
         <div className="flex items-center justify-between border-b border-slate-100 pb-4 shrink-0">
           <div className="flex items-center gap-3.5">
             <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-400 to-amber-500 text-slate-950 shadow-md">
@@ -1446,11 +1425,8 @@ function TemplateEditorModal({
           </div>
         </div>
 
-        {/* Modal Main Grid: Left (Rich Form Editor) & Right (Drafting Table & Real Bond Paper Preview) */}
         <div className="flex-1 overflow-y-auto grid grid-cols-1 lg:grid-cols-12 gap-6 pr-1">
-          {/* LEFT COLUMN: Form Inputs (7 Cols) */}
           <form onSubmit={handleFormSubmit} id="custom-template-form" className="lg:col-span-6 space-y-4 text-xs pr-1">
-            {/* Template Identity Card */}
             <div className="p-4 rounded-2xl bg-slate-50/80 border border-slate-200 space-y-3">
               <span className="text-[11px] font-black uppercase tracking-wider text-slate-500 block">
                 1. Template Identity &amp; Classification
@@ -1498,7 +1474,6 @@ function TemplateEditorModal({
               </div>
             </div>
 
-            {/* DYNAMIC CONTENT FIELDS ACCORDING TO VARIANT */}
             <div className="p-4 rounded-2xl bg-slate-50/80 border border-slate-200 space-y-3.5">
               <div className="flex items-center justify-between">
                 <span className="text-[11px] font-black uppercase tracking-wider text-slate-500">
@@ -1509,7 +1484,6 @@ function TemplateEditorModal({
                 </span>
               </div>
 
-              {/* Triple Logo Agency Header */}
               {variant === "header_triple_logo" && (
                 <div className="space-y-3">
                   <div className="p-3 bg-white rounded-xl border border-slate-200 space-y-2">
@@ -1545,7 +1519,6 @@ function TemplateEditorModal({
                 </div>
               )}
 
-              {/* Addressing Grid */}
               {variant === "address_memo_grid" && (
                 <div className="space-y-3">
                   <div>
@@ -1581,7 +1554,6 @@ function TemplateEditorModal({
                 </div>
               )}
 
-              {/* Formal Letter Heading */}
               {variant === "address_formal_letter" && (
                 <div className="space-y-3">
                   <div>
@@ -1629,7 +1601,6 @@ function TemplateEditorModal({
                 </div>
               )}
 
-              {/* Public Advisory Notice Banner */}
               {variant === "address_public_notice" && (
                 <div className="space-y-3">
                   <div>
@@ -1655,7 +1626,6 @@ function TemplateEditorModal({
                 </div>
               )}
 
-              {/* Certificate Ribbon */}
               {variant === "address_certificate_ribbon" && (
                 <div className="space-y-3">
                   <div>
@@ -1691,7 +1661,6 @@ function TemplateEditorModal({
                 </div>
               )}
 
-              {/* Executive Request Letter Addressing with CC */}
               {variant === "address_letter_with_cc" && (
                 <div className="space-y-3">
                   <div>
@@ -1762,7 +1731,6 @@ function TemplateEditorModal({
                 </div>
               )}
 
-              {/* Letter of Explanation / NTE Addressing */}
               {variant === "address_letter_to_explain" && (
                 <div className="space-y-3">
                   <div>
@@ -1843,7 +1811,6 @@ function TemplateEditorModal({
                 </div>
               )}
 
-              {/* Agency Agreement Termination Addressing */}
               {variant === "address_termination_agency" && (
                 <div className="space-y-3">
                   <div>
@@ -1912,7 +1879,6 @@ function TemplateEditorModal({
                 </div>
               )}
 
-              {/* Rewards Voucher */}
               {variant === "body_rewards_voucher" && (
                 <div className="space-y-3">
                   <div>
@@ -1982,7 +1948,6 @@ function TemplateEditorModal({
                 </div>
               )}
 
-              {/* Numbered Directives */}
               {variant === "body_numbered_directives" && (
                 <div className="space-y-3">
                   <div>
@@ -2015,7 +1980,6 @@ function TemplateEditorModal({
                 </div>
               )}
 
-              {/* Warning Notice Callout */}
               {variant === "body_warning_callout" && (
                 <div className="space-y-3">
                   <div>
@@ -2041,7 +2005,6 @@ function TemplateEditorModal({
                 </div>
               )}
 
-              {/* CSR / Budget Request Proposal with Cost Table */}
               {variant === "body_request_proposal_table" && (
                 <div className="space-y-3">
                   <div>
@@ -2097,7 +2060,6 @@ function TemplateEditorModal({
                 </div>
               )}
 
-              {/* Notice to Explain (Letter of Explanation) Body */}
               {variant === "body_letter_of_explain" && (
                 <div className="space-y-3">
                   <div>
@@ -2163,7 +2125,6 @@ function TemplateEditorModal({
                 </div>
               )}
 
-              {/* Termination of Agency Agreement Body */}
               {variant === "body_termination_agency" && (
                 <div className="space-y-3">
                   <div>
@@ -2226,7 +2187,6 @@ function TemplateEditorModal({
                 </div>
               )}
 
-              {/* Standard Legal / Directive Body */}
               {category === "body" && variant !== "body_rewards_voucher" && variant !== "body_numbered_directives" && variant !== "body_warning_callout" && variant !== "body_request_proposal_table" && variant !== "body_letter_of_explain" && variant !== "body_termination_agency" && (
                 <div className="space-y-3">
                   <div>
@@ -2265,7 +2225,6 @@ function TemplateEditorModal({
                 </div>
               )}
 
-              {/* Dual Signatory */}
               {variant === "sig_dual_executive" && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div className="p-3.5 rounded-xl bg-white border border-slate-200 space-y-2">
@@ -2338,7 +2297,6 @@ function TemplateEditorModal({
                 </div>
               )}
 
-              {/* Single Signatory */}
               {variant === "sig_single_official" && (
                 <div className="p-3.5 rounded-xl bg-white border border-slate-200 space-y-2">
                   <span className="text-[10px] font-black uppercase text-slate-500 block">Official Authority Signatory:</span>
@@ -2375,7 +2333,6 @@ function TemplateEditorModal({
                 </div>
               )}
 
-              {/* Proponent / Staff Requestor Signatory */}
               {variant === "sig_staff_requestor" && (
                 <div className="p-3.5 rounded-xl bg-white border border-slate-200 space-y-2.5">
                   <span className="text-[10px] font-black uppercase text-slate-500 block">Staff Proponent / Requestor Signatory:</span>
@@ -2424,7 +2381,6 @@ function TemplateEditorModal({
                 </div>
               )}
 
-              {/* Triple Signatory */}
               {variant === "sig_triple_authority" && (
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                   <div className="p-2.5 rounded-xl bg-white border border-slate-200 space-y-1.5">
@@ -2448,7 +2404,6 @@ function TemplateEditorModal({
                 </div>
               )}
 
-              {/* Acknowledgment Slip */}
               {variant === "sig_receiving_acknowledgment" && (
                 <div>
                   <label className="block text-[11px] font-black text-slate-700 mb-1">Slip Header Banner:</label>
@@ -2462,7 +2417,6 @@ function TemplateEditorModal({
                 </div>
               )}
 
-              {/* NTE Issuer & Acknowledgment Signatory */}
               {variant === "sig_nte_with_acknowledgment" && (
                 <div className="space-y-3">
                   <div className="p-3 bg-white rounded-xl border border-slate-200 space-y-2">
@@ -2525,7 +2479,6 @@ function TemplateEditorModal({
                 </div>
               )}
 
-              {/* Operations Manager Signatory */}
               {variant === "sig_operations_manager" && (
                 <div className="p-3.5 rounded-xl bg-white border border-slate-200 space-y-2.5">
                   <span className="text-[10px] font-black uppercase text-slate-500 block">Operations Manager Signatory:</span>
@@ -2552,7 +2505,6 @@ function TemplateEditorModal({
                 </div>
               )}
 
-              {/* Corporate Division Centered Footer */}
               {variant === "footer_division_center" && (
                 <div className="space-y-2">
                   <label className="block text-[11px] font-black text-slate-700 mb-1">Division Title:</label>
@@ -2568,7 +2520,6 @@ function TemplateEditorModal({
             </div>
           </form>
 
-          {/* RIGHT COLUMN: Live 1:1 Coupon Bond Output Studio (5 Cols) */}
           <div className="lg:col-span-6 flex flex-col space-y-2.5 bg-slate-100/80 p-4 sm:p-5 rounded-3xl border border-slate-200/90 shadow-inner">
             <div className="flex items-center justify-between pb-1">
               <div className="flex items-center gap-2">
@@ -2582,7 +2533,6 @@ function TemplateEditorModal({
               </span>
             </div>
 
-            {/* Simulated Real White Bond Paper Sheet */}
             <div className="flex-1 bg-white p-6 sm:p-7 rounded-2xl border border-slate-300/80 shadow-xl overflow-y-auto max-h-[500px] select-text">
               <ElementVisualPreview
                 item={previewItem}
@@ -2603,7 +2553,6 @@ function TemplateEditorModal({
           </div>
         </div>
 
-        {/* Modal Bottom Footer Actions */}
         <div className="pt-4 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3 shrink-0">
           <button
             type="button"
@@ -2639,7 +2588,6 @@ function TemplateEditorModal({
   );
 }
 
-
 export default function DocumentStudioPanel({
   currentUser = null,
   profiles = [],
@@ -2647,7 +2595,6 @@ export default function DocumentStudioPanel({
   onOpenAiBuddy = () => { },
   onSwitchToMemo = () => { }
 }) {
-  // Selected Company Entity (Default: Lucky Betplay Corporation) with HRMD & user letterhead defaults
   const [selectedCompanyId, setSelectedCompanyId] = useState("lucky_betplay");
   const [letterheadOverrides, setLetterheadOverrides] = useState({});
   const companies = useMemo(() => {
@@ -2662,41 +2609,32 @@ export default function DocumentStudioPanel({
   const selectedCompanyCodeRef = useRef(selectedCompany?.code || "LBC");
   selectedCompanyCodeRef.current = selectedCompany?.code || "LBC";
 
-  // Bond Paper Settings
-  const [paperSize, setPaperSize] = useState("letter"); // 'letter' | 'legal' | 'a4'
+  const [paperSize, setPaperSize] = useState("letter");
   const [fontFamily, setFontFamily] = useState("inter");
-  const [fontSize, setFontSize] = useState(13.8); // pt
+  const [fontSize, setFontSize] = useState(13.8);
   const [zoomScale, setZoomScale] = useState(100);
-  const [watermarkOpacity, setWatermarkOpacity] = useState(4); // 0 to 35%
-  const [watermarkScale, setWatermarkScale] = useState(100); // 50 to 150%
+  const [watermarkOpacity, setWatermarkOpacity] = useState(4);
+  const [watermarkScale, setWatermarkScale] = useState(100);
 
-  // Active paper size definition
   const currentPaperDef = useMemo(() => {
     return PAPER_SIZES.find((p) => p.id === paperSize) || PAPER_SIZES[0];
   }, [paperSize]);
 
-  // Document Core Identifiers
   const [docRef, setDocRef] = useState(() => generateUniqueDocRef("LBC"));
   const [docDate, setDocDate] = useState(() => {
     return new Date().toLocaleDateString("en-US", { month: "long", day: "2-digit", year: "numeric" });
   });
 
-  // ================= MODULAR BOND PAPER ELEMENTS ARRAY =================
-  // Starts with a completely blank coupon bond paper!
   const [paperElements, setPaperElements] = useState([]);
 
-  // Active / Selected element for fine-tuning
   const [activeElementId, setActiveElementId] = useState(null);
 
-  // Hover visual preview state
   const [hoveredPreview, setHoveredPreview] = useState(null);
 
-  // Drag-and-Drop Canvas State
   const [isDragOverCanvas, setIsDragOverCanvas] = useState(false);
   const [dragOverIndex, setDragOverIndex] = useState(null);
   const [paletteActiveCategory, setPaletteActiveCategory] = useState("header");
 
-  // Custom Reusable Templates (Persisted locally in localStorage)
   const [customTemplates, setCustomTemplates] = useState(() => {
     try {
       const raw = localStorage.getItem("hrhub_doc_custom_templates");
@@ -2706,21 +2644,17 @@ export default function DocumentStudioPanel({
     }
   });
 
-  // Template Editor Modal State
   const [templateEditorModal, setTemplateEditorModal] = useState(null);
 
-  // Saved Documents Archive Modal State
   const [savedDocs, setSavedDocs] = useState([]);
   const [isLoadingSavedDocs, setIsLoadingSavedDocs] = useState(true);
   const [archiveModalOpen, setArchiveModalOpen] = useState(false);
   const [archiveSearchQuery, setArchiveSearchQuery] = useState("");
   const [archiveCompanyFilter, setArchiveCompanyFilter] = useState("ALL");
 
-  // Notifications
   const [toastMessage, setToastMessage] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
 
-  // Fetch saved documents & inherited letterhead defaults on mount
   useEffect(() => {
     let isMounted = true;
     (async () => {
@@ -2758,7 +2692,6 @@ export default function DocumentStudioPanel({
     setTimeout(() => setToastMessage(null), 3600);
   };
 
-  // Switch Company Entity
   const handleSelectCompany = (comp) => {
     if (!comp) return;
     setSelectedCompanyId(comp.id);
@@ -2768,7 +2701,6 @@ export default function DocumentStudioPanel({
     );
     setDocRef(newRef);
 
-    // Synchronize all modular categories (header, addressing, body, signatory, footer) with the new entity
     setPaperElements((prev) =>
       prev.map((el) => {
         if (el.category === "header") {
@@ -2913,7 +2845,6 @@ export default function DocumentStudioPanel({
     triggerToast(`Document entity switched to ${comp.name}`, "info");
   };
 
-  // Save custom template to local storage
   const handleSaveCustomTemplate = (templateData) => {
     const newTemplate = {
       id: templateData.id || "tpl_" + Date.now() + "_" + Math.random().toString(36).substring(2, 7),
@@ -2947,7 +2878,6 @@ export default function DocumentStudioPanel({
     setTemplateEditorModal(null);
   };
 
-  // Delete custom template from local storage
   const handleDeleteCustomTemplate = (templateId) => {
     setCustomTemplates((prev) => {
       const updated = prev.filter((t) => t.id !== templateId);
@@ -2959,7 +2889,6 @@ export default function DocumentStudioPanel({
     triggerToast("Custom template deleted", "info");
   };
 
-  // Open Template Editor from placed element on the bond paper
   const handleOpenSaveAsTemplateFromPaper = (elem) => {
     setTemplateEditorModal({
       isOpen: true,
@@ -2974,7 +2903,6 @@ export default function DocumentStudioPanel({
     });
   };
 
-  // Open Template Editor from palette card
   const handleOpenTemplateEditorFromPalette = (item, cat) => {
     setTemplateEditorModal({
       isOpen: true,
@@ -2991,7 +2919,6 @@ export default function DocumentStudioPanel({
     });
   };
 
-  // Create a brand new custom template
   const handleCreateNewCustomTemplate = (cat) => {
     const categoryPresets = MODULAR_BLOCK_PRESETS.find((p) => p.category === cat);
     const defaultPreset = categoryPresets?.items?.[0];
@@ -3008,7 +2935,6 @@ export default function DocumentStudioPanel({
     });
   };
 
-  // Add a block to the coupon bond paper at a specific index
   const addBlockToPaper = (item, insertIndex = null) => {
     const newElement = {
       id: "elem_" + Date.now() + "_" + Math.random().toString(36).substring(2, 6),
@@ -3031,7 +2957,6 @@ export default function DocumentStudioPanel({
     triggerToast(`✓ Added "${item.name}" to Coupon Bond`, "success");
   };
 
-  // Preserve [COMPANY_*] tokens when contentEditable text is blurred unmodified
   const handleTokenAwareBlur = (elemId, key, rawValue, editedText, fallbackTemplate = "") => {
     const baseTemplate = rawValue || fallbackTemplate;
     const resolvedBefore = resolveCompanyTokens(baseTemplate, selectedCompany).trim();
@@ -3042,7 +2967,6 @@ export default function DocumentStudioPanel({
     updateElementData(elemId, key, editedText);
   };
 
-  // Update field inside a paper element safely
   const updateElementData = (elemId, key, value) => {
     setPaperElements((prev) =>
       prev.map((el) => {
@@ -3058,13 +2982,11 @@ export default function DocumentStudioPanel({
     );
   };
 
-  // Remove element from paper
   const removeElement = (elemId) => {
     setPaperElements((prev) => prev.filter((el) => el.id !== elemId));
     triggerToast("Element removed from bond paper", "info");
   };
 
-  // Move element up or down
   const moveElement = (index, direction) => {
     setPaperElements((prev) => {
       const targetIndex = direction === "up" ? index - 1 : index + 1;
@@ -3076,7 +2998,6 @@ export default function DocumentStudioPanel({
     });
   };
 
-  // Quick Preset: Load one of the 5 requested full document configurations onto the blank paper
   const handleLoadFullDocumentPreset = (presetKey) => {
     let presetBlocks = [];
 
@@ -3174,7 +3095,6 @@ export default function DocumentStudioPanel({
     triggerToast(`✓ Loaded full layout preset on Coupon Bond!`, "success");
   };
 
-  // Clear paper to completely blank
   const handleClearPaper = () => {
     if (paperElements.length === 0) return;
     if (window.confirm("Clear all elements and start with a completely blank coupon bond?")) {
@@ -3183,7 +3103,6 @@ export default function DocumentStudioPanel({
     }
   };
 
-  // HTML5 Drag and Drop handlers
   const handlePaletteDragStart = (e, item) => {
     e.dataTransfer.setData("application/json", JSON.stringify(item));
     e.dataTransfer.effectAllowed = "copy";
@@ -3214,7 +3133,6 @@ export default function DocumentStudioPanel({
     }
   };
 
-  // Save Document to Records / Supabase
   const handleSaveDocument = async () => {
     if (paperElements.length === 0) {
       alert("Please drag at least one element onto the coupon bond paper before saving.");
@@ -3241,7 +3159,7 @@ export default function DocumentStudioPanel({
       paperSize,
       fontFamily,
       fontSize,
-      paperElements, // Full serialized modular elements array
+      paperElements,
       savedAt: new Date().toISOString()
     };
 
@@ -3264,7 +3182,6 @@ export default function DocumentStudioPanel({
     }
   };
 
-  // Load saved document from archive
   const handleLoadSavedDocument = (d) => {
     if (!d) return;
     const cleanRef = normalizeDocRef(d.ref);
@@ -3287,7 +3204,6 @@ export default function DocumentStudioPanel({
     triggerToast(`✓ Loaded document '${cleanRef}' with ${comp.name} letterhead!`, "success");
   };
 
-  // Delete saved document
   const handleDeleteSavedDocument = async (id, refStr) => {
     if (!window.confirm(`Permanently delete document ${refStr} from records?`)) return;
     const filtered = savedDocs.filter((d) => d.id !== id);
@@ -3300,7 +3216,6 @@ export default function DocumentStudioPanel({
     return FONT_FAMILIES.find((f) => f.id === fontFamily)?.css || FONT_FAMILIES[0].css;
   }, [fontFamily]);
 
-  // High-fidelity printing engine that matches viewer 1:1, auto-adapts paper size to the printer, and eliminates 2nd page spillover!
   const handlePrintDocument = () => {
     const printableElement = document.getElementById("coupon-bond-printable");
     if (!printableElement) {
@@ -3308,10 +3223,8 @@ export default function DocumentStudioPanel({
       return;
     }
 
-    // 1. Clone the element to safely sanitize for printing
     const clone = printableElement.cloneNode(true);
 
-    // 2. Remove all interactive / editing / no-print artifacts
     clone.querySelectorAll(".no-print, .block-hover-controls, [role='tooltip']").forEach((el) => el.remove());
     clone.querySelectorAll("[contenteditable]").forEach((el) => {
       el.removeAttribute("contenteditable");
@@ -3321,7 +3234,6 @@ export default function DocumentStudioPanel({
     const wmSize = Math.round((360 * watermarkScale) / 100);
     const wmOpacity = (watermarkOpacity / 100).toFixed(2);
 
-    // Strictly ensure watermark is absolute, centered, adjustable, and NEVER in normal flow
     const watermarkEl = clone.querySelector(".doc-watermark-layer, [class*='opacity-[0.03'], [class*='opacity-[0.04']");
     if (watermarkEl) {
       if (watermarkOpacity <= 0) {
@@ -3335,7 +3247,6 @@ export default function DocumentStudioPanel({
       }
     }
 
-    // Ensure content wrapper fills sheet and distributes top/bottom elements
     const hasFooter = Boolean(clone.querySelector("[data-category='footer'], .footer-stick-bottom"));
     const contentEl = clone.querySelector(".space-y-6");
     if (contentEl) {
@@ -3345,7 +3256,6 @@ export default function DocumentStudioPanel({
     const fontCss = FONT_FAMILIES.find((f) => f.id === fontFamily)?.css || "'Inter', sans-serif";
     const currentPaper = currentPaperDef;
 
-    // Collect all stylesheets and style tags without filtering out Tailwind CSS
     const headStyles = Array.from(document.querySelectorAll("link[rel='stylesheet'], style"))
       .filter((node) => {
         const text = node.textContent || "";
@@ -3354,7 +3264,6 @@ export default function DocumentStudioPanel({
       .map((node) => node.outerHTML)
       .join("\n");
 
-    // 3. Build isolated, self-contained printable document matching exact viewer specifications
     const printHtml = `<!doctype html>
 <html>
 <head>
@@ -3609,7 +3518,6 @@ export default function DocumentStudioPanel({
         }, 650);
       }
     } else {
-      // Invisible iframe fallback if browser popup blocker prevented window.open
       let printFrame = document.getElementById("doc-studio-print-frame");
       if (!printFrame) {
         printFrame = document.createElement("iframe");
@@ -3639,7 +3547,6 @@ export default function DocumentStudioPanel({
 
   return (
     <div className="relative min-h-screen bg-slate-100 flex flex-col font-sans select-none antialiased">
-      {/* SCOPED PRINT STYLESHEET (For native Ctrl+P and direct printing) */}
       <style>{`
         @media print {
           @page {
@@ -3700,9 +3607,7 @@ export default function DocumentStudioPanel({
         }
       `}</style>
 
-      {/* ================= TOP STUDIO ACTION BAR ================= */}
       <header className="no-print sticky top-0 z-40 bg-white border-b border-slate-200 px-4 py-3 shadow-xs flex flex-wrap items-center justify-between gap-3">
-        {/* Left: Branding & Bond Canvas Badge */}
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-500 to-amber-600 text-white shadow-xs">
             <Layout size={20} />
@@ -3722,7 +3627,6 @@ export default function DocumentStudioPanel({
           </div>
         </div>
 
-        {/* Center: Entity Switcher */}
         <div className="flex items-center gap-1.5 overflow-x-auto py-1 scrollbar-none">
           <span className="text-[11px] font-bold text-slate-400 mr-1 hidden sm:inline">Entity:</span>
           {companies.map((comp) => {
@@ -3750,9 +3654,7 @@ export default function DocumentStudioPanel({
           })}
         </div>
 
-        {/* Right: Actions */}
         <div className="flex items-center gap-2">
-          {/* Reset to Blank */}
           <button
             type="button"
             onClick={handleClearPaper}
@@ -3763,7 +3665,6 @@ export default function DocumentStudioPanel({
             <span className="hidden sm:inline">Reset Blank</span>
           </button>
 
-          {/* Saved Archive */}
           <button
             type="button"
             onClick={() => setArchiveModalOpen(true)}
@@ -3777,7 +3678,6 @@ export default function DocumentStudioPanel({
             </span>
           </button>
 
-          {/* Save to Records */}
           <button
             type="button"
             onClick={handleSaveDocument}
@@ -3789,7 +3689,6 @@ export default function DocumentStudioPanel({
             <span>Save to Records</span>
           </button>
 
-          {/* Print / Export PDF */}
           <button
             type="button"
             onClick={handlePrintDocument}
@@ -3800,7 +3699,6 @@ export default function DocumentStudioPanel({
             <span>Print / PDF</span>
           </button>
 
-          {/* Close Panel */}
           {onClose && (
             <button
               type="button"
@@ -3814,7 +3712,6 @@ export default function DocumentStudioPanel({
         </div>
       </header>
 
-      {/* Toast Alert */}
       {toastMessage && (
         <div className="no-print fixed top-16 right-6 z-50 animate-in fade-in slide-in-from-top-3 duration-200">
           <div
@@ -3831,16 +3728,12 @@ export default function DocumentStudioPanel({
         </div>
       )}
 
-      {/* ================= FLOATING HOVER VISUAL PREVIEW MODAL ================= */}
-      {/* Appears right where the cursor is pointing, extra large for crystal-clear inspection */}
       {hoveredPreview?.item && (() => {
         const previewWidth = 580;
         const targetX = hoveredPreview.x ?? 900;
         const targetY = hoveredPreview.y ?? 200;
 
-        // Position to the left of the cursor, with 20px gap
         const leftPos = Math.max(16, targetX - previewWidth - 20);
-        // Vertically aligned with cursor, clamped so it never goes off-screen
         const topPos = Math.max(16, Math.min(window.innerHeight - 560, targetY - 120));
 
         return (
@@ -3871,7 +3764,6 @@ export default function DocumentStudioPanel({
               </span>
             </div>
 
-            {/* Crisp white paper canvas simulating authentic coupon bond output */}
             <div className="bg-white p-5 rounded-xl border border-slate-300 shadow-xs pointer-events-none overflow-hidden select-none">
               <ElementVisualPreview
                 item={hoveredPreview.item}
@@ -3893,18 +3785,14 @@ export default function DocumentStudioPanel({
         );
       })()}
 
-      {/* Main Split Layout: Left (Coupon Bond Paper) & Right (Draggable Building Blocks Palette) */}
       <div className="flex-1 flex flex-col lg:flex-row min-h-0 relative">
-        {/* ================= LEFT SIDE: BLANK COUPON BOND PAPER CANVAS ================= */}
         <main
           className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 flex flex-col items-center justify-start bg-slate-200/70"
           onDragOver={handleCanvasDragOver}
           onDragLeave={handleCanvasDragLeave}
           onDrop={handleCanvasDrop}
         >
-          {/* STEP 1: PAPER CONTROLS BAR (REAL VISUAL FRONTEND SIZE SWITCHER) */}
           <div className="no-print w-full max-w-4xl mb-4 flex flex-wrap items-center justify-between gap-3 text-xs bg-white/95 backdrop-blur-xs p-3 rounded-2xl border border-slate-300 shadow-sm">
-            {/* Paper Size selector with visible dimension indicators */}
             <div className="flex items-center gap-2">
               <span className="font-black text-slate-800 text-xs flex items-center gap-1.5">
                 <Scissors size={14} className="text-amber-600" />
@@ -3935,7 +3823,6 @@ export default function DocumentStudioPanel({
               </div>
             </div>
 
-            {/* Typography & Size */}
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-1.5">
                 <span className="font-bold text-slate-500 text-[11px] uppercase">Font:</span>
@@ -3966,7 +3853,6 @@ export default function DocumentStudioPanel({
                 <span className="font-mono text-[11px] font-bold text-slate-700">{fontSize}pt</span>
               </div>
 
-              {/* Watermark Intensity & Size Controls */}
               <div className="flex items-center gap-2 border-l border-slate-200 pl-3">
                 <span className="font-bold text-slate-500 text-[11px] uppercase">Watermark:</span>
                 <div className="flex items-center gap-1" title="Adjust watermark opacity (thickness)">
@@ -4000,14 +3886,11 @@ export default function DocumentStudioPanel({
               </div>
             </div>
 
-            {/* Elements count indicator */}
             <div className="text-[11px] font-extrabold text-slate-600 bg-slate-100 px-2.5 py-1 rounded-lg">
               Elements placed: <span className="text-amber-700">{paperElements.length}</span>
             </div>
           </div>
 
-          {/* ================= THE BLANK COUPON BOND PAPER SHEET ================= */}
-          {/* Note: maxWidth and minHeight dynamically scale in frontend pixels when clicked! */}
           <div
             id="coupon-bond-printable"
             style={{
@@ -4024,14 +3907,12 @@ export default function DocumentStudioPanel({
             className={`bg-white text-slate-900 border border-slate-300 shadow-2xl rounded-sm p-8 sm:p-12 md:p-14 relative select-text flex flex-col justify-between ${isDragOverCanvas ? "ring-4 ring-amber-500/80 border-amber-500 bg-amber-50/15" : ""
               }`}
           >
-            {/* Visual Paper Size Dimension Badge in Top-Right Corner */}
             <div className="no-print absolute top-3 right-4 z-10 text-[10px] font-extrabold text-slate-400 bg-slate-50/90 border border-slate-200 px-2.5 py-1 rounded-md flex items-center gap-1.5 select-none pointer-events-none shadow-2xs">
               <span className="w-2 h-2 rounded-full bg-amber-500" />
               <span className="text-slate-700">{currentPaperDef.label}</span>
               <span className="text-amber-700 font-mono">({currentPaperDef.heightPx}px height)</span>
             </div>
 
-            {/* Visual Drop Overlay */}
             {isDragOverCanvas && (
               <div className="no-print absolute inset-0 z-30 bg-amber-500/10 border-4 border-dashed border-amber-500 rounded-sm flex items-center justify-center backdrop-blur-2xs pointer-events-none">
                 <div className="bg-amber-900 text-white px-6 py-3 rounded-2xl shadow-2xl font-black text-sm flex items-center gap-2">
@@ -4041,7 +3922,6 @@ export default function DocumentStudioPanel({
               </div>
             )}
 
-            {/* Elegant Background Corporate Watermark (Faint corporate logo as in official documents) */}
             {selectedCompany?.logoUrl && watermarkOpacity > 0 && (
               <div
                 className="doc-watermark-layer pointer-events-none select-none overflow-hidden"
@@ -4075,7 +3955,6 @@ export default function DocumentStudioPanel({
               </div>
             )}
 
-            {/* IF CANVAS IS COMPLETELY BLANK: SHOW FRIENDLY DROPZONE */}
             {paperElements.length === 0 ? (
               <div className="no-print my-auto py-24 text-center border-2 border-dashed border-slate-300 rounded-2xl p-8 bg-slate-50/60 space-y-4 relative z-10">
                 <div className="w-16 h-16 mx-auto rounded-3xl bg-amber-100 text-amber-800 flex items-center justify-center shadow-xs">
@@ -4090,7 +3969,6 @@ export default function DocumentStudioPanel({
                   </p>
                 </div>
 
-                {/* Quick 1-click Preset Fillers */}
                 <div className="pt-4 border-t border-slate-200/60 max-w-lg mx-auto">
                   <span className="text-[11px] font-black uppercase tracking-wider text-slate-400 block mb-2.5">
                     Or Start with a 1-Click Document Configuration:
@@ -4149,8 +4027,6 @@ export default function DocumentStudioPanel({
                 </div>
               </div>
             ) : (
-              /* RENDER PLACED MODULAR ELEMENTS SEQUENTIALLY ON THE BOND PAPER */
-              /* CRASH-PROOF: strictly scoped by el.category with zero textbox frames */
               <div
                 className="space-y-6 flex-1 relative z-10"
                 style={{
@@ -4175,7 +4051,6 @@ export default function DocumentStudioPanel({
                       onClick={() => setActiveElementId(el.id)}
                       className={`relative group transition-all ${el.category === "footer" ? "mt-auto footer-stick-bottom" : ""}`}
                     >
-                      {/* Floating Control Toolbar for this placed element */}
                       <div className="no-print absolute -top-3.5 right-2 z-20 hidden group-hover:flex items-center gap-1 bg-slate-900 text-white px-2 py-0.5 rounded-lg shadow-md text-[10px] font-bold">
                         <span className="text-amber-400 mr-1 max-w-[150px] truncate">{el.name}</span>
                         <button
@@ -4220,7 +4095,6 @@ export default function DocumentStudioPanel({
                         </button>
                       </div>
 
-                      {/* ================= CATEGORY 1: HEADERS ================= */}
                       {el.category === "header" && (
                         <div>
                           {el.variant === "header_dual_logo" && (
@@ -4395,7 +4269,6 @@ export default function DocumentStudioPanel({
                         </div>
                       )}
 
-                      {/* ================= CATEGORY 2: ADDRESSING & METADATA ================= */}
                       {el.category === "addressing" && (
                         <div>
                           {el.variant === "address_termination_agency" && (
@@ -4676,7 +4549,6 @@ export default function DocumentStudioPanel({
                                 {el.data?.date || docDate || "OCTOBER 24, 2026"}
                               </div>
 
-                              {/* TO Section */}
                               <div className="flex items-start text-xs leading-snug">
                                 <span className="font-black text-slate-950 w-12 shrink-0">TO:</span>
                                 <div className="space-y-0.5 flex-1">
@@ -4715,7 +4587,6 @@ export default function DocumentStudioPanel({
                                 </div>
                               </div>
 
-                              {/* CC Section */}
                               <div className="flex items-start text-xs leading-snug">
                                 <span className="font-black text-slate-950 w-12 shrink-0">CC:</span>
                                 <div className="space-y-3 flex-1">
@@ -4753,7 +4624,6 @@ export default function DocumentStudioPanel({
                                 </div>
                               </div>
 
-                              {/* SUBJECT Line */}
                               <div className="pt-2">
                                 <div className="font-black text-xs text-slate-950 uppercase leading-snug">
                                   <span>SUBJECT: </span>
@@ -4768,7 +4638,6 @@ export default function DocumentStudioPanel({
                                 </div>
                               </div>
 
-                              {/* Salutation */}
                               <div
                                 contentEditable
                                 suppressContentEditableWarning
@@ -4795,12 +4664,10 @@ export default function DocumentStudioPanel({
                         </div>
                       )}
 
-                      {/* ================= CATEGORY 3: DIRECTIVES & BODY ================= */}
                       {el.category === "body" && (
                         <div>
                           {el.variant === "body_non_affiliation_salesforce" ? (
                             <div className="space-y-4 my-3 text-xs sm:text-sm leading-relaxed text-slate-900 select-text">
-                              {/* Centered Document Title */}
                               <div className="text-center my-3">
                                 <h2
                                   contentEditable
@@ -4812,7 +4679,6 @@ export default function DocumentStudioPanel({
                                 </h2>
                               </div>
 
-                              {/* Date Line */}
                               {el.data?.dateLine && (
                                 <div className="pt-1 pb-1">
                                   <span
@@ -4826,7 +4692,6 @@ export default function DocumentStudioPanel({
                                 </div>
                               )}
 
-                              {/* Paragraph 1 */}
                               <p className="text-justify leading-relaxed">
                                 This is to certify that{" "}
                                 <strong
@@ -4849,17 +4714,14 @@ export default function DocumentStudioPanel({
                                 </strong>.
                               </p>
 
-                              {/* Paragraph 2 */}
                               <p className="text-justify leading-relaxed">
                                 We affirm that the aforementioned individual <strong className="font-bold">has no formal or informal association</strong> with <strong className="font-bold">{resolveCompanyTokens(el.data?.companyName || selectedCompany.name || selectedCompany.legalName, selectedCompany)}</strong> in any capacity related to Salesforce services, nor do they represent the company in any activities associated with PCSO.
                               </p>
 
-                              {/* Paragraph 3 */}
                               <p className="text-justify leading-relaxed">
                                 Any claims or representation made by this individual suggesting that He is a Salesforce partner of <strong className="font-bold">{resolveCompanyTokens(el.data?.companyName || selectedCompany.name || selectedCompany.legalName, selectedCompany)}</strong> or have any related business dealings with the company are <strong className="font-bold">false and unauthorized</strong>.
                               </p>
 
-                              {/* Paragraph 4 */}
                               <p className="text-justify leading-relaxed">
                                 This certification is issued for the <strong className="font-bold">purpose of clarifying</strong> that{" "}
                                 <strong
@@ -4873,7 +4735,6 @@ export default function DocumentStudioPanel({
                                 has <strong className="font-bold">never been affiliated</strong> with <strong className="font-bold">{resolveCompanyTokens(el.data?.companyName || selectedCompany.name || selectedCompany.legalName, selectedCompany)} as a Salesforce partner</strong>.
                               </p>
 
-                              {/* Paragraph 5 (Verification Hotline) */}
                               <p className="text-justify leading-relaxed pt-1">
                                 For verification or further inquiries, please contact #:{" "}
                                 <strong
@@ -4907,7 +4768,6 @@ export default function DocumentStudioPanel({
                                 {resolveCompanyTokens(el.data?.provisionsIntro || "As stated in the General Provisions of the Agency Agreement – TERMINATION “The Company may immediately terminate this Contract of the concerned member of the SALESFORCE on account of any of the following:", selectedCompany)}
                               </p>
 
-                              {/* Indented Bullets */}
                               <div className="pl-6 space-y-2">
                                 {(el.data?.terminationClauses || [
                                   "5.6. If the concerned member violates, in any way, any provision of this Contract.",
@@ -4961,7 +4821,6 @@ export default function DocumentStudioPanel({
                                 {resolveCompanyTokens(el.data?.reportCitation || "We received a report from Ms. Quennie R. Capuyan, HR Admin, of the following allegations:", selectedCompany)}
                               </p>
 
-                              {/* Allegations Bullets */}
                               <div className="pl-6 space-y-2">
                                 {(el.data?.allegations || [
                                   "It was reported that you insisted on obtaining your fuel allowance in advance despite the prescribed release schedule and borrowed PHP 1,000.00 from company cash, contrary to Company policy prohibiting such borrowing."
@@ -5002,7 +4861,6 @@ export default function DocumentStudioPanel({
                                 {resolveCompanyTokens(el.data?.contractClauseIntro || "As stated in the General Provisions of the Agency Agreement – TERMINATION “The Company may immediately terminate this Contract of the concerned member of the SALESFORCE on account of any of the following:", selectedCompany)}
                               </p>
 
-                              {/* Indented Contract Clauses */}
                               <div className="pl-10 space-y-1.5 font-bold italic text-slate-950">
                                 {(el.data?.contractClauses || [
                                   { num: "9.11", text: "Acts of theft, dishonesty, fraud, misrepresentation, or breach of trust." },
@@ -5055,7 +4913,6 @@ export default function DocumentStudioPanel({
                                 {resolveCompanyTokens(el.data?.proposalText || "", selectedCompany)}
                               </p>
 
-                              {/* Itemized Cost Breakdown Table */}
                               <div className="my-3 border border-slate-900 rounded overflow-hidden">
                                 <table className="w-full text-xs text-slate-900 border-collapse">
                                   <thead className="bg-slate-100 font-bold border-b border-slate-900">
@@ -5155,7 +5012,6 @@ export default function DocumentStudioPanel({
                                 {resolveCompanyTokens(el.data?.citation || "", selectedCompany)}
                               </p>
 
-                              {/* Authentic Incentive Voucher Card */}
                               <div className="p-4 rounded-xl border-2 border-amber-400 bg-gradient-to-r from-amber-50 via-amber-100/50 to-amber-50 text-slate-900 shadow-2xs">
                                 <div className="flex justify-between items-center border-b border-amber-300 pb-2 mb-2">
                                   <span className="text-[11px] font-black uppercase tracking-widest text-amber-900">
@@ -5237,7 +5093,6 @@ export default function DocumentStudioPanel({
                         </div>
                       )}
 
-                      {/* ================= CATEGORY 4: SIGNATORIES ================= */}
                       {el.category === "signatory" && (
                         <div>
                           {el.variant === "sig_dual_executive" && (
@@ -5443,7 +5298,6 @@ export default function DocumentStudioPanel({
 
                           {el.variant === "sig_nte_with_acknowledgment" && (
                             <div className="pt-6 my-4 text-xs select-text space-y-8">
-                              {/* Issuer Line */}
                               <div className="space-y-0.5">
                                 <div
                                   contentEditable
@@ -5466,7 +5320,6 @@ export default function DocumentStudioPanel({
                                 </div>
                               </div>
 
-                              {/* Acknowledgment & Receipt Section */}
                               <div className="space-y-6 pt-2">
                                 <div
                                   contentEditable
@@ -5509,7 +5362,6 @@ export default function DocumentStudioPanel({
 
                           {el.variant === "sig_single_certified_by" && (
                             <div className="pt-3 my-2 text-xs select-text">
-                              {/* Horizontal Divider Line */}
                               <div className="border-b border-slate-300 my-4" />
 
                               <div className="space-y-6">
@@ -5558,7 +5410,6 @@ export default function DocumentStudioPanel({
                         </div>
                       )}
 
-                      {/* ================= CATEGORY 5: FOOTERS ================= */}
                       {el.category === "footer" && (
                         <div>
                           {el.variant === "footer_notary_jurat" && (
@@ -5626,9 +5477,7 @@ export default function DocumentStudioPanel({
           </div>
         </main>
 
-        {/* ================= RIGHT SIDE: DRAGGABLE BUILDING BLOCKS PALETTE ================= */}
         <aside className="no-print w-full lg:w-[560px] xl:w-[620px] bg-white border-t lg:border-t-0 lg:border-l border-slate-200 flex flex-col shrink-0 shadow-2xl z-20">
-          {/* Palette Navigation Tabs */}
           <div className="p-3 border-b border-slate-100 flex items-center justify-between gap-1 overflow-x-auto scrollbar-none">
             {[
               { id: "header", label: "Header", icon: Building2 },
@@ -5657,9 +5506,7 @@ export default function DocumentStudioPanel({
             })}
           </div>
 
-          {/* Palette Items List */}
           <div className="flex-1 overflow-y-auto p-4 space-y-3.5">
-            {/* Header / Create button */}
             <div className="flex items-center justify-between text-xs text-slate-500 pb-1">
               <span className="font-black uppercase tracking-wider text-[11px] text-slate-800">
                 {paletteActiveCategory === "custom"
@@ -5677,7 +5524,6 @@ export default function DocumentStudioPanel({
               </button>
             </div>
 
-            {/* Custom Tab View */}
             {paletteActiveCategory === "custom" ? (
               customTemplates.length === 0 ? (
                 <div className="p-8 text-center text-slate-400 space-y-3 bg-slate-50/70 rounded-2xl border border-dashed border-slate-300 my-4">
@@ -5775,9 +5621,7 @@ export default function DocumentStudioPanel({
                 </div>
               )
             ) : (
-              /* Regular Category Items (Custom templates for this category first, then built-in presets) */
               <div className="space-y-3">
-                {/* Custom templates matching this category */}
                 {customTemplates.filter((t) => t.category === paletteActiveCategory).map((item) => (
                   <div
                     key={item.id}
@@ -5858,7 +5702,6 @@ export default function DocumentStudioPanel({
                   </div>
                 ))}
 
-                {/* Built-in Presets */}
                 {MODULAR_BLOCK_PRESETS.find((c) => c.category === paletteActiveCategory)?.items.map((item) => (
                   <div
                     key={item.variant}
@@ -5890,7 +5733,6 @@ export default function DocumentStudioPanel({
                         </h4>
                       </div>
 
-                      {/* Eye preview badge */}
                       <span className="p-1 rounded-md text-slate-400 hover:text-amber-600 transition" title="Hover to see live preview">
                         <Eye size={13} />
                       </span>
@@ -5926,7 +5768,6 @@ export default function DocumentStudioPanel({
             )}
           </div>
 
-          {/* Quick Preset Tray at bottom of Sidebar */}
           <div className="p-3 bg-slate-50 border-t border-slate-200 space-y-1.5 text-xs">
             <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">
               1-Click Preset Layouts:
@@ -5986,8 +5827,6 @@ export default function DocumentStudioPanel({
         </aside>
       </div>
 
-      {/* ================= SAVED DOCUMENTS ARCHIVE MODAL ================= */}
-      {/* ================= CUSTOMIZE & SAVE TEMPLATE MODAL ================= */}
       {templateEditorModal && (
         <TemplateEditorModal
           isOpen={templateEditorModal.isOpen}
@@ -6004,7 +5843,6 @@ export default function DocumentStudioPanel({
         />
       )}
 
-      {/* ================= SAVED DOCUMENTS ARCHIVE MODAL ================= */}
       {archiveModalOpen && (() => {
         const filteredDocs = savedDocs.filter((d) => {
           const comp = resolveCompanyFromMemoRef(d.ref, d, COMPANIES);
@@ -6061,7 +5899,6 @@ export default function DocumentStudioPanel({
                 </button>
               </div>
 
-              {/* Search & Company Badges */}
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 shrink-0">
                 <div className="relative flex-1">
                   <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -6093,7 +5930,6 @@ export default function DocumentStudioPanel({
                 </div>
               </div>
 
-              {/* Saved Records List */}
               <div className="flex-1 overflow-y-auto space-y-3 pr-1.5">
                 {savedDocs.length === 0 ? (
                   <div className="py-16 text-center text-slate-400 space-y-2">

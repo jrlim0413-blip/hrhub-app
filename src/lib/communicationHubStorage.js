@@ -1,12 +1,3 @@
-/**
- * communicationHubStorage.js
- * Unified Cloud-Synced Persistence & Real-Time Service for Communication Portal Modules:
- * - Service Desks: HR Helpdesk, IT Helpdesk, Finance Desk
- * - Knowledge Center (Guides, FAQs & SOP Playbooks)
- * - Employee Suggestion Box (Anonymous / Named + Upvotes + HR Response)
- * - Leaderboards & Staff Recognition Points
- * - Live Polls & Pulse Surveys
- */
 
 import { supabase } from "./supabase.js";
 
@@ -150,13 +141,10 @@ export function subscribeToCommHubLive(callback) {
   };
 }
 
-// ============================================================================
-// 1. HELPDESK TICKETS (HR Helpdesk, IT Helpdesk, Finance Desk)
-// ============================================================================
 export const fetchHelpdeskTickets = () => loadCollection("tickets", []);
 
 export async function createHelpdeskTicket({
-  deskType, // "hr_helpdesk" | "it_helpdesk" | "finance_desk"
+  deskType,
   subject,
   category,
   priority = "Medium",
@@ -174,7 +162,7 @@ export async function createHelpdeskTicket({
     category: category || "General Inquiry",
     priority,
     description: description.trim(),
-    status: "Open", // Open | In Progress | Resolved | Closed
+    status: "Open",
     requesterName: requester?.name || "Team Member",
     requesterEmail: String(requester?.email || "").toLowerCase().trim(),
     requesterCompany: requester?.company || "Simpal Group of Companies",
@@ -222,9 +210,6 @@ export async function deleteHelpdeskTicket(ticketId) {
   return { success: true, tickets: next };
 }
 
-// ============================================================================
-// 2. KNOWLEDGE CENTER (Starter Guides + Dynamic HRMD Articles)
-// ============================================================================
 const DEFAULT_KNOWLEDGE_ARTICLES = [
   {
     id: "kb_stl_gross_remit",
@@ -297,9 +282,6 @@ export async function deleteKnowledgeArticle(articleId) {
   return { success: true, articles: next };
 }
 
-// ============================================================================
-// 3. SUGGESTION BOX (Named or Anonymous + Upvotes + HRMD Official Response)
-// ============================================================================
 export const fetchSuggestions = () => loadCollection("suggestions", []);
 
 export async function createSuggestion({ title, category, details, isAnonymous = false, author = {} }) {
@@ -314,9 +296,9 @@ export async function createSuggestion({ title, category, details, isAnonymous =
     authorName: isAnonymous ? "Anonymous Team Member" : (author?.name || "Team Member"),
     authorEmail: isAnonymous ? "" : String(author?.email || "").toLowerCase().trim(),
     authorCompany: isAnonymous ? "Confidential" : (author?.company || ""),
-    status: "Submitted", // Submitted | Under Review | Planned | Implemented
+    status: "Submitted",
     hrResponse: "",
-    upvotes: [], // array of voter emails
+    upvotes: [],
     createdAt: nowIso
   };
   const next = [entry, ...existing];
@@ -358,9 +340,6 @@ export async function deleteSuggestion(suggestionId) {
   return { success: true, suggestions: next };
 }
 
-// ============================================================================
-// 4. LEADERBOARDS & RECOGNITION AWARDS
-// ============================================================================
 export const fetchRecognitionAwards = () => loadCollection("recognitions", []);
 
 export async function createRecognitionAward({
@@ -398,9 +377,6 @@ export async function deleteRecognitionAward(awardId) {
   return { success: true, awards: next };
 }
 
-// ============================================================================
-// 5. POLLS & SURVEYS
-// ============================================================================
 export const fetchPolls = () => loadCollection("polls", []);
 
 export async function createPoll({
@@ -417,7 +393,7 @@ export async function createPoll({
     .map((label, idx) => ({
       id: `opt_${idx + 1}_${Math.random().toString(36).slice(2, 5)}`,
       label,
-      votes: [] // array of voter emails
+      votes: []
     }));
 
   if (!question.trim() || cleanOptions.length < 2) {
@@ -431,7 +407,7 @@ export async function createPoll({
     description: description.trim(),
     category,
     options: cleanOptions,
-    status: "Active", // Active | Closed
+    status: "Active",
     closesAt: closesAt || "",
     createdByName: createdBy?.name || "HR Administrator",
     createdAt: new Date().toISOString()

@@ -1,10 +1,5 @@
 import { useState } from "react";
 
-/**
- * HRHub AI Buddy Avatar Component
- * Displays the official portrait face of HRHub AI Buddy (anime HR assistant character)
- * with animated holographic rings, thinking mode effects, and online status badge.
- */
 export default function AiAgentAvatar({
   size = "md",
   isThinking = false,
@@ -14,7 +9,6 @@ export default function AiAgentAvatar({
 }) {
   const [imgError, setImgError] = useState(false);
 
-  // Size styling mapping
   const sizeMap = {
     xs: {
       box: "w-6 h-6 min-w-[24px] min-h-[24px]",
@@ -76,7 +70,6 @@ export default function AiAgentAvatar({
         }
       `}</style>
 
-      {/* Holographic Glowing Ring / Thinking Halo */}
       {isThinking ? (
         <div
           className={`absolute ${currentSize.halo} rounded-full bg-gradient-to-tr from-cyan-400 via-blue-500 to-indigo-500 p-[2px] ai-avatar-thinking-halo opacity-100 z-0`}
@@ -89,7 +82,6 @@ export default function AiAgentAvatar({
         />
       )}
 
-      {/* Main Avatar Circular Frame */}
       <div
         className={`relative z-10 w-full h-full rounded-full overflow-hidden bg-gradient-to-b from-[#0b1329] to-[#070b18] border border-cyan-400/40 shadow-xs flex items-center justify-center ${
           isThinking ? "ai-avatar-thinking-pulse" : ""
@@ -104,14 +96,12 @@ export default function AiAgentAvatar({
             loading="eager"
           />
         ) : (
-          /* Graceful Fallback if image fails */
           <div className="w-full h-full flex items-center justify-center bg-gradient-to-tr from-blue-600 to-indigo-700 text-white font-bold text-xs">
             AI
           </div>
         )}
       </div>
 
-      {/* Online Status Badge (with ping effect) */}
       {showStatus && (
         <span
           className={`absolute ${currentSize.badge} z-20 pointer-events-none flex items-center justify-center`}

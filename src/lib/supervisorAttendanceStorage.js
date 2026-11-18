@@ -1,17 +1,11 @@
-// Centralized Service for Supervisor Attendance Cloud Storage & Sync
 import { supabase } from "./supabase";
 
-/**
- * Compresses an image file in the browser using HTML5 Canvas.
- * Reduces 5MB-15MB phone camera shots to ~150KB-250KB JPEG for instant upload.
- */
 export async function compressImage(file, maxWidth = 1200, maxHeight = 1200, quality = 0.82) {
   return new Promise((resolve, reject) => {
     if (!file) {
       return reject(new Error("No file provided for compression"));
     }
 
-    // If it's already a small blob or not an image, resolve directly
     if (file.type && !file.type.startsWith("image/")) {
       return resolve({ blob: file, dataUrl: null });
     }
@@ -59,10 +53,6 @@ export async function compressImage(file, maxWidth = 1200, maxHeight = 1200, qua
   });
 }
 
-/**
- * Uploads attendance photo proof to the Supabase Storage bucket 'supervisor-attendance'.
- * Returns public URL on success or error info.
- */
 export async function uploadAttendancePhoto(fileOrBlob, supervisorId, dateStr) {
   try {
     const cleanDate = dateStr || new Date().toISOString().split("T")[0];
@@ -96,10 +86,6 @@ export async function uploadAttendancePhoto(fileOrBlob, supervisorId, dateStr) {
   }
 }
 
-/**
- * Fetches attendance records for a specific date from Supabase.
- * Returns records or safe fallback info without throwing errors.
- */
 export async function fetchCloudAttendance(dateStr) {
   try {
     const { data, error } = await supabase
@@ -116,10 +102,6 @@ export async function fetchCloudAttendance(dateStr) {
   }
 }
 
-/**
- * Upserts a supervisor attendance record to Supabase table 'supervisor_attendance'.
- * Automatically adapts and retries if optional columns are missing in schema cache.
- */
 export async function upsertCloudAttendance(rec, dateStr) {
   try {
     const payload = {
@@ -144,7 +126,6 @@ export async function upsertCloudAttendance(rec, dateStr) {
       .upsert(payload, { onConflict: "supervisor_id,attendance_date" })
       .select();
 
-    // Self-healing: If an error mentions a column not in schema cache, strip that column and retry immediately
     if (error && error.message && error.message.includes("Could not find the") && error.message.includes("column")) {
       const match = error.message.match(/'([^']+)' column/);
       if (match && match[1] && payload[match[1]] !== undefined) {
@@ -169,10 +150,6 @@ export async function upsertCloudAttendance(rec, dateStr) {
   }
 }
 
-/**
- * Sets up a Realtime subscription to receive instant updates when
- * a supervisor submits check-in from their phone or mobile app.
- */
 export function subscribeToAttendanceRealtime(dateStr, onRowChange) {
   try {
     const channelName = `realtime_spvr_att_${dateStr}_${Date.now()}`;
@@ -205,9 +182,6 @@ export function subscribeToAttendanceRealtime(dateStr, onRowChange) {
   }
 }
 
-/**
- * Fetches attendance records across a full date range (e.g. for Weekly Attendance Reports).
- */
 export async function fetchRangeCloudAttendance(startDateStr, endDateStr) {
   try {
     const { data, error } = await supabase
@@ -228,17 +202,12 @@ export async function fetchRangeCloudAttendance(startDateStr, endDateStr) {
   }
 }
 
-/**
- * Automatically purges photo proofs from past days (end of day cleanup).
- * All attendance metadata (time_in, status, location, coordinates, remarks) remains 100% intact!
- */
 export async function autoPurgePastPhotos(currentDateStr = null) {
   try {
     const today = currentDateStr || new Date().toISOString().split("T")[0];
     let purgedDbCount = 0;
     let purgedFilesCount = 0;
 
-    // 1. Purge from Supabase Database Table: nullify photo_url for records prior to today
     try {
       const { data: rowsToClean, error: selectErr } = await supabase
         .from("supervisor_attendance")
@@ -263,7 +232,6 @@ export async function autoPurgePastPhotos(currentDateStr = null) {
       console.warn("[autoPurgePastPhotos] DB photo purge notice:", dbErr.message);
     }
 
-    // 2. Purge image files from Supabase Storage bucket 'supervisor-attendance'
     try {
       const { data: rootItems, error: listErr } = await supabase.storage
         .from("supervisor-attendance")
@@ -271,7 +239,6 @@ export async function autoPurgePastPhotos(currentDateStr = null) {
 
       if (!listErr && Array.isArray(rootItems)) {
         for (const item of rootItems) {
-          // Date folders are named YYYY-MM-DD
           if (!item.id && item.name && item.name.length === 10 && item.name < today) {
             const folderName = item.name;
             const { data: subFiles } = await supabase.storage
@@ -300,7 +267,6 @@ export async function autoPurgePastPhotos(currentDateStr = null) {
       console.warn("[autoPurgePastPhotos] Storage bucket purge notice:", storageErr.message);
     }
 
-    // 3. Purge base64 / URLs from Browser localStorage for past dates to prevent storage quota limits
     try {
       if (typeof window !== "undefined" && window.localStorage) {
         const keysToClean = [];
@@ -351,5 +317,4 @@ export async function autoPurgePastPhotos(currentDateStr = null) {
     return { success: false, error: err.message };
   }
 }
-
 

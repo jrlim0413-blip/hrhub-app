@@ -22,10 +22,8 @@ export default function HomeWorkspaceView({
   setWorkspaceTab,
   profiles = []
 }) {
-  // Account name logged in
   const activeUserName = profileName || currentUser?.name || currentUser?.email?.split("@")[0] || "Admin";
 
-  // Dynamic Greeting based on time of day
   const getGreeting = () => {
     const hour = new Date().getHours();
     if (hour < 12) return "Good morning";
@@ -33,14 +31,12 @@ export default function HomeWorkspaceView({
     return "Good evening";
   };
 
-  // Format current date matching screenshot "Oct 8, 2026"
   const formattedDate = new Date().toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
     year: "numeric"
   });
 
-  // Scheduled meetings state (persisted in localStorage, fresh empty default)
   const [meetings, setMeetings] = useState(() => {
     try {
       const stored = localStorage.getItem("hrhub_scheduled_meetings");
@@ -50,7 +46,6 @@ export default function HomeWorkspaceView({
     }
   });
 
-  // Sync meetings to localStorage
   useEffect(() => {
     try {
       localStorage.setItem("hrhub_scheduled_meetings", JSON.stringify(meetings));
@@ -59,7 +54,6 @@ export default function HomeWorkspaceView({
     }
   }, [meetings]);
 
-  // HR Cutoffs & Custom Events State (persisted in localStorage, fresh empty default)
   const [hrEvents, setHrEvents] = useState(() => {
     try {
       const stored = localStorage.getItem("hrhub_custom_hr_events");
@@ -69,7 +63,6 @@ export default function HomeWorkspaceView({
     }
   });
 
-  // Sync HR cutoffs to localStorage
   useEffect(() => {
     try {
       localStorage.setItem("hrhub_custom_hr_events", JSON.stringify(hrEvents));
@@ -78,22 +71,18 @@ export default function HomeWorkspaceView({
     }
   }, [hrEvents]);
 
-  // HR Event Modal State
   const [isEventModalOpen, setIsEventModalOpen] = useState(false);
   const [eventTitle, setEventTitle] = useState("");
   const [eventDate, setEventDate] = useState(new Date().toISOString().split("T")[0]);
   const [eventEntity, setEventEntity] = useState("All entities");
-  const [eventType, setEventType] = useState("payroll"); // 'payroll' | 'audit' | 'holiday' | 'other'
+  const [eventType, setEventType] = useState("payroll");
 
-  // Dynamic Staff Count
   const storedStaff = getStoredEmployees();
   const activeStaffCount = profiles && profiles.length > 0 ? profiles.length : storedStaff.length;
 
-  // Helper to ensure 100% valid URL for Google Meet / Zoom external launchers
   const getValidMeetingUrl = (meeting) => {
     if (!meeting) return "https://meet.google.com/new";
     const rawUrl = meeting.url || "";
-    // If it's a random placeholder or broken launcher URL, use Zoom's official instant meeting creator
     if (
       rawUrl.includes("hrh-q4rev-sync") ||
       rawUrl.includes("84920418392") ||
@@ -108,10 +97,8 @@ export default function HomeWorkspaceView({
     return rawUrl || (meeting.platform === "google_meet" ? "https://meet.google.com/new" : "https://zoom.us/start/videomeeting");
   };
 
-
-  // Meeting Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [modalPlatform, setModalPlatform] = useState("google_meet"); // 'google_meet' | 'zoom'
+  const [modalPlatform, setModalPlatform] = useState("google_meet");
   const [meetingTitle, setMeetingTitle] = useState("");
   const [meetingIdInput, setMeetingIdInput] = useState("");
   const [meetingPasscode, setMeetingPasscode] = useState("hrhub2026");
@@ -125,7 +112,6 @@ export default function HomeWorkspaceView({
   const [copiedId, setCopiedId] = useState(null);
   const [toastMessage, setToastMessage] = useState(null);
 
-  // Helper to Copy Professional Invitation Template
   const handleCopyProfessionalInvite = (meeting) => {
     const isZoom = meeting.platform === "zoom";
     const platformName = isZoom ? "Zoom Video Conference" : "Google Meet Video Room";
@@ -162,10 +148,8 @@ Sent via HRHub Enterprise Portal`;
     setTimeout(() => setCopiedId(null), 2500);
   };
 
-  // Calendar Date State
   const [selectedCalendarDate, setSelectedCalendarDate] = useState(new Date());
 
-  // IN-APP EMBEDDED ZOOM / VIDEO CALL ROOM STATE
   const [activeInAppMeeting, setActiveInAppMeeting] = useState(null);
   const [inAppMicMuted, setInAppMicMuted] = useState(false);
   const [inAppCameraOff, setInAppCameraOff] = useState(false);
@@ -175,12 +159,11 @@ Sent via HRHub Enterprise Portal`;
   const [inAppMessages, setInAppMessages] = useState([
     { id: 1, sender: "System", text: "Welcome to the HRHub In-App Video Call Room!", time: "Just now" }
   ]);
-  const [inAppViewMode, setInAppViewMode] = useState("app_room"); // 'app_room' | 'iframe_web' | 'zoom_sdk'
+  const [inAppViewMode, setInAppViewMode] = useState("app_room");
   const [zoomSdkLoading, setZoomSdkLoading] = useState(false);
   const [zoomSdkError, setZoomSdkError] = useState(null);
   const [zoomSdkSuccess, setZoomSdkSuccess] = useState(false);
 
-  // REAL WEBRTC VIDEO & MEDIA STREAM REFS
   const localVideoRef = useRef(null);
   const bannerVideoRef = useRef(null);
   const screenVideoRef = useRef(null);
@@ -189,7 +172,6 @@ Sent via HRHub Enterprise Portal`;
   const [hasCameraPermission, setHasCameraPermission] = useState(false);
   const [isExpandedRoomOpen, setIsExpandedRoomOpen] = useState(false);
 
-  // Activate Real Webcam Stream when in-app meeting starts
   useEffect(() => {
     let activeStream = null;
     if (activeInAppMeeting) {
@@ -217,7 +199,6 @@ Sent via HRHub Enterprise Portal`;
       };
       initWebcam();
     } else {
-      // Clean up media stream when call leaves
       if (mediaStream) {
         mediaStream.getTracks().forEach((track) => track.stop());
         setMediaStream(null);
@@ -237,7 +218,6 @@ Sent via HRHub Enterprise Portal`;
     };
   }, [activeInAppMeeting]);
 
-  // Bind video element when ref updates or stream changes
   useEffect(() => {
     if (localVideoRef.current && mediaStream) {
       localVideoRef.current.srcObject = mediaStream;
@@ -247,9 +227,6 @@ Sent via HRHub Enterprise Portal`;
     }
   }, [mediaStream, inAppCameraOff, activeInAppMeeting, isExpandedRoomOpen]);
 
-
-
-  // Toggle Real Audio Mute Track
   useEffect(() => {
     if (mediaStream) {
       mediaStream.getAudioTracks().forEach((track) => {
@@ -258,7 +235,6 @@ Sent via HRHub Enterprise Portal`;
     }
   }, [inAppMicMuted, mediaStream]);
 
-  // Toggle Real Video Track
   useEffect(() => {
     if (mediaStream) {
       mediaStream.getVideoTracks().forEach((track) => {
@@ -267,17 +243,14 @@ Sent via HRHub Enterprise Portal`;
     }
   }, [inAppCameraOff, mediaStream]);
 
-  // Handle Real Screen Share Trigger
   const handleToggleScreenShare = async () => {
     if (inAppScreenSharing) {
-      // Stop screen share
       if (screenStream) {
         screenStream.getTracks().forEach((t) => t.stop());
         setScreenStream(null);
       }
       setInAppScreenSharing(false);
     } else {
-      // Start real display media screen share
       try {
         if (navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) {
           const scStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
@@ -302,7 +275,6 @@ Sent via HRHub Enterprise Portal`;
     }
   };
 
-  // Zoom Web SDK Launcher Handler
   const handleLaunchZoomSdk = async (meeting) => {
     if (!meeting) return;
     setZoomSdkLoading(true);
@@ -348,8 +320,6 @@ Sent via HRHub Enterprise Portal`;
     showToast("Meeting ended. Reverted to default dashboard.");
   };
 
-
-  // Direct Connect Zoom Handler (1-Click, No Setup Modal, 100% Valid Live Zoom Call)
   const handleDirectConnectZoom = () => {
     const zoomUrl = "https://zoom.us/start/videomeeting";
     window.open(zoomUrl, "_blank");
@@ -375,7 +345,6 @@ Sent via HRHub Enterprise Portal`;
     showToast("Directly connected to Zoom! Live preview active in banner.");
   };
 
-  // Direct Connect Google Meet Handler
   const handleDirectConnectMeet = () => {
     const meetUrl = "https://meet.google.com/new";
     window.open(meetUrl, "_blank");
@@ -401,7 +370,6 @@ Sent via HRHub Enterprise Portal`;
     showToast("Directly connected to Google Meet! Live preview active in banner.");
   };
 
-  // Direct Launch Meeting Handler for Cards
   const handleDirectLaunchMeeting = (meeting) => {
     const validUrl = getValidMeetingUrl(meeting);
     window.open(validUrl, "_blank");
@@ -412,7 +380,6 @@ Sent via HRHub Enterprise Portal`;
     setInAppScreenSharing(false);
     showToast(`Connecting directly to ${meeting.platform === "zoom" ? "Zoom Video Call" : "Google Meet"}... Live preview in card.`);
   };
-
 
   const showToast = (msg) => {
     setToastMessage(msg);
@@ -485,18 +452,15 @@ Sent via HRHub Enterprise Portal`;
     if (customMeetingUrl.trim()) {
       generatedUrl = customMeetingUrl.trim();
     } else if (modalPlatform === "google_meet") {
-      generatedUrl = "https://meet.google.com/new"; // Official Google Meet instant real room creator
+      generatedUrl = "https://meet.google.com/new";
     } else {
-      // Zoom: If user entered an actual 9 to 11 digit real Zoom Meeting ID, use direct join link
       if (cleanId && cleanId.length >= 9 && cleanId.length <= 11) {
         generatedUrl = `https://zoom.us/j/${cleanId}?pwd=${mPass}`;
       } else {
-        // Otherwise use Zoom's official instant live meeting launcher that always creates an active room
         generatedUrl = "https://zoom.us/start/videomeeting";
       }
     }
 
-    // Format time display
     const timeFormatted = new Date(`2026-01-01T${meetingTime}`).toLocaleTimeString("en-US", {
       hour: "2-digit",
       minute: "2-digit",
@@ -536,7 +500,6 @@ Sent via HRHub Enterprise Portal`;
     setTimeout(() => setCopiedId(null), 2500);
   };
 
-  // Calendar Helpers
   const year = selectedCalendarDate.getFullYear();
   const month = selectedCalendarDate.getMonth();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
@@ -549,7 +512,6 @@ Sent via HRHub Enterprise Portal`;
 
   return (
     <div className="space-y-6 font-['Figtree','Inter',sans-serif] animate-fade-in pb-12">
-      {/* Toast Notification */}
       {toastMessage && (
         <div className="fixed bottom-6 right-6 z-50 bg-slate-900 text-white px-4 py-3 rounded-xl shadow-2xl border border-emerald-500/40 flex items-center gap-3 text-xs font-bold animate-bounce">
           <CheckCircle2 size={16} className="text-emerald-400 shrink-0" />
@@ -557,7 +519,6 @@ Sent via HRHub Enterprise Portal`;
         </div>
       )}
 
-      {/* ================= 1. TOP HEADER BANNER (Matching Screenshot Style) ================= */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-1 pb-2">
         <div>
           <span className="text-xs font-medium text-slate-500 tracking-wide">
@@ -568,7 +529,6 @@ Sent via HRHub Enterprise Portal`;
           </h1>
         </div>
 
-        {/* Action Header Buttons */}
         <div className="flex items-center gap-2.5">
           <button
             type="button"
@@ -600,10 +560,7 @@ Sent via HRHub Enterprise Portal`;
         </div>
       </div>
 
-
-      {/* ================= 2. MEETINGS & VIDEO CONFERENCES CARD (Matching Monday Screenshot) ================= */}
       <div className="bg-white border border-slate-200/90 rounded-2xl shadow-xs overflow-hidden">
-        {/* Card Header */}
         <div className="p-5 border-b border-slate-100 flex items-center justify-between flex-wrap gap-3">
           <div className="flex items-center gap-2.5">
             <div className="p-2 rounded-xl bg-emerald-50 text-[#008559]">
@@ -632,7 +589,6 @@ Sent via HRHub Enterprise Portal`;
 
         </div>
 
-        {/* Card Body - Meeting Platform Connect & Quick Launchers */}
         <div className="p-5 grid grid-cols-1 md:grid-cols-12 gap-6 items-center">
           <div className="md:col-span-7 space-y-4">
             <div className="space-y-1.5">
@@ -644,9 +600,7 @@ Sent via HRHub Enterprise Portal`;
               </p>
             </div>
 
-            {/* Platform Quick Action Buttons */}
             <div className="flex flex-wrap items-center gap-3 pt-1">
-              {/* Direct Connect Zoom Button */}
               <button
                 type="button"
                 onClick={handleDirectConnectZoom}
@@ -659,14 +613,12 @@ Sent via HRHub Enterprise Portal`;
                 <span>Direct Connect Zoom</span>
               </button>
 
-              {/* Direct Connect Google Meet Button */}
               <button
                 type="button"
                 onClick={handleDirectConnectMeet}
                 className="inline-flex items-center gap-2.5 px-4 py-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 text-slate-800 text-xs font-bold transition shadow-2xs cursor-pointer group"
                 title="1-Click Direct Connect to Google Meet"
               >
-                {/* Official Google Meet Colors SVG Badge */}
                 <div className="w-5 h-5 flex items-center justify-center rounded bg-slate-100 p-0.5 group-hover:scale-105 transition-transform">
                   <svg viewBox="0 0 24 24" className="w-4 h-4">
                     <path fill="#4285F4" d="M12 5v14l7-5-7-9z" />
@@ -678,7 +630,6 @@ Sent via HRHub Enterprise Portal`;
                 <span>Direct Connect Google Meet</span>
               </button>
 
-              {/* Optional Schedule for future date */}
               <button
                 type="button"
                 onClick={() => handleOpenScheduleModal("zoom")}
@@ -691,10 +642,8 @@ Sent via HRHub Enterprise Portal`;
 
           </div>
 
-          {/* Right Banner Artwork / Live Zoom Video Preview Screen */}
           {activeInAppMeeting ? (
             <div className="md:col-span-5 bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col justify-between text-white relative overflow-hidden min-h-[220px] shadow-md animate-fade-in">
-              {/* Header Badge */}
               <div className="flex items-center justify-between gap-2 z-10">
                 <div className="flex items-center gap-2">
                   <span className="flex h-2.5 w-2.5 relative">
@@ -710,7 +659,6 @@ Sent via HRHub Enterprise Portal`;
                 </span>
               </div>
 
-              {/* Live Video Canvas Screen Preview - REAL WEBCAM STREAM */}
               <div className="my-2.5 flex-1 bg-black rounded-xl border border-slate-800 relative overflow-hidden min-h-[145px] shadow-inner flex items-center justify-center">
                 {!inAppCameraOff && hasCameraPermission ? (
                   <video
@@ -730,13 +678,11 @@ Sent via HRHub Enterprise Portal`;
                   </div>
                 )}
 
-                {/* Floating On-Air Badge */}
                 <div className="absolute top-2 left-2 z-10 flex items-center gap-1.5 bg-black/70 backdrop-blur-md px-2 py-0.5 rounded-md text-[10px] font-bold text-white border border-white/10">
                   <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping"></span>
                   <span>LIVE PREVIEW</span>
                 </div>
 
-                {/* Live Meeting Details Overlay */}
                 <div className="absolute bottom-2 left-2 right-2 z-10 bg-gradient-to-t from-black/80 to-transparent p-2 rounded-lg flex items-center justify-between text-white">
                   <div className="min-w-0">
                     <p className="text-[11px] font-bold truncate">{activeInAppMeeting.title}</p>
@@ -748,7 +694,6 @@ Sent via HRHub Enterprise Portal`;
                 </div>
               </div>
 
-              {/* Footer Quick Controls */}
               <div className="flex items-center justify-between gap-2 z-10 pt-0.5">
                 <button
                   type="button"
@@ -794,7 +739,6 @@ Sent via HRHub Enterprise Portal`;
             </div>
 
           ) : (
-            /* Original Default Light Card when NO meeting is ongoing */
             <div className="md:col-span-5 bg-gradient-to-tr from-sky-100/70 via-emerald-50 to-indigo-50 border border-slate-200/80 rounded-xl p-4 flex flex-col items-center justify-center text-center relative overflow-hidden transition-all">
               <div className="w-12 h-12 rounded-2xl bg-white shadow-md flex items-center justify-center text-[#008559] mb-2 border border-slate-100">
                 <Video size={24} />
@@ -812,7 +756,6 @@ Sent via HRHub Enterprise Portal`;
           )}
         </div>
 
-        {/* Scheduled Meetings List inside Card */}
         <div className="p-5 border-t border-slate-100 space-y-3 bg-slate-50/50">
           <div className="flex items-center justify-between">
             <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">
@@ -843,7 +786,6 @@ Sent via HRHub Enterprise Portal`;
                   className="bg-white border border-slate-200/80 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs hover:border-slate-300 transition"
                 >
                   <div className="flex items-start gap-3 min-w-0">
-                    {/* Platform Icon Badge */}
                     <div className="shrink-0 pt-0.5">
                       {meeting.platform === "google_meet" ? (
                         <div className="w-9 h-9 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-700" title="Google Meet">
@@ -886,7 +828,6 @@ Sent via HRHub Enterprise Portal`;
                         </span>
                       </p>
 
-                      {/* Meeting Credentials (ID & Passcode) */}
                       <div className="flex items-center gap-2 pt-1 text-[10px] font-semibold text-slate-600 flex-wrap">
                         <span className="bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
                           🆔 ID: <strong className="text-slate-800 font-mono">{meeting.meetingId || "849 2041 8392"}</strong>
@@ -904,7 +845,6 @@ Sent via HRHub Enterprise Portal`;
                     </div>
                   </div>
 
-                  {/* Meeting Actions */}
                   <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
                     <button
                       type="button"
@@ -948,7 +888,6 @@ Sent via HRHub Enterprise Portal`;
                       <ExternalLink size={15} />
                     </a>
 
-                    {/* Direct Connect Live Button */}
                     <button
                       type="button"
                       onClick={() => handleDirectLaunchMeeting(meeting)}
@@ -971,9 +910,7 @@ Sent via HRHub Enterprise Portal`;
         </div>
       </div>
 
-      {/* ================= 3. CALENDAR GRID & HR QUICK SUMMARY SECTION ================= */}
       <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
-        {/* Left Column: Interactive HR Calendar */}
         <div className="md:col-span-7 bg-white border border-slate-200/90 rounded-2xl p-5 shadow-xs space-y-4">
           <div className="flex items-center justify-between pb-2 border-b border-slate-100">
             <div className="flex items-center gap-2">
@@ -1001,7 +938,6 @@ Sent via HRHub Enterprise Portal`;
             </div>
           </div>
 
-          {/* Calendar Days Header */}
           <div className="grid grid-cols-7 text-center text-[11px] font-bold text-slate-400 pb-1">
             <span>Sun</span>
             <span>Mon</span>
@@ -1012,14 +948,11 @@ Sent via HRHub Enterprise Portal`;
             <span>Sat</span>
           </div>
 
-          {/* Calendar Day Cells */}
           <div className="grid grid-cols-7 gap-1 text-center text-xs">
-            {/* Blank leading days */}
             {Array.from({ length: firstDayIndex }).map((_, i) => (
               <div key={`blank-${i}`} className="h-9 rounded-lg bg-slate-50/50" />
             ))}
 
-            {/* Month days */}
             {Array.from({ length: daysInMonth }).map((_, i) => {
               const dayNumber = i + 1;
               const isToday =
@@ -1062,7 +995,6 @@ Sent via HRHub Enterprise Portal`;
             })}
           </div>
 
-          {/* Calendar Legend & Key HR Deadlines */}
           <div className="pt-3 border-t border-slate-100 space-y-2.5">
             <div className="flex items-center justify-between">
               <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
@@ -1119,9 +1051,7 @@ Sent via HRHub Enterprise Portal`;
           </div>
         </div>
 
-        {/* Right Column: HR Executive Quick Overview & Navigation */}
         <div className="md:col-span-5 space-y-4">
-          {/* Quick Stats Card */}
           <div className="bg-white border border-slate-200/90 rounded-2xl p-5 shadow-xs space-y-3">
             <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
               <ShieldCheck size={16} className="text-sky-600" />
@@ -1152,7 +1082,6 @@ Sent via HRHub Enterprise Portal`;
               </div>
             </div>
 
-            {/* Quick Workspace Navigation Buttons */}
             <div className="pt-2 border-t border-slate-100 space-y-1.5">
               <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
                 Quick Shortcuts
@@ -1207,7 +1136,6 @@ Sent via HRHub Enterprise Portal`;
             </div>
           </div>
 
-          {/* AI Partner Card */}
           <div className="bg-gradient-to-tr from-slate-900 to-slate-800 text-white rounded-2xl p-5 shadow-md space-y-3">
             <div className="flex items-center gap-2 text-emerald-400 text-xs font-bold uppercase tracking-wider">
               <Sparkles size={14} />
@@ -1230,11 +1158,9 @@ Sent via HRHub Enterprise Portal`;
         </div>
       </div>
 
-      {/* ================= 4. SCHEDULE MEETING MODAL (Google Meet / Zoom) ================= */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs animate-fade-in">
           <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl w-full max-w-lg overflow-hidden animate-scale-up">
-            {/* Modal Header */}
             <div className="p-5 bg-slate-900 text-white flex items-center justify-between">
               <div className="flex items-center gap-2.5">
                 <div className={`p-2 rounded-xl ${modalPlatform === 'google_meet' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-blue-500/20 text-blue-400'}`}>
@@ -1256,9 +1182,7 @@ Sent via HRHub Enterprise Portal`;
               </button>
             </div>
 
-            {/* Modal Form */}
             <form onSubmit={handleScheduleSubmit} className="p-5 space-y-4">
-              {/* Platform Selector Switch */}
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-slate-700 block">Select Video Platform</label>
                 <div className="grid grid-cols-2 gap-2">
@@ -1311,8 +1235,6 @@ Sent via HRHub Enterprise Portal`;
                 )}
               </div>
 
-
-              {/* Meeting Title */}
               <div className="space-y-1">
                 <label className="text-xs font-bold text-slate-700 block">Meeting Subject / Title</label>
                 <input
@@ -1325,7 +1247,6 @@ Sent via HRHub Enterprise Portal`;
                 />
               </div>
 
-              {/* Meeting Credentials (ID & Passcode) */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <label className="text-xs font-bold text-slate-700 block">
@@ -1357,7 +1278,6 @@ Sent via HRHub Enterprise Portal`;
                 </div>
               </div>
 
-              {/* Date & Time Row */}
               <div className="grid grid-cols-3 gap-3">
                 <div className="space-y-1">
                   <label className="text-xs font-bold text-slate-700 block">Date</label>
@@ -1396,7 +1316,6 @@ Sent via HRHub Enterprise Portal`;
                 </div>
               </div>
 
-              {/* Attendees Email Input */}
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-slate-700 block">Add Participants / Invitees</label>
                 <div className="flex gap-2">
@@ -1437,7 +1356,6 @@ Sent via HRHub Enterprise Portal`;
                 )}
               </div>
 
-              {/* Agenda */}
               <div className="space-y-1">
                 <label className="text-xs font-bold text-slate-700 block">Agenda / Notes (Optional)</label>
                 <textarea
@@ -1449,7 +1367,6 @@ Sent via HRHub Enterprise Portal`;
                 />
               </div>
 
-              {/* Submit Buttons */}
               <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
                 <button
                   type="button"
@@ -1475,10 +1392,8 @@ Sent via HRHub Enterprise Portal`;
           </div>
         </div>
       )}
-      {/* ================= 5. IN-APP EMBEDDED ZOOM & GOOGLE MEET VIDEO CALL ROOM OVERLAY ================= */}
       {activeInAppMeeting && isExpandedRoomOpen && (
         <div className="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md flex flex-col animate-fade-in text-white font-['Figtree','Inter',sans-serif]">
-          {/* Top Bar Header */}
           <header className="h-16 bg-slate-900/90 border-b border-slate-800 px-6 flex items-center justify-between shrink-0">
             <div className="flex items-center gap-3 min-w-0">
               {activeInAppMeeting.platform === "google_meet" ? (
@@ -1512,7 +1427,6 @@ Sent via HRHub Enterprise Portal`;
               </div>
             </div>
 
-            {/* View Mode & Actions */}
             <div className="flex items-center gap-2.5 shrink-0">
               <button
                 type="button"
@@ -1578,7 +1492,6 @@ Sent via HRHub Enterprise Portal`;
                 <ExternalLink size={16} />
               </a>
 
-              {/* Minimize Back to Dashboard Banner */}
               <button
                 type="button"
                 onClick={() => setIsExpandedRoomOpen(false)}
@@ -1600,10 +1513,7 @@ Sent via HRHub Enterprise Portal`;
             </div>
           </header>
 
-
-          {/* Main Meeting Body */}
           <div className="flex-1 relative flex overflow-hidden">
-            {/* Left Main Video Area */}
             <div className="flex-1 p-4 flex flex-col justify-between relative bg-slate-950">
               {inAppViewMode === "zoom_sdk" ? (
                 <div className="w-full h-full rounded-2xl overflow-hidden border border-blue-500/40 bg-slate-900/95 relative flex flex-col p-6 items-center justify-center text-center">
@@ -1714,7 +1624,6 @@ Sent via HRHub Enterprise Portal`;
               ) : (
 
                 <div className="w-full h-full flex flex-col gap-4 overflow-y-auto custom-scrollbar">
-                  {/* Screen Share Window Preview if active */}
                   {inAppScreenSharing && (
                     <div className="w-full h-64 sm:h-80 rounded-2xl bg-slate-900 border border-emerald-500/40 relative overflow-hidden flex flex-col items-center justify-center shadow-2xl">
                       <div className="absolute top-3 left-3 bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 text-[10px] font-black px-2.5 py-1 rounded-full flex items-center gap-1.5 z-20">
@@ -1730,9 +1639,7 @@ Sent via HRHub Enterprise Portal`;
                     </div>
                   )}
 
-                  {/* Video Grid Participants */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 flex-1 items-center">
-                    {/* User 1: Active Logged In User */}
                     <div className={`relative rounded-2xl overflow-hidden border transition-all ${
                       inAppMicMuted ? "border-slate-800 bg-slate-900" : "border-emerald-500/60 bg-slate-900/90 ring-2 ring-emerald-500/20"
                     } h-52 sm:h-64 flex flex-col items-center justify-center p-4`}>
@@ -1761,7 +1668,6 @@ Sent via HRHub Enterprise Portal`;
                         </div>
                       )}
 
-                      {/* Participant Footer Bar */}
                       <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between text-xs font-bold z-10">
                         <span className="bg-slate-900/80 backdrop-blur-xs px-2.5 py-1 rounded-lg text-white border border-slate-700/60">
                           {activeUserName} (You)
@@ -1781,7 +1687,6 @@ Sent via HRHub Enterprise Portal`;
                       </div>
                     </div>
 
-                    {/* User 2: Host Participant */}
                     <div className="relative rounded-2xl overflow-hidden border border-slate-800 bg-slate-900 h-52 sm:h-64 flex flex-col items-center justify-center p-4">
                       <div className="w-full h-full absolute inset-0 bg-gradient-to-tr from-slate-950 via-slate-900 to-sky-950 flex flex-col items-center justify-center">
                         <div className="w-20 h-20 rounded-full bg-slate-800 border-2 border-sky-400/80 text-sky-400 font-extrabold text-2xl flex items-center justify-center shadow-xl">
@@ -1801,7 +1706,6 @@ Sent via HRHub Enterprise Portal`;
                       </div>
                     </div>
 
-                    {/* User 3: Team Attendee */}
                     {activeInAppMeeting.attendees.slice(0, 1).map((attEmail, idx) => (
                       <div key={idx} className="relative rounded-2xl overflow-hidden border border-slate-800 bg-slate-900 h-52 sm:h-64 flex flex-col items-center justify-center p-4">
                         <div className="w-full h-full absolute inset-0 bg-gradient-to-tr from-slate-950 via-slate-900 to-indigo-950 flex flex-col items-center justify-center">
@@ -1827,7 +1731,6 @@ Sent via HRHub Enterprise Portal`;
               )}
             </div>
 
-            {/* Right Live Chat Drawer */}
             {inAppChatOpen && (
               <aside className="w-80 bg-slate-900 border-l border-slate-800 flex flex-col shrink-0 animate-slide-in">
                 <div className="p-4 border-b border-slate-800 flex items-center justify-between">
@@ -1894,15 +1797,12 @@ Sent via HRHub Enterprise Portal`;
             )}
           </div>
 
-          {/* Bottom Floating Control Bar */}
           <footer className="h-20 bg-slate-900 border-t border-slate-800 px-6 flex items-center justify-between shrink-0">
             <div className="hidden sm:block text-xs text-slate-400 font-medium">
               HRHub Live Video Room
             </div>
 
-            {/* Center Main Action Buttons */}
             <div className="flex items-center gap-3 mx-auto sm:mx-0">
-              {/* Mic Toggle */}
               <button
                 type="button"
                 onClick={() => setInAppMicMuted(!inAppMicMuted)}
@@ -1916,7 +1816,6 @@ Sent via HRHub Enterprise Portal`;
                 {inAppMicMuted ? <MicOff size={18} /> : <Mic size={18} />}
               </button>
 
-              {/* Camera Toggle */}
               <button
                 type="button"
                 onClick={() => setInAppCameraOff(!inAppCameraOff)}
@@ -1930,7 +1829,6 @@ Sent via HRHub Enterprise Portal`;
                 {inAppCameraOff ? <VideoOff size={18} /> : <Video size={18} />}
               </button>
 
-              {/* Screen Share Toggle */}
               <button
                 type="button"
                 onClick={handleToggleScreenShare}
@@ -1944,7 +1842,6 @@ Sent via HRHub Enterprise Portal`;
                 <ScreenShare size={18} />
               </button>
 
-              {/* In-Call Chat Button */}
               <button
                 type="button"
                 onClick={() => setInAppChatOpen(!inAppChatOpen)}
@@ -1959,7 +1856,6 @@ Sent via HRHub Enterprise Portal`;
                 <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-emerald-400"></span>
               </button>
 
-              {/* End Call Red Button */}
               <button
                 type="button"
                 onClick={handleLeaveCall}
@@ -1979,7 +1875,6 @@ Sent via HRHub Enterprise Portal`;
         </div>
       )}
 
-      {/* ================= 6. ADD HR CUTOFF / EVENT MODAL ================= */}
       {isEventModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs animate-fade-in">
           <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl w-full max-w-md overflow-hidden animate-scale-up">

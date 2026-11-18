@@ -1,18 +1,5 @@
-/**
- * multiEntityAgentsData.js
- * Multi-Entity Agent & Field Personnel Roster for Simpal Group of Companies
- * 
- * Provides authorized agent and field personnel records across all group subsidiaries:
- * - Lucky Betplay Corporation (PCSO STL Mandaue City, Cebu)
- * - 5A Royal Gaming OPC (PCSO STL Province of Maguindanao)
- * - Glowing Fortune (PCSO STL Iligan City & Lanao)
- * - Imperial Gaming OPC (PCSO STL City of Cotabato)
- * - MC POWER GAS (LPG Retail & Logistics Stations)
- * - Simpal Construction (SIMCON Batching & Logistics)
- */
 
 export const MULTI_ENTITY_SUPERVISORS = [
-  // Lucky Betplay (Mandaue)
   { id: 21, fullName: "ARLFRED SABERON", company: "Lucky Betplay Corporation", area: "Mandaue City" },
   { id: 22, fullName: "RAFFY BAGUIO", company: "Lucky Betplay Corporation", area: "Mandaue City" },
   { id: 23, fullName: "ROEL CATALAN", company: "Lucky Betplay Corporation", area: "Mandaue City" },
@@ -21,30 +8,25 @@ export const MULTI_ENTITY_SUPERVISORS = [
   { id: 26, fullName: "HARRY EYA", company: "Lucky Betplay Corporation", area: "Mandaue City" },
   { id: 30, fullName: "NARCISO TAGUD JR.", company: "Lucky Betplay Corporation", area: "Mandaue City" },
 
-  // 5A Royal Gaming (Maguindanao)
   { id: 101, fullName: "DATU ALI MIDTIMBANG", company: "5A Royal Gaming OPC", area: "Datu Odin Sinsuat & North Maguindanao" },
   { id: 102, fullName: "NASSER GUIALIL", company: "5A Royal Gaming OPC", area: "Sultan Kudarat & Parang Sector" },
   { id: 103, fullName: "BAI SANDRA MASTURA", company: "5A Royal Gaming OPC", area: "Buluan & South Maguindanao" },
   { id: 104, fullName: "AL-HASSAN SINSUAT", company: "5A Royal Gaming OPC", area: "Upi & Coastal Maguindanao" },
 
-  // Glowing Fortune (Iligan City & Lanao)
   { id: 201, fullName: "JUNARD MACASARTE", company: "Glowing Fortune", area: "Tibanga & Commercial Core (Iligan)" },
   { id: 202, fullName: "FATIMA ALAWI", company: "Glowing Fortune", area: "Tubod & Suarez Sector (Iligan)" },
   { id: 203, fullName: "REX BARANDINO", company: "Glowing Fortune", area: "Hinaplanon & Kiwalan Sector (Iligan)" },
   { id: 204, fullName: "JOCELYN DATU-RAMOS", company: "Glowing Fortune", area: "Marawi Corridor & Lanao South" },
 
-  // Imperial Gaming (Cotabato City)
   { id: 301, fullName: "ABDULRASHID DILANGALEN", company: "Imperial Gaming OPC", area: "Poblacion & City Plaza Core" },
   { id: 302, fullName: "CHERRYLYN SAMAMA", company: "Imperial Gaming OPC", area: "Rosary Heights & Supermarket" },
   { id: 303, fullName: "MOHAMAD PENDATUN", company: "Imperial Gaming OPC", area: "Tamontaka & Kalanganan Coast" },
 
-  // Non-STL Subsidiaries
   { id: 401, fullName: "MARLON CORTES", company: "MC POWER GAS", area: "Mandaue & North Terminal Hub" },
   { id: 501, fullName: "ENGR. DANILO SIMPAL", company: "Simpal Construction (SIMCON)", area: "Subangdaku Central Batching Plant" }
 ];
 
 export const MULTI_ENTITY_BARANGAYS = [
-  // 5A Royal Gaming
   { id: "mag_1", name: "Brgy. Dalican (Datu Odin Sinsuat)", company: "5A Royal Gaming OPC" },
   { id: "mag_2", name: "Brgy. Simuay (Sultan Kudarat)", company: "5A Royal Gaming OPC" },
   { id: "mag_3", name: "Brgy. Poblacion Parang", company: "5A Royal Gaming OPC" },
@@ -52,7 +34,6 @@ export const MULTI_ENTITY_BARANGAYS = [
   { id: "mag_5", name: "Brgy. Nuro (Upi)", company: "5A Royal Gaming OPC" },
   { id: "mag_6", name: "Brgy. Bugasan (Matanog)", company: "5A Royal Gaming OPC" },
 
-  // Glowing Fortune
   { id: "ilg_1", name: "Brgy. Tibanga (Iligan City)", company: "Glowing Fortune" },
   { id: "ilg_2", name: "Brgy. Tubod (Iligan City)", company: "Glowing Fortune" },
   { id: "ilg_3", name: "Brgy. Hinaplanon (Iligan City)", company: "Glowing Fortune" },
@@ -60,22 +41,17 @@ export const MULTI_ENTITY_BARANGAYS = [
   { id: "ilg_5", name: "Brgy. Kiwalan (Iligan City)", company: "Glowing Fortune" },
   { id: "ilg_6", name: "Brgy. Pala-o (Iligan City)", company: "Glowing Fortune" },
 
-  // Imperial Gaming
   { id: "cot_1", name: "Brgy. Poblacion 1 (City Plaza, Cotabato)", company: "Imperial Gaming OPC" },
   { id: "cot_2", name: "Brgy. Rosary Heights 3 (Cotabato)", company: "Imperial Gaming OPC" },
   { id: "cot_3", name: "Brgy. Tamontaka 1 (Cotabato)", company: "Imperial Gaming OPC" },
   { id: "cot_4", name: "Brgy. Kalanganan 2 (Cotabato)", company: "Imperial Gaming OPC" },
   { id: "cot_5", name: "Brgy. Bagua 1 (Cotabato)", company: "Imperial Gaming OPC" },
 
-  // Non-STL
   { id: "mc_1", name: "Subangdaku Gas Terminal", company: "MC POWER GAS" },
   { id: "sim_1", name: "Subangdaku Industrial Batching Complex", company: "Simpal Construction (SIMCON)" }
 ];
 
 export const SUBSIDIARY_AGENTS_ROSTER = [
-  // =========================================================================
-  // 5A ROYAL GAMING OPC (Maguindanao)
-  // =========================================================================
   {
     id: "5a_01",
     company: "5A Royal Gaming OPC",
@@ -173,9 +149,6 @@ export const SUBSIDIARY_AGENTS_ROSTER = [
     printer_setting: 0
   },
 
-  // =========================================================================
-  // GLOWING FORTUNE (Iligan City & Lanao)
-  // =========================================================================
   {
     id: "gfc_01",
     company: "Glowing Fortune",
@@ -273,9 +246,6 @@ export const SUBSIDIARY_AGENTS_ROSTER = [
     printer_setting: 0
   },
 
-  // =========================================================================
-  // IMPERIAL GAMING OPC (Cotabato City)
-  // =========================================================================
   {
     id: "imp_01",
     company: "Imperial Gaming OPC",
@@ -357,9 +327,6 @@ export const SUBSIDIARY_AGENTS_ROSTER = [
     printer_setting: 0
   },
 
-  // =========================================================================
-  // MC POWER GAS & SIMPAL CONSTRUCTION (Non-STL)
-  // =========================================================================
   {
     id: "mc_01",
     company: "MC POWER GAS",

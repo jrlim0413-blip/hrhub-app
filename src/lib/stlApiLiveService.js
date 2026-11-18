@@ -1,16 +1,3 @@
-/**
- * stlApiLiveService.js
- * Multi-Entity STL Real Live API Aggregator and Service for HRHub.
- * 
- * Exclusively handles PCSO Small Town Lottery (STL) Operating Subsidiaries:
- * 1. Lucky Betplay Corporation (Mandaue City, Cebu)
- * 2. Glowing Fortune / Glowing Fortune OPC (Iligan City & Lanao Sector)
- * 3. 5A Royal Gaming OPC (Maguindanao del Norte)
- * 4. Imperial Gaming OPC (Cotabato City)
- * 
- * Explicitly EXCLUDES Non-STL Entities (Simpal Group Head Office, MC Power Gas, SIMCON)
- * as they do not have agent networks, supervisor attendance, or territory geo tagging.
- */
 
 import stlCacheData from "../data/stlRealApiCache.json";
 import { getAreaConfigs } from "./areaApiConfigStorage";
@@ -69,9 +56,6 @@ export const STL_ENTITY_CONFIGS = [
   }
 ];
 
-/**
- * Checks if a company name represents an STL subsidiary
- */
 export function isStlEntity(company) {
   if (!company) return false;
   const norm = String(company).toLowerCase().trim();
@@ -84,9 +68,6 @@ export function isStlEntity(company) {
   );
 }
 
-/**
- * Matches an item's company string to the canonical STL entity
- */
 export function matchStlCanonicalName(company) {
   if (!company) return "Lucky Betplay Corporation";
   const norm = String(company).toLowerCase().trim();
@@ -97,29 +78,17 @@ export function matchStlCanonicalName(company) {
   return "Lucky Betplay Corporation";
 }
 
-/**
- * In-memory state for real STL agents and supervisors
- */
 let liveAgents = (stlCacheData && stlCacheData.agents) || [];
 let liveSupervisors = (stlCacheData && stlCacheData.supervisors) || [];
 
-/**
- * Get all cached/live real agents (STL only)
- */
 export function getStlAgents() {
   return liveAgents;
 }
 
-/**
- * Get all cached/live real supervisors (STL only)
- */
 export function getStlSupervisors() {
   return liveSupervisors;
 }
 
-/**
- * Fetch live data from all configured STL API endpoints
- */
 export async function fetchLiveStlData() {
   try {
     const areas = getAreaConfigs();
@@ -132,7 +101,6 @@ export async function fetchLiveStlData() {
       stlAreas.map(async (area) => {
         const canonicalComp = matchStlCanonicalName(area.companyName);
 
-        // Fetch supervisors
         if (area.supervisorUrl && area.supervisorToken) {
           try {
             const res = await fetch(area.supervisorUrl, {
@@ -164,7 +132,6 @@ export async function fetchLiveStlData() {
           }
         }
 
-        // Fetch tellers / agents
         const tellerUrl = area.backupTellersUrl || area.activeTellersUrl;
         const tellerToken = area.backupTellersToken || area.activeTellersToken;
         if (tellerUrl && tellerToken) {

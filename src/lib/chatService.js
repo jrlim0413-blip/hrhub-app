@@ -3,18 +3,12 @@ import { supabase } from "./supabase";
 const LOCAL_CHATS_STORAGE_KEY = "hrhub_direct_chats_db_v1";
 const LOCAL_READ_RECEIPTS_KEY = "hrhub_chat_read_receipts_v1";
 
-/**
- * Generate a deterministic conversation key for 2 user emails
- */
 export function getChatThreadKey(email1, email2) {
   if (!email1 || !email2) return "chat_general";
   const sorted = [email1.toLowerCase().trim(), email2.toLowerCase().trim()].sort();
   return `thread_${sorted[0]}_${sorted[1]}`;
 }
 
-/**
- * Format timestamp Messenger-style (e.g., 'Just now', '5m', '2h', 'Yesterday')
- */
 export function formatMessengerTime(timestamp) {
   if (!timestamp) return "";
   const date = new Date(timestamp);
@@ -31,9 +25,6 @@ export function formatMessengerTime(timestamp) {
   return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-/**
- * Read receipts map: { [threadKey]: lastReadTimestamp }
- */
 export function getStoredReadReceipts() {
   try {
     const raw = localStorage.getItem(LOCAL_READ_RECEIPTS_KEY);
@@ -54,9 +45,6 @@ export function markThreadAsRead(myEmail, otherEmail) {
   return receipts;
 }
 
-/**
- * Get all cached conversations from localStorage
- */
 export function getStoredChatMap() {
   try {
     const raw = localStorage.getItem(LOCAL_CHATS_STORAGE_KEY);
@@ -66,9 +54,6 @@ export function getStoredChatMap() {
   }
 }
 
-/**
- * Fetch all conversations for the current user from Supabase and update local cache
- */
 export async function fetchAllUserThreads(myEmail) {
   const localMap = getStoredChatMap();
   if (!myEmail) return localMap;
@@ -96,7 +81,6 @@ export async function fetchAllUserThreads(myEmail) {
 
         if (!newMap[threadKey]) newMap[threadKey] = [];
 
-        // Check if message already in thread
         const exists = newMap[threadKey].some((m) => m.id === row.id);
         const formatted = {
           id: row.id,
@@ -129,18 +113,12 @@ export async function fetchAllUserThreads(myEmail) {
   return localMap;
 }
 
-/**
- * Save conversations map to localStorage
- */
 export function saveStoredChatMap(map) {
   try {
     localStorage.setItem(LOCAL_CHATS_STORAGE_KEY, JSON.stringify(map));
   } catch {}
 }
 
-/**
- * Fetch messages from Supabase chat_messages table with local cache fallback
- */
 export async function fetchConversationMessages(myEmail, recipientEmail) {
   const threadKey = getChatThreadKey(myEmail, recipientEmail);
   const localMap = getStoredChatMap();
@@ -182,7 +160,6 @@ export async function fetchConversationMessages(myEmail, recipientEmail) {
         isIncoming: row.sender_email?.toLowerCase() !== cleanMyEmail
       }));
 
-      // Update local cache
       localMap[threadKey] = formatted;
       saveStoredChatMap(localMap);
       return formatted;
@@ -194,9 +171,6 @@ export async function fetchConversationMessages(myEmail, recipientEmail) {
   return cachedMessages;
 }
 
-/**
- * Send a message to Supabase chat_messages table and cache locally
- */
 export async function sendChatMessage({
   senderEmail,
   senderName,
@@ -226,12 +200,10 @@ export async function sendChatMessage({
     isIncoming: false
   };
 
-  // 1. Optimistic update in localStorage
   const localMap = getStoredChatMap();
   localMap[threadKey] = [...(localMap[threadKey] || []), newLocalMessage];
   saveStoredChatMap(localMap);
 
-  // 2. Persist to Supabase chat_messages
   try {
     const { data, error } = await supabase
       .from("chat_messages")
@@ -266,9 +238,6 @@ export async function sendChatMessage({
   return newLocalMessage;
 }
 
-/**
- * React or toggle emoji reaction on a chat message
- */
 export async function reactChatMessage({
   messageId,
   emoji,
@@ -306,7 +275,6 @@ export async function reactChatMessage({
   localMap[threadKey] = updatedThread;
   saveStoredChatMap(localMap);
 
-  // Persist reactions to Supabase
   if (targetMsg) {
     try {
       await supabase
@@ -321,9 +289,6 @@ export async function reactChatMessage({
   return updatedThread;
 }
 
-/**
- * Delete a chat message from database and local storage
- */
 export async function deleteChatMessage({
   messageId,
   threadKey,
@@ -345,10 +310,6 @@ export async function deleteChatMessage({
   return updatedThread;
 }
 
-/**
- * Compress an image file using browser Canvas (downscales to max 1200px, 75% quality WebP)
- * Drops file size from 4MB to ~40KB - 80KB!
- */
 export async function compressImageFile(file, maxWidth = 1200, quality = 0.75) {
   return new Promise((resolve) => {
     if (!file || !file.type.startsWith("image/")) {
@@ -404,10 +365,6 @@ export async function compressImageFile(file, maxWidth = 1200, quality = 0.75) {
   });
 }
 
-/**
- * Upload image to Supabase Storage bucket 'chat-attachments'
- * Returns the short public URL (~80 chars) if uploaded, or returns null to use compressed dataUrl
- */
 export async function uploadChatAttachment(blobOrFile, senderEmail) {
   if (!blobOrFile) return null;
 

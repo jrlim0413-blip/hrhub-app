@@ -37,12 +37,11 @@ export default function RolePermissionMatrixPanel({ currentUser, onClose }) {
   const [realAccounts, setRealAccounts] = useState([]);
   const [roleTiers, setRoleTiers] = useState(STANDARD_ROLE_TIERS);
   const [loadingAccounts, setLoadingAccounts] = useState(true);
-  const [viewMode, setViewMode] = useState("tags"); // "tags" | "role" | "account"
+  const [viewMode, setViewMode] = useState("tags");
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncStatusText, setSyncStatusText] = useState("Database Cloud Synchronized");
   const [toastMessage, setToastMessage] = useState("");
 
-  // Tag Manager & Search states
   const [selectedAccountEmail, setSelectedAccountEmail] = useState("");
   const [accountSearchQuery, setAccountSearchQuery] = useState("");
   const [moduleCategoryFilter, setModuleCategoryFilter] = useState("All");
@@ -52,7 +51,6 @@ export default function RolePermissionMatrixPanel({ currentUser, onClose }) {
 
   const currentEmail = (currentUser?.email || "").toLowerCase().trim();
 
-  // Load real accounts from database and cloud permissions
   const loadDatabaseData = async () => {
     setLoadingAccounts(true);
     try {
@@ -66,7 +64,6 @@ export default function RolePermissionMatrixPanel({ currentUser, onClose }) {
         setRealAccounts(accountData.realAccounts);
         setRoleTiers(accountData.dynamicTiers);
         if (!selectedAccountEmail && accountData.realAccounts.length > 0) {
-          // Select first non-master account if available, otherwise first account
           const firstStaff = accountData.realAccounts.find(
             (a) => a.email !== "admin@hrhub.com" && a.email !== "jay@simpalgroup.com"
           );
@@ -97,7 +94,6 @@ export default function RolePermissionMatrixPanel({ currentUser, onClose }) {
     setTimeout(() => setToastMessage(""), 3500);
   };
 
-  // Filtered accounts list for search
   const filteredAccounts = useMemo(() => {
     const q = accountSearchQuery.toLowerCase().trim();
     if (!q) return realAccounts;
@@ -110,7 +106,6 @@ export default function RolePermissionMatrixPanel({ currentUser, onClose }) {
     );
   }, [realAccounts, accountSearchQuery]);
 
-  // Selected account object for Tag Studio
   const selectedAccount = useMemo(() => {
     if (!selectedAccountEmail && realAccounts.length > 0) return realAccounts[0];
     return (
@@ -120,7 +115,6 @@ export default function RolePermissionMatrixPanel({ currentUser, onClose }) {
     );
   }, [realAccounts, selectedAccountEmail]);
 
-  // Filtered tabs & features for matrix search
   const filteredWorkspaceTabs = useMemo(() => {
     const q = matrixSearchQuery.toLowerCase().trim();
     if (!q) return WORKSPACE_TABS_CONFIG;
@@ -144,7 +138,6 @@ export default function RolePermissionMatrixPanel({ currentUser, onClose }) {
     );
   }, [matrixSearchQuery]);
 
-  // Toggle capability handler (Matrix Table)
   const handleToggle = (type, targetId, capId, currentValue, parentTabKey = null) => {
     if (parentTabKey) {
       const parentAllowed = getEffectiveCapability(type, targetId, parentTabKey, matrixData, realAccounts);
@@ -159,7 +152,6 @@ export default function RolePermissionMatrixPanel({ currentUser, onClose }) {
     showToast(`Access Updated: ${targetId.toUpperCase()} → ${nextVal ? "ENABLED" : "DISABLED"}`);
   };
 
-  // Tag Add / Remove handler (Tag Studio)
   const handleTagToggle = (email, capId, enable, capLabel) => {
     const updated = setAccountCapabilityTag(email, capId, enable);
     setMatrixData({ ...updated });
@@ -170,7 +162,6 @@ export default function RolePermissionMatrixPanel({ currentUser, onClose }) {
     );
   };
 
-  // Quick Action: Clear All (Single-Module / Whitelist Mode)
   const handleLockAllForSingleModule = (acct) => {
     if (!acct) return;
     const updated = setAccountRestrictedOnlyMode(acct.email, []);
@@ -178,7 +169,6 @@ export default function RolePermissionMatrixPanel({ currentUser, onClose }) {
     showToast(`🔒 All modules disabled for ${acct.name}. Click any "+ Add" tag below to assign specific module(s).`);
   };
 
-  // Quick Action: Grant All Operational Modules
   const handleGrantAllModules = (acct) => {
     if (!acct) return;
     const updated = grantAllAccountCapabilities(acct.email, true);
@@ -186,7 +176,6 @@ export default function RolePermissionMatrixPanel({ currentUser, onClose }) {
     showToast(`✅ Granted all standard operational modules to ${acct.name}.`);
   };
 
-  // Quick Action: Reset Account to Role Tier Default
   const handleClearAccountOverrides = (acct) => {
     if (!acct) return;
     const updated = clearAccountOverrides(acct.email);
@@ -194,7 +183,6 @@ export default function RolePermissionMatrixPanel({ currentUser, onClose }) {
     showToast(`↺ ${acct.name} reverted to Role Tier default permissions.`);
   };
 
-  // Reset entire matrix to factory defaults
   const handleResetDefaults = () => {
     if (window.confirm("Reset all enterprise role & account access policies back to standard factory defaults?")) {
       const reset = resetRbacMatrixToDefaults();
@@ -203,7 +191,6 @@ export default function RolePermissionMatrixPanel({ currentUser, onClose }) {
     }
   };
 
-  // Cloud Sync handler
   const handleSyncCloud = async () => {
     setIsSyncing(true);
     setSyncStatusText("Synchronizing to Database...");
@@ -213,7 +200,6 @@ export default function RolePermissionMatrixPanel({ currentUser, onClose }) {
     showToast("Security access matrix successfully committed to cloud database storage.");
   };
 
-  // Helper to compute enabled module & feature lists for a given account
   const getAccountTagBreakdown = (acct) => {
     if (!acct) return { enabledTabs: [], disabledTabs: [], enabledFeatures: [], disabledFeatures: [] };
     const enabledTabs = [];
@@ -255,7 +241,6 @@ export default function RolePermissionMatrixPanel({ currentUser, onClose }) {
 
   return (
     <div className="space-y-5">
-      {/* Toast Notification */}
       {toastMessage && (
         <div className="fixed bottom-6 right-6 z-50 bg-slate-900 text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-2xl border border-slate-700 flex items-center gap-2 animate-in fade-in slide-in-from-bottom-3 duration-200 max-w-md">
           <Sparkles size={14} className="text-emerald-400 shrink-0" />
@@ -263,9 +248,6 @@ export default function RolePermissionMatrixPanel({ currentUser, onClose }) {
         </div>
       )}
 
-      {/* ========================================================================= */}
-      {/* 1. ENTERPRISE HEADER & CLOUD PERSISTENCE CONTROLS                          */}
-      {/* ========================================================================= */}
       <div className="bg-white rounded-2xl border border-slate-200/90 p-4 sm:p-5 shadow-xs flex flex-col xl:flex-row xl:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 flex-wrap">
@@ -282,7 +264,6 @@ export default function RolePermissionMatrixPanel({ currentUser, onClose }) {
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
-          {/* Cloud Synced Online Indicator */}
           <div className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 shadow-2xs">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
             <Database size={12} className="text-emerald-600" />
@@ -321,9 +302,6 @@ export default function RolePermissionMatrixPanel({ currentUser, onClose }) {
         </div>
       </div>
 
-      {/* ========================================================================= */}
-      {/* 2. SUB-BAR: USER ACCESS TAGS | ROLE TIERS | ACCOUNT TABLE                 */}
-      {/* ========================================================================= */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 bg-white p-3 rounded-2xl border border-slate-200/90 shadow-2xs">
         <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl flex-wrap">
           <button
@@ -378,12 +356,8 @@ export default function RolePermissionMatrixPanel({ currentUser, onClose }) {
         </div>
       </div>
 
-      {/* ========================================================================= */}
-      {/* 3A. USER ACCESS TAGS STUDIO (ADD / DISABLE MODULES & FEATURES PER USER)   */}
-      {/* ========================================================================= */}
       {viewMode === "tags" && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
-          {/* LEFT: USER ACCOUNTS DIRECTORY PICKER */}
           <div className="lg:col-span-4 bg-white rounded-2xl border border-slate-200/90 shadow-xs overflow-hidden flex flex-col max-h-[760px]">
             <div className="p-3.5 border-b border-slate-100 bg-slate-50/70 space-y-2.5">
               <div className="flex items-center justify-between">
@@ -477,7 +451,6 @@ export default function RolePermissionMatrixPanel({ currentUser, onClose }) {
             </div>
           </div>
 
-          {/* RIGHT: SELECTED USER ACCESS TAGS BUILDER */}
           <div className="lg:col-span-8 space-y-4">
             {!selectedAccount ? (
               <div className="bg-white rounded-2xl border border-slate-200/90 p-10 text-center text-xs text-slate-500">
@@ -485,7 +458,6 @@ export default function RolePermissionMatrixPanel({ currentUser, onClose }) {
               </div>
             ) : (
               <>
-                {/* Selected User Summary & Quick Actions Bar */}
                 <div className="bg-white rounded-2xl border border-slate-200/90 p-4 shadow-xs space-y-3">
                   <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
                     <div className="flex items-center gap-3 min-w-0">
@@ -519,7 +491,6 @@ export default function RolePermissionMatrixPanel({ currentUser, onClose }) {
                     </div>
                   </div>
 
-                  {/* Quick One-Click Access Presets */}
                   <div className="flex items-center gap-2 flex-wrap pt-2 border-t border-slate-100">
                     <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 mr-1">
                       Quick Presets:
@@ -554,9 +525,6 @@ export default function RolePermissionMatrixPanel({ currentUser, onClose }) {
                   </div>
                 </div>
 
-                {/* ========================================================= */}
-                {/* SECTION A: AUTHORIZED MODULES (WORKSPACE TABS) TAGS       */}
-                {/* ========================================================= */}
                 <div className="bg-white rounded-2xl border border-slate-200/90 p-4 shadow-xs space-y-4">
                   <div className="flex items-center justify-between gap-2 flex-wrap">
                     <div className="flex items-center gap-2">
@@ -573,7 +541,6 @@ export default function RolePermissionMatrixPanel({ currentUser, onClose }) {
                     </span>
                   </div>
 
-                  {/* Active (Enabled) Module Tags */}
                   <div className="p-3 rounded-xl bg-emerald-50/40 border border-emerald-200/80 min-h-[68px]">
                     {selectedBreakdown.enabledTabs.length === 0 ? (
                       <div className="text-center py-2 text-xs text-slate-500 flex items-center justify-center gap-1.5">
@@ -618,7 +585,6 @@ export default function RolePermissionMatrixPanel({ currentUser, onClose }) {
                     )}
                   </div>
 
-                  {/* Available / Disabled Module Tags (+ Add to User) */}
                   <div className="space-y-2.5">
                     <div className="flex items-center justify-between gap-2 flex-wrap">
                       <span className="text-[11px] font-extrabold text-slate-700 flex items-center gap-1.5">
@@ -675,9 +641,6 @@ export default function RolePermissionMatrixPanel({ currentUser, onClose }) {
                   </div>
                 </div>
 
-                {/* ========================================================= */}
-                {/* SECTION B: AUTHORIZED IN-TAB FEATURES TAGS                */}
-                {/* ========================================================= */}
                 <div className="bg-white rounded-2xl border border-slate-200/90 p-4 shadow-xs space-y-4">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                     <div className="flex items-center gap-2">
@@ -702,7 +665,6 @@ export default function RolePermissionMatrixPanel({ currentUser, onClose }) {
                     </div>
                   </div>
 
-                  {/* Quick Feature Group Filter Pills */}
                   <div className="flex items-center gap-1 flex-wrap">
                     {FEATURE_GROUP_FILTERS.map((grp) => (
                       <button
@@ -720,7 +682,6 @@ export default function RolePermissionMatrixPanel({ currentUser, onClose }) {
                     ))}
                   </div>
 
-                  {/* Active Feature Tags */}
                   <div className="p-3 rounded-xl bg-amber-50/40 border border-amber-200/80 min-h-[56px]">
                     {selectedBreakdown.enabledFeatures.length === 0 ? (
                       <div className="text-center py-1.5 text-xs text-slate-500">
@@ -763,7 +724,6 @@ export default function RolePermissionMatrixPanel({ currentUser, onClose }) {
                     )}
                   </div>
 
-                  {/* Disabled Feature Tags (+ Add Feature to User) */}
                   <div className="space-y-2">
                     <span className="text-[11px] font-extrabold text-slate-700 flex items-center gap-1.5">
                       <Plus size={13} className="text-amber-600" />
@@ -808,12 +768,8 @@ export default function RolePermissionMatrixPanel({ currentUser, onClose }) {
         </div>
       )}
 
-      {/* ========================================================================= */}
-      {/* 3B. CAPABILITIES MATRIX TABLE (BY ROLE TIER OR BY ACCOUNT)                */}
-      {/* ========================================================================= */}
       {(viewMode === "role" || viewMode === "account") && (
         <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs overflow-hidden">
-          {/* Matrix Filter Bar */}
           <div className="p-3 border-b border-slate-100 bg-slate-50/70 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div className="relative flex-1 max-w-md">
               <Filter size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -842,7 +798,6 @@ export default function RolePermissionMatrixPanel({ currentUser, onClose }) {
 
           <div className="overflow-x-auto custom-scrollbar">
             <table className="w-full text-left border-collapse min-w-[960px]">
-              {/* TABLE HEADER (COLUMNS) */}
               <thead>
                 <tr className="border-b border-slate-200 bg-slate-50/70">
                   <th className="py-4 px-5 text-[11px] font-black uppercase tracking-wider text-slate-500 w-[340px]">
@@ -927,9 +882,7 @@ export default function RolePermissionMatrixPanel({ currentUser, onClose }) {
                 </tr>
               </thead>
 
-              {/* TABLE BODY */}
               <tbody className="divide-y divide-slate-100 text-xs">
-                {/* SECTION 1: WORKSPACE TABS (All 21 Modules) */}
                 <tr className="bg-emerald-50/40 border-y border-emerald-100">
                   <td
                     colSpan={viewMode === "role" ? roleTiers.length + 1 : filteredAccounts.length + 1}
@@ -1020,7 +973,6 @@ export default function RolePermissionMatrixPanel({ currentUser, onClose }) {
                   </tr>
                 ))}
 
-                {/* SECTION 2: IN-TAB FEATURES */}
                 <tr className="bg-amber-50/40 border-y border-amber-100">
                   <td
                     colSpan={viewMode === "role" ? roleTiers.length + 1 : filteredAccounts.length + 1}

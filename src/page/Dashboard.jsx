@@ -105,7 +105,6 @@ function getCategoryBadgeColor(category) {
   }
 }
 
-// Helpers for Clean Team Member Directory & Chat
 function formatShortCompany(companyName) {
   if (!companyName) return "Simpal Group";
   const c = companyName.toLowerCase();
@@ -225,7 +224,7 @@ const THEME_OPTIONS = [
 ];
 
 const FREQUENT_USAGE_STORAGE_KEY = "hrhub_frequent_tabs_usage_v2";
-const TEN_DAYS_MS = 10 * 24 * 60 * 60 * 1000; // 10 days in milliseconds
+const TEN_DAYS_MS = 10 * 24 * 60 * 60 * 1000;
 
 const DEFAULT_POPULAR_TAB_IDS = [
   "sops",
@@ -253,7 +252,6 @@ function loadFrequentTabsState() {
     if (raw) data = JSON.parse(raw);
   } catch {}
 
-  // Auto-reset cycle after 10 days
   if (!data || !data.cycleStartedAt || (now - Number(data.cycleStartedAt)) >= TEN_DAYS_MS) {
     data = {
       cycleStartedAt: now,
@@ -486,10 +484,9 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
     }
   });
   const [viewSwitcherOpen, setViewSwitcherOpen] = useState(false);
-  const [operationsSubTab, setOperationsSubTab] = useState("geotagging"); // 'geotagging' | 'sops' | 'weather'
+  const [operationsSubTab, setOperationsSubTab] = useState("geotagging");
   const [isGeoTaggingMounted, setIsGeoTaggingMounted] = useState(false);
 
-  // Broadcast listener to strictly remove floating AI Buddy whenever GeoTagging panel is active
   useEffect(() => {
     const handleGeoTaggingVisibility = (e) => {
       setIsGeoTaggingMounted(!!e.detail);
@@ -550,7 +547,6 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
     }
   }, [currentUser]);
 
-  // Direct database profile sync: guarantee logged-in user profile, company, role, phone, branch, department, bio, and join date match real DB records (zero mockups)
   useEffect(() => {
     if (!currentUser?.email) return;
     const targetEmail = currentUser.email.toLowerCase().trim();
@@ -656,13 +652,11 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
     syncProfileFromDatabase();
   }, [currentUser?.email]);
 
-  // Real Database Save Handler for Communication "Update Profile" Modal
   const handleSaveUserProfile = async (updated) => {
     const targetEmail = (profileEmail || currentUser?.email || "").toLowerCase().trim();
     if (!targetEmail) return { success: false, error: "No authenticated email found." };
 
     try {
-      // 1. Persist custom extended profile fields reliably in user_settings
       await supabase.from("user_settings").upsert(
         {
           user_id: `hrhub_user_profile_${targetEmail}`,
@@ -680,7 +674,6 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
         { onConflict: "user_id" }
       );
 
-      // 2. Sync official record in `employees` table (if record exists)
       const { data: existingEmp } = await supabase
         .from("employees")
         .select("id, metadata")
@@ -707,7 +700,6 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
           .eq("id", existingEmp.id);
       }
 
-      // 3. Sync `profiles` table (if record exists)
       await supabase
         .from("profiles")
         .update({
@@ -717,7 +709,6 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
         })
         .ilike("email", targetEmail);
 
-      // 4. Update local state & localStorage immediately
       setProfileName(updated.name);
       setProfileRole(updated.role);
       setProfilePhone(updated.phone);
@@ -766,7 +757,6 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
     }
   };
 
-  // Real Password Change Handler via Auth API
   const handleChangeUserPassword = async ({ newPassword }) => {
     try {
       const { error } = await supabase.auth.updateUser({ password: newPassword });
@@ -787,7 +777,6 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
   const displayRole = profileRole || currentUser?.role || "Team Member";
   const displayCompany = profileCompany || currentUser?.company || "Simpal Group of Companies";
 
-  // Dynamic Workspace Tabs State: opens Task Board ("sops") FIRST by default so assigned tasks are immediately visible
   const [openTabs, setOpenTabs] = useState(() => {
     try {
       const stored = localStorage.getItem("hrhub_workspace_open_tabs");
@@ -815,7 +804,6 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
     }
   });
 
-  // Live Task Board counter (for Head Office HR Admin: "For Review" count; for Subsidiaries/Employees: active Backlog/In Progress tasks)
   const [taskBoardItems, setTaskBoardItems] = useState([]);
   useEffect(() => {
     fetchAllTasks().then((list) => setTaskBoardItems(list || []));
@@ -855,16 +843,11 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
     }
   }, [workspaceTab]);
 
-  // 10-Day Frequent Tab Usage Tracker State
   const [frequentStats, setFrequentStats] = useState(() => loadFrequentTabsState());
 
-  // When a tab is clicked in the sidebar or workspace:
-  // Appends to the end so it appears on the right side of the container,
-  // shifting any earlier tabs to the left.
   const handleOpenWorkspaceTab = (tabId) => {
     const targetId = tabId === "betting_ratio" ? "revenue_trends" : tabId;
     if (!targetId || !WORKSPACE_TAB_DEFS[targetId]) return;
-    // Strict Enterprise RBAC Matrix Gate: block any module disabled for this user/role
     if (!isUserTabAllowed(currentUserObj, targetId, matrixData)) {
       return;
     }
@@ -875,7 +858,6 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
     });
     setWorkspaceTab(targetId);
 
-    // Track usage count in 10-day cycle
     const nextStats = saveFrequentTabClick(targetId);
     setFrequentStats(nextStats);
   };
@@ -896,15 +878,12 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
   const [memoGeneratorOpen, setMemoGeneratorOpen] = useState(false);
   const [aiDrawerOpen, setAiDrawerOpen] = useState(false);
   const [aiGeneratedMemoDraft, setAiGeneratedMemoDraft] = useState(null);
-  const [communicationTab, setCommunicationTab] = useState("bulletin"); // 'bulletin' | 'directory' | 'attendance' | 'policies'
+  const [communicationTab, setCommunicationTab] = useState("bulletin");
 
-  // Communication tab selection handler
   const handleSelectCommunicationTab = (tabId) => {
     setCommunicationTab(tabId);
   };
 
-  // Automatic Live Telemetry & Active Module Session Tracking for all tabs and modules
-  // Debounced by 2000ms: Single authority to eliminate rapid click strain and prevent duplicate database writes
   useEffect(() => {
     if (!currentUser) return;
     const userPayload = {
@@ -923,9 +902,6 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
     return () => clearTimeout(timer);
   }, [workspaceTab, communicationTab, activeView, currentUser, profileName, profileEmail, profileRole, profileCompany]);
 
-  // Live Inactivity / AFK Monitor
-  // Detects when the user steps away from keyboard/screen (45s idle or tab hidden > 25s)
-  // and updates status back to Active (Working) when deliberate interaction resumes
   const lastUserActivityRef = useRef(Date.now());
   const isUserAfkRef = useRef(false);
   const tabRefocusTimeRef = useRef(0);
@@ -950,11 +926,9 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
       }
     };
 
-    // Throttle interaction listeners so event handling uses 0.00% CPU
     let lastThrottledTime = 0;
     const throttledInteraction = () => {
       const now = Date.now();
-      // Grace period: if user just refocused the tab, don't immediately cancel AFK on passive cursor drift
       if (isUserAfkRef.current && (now - tabRefocusTimeRef.current < 2500)) {
         return;
       }
@@ -964,18 +938,16 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
       }
     };
 
-    // Listeners for active user input
     window.addEventListener("mousemove", throttledInteraction, { passive: true });
     window.addEventListener("keydown", handleUserInteraction, { passive: true });
     window.addEventListener("click", handleUserInteraction, { passive: true });
     window.addEventListener("scroll", throttledInteraction, { passive: true });
     window.addEventListener("touchstart", handleUserInteraction, { passive: true });
 
-    // Idle check ticker runs every 5 seconds (fast response, 0.00% CPU)
     const interval = setInterval(() => {
       const now = Date.now();
       const idleTime = now - lastUserActivityRef.current;
-      const IDLE_LIMIT = 45 * 1000; // 45 seconds of continuous inactivity
+      const IDLE_LIMIT = 45 * 1000;
 
       if (idleTime >= IDLE_LIMIT && !isUserAfkRef.current) {
         isUserAfkRef.current = true;
@@ -984,7 +956,6 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
       }
     }, 5000);
 
-    // Tab visibility change handler
     let hideTimer = null;
     const handleVisibilityChange = () => {
       if (document.hidden) {
@@ -994,17 +965,14 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
             const currentMod = activeView === "communication" ? communicationTab : (workspaceTab || "home");
             updateUserPresenceStatus({ user: userPayload, isAfk: true, currentModule: currentMod });
           }
-        }, 25000); // 25 seconds of minimized / hidden tab
+        }, 25000);
       } else {
         if (hideTimer) clearTimeout(hideTimer);
-        // User switched back to the tab: record timestamp for grace period so AFK badge remains visible
         tabRefocusTimeRef.current = Date.now();
       }
     };
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
-    // Continuous Presence Heartbeat ticker: keeps updated_at fresh every 45s while active.
-    // When laptop lid is closed or machine powers off, heartbeats stop and system marks offline in 7 mins.
     const heartbeatInterval = setInterval(() => {
       const currentMod = activeView === "communication" ? communicationTab : (workspaceTab || "home");
       sendUserHeartbeat({
@@ -1014,7 +982,6 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
       });
     }, 45000);
 
-    // Handle tab / browser close gracefully
     const handleUnload = () => {
       closeActiveModuleSession({ user: userPayload });
     };
@@ -1037,15 +1004,12 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
   }, [currentUser, profileName, profileEmail, profileRole, profileCompany, activeView, communicationTab, workspaceTab]);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(true);
 
-  // Enterprise RBAC Capabilities State for Head Office Governance
   const [matrixData, setMatrixData] = useState(() => getRbacMatrixData());
   useEffect(() => {
-    // 1. Initial async sync from cloud database
     loadRbacMatrixFromCloud().then((cloudData) => {
       if (cloudData) setMatrixData(cloudData);
     });
 
-    // 2. Listen to local window events
     const handleRbacUpdate = (e) => {
       if (e.detail) {
         setMatrixData(e.detail);
@@ -1085,7 +1049,6 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
     window.addEventListener("hrhub_switch_workspace_tab", handleSwitchWorkspaceTab);
     window.addEventListener("hrhub_employee_deleted", handleEmployeeDeleted);
 
-    // 3. Listen to Supabase Realtime for instant multi-device matrix synchronization
     let channel = null;
     if (supabase) {
       channel = supabase
@@ -1133,14 +1096,12 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
     };
   }, [currentUser, profileEmail, profileRole, profileCompany, profileName]);
 
-  // Determine whether current user is Head Office HRMD Master Account
   const isHRMD = useMemo(() => {
     const curEmail = (currentUserObj.email || "").toLowerCase().trim();
     const role = (currentUserObj.role || "").toLowerCase().trim();
     const name = (currentUserObj.name || "").toLowerCase().trim();
     const company = (currentUserObj.company || "").toLowerCase().trim();
 
-    // Subsidiary accounts are NOT Head Office Master HRMD!
     const isSubsidiary =
       company.includes("5a") ||
       company.includes("royal") ||
@@ -1203,7 +1164,6 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
   const canManageCommHelpdesk = resolveAdminFeature("comm_manage_helpdesk", "communication");
   const canManageCommEngagement = resolveAdminFeature("comm_manage_engagement", "communication");
 
-  // Live Task Board attention badge (Task Board Admins: "For Review" count; Subsidiaries/Employees: pending Backlog/In Progress tasks)
   const taskBoardBadgeCount = useMemo(() => {
     const visible = getVisibleTasksForUser(taskBoardItems, currentUserObj, canManageTaskBoard);
     const email = (currentUserObj?.email || "").toLowerCase().trim();
@@ -1227,7 +1187,6 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
   const canViewLeaderboards = isUserFeatureAllowed(currentUserObj, "comm_leaderboards", matrixData);
   const canViewPollsSurveys = isUserFeatureAllowed(currentUserObj, "comm_polls_surveys", matrixData);
 
-  // Automatically select the first authorized sub-tab if active sub-tab is restricted
   useEffect(() => {
     if (activeView === "communication" && isCommWorkspaceAllowed) {
       const tabs = [
@@ -1268,8 +1227,6 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
     canViewPollsSurveys
   ]);
 
-  // Strict Real-Time RBAC Workspace Enforcement:
-  // Immediately closes any open workspace tab whose capability is disabled in the matrix
   useEffect(() => {
     setOpenTabs((prev) => {
       const filtered = prev.filter((id) => canAccessTab(id));
@@ -1283,7 +1240,6 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
     }
   }, [canAccessTab, workspaceTab]);
 
-  // Telemetry: Auto-log Daily Shift Start for HR Officer
   useEffect(() => {
     if (!currentUser) return;
     const roleLower = String(currentUser.role || profileRole || "").toLowerCase();
@@ -1318,7 +1274,6 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
     }
   }, [currentUser, isHRMD, profileName, profileRole, profileEmail, profileCompany]);
 
-  // Direct Team Chat State
   const [activeDirectChatUser, setActiveDirectChatUser] = useState(null);
   const activeDirectChatUserRef = useRef(null);
   useEffect(() => {
@@ -1345,11 +1300,9 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
     const recipientEmail = (prof.email || "").toLowerCase();
     const threadKey = getChatThreadKey(myEmail, recipientEmail);
 
-    // Mark thread as read
     const updatedReceipts = markThreadAsRead(myEmail, recipientEmail);
     if (updatedReceipts) setReadReceipts(updatedReceipts);
 
-    // Fetch conversation from Supabase database (with local cache fallback)
     const msgs = await fetchConversationMessages(myEmail, recipientEmail);
     setDirectMessagesMap((prev) => ({
       ...prev,
@@ -1357,7 +1310,6 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
     }));
   };
 
-  // Periodic background synchronization for open chat modal (live zero-miss fallback)
   useEffect(() => {
     if (!activeDirectChatUser) return;
     const myEmail = (currentUser?.email || profileEmail || "").trim().toLowerCase();
@@ -1414,7 +1366,6 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
       [threadKey]: [...(prev[threadKey] || []).filter((m) => m.id !== newMsg.id), newMsg]
     }));
 
-    // Broadcast instant real-time message event to receiver
     if (channelRef.current) {
       channelRef.current.send({
         type: "broadcast",
@@ -1516,11 +1467,9 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
   };
 
   const handleDeleteProfile = async (id, email) => {
-    // 1. Remove from local & cloud persistent storage
     if (email) await deleteStoredEmployee(email);
     if (id) await deleteStoredEmployee(id);
 
-    // 2. Remove from Supabase
     try {
       if (id && !String(id).startsWith("prof-") && !String(id).startsWith("db-") && !String(id).startsWith("emp-")) {
         await supabase.from("profiles").delete().eq("id", id);
@@ -1531,7 +1480,6 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
       console.warn("Delete from Supabase notice:", err);
     }
 
-    // 3. Update state immediately
     setSupabaseProfiles((prev) =>
       prev.filter((p) => {
         const matchId = id && String(p.id) === String(id);
@@ -1544,7 +1492,6 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
   const isCommunicationView = activeView === "communication";
   const pageTheme = THEME_OPTIONS.find((theme) => theme.id === activeTheme)?.page || "bg-sky-50";
 
-  // Fetch memos from database
   const fetchMemos = async () => {
     try {
       setLoadingMemos(true);
@@ -1565,7 +1512,6 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
     }
   };
 
-  // Fetch profiles from database
   const fetchProfiles = async () => {
     try {
       setLoadingProfiles(true);
@@ -1587,9 +1533,8 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
     }
   };
 
-  // User AFK / Idle Detection (2 minutes of inactivity or tab hidden)
   useEffect(() => {
-    const IDLE_TIMEOUT_MS = 2 * 60 * 1000; // 2 minutes
+    const IDLE_TIMEOUT_MS = 2 * 60 * 1000;
 
     const setIdle = (idle) => {
       if (isUserIdleRef.current !== idle) {
@@ -1654,7 +1599,6 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
 
     const presenceKey = currentEmail || `guest-${Math.random().toString(36).slice(2, 8)}`;
 
-    // Realtime channel with Presence and Typing indicator broadcast
     const channel = supabase.channel("hrhub-realtime-presence", {
       config: {
         presence: {
@@ -1733,7 +1677,6 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
               };
             });
 
-            // If active chat window with this sender is open, mark read immediately
             if (
               activeDirectChatUserRef.current &&
               senderEmail &&
@@ -1769,7 +1712,6 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
             return next;
           });
 
-          // Clear typing indicator automatically after 3.5s if no follow-up received
           if (typingTimeoutsRef.current[senderKey]) {
             clearTimeout(typingTimeoutsRef.current[senderKey]);
           }
@@ -1829,7 +1771,6 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
 
       if (error) {
         console.warn("Memo insert notice:", error);
-        // Fallback to local post so user isn't blocked
         const localPost = {
           id: `local-${Date.now()}`,
           author: authorName,
@@ -1878,7 +1819,6 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
     }
   };
 
-  // Combine database memos with local posts and fallback sample memos
   const displayMemos = [
     ...supabaseMemos.map((m) => ({
       id: m.id,
@@ -1901,8 +1841,6 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
 
   const currentEmail = (currentUser?.email || profileEmail || "").trim().toLowerCase();
 
-  // Helper to determine exact presence status: 'active' | 'away' | 'offline'
-  // HRMD is NOT hardcoded; reflects 100% real live session presence
   const getUserPresenceStatus = (email) => {
     if (!email) return "offline";
     const clean = email.toLowerCase().trim();
@@ -1944,7 +1882,6 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
     }).catch((err) => console.warn("Typing broadcast notice:", err));
   };
 
-  // Filter out the logged-in user so the widget only displays their colleagues / team members
   const colleaguesProfiles = supabaseProfiles.filter((p) => {
     const pEmail = (p.email || "").trim().toLowerCase();
     return currentEmail ? pEmail !== currentEmail : true;
@@ -2073,19 +2010,16 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
                 }`}
               >
                 <div className="flex items-center gap-3 min-w-0">
-                  {/* Round Dark Avatar with 2-letter uppercase initials and online/away/offline status dot */}
                   <div className="relative shrink-0">
                     <div className="w-10 h-10 rounded-full bg-[#101e2e] text-white font-bold text-xs flex items-center justify-center shrink-0 tracking-wider shadow-2xs">
                       {initials}
                     </div>
-                    {/* Status Dot */}
                     <span
                       className={`absolute bottom-0 right-0 w-3 h-3 rounded-full ring-2 ring-white ${getStatusBadgeDot(presenceStatus)}`}
                       title={`${displayName} is ${getStatusTextLabel(presenceStatus)}`}
                     />
                   </div>
 
-                  {/* Name and Company / Typing */}
                   <div className="min-w-0 text-left">
                     <p className="text-[13px] font-bold text-slate-900 truncate leading-tight group-hover:text-emerald-700 transition-colors">
                       {displayName}
@@ -2107,7 +2041,6 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
                   </div>
                 </div>
 
-                {/* Right Chat Message Outline Icon */}
                 <button
                   type="button"
                   onClick={(e) => {
@@ -2151,7 +2084,6 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
     </div>
   );
 
-  // Compute frequently used tabs sorted by 10-day usage count (strictly filtered by RBAC permissions)
   const frequentTabs = useMemo(() => {
     const counts = frequentStats?.counts || {};
     const allTabs = Object.values(WORKSPACE_TAB_DEFS).filter((tab) => {
@@ -2159,13 +2091,10 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
       return canAccessTab(tab.id);
     });
 
-    // Filter tabs with at least 1 click in this 10-day cycle, sorted descending
     const openedTabs = allTabs
       .filter((tab) => (counts[tab.id] || 0) > 0)
       .sort((a, b) => (counts[b.id] || 0) - (counts[a.id] || 0));
 
-    // If fewer than 4 tabs have been opened yet in this 10-day cycle,
-    // supplement with default popular core tabs that are allowed for this user
     if (openedTabs.length < 4) {
       const existingIds = new Set(openedTabs.map((t) => t.id));
       for (const defId of DEFAULT_POPULAR_TAB_IDS) {
@@ -2176,7 +2105,6 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
           if (openedTabs.length >= 6) break;
         }
       }
-      // If user is restricted to specific non-default modules (e.g. single-module user), surface their allowed modules
       if (openedTabs.length < 6) {
         for (const tab of allTabs) {
           if (!existingIds.has(tab.id)) {
@@ -2198,7 +2126,6 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
       <header className="bg-[#0d1b2a] text-white sticky top-0 z-40 shadow-md border-b border-slate-800 px-3 sm:px-4 py-2">
         <div className="max-w-[1280px] mx-auto flex items-center justify-between gap-2 sm:gap-4">
           <div className="flex items-center gap-2 sm:gap-3 flex-1 max-w-[720px] min-w-0">
-            {/* Mobile Sidebar Hamburger Menu Toggle */}
             <button
               type="button"
               onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
@@ -2224,7 +2151,6 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
-            {/* DIRECT MESSAGES DROPDOWN (Messenger Style) */}
             <div className="relative">
               <button
                 onClick={() => {
@@ -2247,7 +2173,6 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
 
               {messagesOpen && (
                 <div className="absolute right-0 mt-2 w-[calc(100vw-2rem)] sm:w-92 max-w-[360px] bg-white border border-slate-200/90 rounded-3xl shadow-2xl p-4 text-slate-900 z-50 animate-in fade-in slide-in-from-top-2 duration-150 flex flex-col max-h-[500px]">
-                  {/* Dropdown Header */}
                   <div className="flex justify-between items-center pb-2.5 border-b border-slate-100">
                     <div className="flex items-center gap-2">
                       <h4 className="font-extrabold text-slate-900 text-sm tracking-tight">Chats</h4>
@@ -2278,7 +2203,6 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
                     </div>
                   </div>
 
-                  {/* Messenger Search Input */}
                   <div className="relative my-2.5">
                     <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                     <input
@@ -2290,7 +2214,6 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
                     />
                   </div>
 
-                  {/* Conversation List */}
                   <div className="space-y-1 overflow-y-auto custom-scrollbar flex-1 pr-0.5">
                     {dropdownProfiles.length > 0 ? (
                       dropdownProfiles.map((prof) => {
@@ -2329,7 +2252,6 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
                                 : "hover:bg-slate-100/80 border border-transparent"
                             }`}
                           >
-                            {/* Avatar with Status */}
                             <div className="relative shrink-0">
                               <div className="w-10 h-10 rounded-full bg-[#101e2e] text-emerald-400 font-extrabold text-xs flex items-center justify-center shrink-0 shadow-2xs">
                                 {initials}
@@ -2340,7 +2262,6 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
                               />
                             </div>
 
-                            {/* Message Details */}
                             <div className="flex-1 min-w-0 text-left">
                               <div className="flex justify-between items-baseline gap-1">
                                 <p className={`text-xs truncate ${isUnread ? "font-black text-slate-950" : "font-bold text-slate-800"}`}>
@@ -2393,7 +2314,6 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
               )}
             </div>
 
-            {/* NOTIFICATIONS DROPDOWN */}
             <div className="relative">
               <button
                 onClick={() => {
@@ -2430,7 +2350,6 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
               )}
             </div>
 
-            {/* WORKSPACE SWITCHER DROPDOWN */}
             <div className="flex items-center gap-1 pl-1 sm:pl-2 border-l border-slate-800">
               <WorkspaceSwitcher
                 isOpen={viewSwitcherOpen}
@@ -2621,7 +2540,6 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
                 </nav>
               </div>
 
-              {/* Dynamic Real-Time Quick Info Card */}
               <QuickInfoCard
                 isHRMD={isHRMD}
                 profileName={profileName}
@@ -2651,7 +2569,6 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
             </aside>
 
             <main className={`${communicationTab === "bulletin" && canViewDirectory ? "md:col-span-6" : "md:col-span-9"} space-y-6`}>
-              {/* Mobile Communication Tab Switcher */}
               <div className="md:hidden -mx-1 px-1 pb-1 overflow-x-auto custom-scrollbar flex items-center gap-1.5">
                 {[
                   { id: "bulletin", icon: Megaphone, label: "Bulletin", allowed: canViewBulletin },
@@ -2805,7 +2722,6 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
                     </div>
                   )
                 ) : (
-                  /* Bulletin View - Facebook Style Feed */
                   !canViewBulletin ? (
                     <div className="bg-white rounded-3xl border border-slate-200/90 p-8 text-center space-y-3">
                       <Lock size={28} className="mx-auto text-amber-500" />
@@ -2849,7 +2765,6 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
             isTabAllowed={canAccessTab}
           />
           <div className="flex-1 min-w-0 p-3 sm:p-4 transition-all duration-300 overflow-x-hidden antialiased">
-          {/* WORKSPACE CENTRAL OPERATIONS HUB */}
           <div className="mb-3 rounded-2xl border border-slate-200/80 bg-white p-3 sm:p-3.5 shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-2.5">
             <div className="flex items-center gap-3 shrink-0">
               <div>
@@ -2873,7 +2788,6 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
               )}
             </div>
 
-            {/* WORKSPACE INTEGRATED TABS (Right-aligned, new tabs enter on the right side and shift older tabs to the left) */}
             <div className="flex items-center justify-end gap-1.5 overflow-x-auto custom-scrollbar pb-0.5 max-w-full flex-1">
               {openTabs.length === 0 ? (
                 <span className="text-xs text-slate-400 italic font-medium hidden sm:inline">
@@ -2931,7 +2845,6 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
           </div>
 
           <div key={workspaceTab || "home"} className="animate-tab-fade-in space-y-3">
-            {/* EMPTY WORKSPACE STATE or HOME DASHBOARD: Workspace Ready Hub with Frequently Used Modules */}
             {(!workspaceTab || openTabs.length === 0 || workspaceTab === "home") && (
             <div className="rounded-2xl border border-slate-200/80 bg-white/90 backdrop-blur-sm p-5 sm:p-7 text-center shadow-2xs animate-in fade-in">
               <div className="mx-auto w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-100 flex items-center justify-center mb-2 shadow-2xs">
@@ -2944,7 +2857,6 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
                 Choose any functional module from the sidebar, or launch your frequently used modules below:
               </p>
 
-              {/* 10-Day Frequent Usage Tracker Header */}
               <div className="mb-4 flex flex-wrap items-center justify-center gap-2">
                 <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-[10px] font-bold text-amber-800 shadow-2xs">
                   <Flame size={11} className="text-amber-500" />
@@ -2956,7 +2868,6 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
                 </span>
               </div>
 
-              {/* Grid of Frequent (or All) Module Cards */}
               {displayedWorkspaceTabs.length === 0 ? (
                 <div className="max-w-md mx-auto rounded-2xl border border-amber-200 bg-amber-50/70 p-4 text-center space-y-1">
                   <Lock size={20} className="mx-auto text-amber-600" />
@@ -3001,7 +2912,6 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
             </div>
           )}
 
-          {/* UNIVERSAL RBAC WORKSPACE MODULE GATE */}
           {workspaceTab && workspaceTab !== "home" && !canAccessTab(workspaceTab) ? (
             <div className="bg-white border border-rose-200 rounded-3xl p-8 text-center space-y-3 max-w-lg mx-auto my-12 shadow-sm">
               <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mx-auto">
@@ -3023,7 +2933,6 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
             </div>
           ) : (
           <>
-          {/* TAB: ZOOM & GOOGLE MEET VIDEO CONFERENCES */}
           {workspaceTab === "meetings" && (
             <div className="animate-in fade-in">
               <HomeWorkspaceView
@@ -3036,7 +2945,6 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
             </div>
           )}
 
-          {/* TAB: INCIDENT REPORTS & NOTICE TO EXPLAIN (NTE) */}
           {workspaceTab === "incident_reports" && (
             <IncidentReportPanel
               currentUser={currentUser}
@@ -3046,7 +2954,6 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
             />
           )}
 
-          {/* TAB 1: OFFICIAL MEMO GENERATOR */}
           {workspaceTab === "memo" && (
             <MemoGeneratorPanel
               onClose={() => handleCloseWorkspaceTab(null, "memo")}
@@ -3062,7 +2969,6 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
             />
           )}
 
-          {/* TAB: DOCUMENT & CERTIFICATE STUDIO (COUPON BOND) */}
           {workspaceTab === "doc_studio" && (
             <DocumentStudioPanel
               currentUser={currentUser}
@@ -3073,7 +2979,6 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
             />
           )}
 
-          {/* TAB 2: AGENTS DIRECTORY */}
           {workspaceTab === "agents" && (
             <AgentsPanel
               onClose={() => handleCloseWorkspaceTab(null, "agents")}
@@ -3081,12 +2986,10 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
             />
           )}
 
-          {/* TAB 3: GROSS REPORT */}
           {workspaceTab === "gross" && (
             <GrossReportPanel currentUser={currentUserObj} />
           )}
 
-          {/* TAB: MULTI-ENTITY REVENUE TRENDS & BETTING RATIO */}
           {(workspaceTab === "revenue_trends" || workspaceTab === "betting_ratio") && (
             <div className="space-y-4">
               <MultiAreaBettingRatioView
@@ -3101,7 +3004,6 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
             </div>
           )}
 
-          {/* TAB: FUNCTIONAL ENTERPRISE TASK BOARD */}
           {workspaceTab === "sops" && (
             <TaskBoardPanel
               currentUser={currentUserObj}
@@ -3111,14 +3013,12 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
             />
           )}
 
-          {/* TAB: FIELD WEATHER RADAR */}
           {workspaceTab === "weather" && (
             <div className="space-y-4 animate-in fade-in">
               <WeatherWidget />
             </div>
           )}
 
-          {/* DEDICATED GEOTAGGING WORKSPACE TAB */}
           {workspaceTab === "geotagging" && (
             <div className="animate-in fade-in">
               <OperationsGeoTaggingPanel
@@ -3128,7 +3028,6 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
             </div>
           )}
 
-          {/* TAB 5: SUPERVISORS ATTENDANCE */}
           {workspaceTab === "supervisors_attendance" && (
             <SupervisorsAttendancePanel
               onClose={() => handleCloseWorkspaceTab(null, "supervisors_attendance")}
@@ -3136,7 +3035,6 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
             />
           )}
 
-          {/* TAB 6: ROLE & ACCOUNT CAPABILITIES MATRIX */}
           {workspaceTab === "permission_matrix" && (
             (isHRMD || canAccessTab("permission_matrix")) ? (
               <RolePermissionMatrixPanel
@@ -3165,7 +3063,6 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
             )
           )}
 
-          {/* TAB 7: SYSTEM HEALTH & API CONFIGURATION */}
           {workspaceTab === "api_health" && (
             (isHRMD || canAccessTab("api_health")) ? (
               <ApiHealthConfigurationPanel />
@@ -3191,7 +3088,6 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
             )
           )}
 
-          {/* TAB 8: DOLE LEGAL GUIDELINES & STATUTORY SUITE */}
           {workspaceTab === "dole_handbook" && (
             <DoleLegalGuidelinesPanel
               currentUser={currentUser}
@@ -3205,7 +3101,6 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
             />
           )}
 
-          {/* TAB: HR WORKFORCE & OPERATIONAL ANALYTICS */}
           {workspaceTab === "hr_analytics" && (
             <HrAnalyticsPanel
               currentUser={currentUser}
@@ -3216,7 +3111,6 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
             />
           )}
 
-          {/* TAB: 13TH MONTH PAYROLL CALCULATOR (P.D. 851) */}
           {workspaceTab === "payroll_calc" && (
             <ThirteenthMonthPayrollPanel
               currentUser={currentUser}
@@ -3225,7 +3119,6 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
             />
           )}
 
-          {/* TAB: BRANCH EXPENSES & PETTY CASH VOUCHERS */}
           {workspaceTab === "petty_cash" && (
             <BranchExpensesVouchersPanel
               currentUser={currentUser}
@@ -3234,7 +3127,6 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
             />
           )}
 
-          {/* TAB: SALARY & COMPENSATION WITH PAYSLIP (EXCEL + OCR + DB) */}
           {workspaceTab === "salary_compensation" && (
             <SalaryCompensationPanel
               currentUser={currentUser}
@@ -3249,7 +3141,6 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
       </div>
     )}
 
-      {/* ================= ANIMATED AI ASSISTANT FLOATING ON THE SIDE ================= */}
       {canUseAiBuddy && (
         <AiAssistantGirlWidget
           isChatOpen={aiDrawerOpen}
@@ -3266,7 +3157,6 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
         />
       )}
 
-      {/* Floating AI Assistant Drawer/Modal */}
       {canUseAiBuddy && (
         <AiAssistantDrawer
           isOpen={aiDrawerOpen}
@@ -3295,7 +3185,6 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
         />
       )}
 
-      {/* ================= ADVANCED MESSENGER TEAM CHAT MODAL ================= */}
       {activeDirectChatUser && (
         <TeamChatMessengerModal
           activeUser={activeDirectChatUser}

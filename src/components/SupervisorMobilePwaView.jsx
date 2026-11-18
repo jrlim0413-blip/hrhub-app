@@ -19,7 +19,6 @@ import {
 } from "../lib/fieldMonitoringStorage";
 import { getStlSupervisors } from "../lib/stlApiLiveService";
 
-// Real Active STL Supervisors across all 4 subsidiaries
 const SUPERVISORS = getStlSupervisors();
 
 function getTodayString() {
@@ -30,10 +29,6 @@ function getTodayString() {
   return `${year}-${month}-${day}`;
 }
 
-/**
- * Generates strict, collision-free aliases for a supervisor
- * e.g. "asaberon", "spvr-arlfred", "arlfred", "21", "arlfred saberon", "saberon"
- */
 function getSupervisorAliases(s) {
   if (!s) return [];
   const aliases = new Set();
@@ -64,9 +59,6 @@ function getSupervisorAliases(s) {
   return Array.from(aliases).filter(Boolean);
 }
 
-/**
- * Strict equality check against supervisor's assigned aliases or Field Monitoring account
- */
 function isSupervisorAccountMatch(enteredUser, supervisor) {
   if (!supervisor || !enteredUser) return false;
   const clean = String(enteredUser).trim().toLowerCase();
@@ -79,10 +71,6 @@ function isSupervisorAccountMatch(enteredUser, supervisor) {
   return aliases.includes(clean);
 }
 
-/**
- * Strictly authenticates credentials against official Field Monitoring accounts
- * or official Source API endpoints for supervisors.
- */
 async function verifySourceApiCredentials(username, password, supervisor = null) {
   const cleanUsername = String(username || "").trim();
   const cleanPassword = String(password || "").trim();
@@ -91,7 +79,6 @@ async function verifySourceApiCredentials(username, password, supervisor = null)
     return { success: false, error: "Please enter both username and password." };
   }
 
-  // 0. Check if this is a Field Monitoring account created by the system
   try {
     const fmResult = await verifyFieldMonitoringLogin(cleanUsername, cleanPassword);
     if (fmResult.success) {
@@ -111,7 +98,6 @@ async function verifySourceApiCredentials(username, password, supervisor = null)
     console.warn("Field Monitoring auth check notice:", fmErr);
   }
 
-  // 1. Candidate usernames to check against Source API
   const candidateUsernames = new Set();
   if (supervisor?.username) {
     candidateUsernames.add(supervisor.username.trim().toLowerCase());
@@ -122,25 +108,21 @@ async function verifySourceApiCredentials(username, password, supervisor = null)
   }
 
   const endpoints = [
-    // Lucky Betplay Corporation (Mandaue City)
     "https://stl-mandaue-api.com/api/coordinator/login",
     "https://stl-mandaue-api.com/api/teller/login",
     "https://stl-mandaue-api.com/api/cashier/login",
     "https://stl-mandaue-api.com/api/accountant/login",
     "https://stl-mandaue-api.com/api/admin/login",
-    // Glowing Fortune OPC (Iligan City & Lanao)
     "https://stl-ldn-api.com/api/coordinator/login",
     "https://stl-ldn-api.com/api/teller/login",
     "https://stl-ldn-api.com/api/cashier/login",
     "https://stl-ldn-api.com/api/accountant/login",
     "https://stl-ldn-api.com/api/admin/login",
-    // 5A Royal Gaming OPC (Maguindanao)
     "https://stl-mag-api.com/api/coordinator/login",
     "https://stl-mag-api.com/api/teller/login",
     "https://stl-mag-api.com/api/cashier/login",
     "https://stl-mag-api.com/api/accountant/login",
     "https://stl-mag-api.com/api/admin/login",
-    // Imperial Gaming OPC (Cotabato City)
     "https://stl-cotabato-api.com/api/coordinator/login",
     "https://stl-cotabato-api.com/api/teller/login",
     "https://stl-cotabato-api.com/api/cashier/login",
@@ -194,7 +176,6 @@ async function verifySourceApiCredentials(username, password, supervisor = null)
     };
   }
 
-  // 2. Check if supervisor has a registered/activated password in HRHub cloud credentials
   try {
     const { data: cloudCreds } = await supabase
       .from("user_settings")
@@ -214,7 +195,6 @@ async function verifySourceApiCredentials(username, password, supervisor = null)
     console.warn("Cloud credentials check notice:", cloudErr);
   }
 
-  // 3. Check previously verified local session password for this specific supervisor ID
   if (supervisor?.id) {
     try {
       const savedPass = localStorage.getItem(`hrhub_spvr_pwd_${supervisor.id}`);
@@ -231,7 +211,6 @@ async function verifySourceApiCredentials(username, password, supervisor = null)
 }
 
 export default function SupervisorMobilePwaView() {
-  // PWA Install Prompt State
   const [deferredPrompt, setDeferredPrompt] = useState(() => {
     return typeof window !== "undefined" ? window.__PWA_PROMPT__ : null;
   });
@@ -267,7 +246,6 @@ export default function SupervisorMobilePwaView() {
     setTimeout(() => setCopiedLinkSuccess(false), 3000);
   };
 
-  // Supervisor Identity (derived strictly from magic link or storage)
   const isAssignedLink = Boolean(
     typeof window !== "undefined" &&
     (() => {
@@ -296,7 +274,6 @@ export default function SupervisorMobilePwaView() {
       (nameParam && decodeURIComponent(nameParam).toLowerCase().includes("field monitor"));
 
     if (idParam) {
-      // 1. Check Field Monitoring accounts first
       const fmMatch = fieldAccounts.find((f) =>
         String(f.id).toLowerCase() === String(idParam).toLowerCase() ||
         String(f.username).toLowerCase() === String(usernameParam || idParam).toLowerCase()
@@ -324,7 +301,6 @@ export default function SupervisorMobilePwaView() {
         return customFm;
       }
 
-      // 2. Check Supervisors list (Source API)
       const match = SUPERVISORS.find((s) => String(s.id) === String(idParam));
       if (match) {
         const merged = {
@@ -380,7 +356,6 @@ export default function SupervisorMobilePwaView() {
     return { ...SUPERVISORS[0], role: "Supervisor" };
   });
 
-  // Dynamic role determination: true if Field Monitoring account
   const isFieldMonitoring = useMemo(() => {
     if (!currentSupervisor) return false;
     const role = String(currentSupervisor.role || "").toLowerCase();
@@ -404,13 +379,11 @@ export default function SupervisorMobilePwaView() {
     );
   }, [currentSupervisor]);
 
-  // Today's Date & Clock
   const todayStr = getTodayString();
   const [currentTime, setCurrentTime] = useState(() =>
     new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: true })
   );
 
-  // Live Clock
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTime(
@@ -420,7 +393,6 @@ export default function SupervisorMobilePwaView() {
     return () => clearInterval(timer);
   }, []);
 
-  // Authentication State with strict per-supervisor session isolation
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
     if (typeof window === "undefined") return false;
     try {
@@ -447,7 +419,6 @@ export default function SupervisorMobilePwaView() {
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [loginError, setLoginError] = useState("");
 
-  // Reactive URL listener: if URL params change or a new link is opened, synchronize identity immediately
   useEffect(() => {
     if (typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
@@ -517,7 +488,6 @@ export default function SupervisorMobilePwaView() {
     syncAccountIdentity();
   }, []);
 
-  // Handle Supervisor Login Submission with strict account link isolation & Source API verification
   const handleSupervisorLogin = async (e) => {
     if (e && e.preventDefault) e.preventDefault();
     setLoginError("");
@@ -535,8 +505,6 @@ export default function SupervisorMobilePwaView() {
       return;
     }
 
-    // 1. STRICT ACCOUNT-TO-LINK LOCK:
-    // This terminal strictly belongs to currentSupervisor (e.g. ARLFRED SABERON)
     const isTargetSupervisor = isSupervisorAccountMatch(enteredUser, currentSupervisor);
 
     if (!isTargetSupervisor) {
@@ -557,7 +525,6 @@ export default function SupervisorMobilePwaView() {
       return;
     }
 
-    // 2. STRICT CREDENTIALS VERIFICATION:
     setIsAuthenticating(true);
     try {
       const authRes = await verifySourceApiCredentials(enteredUser, enteredPass, currentSupervisor);
@@ -593,7 +560,6 @@ export default function SupervisorMobilePwaView() {
       setInputPassword("");
       setLoginError("");
 
-      // Auto-request GPS and Camera upon login
       requestGpsLocation();
       startCamera("user");
     } catch (err) {
@@ -603,7 +569,6 @@ export default function SupervisorMobilePwaView() {
     }
   };
 
-  // Handle Supervisor Logout
   const handleSupervisorLogout = () => {
     try {
       const authKey = `hrhub_spvr_auth_${currentSupervisor.id}_${todayStr}`;
@@ -616,14 +581,12 @@ export default function SupervisorMobilePwaView() {
     stopCamera();
   };
 
-  // Today's Existing Attendance from Supabase Cloud
   const [todayRecord, setTodayRecord] = useState(null);
   const [isCheckingTodayRecord, setIsCheckingTodayRecord] = useState(true);
 
-  // Camera State with Fast Mobile Detection
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [isVideoReady, setIsVideoReady] = useState(false);
-  const [cameraFacingMode, setCameraFacingMode] = useState("user"); // 'user' (selfie) | 'environment' (area)
+  const [cameraFacingMode, setCameraFacingMode] = useState("user");
   const [cameraError, setCameraError] = useState("");
   const [capturedPhotoUrl, setCapturedPhotoUrl] = useState("");
   const [capturedFile, setCapturedFile] = useState(null);
@@ -631,19 +594,16 @@ export default function SupervisorMobilePwaView() {
   const streamRef = useRef(null);
   const fileInputRef = useRef(null);
 
-  // GPS State
   const [lat, setLat] = useState("");
   const [lng, setLng] = useState("");
   const [accuracy, setAccuracy] = useState("");
   const [isGettingGps, setIsGettingGps] = useState(false);
   const [locationLandmark, setLocationLandmark] = useState("");
 
-  // Submission State
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [submitError, setSubmitError] = useState("");
 
-  // PWA Install Prompt Listener
   useEffect(() => {
     const isStandalone =
       (typeof window !== "undefined" && window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) ||
@@ -652,13 +612,11 @@ export default function SupervisorMobilePwaView() {
       setIsInstalled(true);
     }
 
-    // Check early capture in index.html
     if (typeof window !== "undefined" && window.__PWA_PROMPT__) {
       setDeferredPrompt(window.__PWA_PROMPT__);
       setIsInstallable(true);
     }
 
-    // iOS check
     const userAgent = typeof window !== "undefined" ? window.navigator.userAgent.toLowerCase() : "";
     const isIosDevice = /iphone|ipad|ipod/.test(userAgent);
     setIsIos(isIosDevice);
@@ -698,7 +656,6 @@ export default function SupervisorMobilePwaView() {
   }, []);
 
   const handleInstallClick = async () => {
-    // If opened inside Facebook Messenger / In-App browser, guide them to "Open in browser"
     if (isInAppBrowser) {
       setShowMessengerTip(true);
       return;
@@ -725,11 +682,9 @@ export default function SupervisorMobilePwaView() {
         console.warn("PWA install error:", err);
       }
     }
-    // If native prompt is not available or already consumed, show clear visual modal guide instead of alert()
     setShowAndroidTip(true);
   };
 
-  // Fetch Existing Today Attendance for this Supervisor
   const checkTodayAttendance = async () => {
     if (!currentSupervisor?.id) return;
     try {
@@ -755,7 +710,6 @@ export default function SupervisorMobilePwaView() {
     }
   }, [isAuthenticated, currentSupervisor?.id, todayStr]);
 
-  // Request GPS Location
   const requestGpsLocation = () => {
     if (!navigator.geolocation) {
       alert("Geolocation is not supported by your device browser.");
@@ -778,7 +732,6 @@ export default function SupervisorMobilePwaView() {
     );
   };
 
-  // Start Camera Stream with Instant Front Camera Detection
   const startCamera = async (facing = cameraFacingMode) => {
     stopCamera();
     setIsVideoReady(false);
@@ -793,7 +746,6 @@ export default function SupervisorMobilePwaView() {
       const targetFacing = facing === "user" ? "user" : "environment";
       let stream;
 
-      // Tier 1: Try optimal mobile front-facing camera
       try {
         stream = await navigator.mediaDevices.getUserMedia({
           video: {
@@ -805,13 +757,11 @@ export default function SupervisorMobilePwaView() {
         });
       } catch (err1) {
         try {
-          // Tier 2: Instant fallback without resolution constraints (prevents hardware delay on mobile)
           stream = await navigator.mediaDevices.getUserMedia({
             video: { facingMode: targetFacing },
             audio: false
           });
         } catch (err2) {
-          // Tier 3: Universal fallback to any available video track
           stream = await navigator.mediaDevices.getUserMedia({
             video: true,
             audio: false
@@ -822,7 +772,6 @@ export default function SupervisorMobilePwaView() {
       streamRef.current = stream;
       setIsCameraActive(true);
 
-      // Attach immediately if videoRef element is already in DOM
       if (videoRef.current) {
         const video = videoRef.current;
         video.srcObject = stream;
@@ -852,7 +801,6 @@ export default function SupervisorMobilePwaView() {
     setIsVideoReady(false);
   };
 
-  // Reactive binding: ensures stream is immediately attached to <video> when element renders
   useEffect(() => {
     if (isCameraActive && videoRef.current && streamRef.current) {
       const video = videoRef.current;
@@ -866,14 +814,12 @@ export default function SupervisorMobilePwaView() {
     }
   }, [isCameraActive]);
 
-  // Flip Camera Front / Back
   const toggleCameraFacing = () => {
     const nextMode = cameraFacingMode === "user" ? "environment" : "user";
     setCameraFacingMode(nextMode);
     startCamera(nextMode);
   };
 
-  // Shutter Snapshot
   const takeSnapshot = () => {
     if (!videoRef.current) return;
     const video = videoRef.current;
@@ -882,17 +828,14 @@ export default function SupervisorMobilePwaView() {
     canvas.height = video.videoHeight || 480;
     const ctx = canvas.getContext("2d");
 
-    // Mirror image if selfie camera
     if (cameraFacingMode === "user") {
       ctx.translate(canvas.width, 0);
       ctx.scale(-1, 1);
     }
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-    // Reset transform for geotag watermark
     ctx.setTransform(1, 0, 0, 1, 0, 0);
 
-    // Watermark Geotag Overlay
     const ts = new Date().toLocaleString("en-US", { timeZone: "Asia/Manila", hour12: true });
     ctx.fillStyle = "rgba(15, 23, 42, 0.75)";
     ctx.fillRect(10, canvas.height - 54, canvas.width - 20, 44);
@@ -920,7 +863,6 @@ export default function SupervisorMobilePwaView() {
     );
   };
 
-  // Fallback Native Camera File Input
   const handleNativeCameraFallback = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -938,14 +880,12 @@ export default function SupervisorMobilePwaView() {
     }
   };
 
-  // Retake Photo
   const handleRetake = () => {
     setCapturedPhotoUrl("");
     setCapturedFile(null);
     startCamera(cameraFacingMode);
   };
 
-  // Auto-start camera once authenticated and not checked in
   useEffect(() => {
     if (isAuthenticated && !todayRecord && !capturedPhotoUrl) {
       requestGpsLocation();
@@ -954,7 +894,6 @@ export default function SupervisorMobilePwaView() {
     return () => stopCamera();
   }, [isAuthenticated, cameraFacingMode, todayRecord]);
 
-  // Submit Attendance to Supabase Cloud
   const handleSubmitAttendance = async () => {
     if (!capturedPhotoUrl) {
       alert("Please capture your live photo proof before submitting Daily Login.");
@@ -969,7 +908,6 @@ export default function SupervisorMobilePwaView() {
     setSubmitError("");
 
     try {
-      // 1. Upload compressed photo to Supabase Storage Bucket
       let cloudPhotoUrl = "";
       let cloudStoragePath = "";
 
@@ -981,7 +919,6 @@ export default function SupervisorMobilePwaView() {
         }
       }
 
-      // 2. Prepare Attendance Record strictly in Mandaue City
       const recordPayload = {
         supervisorId: String(currentSupervisor.id),
         fullName: currentSupervisor.fullName,
@@ -1000,13 +937,11 @@ export default function SupervisorMobilePwaView() {
           : "Logged via Official Supervisor Mobile PWA • Mandaue City Operations"
       };
 
-      // 3. Upsert to Supabase
       const savedRes = await upsertCloudAttendance(recordPayload, todayStr);
       if (!savedRes.success) {
         throw new Error(savedRes.error || "Failed to sync Daily Login to HR Cloud. Please try again.");
       }
 
-      // Vibration confirmation
       if (typeof window !== "undefined" && window.navigator && window.navigator.vibrate) {
         window.navigator.vibrate([100, 50, 100]);
       }
@@ -1024,7 +959,6 @@ export default function SupervisorMobilePwaView() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans select-none antialiased">
-      {/* ================= TOP NAVIGATION BAR ================= */}
       <header className="sticky top-0 z-40 bg-slate-950/95 backdrop-blur-md border-b border-slate-800/80 px-4 py-3 flex items-center justify-between shadow-xl">
         <div className="flex items-center gap-2.5">
           <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-400 flex items-center justify-center font-black text-white text-base shadow-md shadow-emerald-950/50">
@@ -1040,7 +974,6 @@ export default function SupervisorMobilePwaView() {
           </div>
         </div>
 
-        {/* Live Clock Badge */}
         <div className="text-right">
           <div className="inline-flex items-center gap-1.5 font-mono text-xs font-bold text-emerald-400 bg-slate-900 px-2.5 py-1 rounded-lg border border-slate-800 shadow-inner">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
@@ -1050,7 +983,6 @@ export default function SupervisorMobilePwaView() {
         </div>
       </header>
 
-      {/* ================= MESSENGER IN-APP BROWSER ALERT BANNER ================= */}
       {isInAppBrowser && (
         <div className="bg-gradient-to-r from-amber-950 via-slate-900 to-amber-950 border-b border-amber-500/40 px-4 py-2.5 flex items-center justify-between gap-2 shadow-inner">
           <div className="flex items-start gap-2 text-xs min-w-0">
@@ -1077,7 +1009,6 @@ export default function SupervisorMobilePwaView() {
         </div>
       )}
 
-      {/* ================= PWA INSTALLATION BANNER ================= */}
       {!isInstalled && (
         <div className="bg-gradient-to-r from-emerald-950/90 via-slate-900 to-slate-950 border-b border-emerald-600/30 px-4 py-2.5 flex items-center justify-between gap-3 shadow-inner">
           <div className="flex items-center gap-2 text-xs">
@@ -1100,7 +1031,6 @@ export default function SupervisorMobilePwaView() {
         </div>
       )}
 
-      {/* Messenger In-App Browser Guide Modal */}
       {showMessengerTip && (
         <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-end sm:items-center justify-center p-4 animate-in fade-in duration-200">
           <div className="bg-slate-900 border border-emerald-500/40 rounded-3xl p-5 max-w-sm w-full space-y-3.5 shadow-2xl relative text-left">
@@ -1150,7 +1080,6 @@ export default function SupervisorMobilePwaView() {
               </div>
             </div>
 
-            {/* Quick Copy URL Option */}
             <div className="pt-1 space-y-2">
               <button
                 type="button"
@@ -1182,7 +1111,6 @@ export default function SupervisorMobilePwaView() {
         </div>
       )}
 
-      {/* iOS Safari Installation Guide Modal */}
       {showIosTip && (
         <div className="fixed inset-0 z-50 bg-black/80 flex items-end sm:items-center justify-center p-4">
           <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 max-w-sm w-full space-y-3 shadow-2xl">
@@ -1205,7 +1133,6 @@ export default function SupervisorMobilePwaView() {
         </div>
       )}
 
-      {/* Android Chrome Installation Guide Modal */}
       {showAndroidTip && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-4 animate-in fade-in duration-200">
           <div className="bg-slate-900 border border-emerald-500/30 rounded-3xl p-5 max-w-sm w-full space-y-3.5 shadow-2xl relative text-left">
@@ -1268,12 +1195,9 @@ export default function SupervisorMobilePwaView() {
         </div>
       )}
 
-      {/* ================= MAIN CONTENT AREA ================= */}
       <main className="flex-1 max-w-md w-full mx-auto p-4 space-y-4">
         {!isAuthenticated ? (
-          /* ================= DAILY LOGIN FORM (STRICT ACCOUNT LOCK) ================= */
           <div className="rounded-3xl border border-slate-800/90 bg-gradient-to-b from-slate-900/90 via-slate-950 to-slate-950 p-6 shadow-2xl space-y-5 animate-in fade-in duration-300">
-            {/* Header Lock Icon */}
             <div className="text-center space-y-2 pt-2">
               <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-emerald-500/20 to-teal-500/20 border border-emerald-500/40 text-emerald-400 flex items-center justify-center mx-auto shadow-lg shadow-emerald-950/50">
                 <Lock size={26} />
@@ -1284,7 +1208,6 @@ export default function SupervisorMobilePwaView() {
               </p>
             </div>
 
-            {/* Error Message Notice */}
             {loginError && (
               <div className="p-3 rounded-xl bg-rose-950/60 border border-rose-500/60 text-rose-300 text-xs flex items-center gap-2 animate-in fade-in duration-200">
                 <AlertCircle size={16} className="shrink-0 text-rose-400" />
@@ -1292,9 +1215,7 @@ export default function SupervisorMobilePwaView() {
               </div>
             )}
 
-            {/* Credentials Input Form */}
             <form onSubmit={handleSupervisorLogin} className="space-y-4">
-              {/* Username Field */}
               <div className="space-y-1.5">
                 <label className="text-[11px] font-bold text-slate-300 uppercase tracking-wider block">
                   {isFieldMonitoring ? "Field Monitor Username" : "Supervisor Username"}
@@ -1314,7 +1235,6 @@ export default function SupervisorMobilePwaView() {
                 </div>
               </div>
 
-              {/* Password Field */}
               <div className="space-y-1.5">
                 <label className="text-[11px] font-bold text-slate-300 uppercase tracking-wider block">
                   {isFieldMonitoring ? "Field Monitor Password" : "Supervisor Password"}
@@ -1341,7 +1261,6 @@ export default function SupervisorMobilePwaView() {
                 </div>
               </div>
 
-              {/* Daily Login Button */}
               <button
                 type="submit"
                 disabled={isAuthenticating}
@@ -1371,16 +1290,12 @@ export default function SupervisorMobilePwaView() {
             </div>
           </div>
         ) : (
-          /* ================= AUTHENTICATED FIELD VIEW (HIGH-END EXECUTIVE REDESIGN) ================= */
           <>
-            {/* 1. EXECUTIVE IDENTITY CONSOLE */}
             <div className="relative rounded-3xl border border-slate-800/90 bg-gradient-to-b from-slate-900/90 via-slate-950 to-slate-950 p-5 shadow-2xl overflow-hidden backdrop-blur-xl">
-              {/* Subtle Ambient Glow */}
               <div className="absolute -top-12 -right-12 w-44 h-44 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
 
               <div className="relative flex items-start justify-between gap-3">
                 <div className="flex items-center gap-3.5 min-w-0">
-                  {/* Avatar with live session ring */}
                   <div className="relative shrink-0">
                     <div className="w-13 h-13 rounded-2xl bg-gradient-to-tr from-emerald-600/30 to-teal-400/20 border-2 border-emerald-500/40 text-emerald-400 flex items-center justify-center font-black text-lg shadow-lg shadow-emerald-950/60">
                       {currentSupervisor.fullName?.charAt(0) || "S"}
@@ -1405,7 +1320,6 @@ export default function SupervisorMobilePwaView() {
                   </div>
                 </div>
 
-                {/* Sign Out Button */}
                 <button
                   type="button"
                   onClick={handleSupervisorLogout}
@@ -1418,7 +1332,6 @@ export default function SupervisorMobilePwaView() {
               </div>
             </div>
 
-            {/* 2. TODAY'S RECORDED STATUS CARD */}
             {todayRecord && !submitSuccess && (
               <div className="rounded-3xl border border-emerald-500/50 bg-gradient-to-b from-emerald-950/40 via-slate-950 to-slate-950 p-5 shadow-2xl space-y-4 animate-in fade-in duration-200">
                 <div className="flex items-center justify-between">
@@ -1463,7 +1376,6 @@ export default function SupervisorMobilePwaView() {
               </div>
             )}
 
-            {/* 3. SUCCESS BANNER */}
             {submitSuccess && (
               <div className="rounded-3xl border border-emerald-500 bg-emerald-950/50 p-6 text-center space-y-3.5 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
                 <div className="w-14 h-14 rounded-2xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center mx-auto shadow-inner">
@@ -1485,7 +1397,6 @@ export default function SupervisorMobilePwaView() {
               </div>
             )}
 
-            {/* 4. STEP 1: SATELLITE GPS & MANDAUE STATION LOCK (MOVED TO TOP) */}
             {(!todayRecord || submitSuccess === false) && (
               <div className="rounded-3xl border border-slate-800/90 bg-slate-950/80 p-5 shadow-2xl space-y-3.5">
                 <div className="flex items-center justify-between">
@@ -1510,7 +1421,6 @@ export default function SupervisorMobilePwaView() {
                   </button>
                 </div>
 
-                {/* Embedded Interactive Map */}
                 <div className="w-full h-44 rounded-2xl overflow-hidden border border-slate-800 bg-slate-900 relative shadow-inner">
                   {lat && lng ? (
                     <iframe
@@ -1527,7 +1437,6 @@ export default function SupervisorMobilePwaView() {
                   )}
                 </div>
 
-                {/* GPS Coordinates Strip */}
                 <div className="flex items-center justify-between text-[11px] font-mono text-slate-400 bg-slate-900/90 p-2.5 rounded-xl border border-slate-800">
                   <div className="flex items-center gap-1.5 text-emerald-400 font-bold">
                     <MapPin size={13} />
@@ -1538,7 +1447,6 @@ export default function SupervisorMobilePwaView() {
                   </span>
                 </div>
 
-                {/* Optional Mandaue Station/Landmark Note */}
                 <div>
                   <input
                     type="text"
@@ -1551,7 +1459,6 @@ export default function SupervisorMobilePwaView() {
               </div>
             )}
 
-            {/* 5. STEP 2: LIVE PHOTO VERIFICATION (MOVED TO BOTTOM) */}
             {(!todayRecord || submitSuccess === false) && (
               <div className="rounded-3xl border border-slate-800/90 bg-slate-950/80 p-5 shadow-2xl space-y-3.5">
                 <div className="flex items-center justify-between">
@@ -1575,10 +1482,8 @@ export default function SupervisorMobilePwaView() {
                   </button>
                 </div>
 
-                {/* Viewfinder Window (Preview removed after capture: database record only) */}
                 <div className="relative aspect-4/3 w-full rounded-2xl overflow-hidden bg-slate-950 border-2 border-slate-800/90 shadow-2xl flex items-center justify-center">
                   {capturedPhotoUrl ? (
-                    // After capture: Confirmation state ONLY (No image preview displayed to user)
                     <div className="w-full h-full flex flex-col items-center justify-center p-6 text-center space-y-3.5 bg-gradient-to-b from-slate-900 via-slate-950 to-slate-900 animate-in fade-in zoom-in-95 duration-200">
                       <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-emerald-500/20 to-teal-500/20 border border-emerald-500/50 text-emerald-400 flex items-center justify-center shadow-xl shadow-emerald-950/70">
                         <CheckCircle2 size={36} />
@@ -1602,7 +1507,6 @@ export default function SupervisorMobilePwaView() {
                       </button>
                     </div>
                   ) : isCameraActive ? (
-                    // Live Viewfinder with instant front camera detection
                     <>
                       <video
                         ref={videoRef}
@@ -1622,7 +1526,6 @@ export default function SupervisorMobilePwaView() {
                         </div>
                       )}
 
-                      {/* Viewfinder Reticle & Corner Brackets */}
                       <div className="absolute inset-5 pointer-events-none border border-white/15 rounded-2xl flex items-center justify-center">
                         <div className="absolute top-0 left-0 w-4 h-4 border-t-2 border-l-2 border-emerald-400" />
                         <div className="absolute top-0 right-0 w-4 h-4 border-t-2 border-r-2 border-emerald-400" />
@@ -1631,13 +1534,11 @@ export default function SupervisorMobilePwaView() {
                         <div className="w-9 h-9 rounded-full border border-dashed border-white/30" />
                       </div>
 
-                      {/* Viewfinder Top Live Badge */}
                       <div className="absolute top-3 left-3 bg-slate-950/80 backdrop-blur-md px-2.5 py-1 rounded-full border border-slate-800 flex items-center gap-1.5 text-[10px] font-mono text-emerald-400 font-bold shadow-md">
                         <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
                         <span>LIVE CAMERA</span>
                       </div>
 
-                      {/* Circular Shutter Trigger */}
                       <div className="absolute bottom-3 inset-x-0 flex flex-col items-center justify-center gap-1">
                         <button
                           type="button"
@@ -1655,7 +1556,6 @@ export default function SupervisorMobilePwaView() {
                       </div>
                     </>
                   ) : (
-                    // Inactive placeholder
                     <div className="text-center p-4 space-y-2">
                       <VideoOff size={32} className="mx-auto text-slate-600" />
                       <p className="text-xs text-slate-400">Camera viewfinder is inactive</p>
@@ -1672,7 +1572,6 @@ export default function SupervisorMobilePwaView() {
                   )}
                 </div>
 
-                {/* Fallback Native Camera Trigger */}
                 <input
                   type="file"
                   ref={fileInputRef}
@@ -1693,7 +1592,6 @@ export default function SupervisorMobilePwaView() {
               </div>
             )}
 
-            {/* 6. SUBMIT BUTTON DOCK */}
             {(!todayRecord || submitSuccess === false) && (
               <div className="pt-1">
                 <button
@@ -1732,7 +1630,6 @@ export default function SupervisorMobilePwaView() {
           </>
         )}
 
-        {/* Executive Footer */}
         <div className="pt-4 pb-8 text-center text-xs text-slate-500 space-y-1">
           <p className="font-semibold text-slate-400">SGC • HR Technology Systems</p>
           <p className="text-[10px] text-slate-600 font-medium">Mandaue City Field Verification Portal • SSL Encrypted</p>

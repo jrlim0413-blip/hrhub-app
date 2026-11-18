@@ -1,11 +1,3 @@
-/**
- * employeeStorage.js
- * Dedicated Supabase Database Storage Service for Employee Directory & Personnel Accounts.
- * 
- * Completely eliminates localStorage saving:
- * All employee profiles (Remark Joy Gaviola, Caquennie6, Efilfonimda, etc.) are permanently
- * stored and synchronized directly with the dedicated Supabase database table ('employees').
- */
 
 import { supabase } from "./supabase.js";
 
@@ -14,12 +6,9 @@ export const BACKUP_STORE_KEY = "company_employee_directory";
 export const DELETED_STORE_KEY = "company_deleted_employees";
 export const LOCAL_DELETED_KEY = "hrhub_deleted_employee_emails";
 
-// Persistent tombstone blacklist: once deleted, an employee will NEVER return on refresh
 const deletedEmailsSet = new Set();
-// Pre-seed efilfonimda to prevent resurrection across sessions
 deletedEmailsSet.add("efilfonimda@gmail.com");
 
-// Synchronously load deleted emails from localStorage on module startup
 if (typeof window !== "undefined" && window.localStorage) {
   try {
     const rawDel = window.localStorage.getItem(LOCAL_DELETED_KEY);
@@ -36,10 +25,8 @@ if (typeof window !== "undefined" && window.localStorage) {
   }
 }
 
-// In-memory cache for fast synchronous renders
 const memoryEmployeeStore = new Map();
 
-// Base seed accounts to guarantee instant availability (excluding deleted accounts)
 const INITIAL_DIRECTORY = [
   {
     id: "emp-remark-joy",
@@ -85,7 +72,6 @@ const INITIAL_DIRECTORY = [
   }
 ];
 
-// Initialize in-memory cache with base records excluding any deleted accounts
 INITIAL_DIRECTORY.forEach((emp) => {
   const emailKey = emp.email.trim().toLowerCase();
   const idKey = String(emp.id || "").toLowerCase();
@@ -94,31 +80,20 @@ INITIAL_DIRECTORY.forEach((emp) => {
   }
 });
 
-/**
- * Check if an email or ID has been permanently deleted
- */
 export function isEmployeeDeleted(emailOrId) {
   if (!emailOrId) return false;
   const q = String(emailOrId).trim().toLowerCase();
   return deletedEmailsSet.has(q);
 }
 
-/**
- * Helper to determine if an employee profile is authorized for portal login.
- * - Accounts input from Pre-Register button automatically have portal login access.
- * - HR Administrator and management accounts automatically have portal login access.
- * - Profiled employees from Employee Directory are restricted to HR profiling only.
- */
 export function isEmployeeLoginEnabled(emp) {
   if (!emp) return false;
   const email = (emp.email || "").trim().toLowerCase();
   if (email === "admin@hrhub.com" || email === "caquennie6@gmail.com") return true;
 
-  // 1. Explicit login_enabled flags if present take precedence (allows HR Administrator to toggle authorization)
   if (typeof emp.login_enabled === "boolean") return emp.login_enabled;
   if (emp.metadata && typeof emp.metadata.login_enabled === "boolean") return emp.metadata.login_enabled;
 
-  // 2. Pre-registered accounts automatically have portal login access
   if (
     emp.is_preregistered ||
     emp.metadata?.is_preregistered ||
@@ -128,7 +103,6 @@ export function isEmployeeLoginEnabled(emp) {
     return true;
   }
 
-  // 3. HR administrator accounts automatically have portal login access
   const role = (emp.role || "").trim().toLowerCase();
   if (
     role.startsWith("hr admin") ||
@@ -142,16 +116,10 @@ export function isEmployeeLoginEnabled(emp) {
   return false;
 }
 
-/**
- * Get all permanently deleted email and ID tombstones
- */
 export function getDeletedEmails() {
   return Array.from(deletedEmailsSet);
 }
 
-/**
- * Fetch and synchronize deleted emails tombstone blacklist from Supabase database
- */
 export async function syncDeletedEmailsFromCloud() {
   try {
     const { data, error } = await supabase
@@ -173,14 +141,8 @@ export async function syncDeletedEmailsFromCloud() {
   }
 }
 
-// Kick off cloud tombstone sync immediately
 syncDeletedEmailsFromCloud();
 
-/**
- * Migration & Purge:
- * Permanently cleans up any legacy localStorage records and ensures any
- * previously cached accounts (like Remark Joy Gaviola) are saved to Supabase.
- */
 async function purgeLegacyLocalStorage() {
   if (typeof window === "undefined" || !window.localStorage) return;
 
@@ -190,7 +152,6 @@ async function purgeLegacyLocalStorage() {
       try {
         const parsed = JSON.parse(rawLegacy);
         if (Array.isArray(parsed)) {
-          // If legacy records existed, add them to memory and sync to cloud
           parsed.forEach((item) => {
             if (item?.email) {
               const emailKey = item.email.trim().toLowerCase();
@@ -202,29 +163,20 @@ async function purgeLegacyLocalStorage() {
       } catch (parseErr) {
         console.warn("Legacy employee parse notice:", parseErr);
       }
-      // Purge from localStorage
       window.localStorage.removeItem("hrhub_employee_directory");
     }
 
-    // Always remove obsolete passwords key from localStorage
     window.localStorage.removeItem("hrhub_employee_passwords");
   } catch (err) {
     console.warn("LocalStorage purge notice:", err);
   }
 }
 
-// Kick off purge immediately
 purgeLegacyLocalStorage();
 
-/**
- * Fetch all employee records from Supabase Database.
- * Checks the dedicated 'employees' table first, with seamless cloud fallback to
- * 'user_settings' (company_employee_directory) and 'profiles'.
- */
 export async function fetchEmployeesFromDatabase() {
   await syncDeletedEmailsFromCloud();
 
-  // Purge any deleted emails from memoryEmployeeStore
   for (const del of deletedEmailsSet) {
     memoryEmployeeStore.delete(del);
   }
@@ -242,7 +194,6 @@ export async function fetchEmployeesFromDatabase() {
   });
 
   try {
-    // 1. Query dedicated Supabase 'employees' table
     const { data: employeesData, error: employeesErr } = await supabase
       .from(EMPLOYEES_TABLE)
       .select("*")
@@ -254,7 +205,7 @@ export async function fetchEmployeesFromDatabase() {
           const emailKey = emp.email.trim().toLowerCase();
           const idKey = String(emp.id || "").toLowerCase();
           if (deletedEmailsSet.has(emailKey) || deletedEmailsSet.has(idKey)) {
-            return; // Skip permanently deleted account
+            return;
           }
           const meta = emp.metadata && typeof emp.metadata === "object" ? emp.metadata : {};
           const createdBy = (emp.created_by || meta.created_by || meta.created_by_email || "").trim().toLowerCase();
@@ -281,7 +232,6 @@ export async function fetchEmployeesFromDatabase() {
         }
       });
     } else {
-      // 2. Fallback: Query cloud backup in 'user_settings'
       const { data: cloudBackup, error: backupErr } = await supabase
         .from("user_settings")
         .select("settings_json")
@@ -294,7 +244,7 @@ export async function fetchEmployeesFromDatabase() {
             const emailKey = emp.email.trim().toLowerCase();
             const idKey = String(emp.id || "").toLowerCase();
             if (deletedEmailsSet.has(emailKey) || deletedEmailsSet.has(idKey)) {
-              return; // Skip permanently deleted account
+              return;
             }
             const meta = emp.metadata && typeof emp.metadata === "object" ? emp.metadata : {};
             const createdBy = (emp.created_by || emp.created_by_email || meta.created_by || meta.created_by_email || "").trim().toLowerCase();
@@ -322,7 +272,6 @@ export async function fetchEmployeesFromDatabase() {
       }
     }
 
-    // 3. Also merge any Auth 'profiles' from Supabase
     try {
       const { data: profilesData } = await supabase
         .from("profiles")
@@ -334,7 +283,7 @@ export async function fetchEmployeesFromDatabase() {
           const emailKey = prof.email.trim().toLowerCase();
           const idKey = String(prof.id || "").toLowerCase();
           if (deletedEmailsSet.has(emailKey) || deletedEmailsSet.has(idKey)) {
-            return; // Skip permanently deleted account
+            return;
           }
           const existing = mergedMap.get(emailKey) || {};
           const meta = existing.metadata || {};
@@ -364,7 +313,6 @@ export async function fetchEmployeesFromDatabase() {
       console.warn("Profiles check in fetchEmployees:", profErr);
     }
 
-    // Update in-memory store
     memoryEmployeeStore.clear();
     mergedMap.forEach((val, key) => {
       if (!deletedEmailsSet.has(key) && !deletedEmailsSet.has(String(val.id).toLowerCase())) {
@@ -372,7 +320,6 @@ export async function fetchEmployeesFromDatabase() {
       }
     });
 
-    // Ensure HRMD master admin is consistent
     ensureHrmdAdmin(memoryEmployeeStore);
 
     return Array.from(memoryEmployeeStore.values()).filter((emp) => {
@@ -390,9 +337,6 @@ export async function fetchEmployeesFromDatabase() {
   }
 }
 
-/**
- * Helper to ensure HRMD administrator account is properly formatted
- */
 function ensureHrmdAdmin(storeMap) {
   const HRMD_ADMIN_EMAIL = "admin@hrhub.com";
   const existing = storeMap.get(HRMD_ADMIN_EMAIL);
@@ -427,27 +371,17 @@ function ensureHrmdAdmin(storeMap) {
   }
 }
 
-/**
- * Synchronous getter returning currently cached employees from memory.
- * No localStorage access.
- */
 export function getStoredEmployees() {
   ensureHrmdAdmin(memoryEmployeeStore);
   return Array.from(memoryEmployeeStore.values());
 }
 
-/**
- * Save or update an employee in the Supabase Database.
- * Persists to dedicated 'employees' table and cloud backup in Supabase.
- * No localStorage saving!
- */
 export async function saveStoredEmployee(employee) {
   if (!employee || !employee.email) return getStoredEmployees();
 
   const targetEmail = employee.email.trim().toLowerCase();
   const targetId = employee.id ? String(employee.id).toLowerCase() : null;
 
-  // If this email or ID was previously deleted, remove it from tombstone blacklist
   if (deletedEmailsSet.has(targetEmail) || (targetId && deletedEmailsSet.has(targetId))) {
     deletedEmailsSet.delete(targetEmail);
     if (targetId) deletedEmailsSet.delete(targetId);
@@ -456,7 +390,6 @@ export async function saveStoredEmployee(employee) {
         window.localStorage.setItem(LOCAL_DELETED_KEY, JSON.stringify(Array.from(deletedEmailsSet)));
       } catch (e) {}
     }
-    // Update cloud tombstone
     supabase
       .from("user_settings")
       .upsert({
@@ -509,12 +442,9 @@ export async function saveStoredEmployee(employee) {
     updated_at: new Date().toISOString()
   };
 
-  // 1. Update in-memory store immediately
   memoryEmployeeStore.set(targetEmail, updatedRecord);
 
-  // 2. Persist to Supabase Database
   try {
-    // A. Upsert to dedicated 'employees' table
     const { error: empErr } = await supabase
       .from(EMPLOYEES_TABLE)
       .upsert({
@@ -532,7 +462,6 @@ export async function saveStoredEmployee(employee) {
       console.warn("Notice saving to 'employees' table:", empErr.message);
     }
 
-    // B. Also sync to cloud backup in 'user_settings'
     const allEmployees = Array.from(memoryEmployeeStore.values()).filter(
       (emp) => !deletedEmailsSet.has((emp.email || "").trim().toLowerCase())
     );
@@ -544,7 +473,6 @@ export async function saveStoredEmployee(employee) {
         updated_at: new Date().toISOString()
       }, { onConflict: "user_id" });
 
-    // C. Update profiles table if profile exists
     try {
       await supabase
         .from("profiles")
@@ -560,9 +488,6 @@ export async function saveStoredEmployee(employee) {
   return Array.from(memoryEmployeeStore.values());
 }
 
-/**
- * Update approval status for an employee in Supabase Database.
- */
 export async function updateStoredEmployeeApproval(emailOrId, isApproved) {
   const query = String(emailOrId || "").trim().toLowerCase();
   if (!query) return getStoredEmployees();
@@ -589,15 +514,12 @@ export async function updateStoredEmployeeApproval(emailOrId, isApproved) {
     memoryEmployeeStore.set(query, targetRecord);
   }
 
-  // Persist update to Supabase
   try {
-    // 1. Dedicated 'employees' table
     await supabase
       .from(EMPLOYEES_TABLE)
       .update({ is_approved: Boolean(isApproved), updated_at: new Date().toISOString() })
       .or(`email.ilike.${targetRecord.email},id.eq.${targetRecord.id}`);
 
-    // 2. Cloud backup
     const allEmployees = Array.from(memoryEmployeeStore.values()).filter(
       (emp) => !deletedEmailsSet.has((emp.email || "").trim().toLowerCase())
     );
@@ -609,7 +531,6 @@ export async function updateStoredEmployeeApproval(emailOrId, isApproved) {
         updated_at: new Date().toISOString()
       }, { onConflict: "user_id" });
 
-    // 3. Profiles table
     await supabase
       .from("profiles")
       .update({ is_approved: Boolean(isApproved) })
@@ -621,10 +542,6 @@ export async function updateStoredEmployeeApproval(emailOrId, isApproved) {
   return Array.from(memoryEmployeeStore.values());
 }
 
-/**
- * Update portal login permission for a specific employee profile.
- * Only accounts with login_enabled = true are permitted to activate or log in.
- */
 export async function updateStoredEmployeeLoginAccess(emailOrId, loginEnabled) {
   const query = String(emailOrId || "").trim().toLowerCase();
   if (!query) return getStoredEmployees();
@@ -635,7 +552,6 @@ export async function updateStoredEmployeeLoginAccess(emailOrId, loginEnabled) {
 
   for (const [email, record] of memoryEmployeeStore.entries()) {
     if (email === query || String(record.id).toLowerCase() === query) {
-      // Master superadmin admin@hrhub.com is permanently enabled
       const effectiveAllowed = email === "admin@hrhub.com" ? true : isAllowed;
       const meta = { ...(record.metadata || {}), login_enabled: effectiveAllowed };
       targetRecord = {
@@ -651,9 +567,7 @@ export async function updateStoredEmployeeLoginAccess(emailOrId, loginEnabled) {
 
   if (!targetRecord) return getStoredEmployees();
 
-  // Persist update to Supabase Database
   try {
-    // 1. Dedicated 'employees' table: update metadata (where login_enabled is stored)
     let queryBuilder = supabase.from(EMPLOYEES_TABLE).update({
       metadata: targetRecord.metadata,
       updated_at: now
@@ -672,7 +586,6 @@ export async function updateStoredEmployeeLoginAccess(emailOrId, loginEnabled) {
       console.warn("Notice updating employee metadata:", patchErr.message || patchErr);
     }
 
-    // 2. Cloud backup in 'user_settings'
     const allEmployees = Array.from(memoryEmployeeStore.values()).filter(
       (emp) => !deletedEmailsSet.has((emp.email || "").trim().toLowerCase())
     );
@@ -684,7 +597,6 @@ export async function updateStoredEmployeeLoginAccess(emailOrId, loginEnabled) {
         updated_at: now
       }, { onConflict: "user_id" });
 
-    // 3. Dispatch event for instant UI sync
     if (typeof window !== "undefined") {
       window.dispatchEvent(new CustomEvent("hrhub_employees_updated", { detail: allEmployees }));
     }
@@ -695,10 +607,6 @@ export async function updateStoredEmployeeLoginAccess(emailOrId, loginEnabled) {
   return Array.from(memoryEmployeeStore.values());
 }
 
-/**
- * Bulk update portal login permissions for ALL employees in the directory.
- * Master HRMD administrator (admin@hrhub.com) remains permanently enabled.
- */
 export async function updateAllStoredEmployeesLoginAccess(loginEnabled) {
   const isAllowed = Boolean(loginEnabled);
   const now = new Date().toISOString();
@@ -719,7 +627,6 @@ export async function updateAllStoredEmployeesLoginAccess(loginEnabled) {
   );
 
   try {
-    // 1. Cloud backup in 'user_settings'
     await supabase
       .from("user_settings")
       .upsert({
@@ -728,7 +635,6 @@ export async function updateAllStoredEmployeesLoginAccess(loginEnabled) {
         updated_at: now
       }, { onConflict: "user_id" });
 
-    // 2. Dispatch event for instant UI sync
     if (typeof window !== "undefined") {
       window.dispatchEvent(new CustomEvent("hrhub_employees_updated", { detail: allEmployees }));
     }
@@ -739,10 +645,6 @@ export async function updateAllStoredEmployeesLoginAccess(loginEnabled) {
   return allEmployees;
 }
 
-/**
- * Delete an employee permanently from Supabase Database and local cache.
- * Records target in persistent tombstone blacklist to guarantee it NEVER returns upon page refresh.
- */
 export async function deleteStoredEmployee(emailOrId) {
   if (!emailOrId) return getStoredEmployees();
   const query = String(emailOrId).trim().toLowerCase();
@@ -766,11 +668,9 @@ export async function deleteStoredEmployee(emailOrId) {
     targetId = query;
   }
 
-  // 1. Add to persistent tombstone blacklist
   if (targetEmail) deletedEmailsSet.add(targetEmail);
   if (targetId) deletedEmailsSet.add(String(targetId).toLowerCase());
 
-  // Save to localStorage immediately for instant offline/initialization protection
   if (typeof window !== "undefined" && window.localStorage) {
     try {
       window.localStorage.setItem(LOCAL_DELETED_KEY, JSON.stringify(Array.from(deletedEmailsSet)));
@@ -779,7 +679,6 @@ export async function deleteStoredEmployee(emailOrId) {
     }
   }
 
-  // 2. Persist tombstone blacklist to Supabase 'user_settings'
   try {
     await supabase
       .from("user_settings")
@@ -792,7 +691,6 @@ export async function deleteStoredEmployee(emailOrId) {
     console.warn("Notice updating cloud tombstone:", cloudErr);
   }
 
-  // 3. Delete from 'employees' table
   try {
     if (targetEmail) {
       await supabase.from(EMPLOYEES_TABLE).delete().ilike("email", targetEmail);
@@ -804,7 +702,6 @@ export async function deleteStoredEmployee(emailOrId) {
     console.warn("Delete from employees table notice:", err);
   }
 
-  // 4. Delete from 'profiles' table
   try {
     if (targetEmail) {
       await supabase.from("profiles").delete().ilike("email", targetEmail);
@@ -816,7 +713,6 @@ export async function deleteStoredEmployee(emailOrId) {
     console.warn("Delete from profiles table notice:", err);
   }
 
-  // 5. Update cloud backup
   try {
     const allEmployees = Array.from(memoryEmployeeStore.values()).filter(
       (emp) => !deletedEmailsSet.has((emp.email || "").trim().toLowerCase())
@@ -832,7 +728,6 @@ export async function deleteStoredEmployee(emailOrId) {
     console.warn("Error updating backup store:", err);
   }
 
-  // 6. Dispatch custom window event
   if (typeof window !== "undefined") {
     window.dispatchEvent(
       new CustomEvent("hrhub_employee_deleted", {
@@ -846,15 +741,9 @@ export async function deleteStoredEmployee(emailOrId) {
   );
 }
 
-/**
- * Merge Supabase database profiles with database-backed employees directory.
- * Authoritative source of truth is the Supabase database.
- * Strictly excludes any permanently deleted account.
- */
 export function mergeProfilesWithStored(supabaseProfiles = []) {
   const mergedMap = new Map();
 
-  // 1. First populate with our database-backed employee records, excluding tombstones
   memoryEmployeeStore.forEach((item, emailKey) => {
     const idKey = String(item.id || "").toLowerCase();
     if (!deletedEmailsSet.has(emailKey) && !deletedEmailsSet.has(idKey)) {
@@ -862,13 +751,12 @@ export function mergeProfilesWithStored(supabaseProfiles = []) {
     }
   });
 
-  // 2. Overlay / synchronize with any Supabase Auth profiles, excluding tombstones
   (supabaseProfiles || []).forEach((sp) => {
     if (!sp?.email) return;
     const emailKey = sp.email.trim().toLowerCase();
     const idKey = String(sp.id || "").toLowerCase();
     if (deletedEmailsSet.has(emailKey) || deletedEmailsSet.has(idKey)) {
-      return; // Skip permanently deleted account
+      return;
     }
 
     const existing = mergedMap.get(emailKey);
@@ -905,7 +793,6 @@ export function mergeProfilesWithStored(supabaseProfiles = []) {
     });
   });
 
-  // 3. Ensure Remark Joy Gaviola only if NOT deleted
   const REMARK_EMAIL = "remarkjoymark@gmail.com";
   if (!deletedEmailsSet.has(REMARK_EMAIL)) {
     if (!mergedMap.has(REMARK_EMAIL)) {
@@ -933,7 +820,6 @@ export function mergeProfilesWithStored(supabaseProfiles = []) {
     }
   }
 
-  // 4. Ensure HR Administrator account is always present
   ensureHrmdAdmin(mergedMap);
 
   return Array.from(mergedMap.values()).filter((emp) => {
@@ -946,12 +832,9 @@ export function mergeProfilesWithStored(supabaseProfiles = []) {
 export const CREDENTIALS_STORE_KEY = "company_activated_credentials";
 export const LOCAL_CREDENTIALS_KEY = "hrhub_activated_credentials";
 
-// In-memory activated password cache for instant synchronous verification
 const activatedPasswordsMap = new Map();
-// Always guarantee master HR Administrator fallback login credentials
 activatedPasswordsMap.set("admin@hrhub.com", "admin123");
 
-// Load any existing local credentials into memory on initialization
 if (typeof window !== "undefined" && window.localStorage) {
   try {
     const rawLocal = window.localStorage.getItem(LOCAL_CREDENTIALS_KEY);
@@ -968,9 +851,6 @@ if (typeof window !== "undefined" && window.localStorage) {
   }
 }
 
-/**
- * Fetch and synchronize activated credentials from Supabase Database.
- */
 export async function syncActivatedCredentialsFromCloud() {
   try {
     const { data, error } = await supabase
@@ -986,7 +866,6 @@ export async function syncActivatedCredentialsFromCloud() {
           activatedPasswordsMap.set(k.trim().toLowerCase(), String(v));
         }
       });
-      // Sync back to localStorage for instant offline access
       if (typeof window !== "undefined" && window.localStorage) {
         const currentObj = Object.fromEntries(activatedPasswordsMap.entries());
         window.localStorage.setItem(LOCAL_CREDENTIALS_KEY, JSON.stringify(currentObj));
@@ -997,28 +876,17 @@ export async function syncActivatedCredentialsFromCloud() {
   }
 }
 
-/**
- * Get stored credentials object.
- */
 export function getStoredPasswords() {
   return Object.fromEntries(activatedPasswordsMap.entries());
 }
 
-/**
- * Persist activated password for employee:
- * 1. Updates in-memory map
- * 2. Saves to localStorage
- * 3. Syncs to Supabase user_settings and employees table metadata
- */
 export async function saveActivatedPassword(email, password) {
   if (!email || !password) return;
   const normEmail = String(email).trim().toLowerCase();
   const normPass = String(password).trim();
 
-  // 1. Update in-memory map
   activatedPasswordsMap.set(normEmail, normPass);
 
-  // 2. Persist to localStorage
   if (typeof window !== "undefined" && window.localStorage) {
     try {
       const currentObj = Object.fromEntries(activatedPasswordsMap.entries());
@@ -1028,9 +896,7 @@ export async function saveActivatedPassword(email, password) {
     }
   }
 
-  // 3. Asynchronously sync to Supabase Database
   try {
-    // A. Update user_settings table
     const allCreds = Object.fromEntries(activatedPasswordsMap.entries());
     await supabase
       .from("user_settings")
@@ -1040,7 +906,6 @@ export async function saveActivatedPassword(email, password) {
         updated_at: new Date().toISOString()
       }, { onConflict: "user_id" });
 
-    // B. Also update employees table metadata if record exists
     try {
       const { data: empData } = await supabase
         .from(EMPLOYEES_TABLE)
@@ -1064,25 +929,19 @@ export async function saveActivatedPassword(email, password) {
   }
 }
 
-/**
- * Verify activated password (supports sync check, localStorage check, and cloud fallback).
- */
 export async function verifyActivatedPassword(email, password) {
   if (!email || !password) return false;
   const normEmail = String(email).trim().toLowerCase();
   const normPass = String(password).trim();
 
-  // 1. Master admin fallback
   if (normEmail === "admin@hrhub.com" && normPass === "admin123") {
     return true;
   }
 
-  // 2. Fast In-Memory Check
   if (activatedPasswordsMap.has(normEmail)) {
     return activatedPasswordsMap.get(normEmail) === normPass;
   }
 
-  // 3. LocalStorage check
   if (typeof window !== "undefined" && window.localStorage) {
     try {
       const raw = window.localStorage.getItem(LOCAL_CREDENTIALS_KEY);
@@ -1094,11 +953,9 @@ export async function verifyActivatedPassword(email, password) {
         }
       }
     } catch {
-      // LocalStorage access not available
     }
   }
 
-  // 4. Cloud Fallback: Check Supabase user_settings
   try {
     const { data, error } = await supabase
       .from("user_settings")
@@ -1112,7 +969,6 @@ export async function verifyActivatedPassword(email, password) {
       return cloudPass === normPass;
     }
 
-    // 5. Cloud Fallback: Check employees table metadata
     const { data: empRow } = await supabase
       .from(EMPLOYEES_TABLE)
       .select("metadata")
@@ -1131,7 +987,6 @@ export async function verifyActivatedPassword(email, password) {
   return false;
 }
 
-// Initial async fetch to populate memory store from Supabase
 fetchEmployeesFromDatabase().catch(() => {});
 syncActivatedCredentialsFromCloud().catch(() => {});
 

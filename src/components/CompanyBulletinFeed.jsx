@@ -29,17 +29,14 @@ const CATEGORIES = [
 export function getYouTubeEmbedUrl(url) {
   if (!url) return null;
   const trimmed = String(url).trim();
-  // Standard watch: youtube.com/watch?v=ID
   const watchMatch = trimmed.match(/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/i);
   if (watchMatch && watchMatch[1]) {
     return `https://www.youtube.com/embed/${watchMatch[1]}`;
   }
-  // Shorts: youtube.com/shorts/ID
   const shortsMatch = trimmed.match(/youtube\.com\/shorts\/([^"&?\/\s]{11})/i);
   if (shortsMatch && shortsMatch[1]) {
     return `https://www.youtube.com/embed/${shortsMatch[1]}`;
   }
-  // Vimeo: vimeo.com/ID
   const vimeoMatch = trimmed.match(/vimeo\.com\/(?:channels\/(?:\w+\/)?|groups\/([^\/]*)\/videos\/|album\/(\d+)\/video\/|)(\d+)/i);
   if (vimeoMatch && vimeoMatch[3]) {
     return `https://player.vimeo.com/video/${vimeoMatch[3]}`;
@@ -80,28 +77,24 @@ export default function CompanyBulletinFeed({
   const [loading, setLoading] = useState(true);
   const [activeFilter, setActiveFilter] = useState("all");
 
-  // Composer Form States
   const [isComposerExpanded, setIsComposerExpanded] = useState(false);
   const [postTitle, setPostTitle] = useState("");
   const [postContent, setPostContent] = useState("");
   const [postCategory, setPostCategory] = useState("Announcement");
   const [isPinned, setIsPinned] = useState(false);
   const [attachedImage, setAttachedImage] = useState(null);
-  const [attachedVideo, setAttachedVideo] = useState(null); // { url, type: 'file' | 'youtube' | 'direct', fileName?: string }
+  const [attachedVideo, setAttachedVideo] = useState(null);
   const [isVideoLinkModalOpen, setIsVideoLinkModalOpen] = useState(false);
   const [videoUrlInput, setVideoUrlInput] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [notice, setNotice] = useState(null);
 
-  // Active Open Comments State (Map of postId -> boolean)
   const [openCommentsMap, setOpenCommentsMap] = useState({});
   const [commentInputs, setCommentInputs] = useState({});
   const [submittingCommentPostId, setSubmittingCommentPostId] = useState(null);
 
-  // Lightbox Image Preview State
   const [previewImageUrl, setPreviewImageUrl] = useState(null);
 
-  // Toast notice
   const [toastMessage, setToastMessage] = useState(null);
 
   const fileInputRef = useRef(null);
@@ -113,7 +106,6 @@ export default function CompanyBulletinFeed({
     setTimeout(() => setToastMessage(null), 3000);
   };
 
-  // 1. Load bulletin posts from database
   const fetchFeed = async () => {
     try {
       setLoading(true);
@@ -130,7 +122,6 @@ export default function CompanyBulletinFeed({
     fetchFeed();
   }, []);
 
-  // 2. Handle image file selection with browser client-side compression
   const handleImageSelect = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -167,7 +158,7 @@ export default function CompanyBulletinFeed({
         ctx.drawImage(img, 0, 0, width, height);
         const compressedBase64 = canvas.toDataURL("image/jpeg", 0.85);
         setAttachedImage(compressedBase64);
-        setAttachedVideo(null); // Either image or video
+        setAttachedVideo(null);
         setIsComposerExpanded(true);
         setNotice(null);
       };
@@ -176,7 +167,6 @@ export default function CompanyBulletinFeed({
     reader.readAsDataURL(file);
   };
 
-  // 3. Handle video file selection from device
   const handleVideoFileSelect = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -186,7 +176,6 @@ export default function CompanyBulletinFeed({
       return;
     }
 
-    // 25MB check for smooth in-browser performance
     if (file.size > 25 * 1024 * 1024) {
       setNotice({
         type: "warning",
@@ -209,7 +198,6 @@ export default function CompanyBulletinFeed({
     reader.readAsDataURL(file);
   };
 
-  // 4. Handle Video Link / URL paste (YouTube, Vimeo, MP4 direct)
   const handleApplyVideoLink = () => {
     if (!videoUrlInput.trim()) return;
     const trimmed = videoUrlInput.trim();
@@ -228,7 +216,6 @@ export default function CompanyBulletinFeed({
     setNotice(null);
   };
 
-  // 5. Handle Submit Post to Database
   const handleCreatePost = async (e) => {
     e?.preventDefault();
     if (!postContent.trim() && !attachedImage && !attachedVideo) {
@@ -258,7 +245,6 @@ export default function CompanyBulletinFeed({
       const res = await createBulletinPostInDb(payload);
       if (res.success) {
         setPosts(res.allPosts);
-        // Reset composer
         setPostTitle("");
         setPostContent("");
         setAttachedImage(null);
@@ -277,7 +263,6 @@ export default function CompanyBulletinFeed({
     }
   };
 
-  // 6. Handle Like Toggle
   const handleToggleLike = async (postId) => {
     if (!currentEmail) {
       showToast("Please log in to acknowledge announcements.");
@@ -294,7 +279,6 @@ export default function CompanyBulletinFeed({
     }
   };
 
-  // 7. Toggle Comment Section
   const handleToggleComments = (postId) => {
     setOpenCommentsMap((prev) => ({
       ...prev,
@@ -302,7 +286,6 @@ export default function CompanyBulletinFeed({
     }));
   };
 
-  // 8. Handle Submit Comment
   const handleSubmitComment = async (postId) => {
     const text = (commentInputs[postId] || "").trim();
     if (!text) return;
@@ -330,7 +313,6 @@ export default function CompanyBulletinFeed({
     }
   };
 
-  // 9. Delete Post
   const handleDeletePost = async (postId) => {
     if (!window.confirm("Are you sure you want to delete this post from the bulletin?")) return;
     try {
@@ -344,7 +326,6 @@ export default function CompanyBulletinFeed({
     }
   };
 
-  // 10. Delete Comment
   const handleDeleteComment = async (postId, commentId) => {
     try {
       const res = await deleteCommentFromBulletinPostInDb(postId, commentId);
@@ -356,12 +337,10 @@ export default function CompanyBulletinFeed({
     }
   };
 
-  // 11. Pinned post extraction for executive spotlight
   const primaryPinnedPost = useMemo(() => {
     return posts.find((p) => Boolean(p.pinned)) || null;
   }, [posts]);
 
-  // 12. Filtered Feed (Strictly chronological: newest post is ALWAYS at the very top)
   const filteredPosts = useMemo(() => {
     return posts.filter((p) => {
       if (activeFilter === "pinned") return Boolean(p.pinned);
@@ -369,14 +348,12 @@ export default function CompanyBulletinFeed({
       if (activeFilter !== "all") return p.category === activeFilter;
       return true;
     }).sort((a, b) => {
-      // Newest post is always at the top regardless of pinned status
       return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
     });
   }, [posts, activeFilter]);
 
   return (
     <div className="space-y-3 max-w-3xl mx-auto antialiased">
-      {/* Toast Notification */}
       {toastMessage && (
         <div className="fixed bottom-6 right-6 z-50 bg-slate-900 text-white text-xs font-bold px-3.5 py-2 rounded-xl shadow-xl flex items-center gap-2 animate-in fade-in slide-in-from-bottom-2">
           <CheckCircle2 size={14} className="text-emerald-400" />
@@ -384,12 +361,8 @@ export default function CompanyBulletinFeed({
         </div>
       )}
 
-      {/* ============================================================ */}
-      {/* 1. FACEBOOK-STYLE "CREATE POST" COMPOSER                     */}
-      {/* ============================================================ */}
       {canPost ? (
         <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-3 sm:p-3.5 space-y-2.5 transition">
-          {/* Top Trigger Row */}
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-full bg-slate-900 text-emerald-400 font-bold text-[11px] flex items-center justify-center shrink-0 shadow-2xs">
               {userInitials}
@@ -404,7 +377,6 @@ export default function CompanyBulletinFeed({
             </div>
           </div>
 
-          {/* Quick Media Action Row */}
           {!isComposerExpanded && (
             <div className="pt-1.5 border-t border-slate-100 flex items-center justify-around text-[11px] font-semibold text-slate-600">
               <button
@@ -457,10 +429,8 @@ export default function CompanyBulletinFeed({
             </div>
           )}
 
-          {/* Expanded Composer Drawer */}
           {isComposerExpanded && (
             <div className="pt-2 border-t border-slate-100 space-y-3 animate-in fade-in duration-150">
-              {/* Author Header & Audience Badge */}
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-bold text-slate-900">{profileName}</span>
@@ -475,7 +445,6 @@ export default function CompanyBulletinFeed({
                 </div>
               </div>
 
-              {/* Optional Post Title */}
               <input
                 type="text"
                 value={postTitle}
@@ -484,7 +453,6 @@ export default function CompanyBulletinFeed({
                 className="w-full text-xs font-bold px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:border-emerald-500 text-slate-900 placeholder:text-slate-400 placeholder:font-normal"
               />
 
-              {/* Main Post Textarea */}
               <textarea
                 rows={3}
                 value={postContent}
@@ -493,7 +461,6 @@ export default function CompanyBulletinFeed({
                 className="w-full text-xs text-slate-800 bg-slate-50 border border-slate-200 rounded-xl p-3.5 focus:bg-white focus:outline-none focus:border-emerald-500 resize-none transition leading-relaxed placeholder:text-slate-400"
               />
 
-              {/* Attached Photo Preview */}
               {attachedImage && (
                 <div className="relative rounded-2xl overflow-hidden border border-slate-200 max-h-72 bg-slate-950 flex items-center justify-center">
                   <img src={attachedImage} alt="Attachment" className="max-h-72 w-full object-contain" />
@@ -508,7 +475,6 @@ export default function CompanyBulletinFeed({
                 </div>
               )}
 
-              {/* Attached Video Preview */}
               {attachedVideo && (
                 <div className="relative rounded-2xl overflow-hidden border border-slate-200 bg-slate-950 p-2 shadow-xs">
                   {getYouTubeEmbedUrl(attachedVideo.url) ? (
@@ -546,7 +512,6 @@ export default function CompanyBulletinFeed({
                 </div>
               )}
 
-              {/* Video Link Embed Sub-Input */}
               {isVideoLinkModalOpen && (
                 <div className="p-3 bg-indigo-50/70 border border-indigo-200 rounded-2xl space-y-2 animate-in fade-in">
                   <div className="flex items-center justify-between text-xs font-bold text-indigo-900">
@@ -582,7 +547,6 @@ export default function CompanyBulletinFeed({
                 </div>
               )}
 
-              {/* Category Pills & Action Buttons */}
               <div className="space-y-2">
                 <div className="flex items-center gap-1.5 flex-wrap">
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mr-1">Category:</span>
@@ -607,7 +571,6 @@ export default function CompanyBulletinFeed({
                   })}
                 </div>
 
-                {/* Pinned announcement checkbox (HRMD only) */}
                 {isHRMD && (
                   <label className="flex items-center gap-2 pt-1 text-xs text-slate-600 font-bold cursor-pointer select-none">
                     <input
@@ -624,7 +587,6 @@ export default function CompanyBulletinFeed({
                 )}
               </div>
 
-              {/* Form Validation Notice */}
               {notice && (
                 <div className={`p-2.5 rounded-xl text-xs flex items-center gap-2 border ${
                   notice.type === "success"
@@ -636,7 +598,6 @@ export default function CompanyBulletinFeed({
                 </div>
               )}
 
-              {/* Hidden File Inputs */}
               <input
                 ref={fileInputRef}
                 type="file"
@@ -652,7 +613,6 @@ export default function CompanyBulletinFeed({
                 className="hidden"
               />
 
-              {/* Actions Footer */}
               <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2 flex-wrap">
                 <div className="flex items-center gap-1.5 flex-wrap">
                   <button
@@ -724,9 +684,6 @@ export default function CompanyBulletinFeed({
         </div>
       )}
 
-      {/* ============================================================ */}
-      {/* 2. FEED TOOLBAR & CATEGORY FILTER TABS                       */}
-      {/* ============================================================ */}
       <div className="bg-white rounded-xl border border-slate-200/80 p-1.5 sm:p-2 flex flex-wrap items-center justify-between gap-1.5 shadow-2xs">
         <div className="flex items-center gap-1 flex-wrap flex-1 min-w-0">
           {[
@@ -766,9 +723,6 @@ export default function CompanyBulletinFeed({
         </button>
       </div>
 
-      {/* ============================================================ */}
-      {/* 2B. PINNED ANNOUNCEMENT EXECUTIVE SPOTLIGHT BANNER           */}
-      {/* ============================================================ */}
       {primaryPinnedPost && activeFilter === "all" && (
         <div
           onClick={() => {
@@ -806,9 +760,6 @@ export default function CompanyBulletinFeed({
         </div>
       )}
 
-      {/* ============================================================ */}
-      {/* 3. POSTS FEED LIST                                           */}
-      {/* ============================================================ */}
       <div key={activeFilter} className="space-y-4">
         {loading && posts.length === 0 ? (
           <div className="space-y-4 animate-tab-fade-in">
@@ -871,7 +822,6 @@ export default function CompanyBulletinFeed({
                     : "border-slate-200/90 hover:border-slate-300"
                 }`}
               >
-                {/* Pinned Ribbon */}
                 {post.pinned && (
                   <div className="bg-gradient-to-r from-amber-400 via-amber-300 to-amber-400 border-b border-amber-300 text-slate-950 px-4 py-1.5 text-[10px] font-black uppercase tracking-wider flex items-center justify-between shadow-xs">
                     <span className="flex items-center gap-1.5">
@@ -884,7 +834,6 @@ export default function CompanyBulletinFeed({
                   </div>
                 )}
 
-                {/* Post Author Header */}
                 <div className="p-3 sm:p-3.5 pb-2 flex items-start justify-between gap-2.5">
                   <div className="flex items-center gap-2.5 min-w-0">
                     <div className="w-8 h-8 rounded-full bg-slate-900 text-emerald-400 font-bold text-[11px] flex items-center justify-center shrink-0 shadow-2xs">
@@ -929,7 +878,6 @@ export default function CompanyBulletinFeed({
                     </div>
                   </div>
 
-                  {/* Header Actions: Category Badge & Delete */}
                   <div className="flex items-center gap-1 shrink-0">
                     <span className="text-[9px] font-bold uppercase px-2 py-0.5 rounded-md border bg-slate-50 text-slate-700 border-slate-200">
                       {post.category || "Announcement"}
@@ -948,7 +896,6 @@ export default function CompanyBulletinFeed({
                   </div>
                 </div>
 
-                {/* Post Content Body */}
                 <div className="px-3 sm:px-3.5 space-y-1.5">
                   {post.title && (
                     <h3 className="text-xs sm:text-sm font-bold text-slate-900 leading-snug">
@@ -963,7 +910,6 @@ export default function CompanyBulletinFeed({
                   )}
                 </div>
 
-                {/* Attached Photo Display */}
                 {post.imageUrl && (
                   <div className="mt-3 bg-slate-950/95 overflow-hidden flex items-center justify-center max-h-[460px]">
                     <img
@@ -975,7 +921,6 @@ export default function CompanyBulletinFeed({
                   </div>
                 )}
 
-                {/* Attached Video Display */}
                 {post.videoUrl && (
                   <div className="mt-3 bg-black overflow-hidden flex items-center justify-center border-y border-slate-900">
                     {ytEmbedUrl ? (
@@ -1000,7 +945,6 @@ export default function CompanyBulletinFeed({
                   </div>
                 )}
 
-                {/* Reaction & Counts Stats Bar */}
                 <div className="px-3 sm:px-3.5 pt-2 pb-1.5 flex items-center justify-between text-[11px] text-slate-500 border-b border-slate-100">
                   <div className="flex items-center gap-1.5">
                     {likesArray.length > 0 && (
@@ -1035,7 +979,6 @@ export default function CompanyBulletinFeed({
                   </div>
                 </div>
 
-                {/* Action Buttons: Like, Comment, Share */}
                 <div className="px-1.5 py-0.5 flex items-center justify-around text-[11px] font-semibold text-slate-600">
                   <button
                     type="button"
@@ -1074,12 +1017,8 @@ export default function CompanyBulletinFeed({
                   </button>
                 </div>
 
-                {/* ========================================================== */}
-                {/* 4. FACEBOOK-STYLE COMMENTS DRAWER                          */}
-                {/* ========================================================== */}
                 {isCommentsOpen && (
                   <div className="bg-slate-50/70 p-4 sm:p-5 pt-3 border-t border-slate-100 space-y-3">
-                    {/* Comments List */}
                     {commentsArray.length > 0 && (
                       <div className="space-y-2.5 max-h-72 overflow-y-auto pr-1">
                         {commentsArray.map((comm) => {
@@ -1125,7 +1064,6 @@ export default function CompanyBulletinFeed({
                       </div>
                     )}
 
-                    {/* Write Comment Box */}
                     <div className="flex items-center gap-2 pt-1">
                       <div className="w-8 h-8 rounded-full bg-slate-900 text-emerald-400 font-extrabold text-[10px] flex items-center justify-center shrink-0">
                         {userInitials}
@@ -1165,9 +1103,6 @@ export default function CompanyBulletinFeed({
         )}
       </div>
 
-      {/* ============================================================ */}
-      {/* 5. LIGHTBOX IMAGE PREVIEW MODAL                              */}
-      {/* ============================================================ */}
       {previewImageUrl && (
         <div
           className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in"

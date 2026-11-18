@@ -9,7 +9,7 @@ body {
 }
 
 @media print {
-  /* Global: completely suppress elements marked .no-print during any print operation */
+
   .no-print,
   .no-print * {
     display: none !important;
@@ -22,7 +22,6 @@ body {
     -webkit-column-break-inside: avoid !important;
   }
 
-  /* Bond Paper Official Document Printing (Incident Report & Notice to Explain) */
   body.printing-active-document html,
   body.printing-active-document {
     background: #ffffff !important;
@@ -33,7 +32,6 @@ body {
     print-color-adjust: exact !important;
   }
 
-  /* Strict A4 Portrait Paper (Scoped to Agent ID Card printing) */
   body.printing-agent-id-card html,
   body.printing-agent-id-card {
     width: 210mm !important;
@@ -65,19 +63,12 @@ body {
     visibility: visible !important;
   }
 
-  /* Completely suppress preview UI badges and helpers during print */
   body.printing-agent-id-card .no-print,
   body.printing-agent-id-card .no-print * {
     display: none !important;
     visibility: hidden !important;
   }
 
-  /* Positioned near the top of A4 Sheet (5mm top offset, 4.5mm side margins)
-     Card size: 99.5mm x 140mm
-     Total card width: 99.5mm + 2mm + 99.5mm = 201mm
-     Leaves safe 4.5mm margin on left and right
-     Guarantees all 4 borders (top, bottom, left, and RIGHT edge) are 100% visible!
-  */
   body.printing-agent-id-card #printable-id-card-area {
     position: relative !important;
     width: 100% !important;
@@ -90,9 +81,9 @@ body {
     flex-wrap: nowrap !important;
     justify-content: center !important;
     align-items: flex-start !important;
-    padding-top: 5mm !important; /* Lowered by 5mm so top line is 100% visible */
-    padding-left: 4.5mm !important; /* 4.5mm margin protects left edge */
-    padding-right: 4.5mm !important; /* 4.5mm margin protects right edge */
+    padding-top: 5mm !important;
+    padding-left: 4.5mm !important;
+    padding-right: 4.5mm !important;
     margin-top: 0 !important;
     margin-left: auto !important;
     margin-right: auto !important;
@@ -106,11 +97,6 @@ body {
     break-after: avoid !important;
   }
 
-  /* Calibrated Card Face in Print:
-     Width: 99.5mm
-     Height: 140mm
-     Heavy, distinct 2px solid black outline on all 4 borders!
-  */
   body.printing-agent-id-card #printable-id-card-area.print-top-side-by-side .id-card-face,
   body.printing-agent-id-card .id-card-face {
     width: 99.5mm !important;
@@ -121,7 +107,7 @@ body {
     max-height: 140mm !important;
     box-sizing: border-box !important;
     box-shadow: none !important;
-    border: 2px solid #000000 !important; /* Solid black outline on all 4 sides */
+    border: 2px solid #000000 !important;
     border-radius: 0 !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
@@ -135,15 +121,12 @@ body {
     padding: 0 !important;
   }
 
-  /* Shortened ID number line: exactly 1 1/2 inches (38.1mm) in print */
   body.printing-agent-id-card .id-number-line {
     width: 38.1mm !important;
     max-width: 38.1mm !important;
   }
 }
 
-
-/* Sleek custom scrollbars for sticky sidebars */
 .custom-scrollbar::-webkit-scrollbar {
   width: 4px;
 }
@@ -158,12 +141,10 @@ body {
   background: rgba(100, 116, 139, 0.6);
 }
 
-/* Ensure details disclosure triangle marker is visible across all browsers */
 summary {
   display: list-item;
 }
 
-/* Modern professional skeleton shimmer wave */
 @keyframes shimmerWave {
   0% {
     background-position: -200% 0;
@@ -179,7 +160,6 @@ summary {
   animation: shimmerWave 2s infinite ease-in-out;
 }
 
-/* Holographic Laser Scan Beam */
 @keyframes scanBeam {
   0% {
     top: 0%;
@@ -199,7 +179,6 @@ summary {
   animation: scanBeam 2.6s ease-in-out infinite;
 }
 
-/* Precision Orbital Rings */
 @keyframes spinSlow {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
@@ -218,7 +197,6 @@ summary {
   animation: spinReverseSlow 6s linear infinite;
 }
 
-/* Dynamic Live Data Equalizer Bars */
 @keyframes dataBarPulse {
   0%, 100% {
     height: 6px;
@@ -236,7 +214,6 @@ summary {
 .data-bar-4 { animation: dataBarPulse 1.4s ease-in-out infinite 0.5s; }
 .data-bar-5 { animation: dataBarPulse 1.0s ease-in-out infinite 0.15s; }
 
-/* Stream Flow Beam */
 @keyframes streamFlow {
   0% { transform: translateX(-100%); }
   100% { transform: translateX(100%); }
@@ -246,7 +223,6 @@ summary {
   animation: streamFlow 1.6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
 }
 
-/* Physics-based Spring Bounce for Hero Badge */
 @keyframes springBounce {
   0%, 100% {
     transform: translateY(0) scale(1, 1);
@@ -268,7 +244,6 @@ summary {
   animation: springBounce 1.6s infinite;
 }
 
-/* Floor Shadow Squash & Stretch */
 @keyframes shadowSquash {
   0%, 100% {
     transform: scale(1.1);
@@ -286,7 +261,6 @@ summary {
   animation: shadowSquash 1.6s infinite;
 }
 
-/* Harmonic 3-Dot Bounce Wave */
 @keyframes dotWaveBounce {
   0%, 100% {
     transform: translateY(0) scale(1);
@@ -310,7 +284,6 @@ summary {
   animation: dotWaveBounce 1.1s cubic-bezier(0.34, 1.56, 0.64, 1) infinite 0.36s;
 }
 
-/* Pipeline Step Hop / Bounce */
 @keyframes stepHop {
   0%, 100% {
     transform: translateY(0);
@@ -332,7 +305,6 @@ summary {
   animation: stepHop 1.8s cubic-bezier(0.34, 1.56, 0.64, 1) infinite 0.7s;
 }
 
-/* Float Bounce for Avatar */
 @keyframes floatBounce {
   0%, 100% {
     transform: translateY(0);
@@ -346,7 +318,6 @@ summary {
   animation: floatBounce 2.5s ease-in-out infinite;
 }
 
-/* News Marquee & Radar Animations */
 @keyframes marquee {
   0% {
     transform: translateX(100%);
@@ -366,7 +337,6 @@ summary {
   animation-play-state: paused;
 }
 
-/* Real-Time Live WYSIWYG Memo Editor */
 .memo-live-editor:empty::before {
   content: attr(data-placeholder);
   color: #94a3b8;
@@ -379,7 +349,6 @@ summary {
   outline: none;
 }
 
-/* Directives Lists (Numbered & Bullet Lists) Styling Override for Tailwind Reset */
 .memo-live-editor ol,
 .memo-directives-content ol,
 .memo-print-sheet ol {
@@ -405,7 +374,6 @@ summary {
   line-height: inherit !important;
 }
 
-/* Leaflet Custom Map Pins - Zero border/background reset */
 .user-booth-pin,
 .agent-outlet-pin,
 .custom-point-pin,
@@ -414,10 +382,6 @@ summary {
   background: transparent !important;
   border: none !important;
 }
-
-/* ============================================================ */
-/* ENTERPRISE ENTRANCE & TAB TRANSITION ANIMATIONS              */
-/* ============================================================ */
 
 @keyframes tabFadeInUp {
   0% {
@@ -461,7 +425,6 @@ summary {
   }
 }
 
-/* Base entrance transition for tabs & page views */
 .animate-tab-fade-in {
   animation: tabFadeInUp 0.32s cubic-bezier(0.16, 1, 0.3, 1) both;
   will-change: opacity, transform;
@@ -472,7 +435,6 @@ summary {
   will-change: opacity, transform;
 }
 
-/* Stagger delay classes for cascading item reveals */
 .stagger-1 {
   animation: staggerItemUp 0.34s cubic-bezier(0.16, 1, 0.3, 1) both;
   animation-delay: 40ms;
@@ -503,7 +465,6 @@ summary {
   animation-delay: 240ms;
 }
 
-/* Automatic staggered child container */
 .stagger-children > *:nth-child(1) {
   animation: staggerItemUp 0.32s cubic-bezier(0.16, 1, 0.3, 1) both;
   animation-delay: 30ms;
@@ -533,11 +494,9 @@ summary {
   animation-delay: 210ms;
 }
 
-/* Skeleton Loading Placeholder */
 .skeleton-shimmer {
   background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
   background-size: 200% 100%;
   animation: skeletonPulse 1.6s ease-in-out infinite;
 }
-
 

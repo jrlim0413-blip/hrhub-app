@@ -338,7 +338,6 @@ export async function copyRichInviteToClipboard(employee, portalUrl = getPortalI
       ]);
       return { mode: "rich_html", plainText };
     } catch {
-      // Fallback to plain text if rich ClipboardItem is blocked
     }
   }
 

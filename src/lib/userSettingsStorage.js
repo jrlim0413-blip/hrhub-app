@@ -1,8 +1,3 @@
-/**
- * Dedicated User Settings Storage Service
- * Purpose: Manage all user default settings in dedicated Supabase table ('user_settings')
- * per user account without localStorage.
- */
 
 import { supabase } from "./supabase.js";
 
@@ -11,7 +6,6 @@ export const ORGANIZATION_DEFAULT_ACCOUNT_KEY = "admin@hrhub.com";
 export const SETTINGS_SCHEMA_VERSION = 2;
 export const LETTERHEAD_FIELDS = ["legalName", "tagline", "address", "contact"];
 
-// Prior v1 factory values so untouched defaults on existing accounts upgrade cleanly once
 const LEGACY_V1_FACTORY_DEFAULTS = {
   fontSize: 13.3,
   signatoryLayout: "dual",
@@ -20,12 +14,8 @@ const LEGACY_V1_FACTORY_DEFAULTS = {
   watermarkOpacity: 18
 };
 
-// In-memory session cache (replaces localStorage)
 const memorySettingsStore = new Map();
 
-/**
- * Validates per-company letterhead overrides so invalid or blank company headings never blank a letterhead.
- */
 export function filterValidLetterheadFields(letterheadMap, validCompanyIds = null) {
   if (!letterheadMap || typeof letterheadMap !== "object" || Array.isArray(letterheadMap)) {
     return {};
@@ -59,10 +49,6 @@ export function filterValidLetterheadFields(letterheadMap, validCompanyIds = nul
   }, {});
 }
 
-/**
- * Extracts a normalized, stable account key for the current user.
- * Prioritizes email, then user id, then username, then fallback.
- */
 export function getUserAccountKey(currentUser = null) {
   if (currentUser) {
     if (typeof currentUser === "string" && currentUser.trim()) {
@@ -82,9 +68,6 @@ export function getUserAccountKey(currentUser = null) {
   return "default_account";
 }
 
-/**
- * Clean factory baseline defaults aligned with HRMD (admin@hrhub.com) master defaults
- */
 export function getDefaultUserSettings() {
   return {
     version: SETTINGS_SCHEMA_VERSION,
@@ -110,9 +93,9 @@ export function getDefaultUserSettings() {
       offsetX: 0,
       offsetY: -45
     },
-    signatoryLayout: "single", // "dual" | "single"
-    letterheadDefaults: {}, // Per-company custom overrides for the active user
-    organizationLetterheadDefaults: {}, // Organization baseline synced from HRMD (admin@hrhub.com)
+    signatoryLayout: "single",
+    letterheadDefaults: {},
+    organizationLetterheadDefaults: {},
     headerDefaults: {
       defaultTo: "HR ON-SITE, CIC, AND FIELD MONITORING",
       defaultFrom: "HUMAN RESOURCES DEPARTMENT",
@@ -154,9 +137,6 @@ const pickBool = (colVal, jsonVal, fallback) => {
   return fallback;
 };
 
-/**
- * Normalizes a Supabase 'user_settings' row into the frontend settings structure.
- */
 export function mapUserSettingsRow(data, baseDefaults = getDefaultUserSettings()) {
   if (!data || typeof data !== "object") return baseDefaults;
   const jsonSettings = data.settings_json || data.settings || {};
@@ -209,10 +189,6 @@ export function mapUserSettingsRow(data, baseDefaults = getDefaultUserSettings()
   };
 }
 
-/**
- * Builds the shared organization template from HRMD's (admin@hrhub.com) saved settings.
- * Personal e-signature images and active entity filter remain per-account.
- */
 export function buildOrganizationBaseline(adminRow = null) {
   const factoryDefaults = getDefaultUserSettings();
   if (!adminRow) return factoryDefaults;
@@ -246,9 +222,6 @@ const isLegacySignatoryBox = (box, legacy) =>
   Number(box.offsetX) === legacy.offsetX &&
   Number(box.offsetY) === legacy.offsetY;
 
-/**
- * Resolves effective account settings from the user's own row and HRMD's organization template row.
- */
 export function resolveUserSettingsFromRows(ownRow = null, adminRow = null, accountKey = "") {
   const factoryDefaults = getDefaultUserSettings();
 
@@ -316,9 +289,6 @@ export function resolveUserSettingsFromRows(ownRow = null, adminRow = null, acco
   };
 }
 
-/**
- * Synchronous in-memory session reader for immediate initial state
- */
 export function getLocalUserSettings(currentUser = null) {
   const accountKey = getUserAccountKey(currentUser);
   const defaults = getDefaultUserSettings();
@@ -341,10 +311,6 @@ export function getLocalUserSettings(currentUser = null) {
   return defaults;
 }
 
-/**
- * Loads user settings directly from Supabase ('user_settings' table) for the account,
- * inheriting organization defaults configured on HRMD (admin@hrhub.com) for other/new accounts.
- */
 export async function getUserSettings(currentUser = null) {
   const accountKey = getUserAccountKey(currentUser);
   const defaults = getDefaultUserSettings();
@@ -375,7 +341,6 @@ export async function getUserSettings(currentUser = null) {
       const adminRow = dataRows.find((row) => row.user_id === ORGANIZATION_DEFAULT_ACCOUNT_KEY) || null;
       const merged = resolveUserSettingsFromRows(ownRow, adminRow, accountKey);
 
-      // Cache in active session memory
       memorySettingsStore.set(accountKey, merged);
 
       return {
@@ -396,9 +361,6 @@ export async function getUserSettings(currentUser = null) {
   };
 }
 
-/**
- * Saves or updates user default settings directly in Supabase ('user_settings' table)
- */
 export async function saveUserSettings(currentUser = null, settingsPartial = {}) {
   const accountKey = getUserAccountKey(currentUser);
   const current = getLocalUserSettings(currentUser);
@@ -415,14 +377,11 @@ export async function saveUserSettings(currentUser = null, settingsPartial = {})
     updatedAt: new Date().toISOString()
   };
 
-  // Cache in active session memory (retaining transient organizationLetterheadDefaults)
   memorySettingsStore.set(accountKey, merged);
 
-  // Strip transient organizationLetterheadDefaults before persisting per-account overrides
   const persistableJson = { ...merged };
   delete persistableJson.organizationLetterheadDefaults;
 
-  // Dedicated row payload with both explicit columns & JSON document column
   const payload = {
     user_id: accountKey,
     directives_font_family: merged.directives.fontFamily,
@@ -465,7 +424,6 @@ export async function saveUserSettings(currentUser = null, settingsPartial = {})
       .from(USER_SETTINGS_TABLE)
       .upsert(payload, { onConflict: "user_id" });
 
-    // Auto-heal schema differences: if any column is reported missing from Supabase schema cache, strip and retry
     if (error && error.message?.includes("Could not find the")) {
       const workingPayload = { ...payload };
       let retries = 5;
@@ -504,9 +462,6 @@ export async function saveUserSettings(currentUser = null, settingsPartial = {})
   };
 }
 
-/**
- * Resets user settings back to initial factory defaults in Supabase
- */
 export async function resetUserSettings(currentUser = null) {
   const accountKey = getUserAccountKey(currentUser);
   const defaults = getDefaultUserSettings();
@@ -531,17 +486,11 @@ export async function resetUserSettings(currentUser = null) {
   return { success: true, syncedToSupabase, settings: defaults };
 }
 
-/**
- * Exports user settings as a downloadable JSON string
- */
 export function exportSettingsAsJson(currentUser = null) {
   const settings = getLocalUserSettings(currentUser);
   return JSON.stringify(settings, null, 2);
 }
 
-/**
- * Imports settings from a JSON string and saves them directly to Supabase
- */
 export async function importSettingsFromJson(currentUser = null, jsonString) {
   try {
     const parsed = JSON.parse(jsonString);

@@ -120,7 +120,6 @@ const dateKey = (record) => {
   return "";
 };
 
-// Vibrant color palette for multi-area representation
 const AREA_PALETTES = [
   {
     bg: "bg-emerald-500",
@@ -216,7 +215,6 @@ export default function MultiAreaBettingRatioView({
     return formatDate(new Date(d.getFullYear(), d.getMonth(), 1));
   }, []);
 
-  // Date range filter - defaults to yesterday's finalized ledger
   const [dateRange, setDateRange] = useState(() => {
     if (parentRange?.from && parentRange?.to) {
       return { from: parentRange.from, to: parentRange.to };
@@ -224,17 +222,14 @@ export default function MultiAreaBettingRatioView({
     return { from: yesterdayStr, to: yesterdayStr };
   });
 
-  // Keep in sync if parentRange changes
   useEffect(() => {
     if (parentRange?.from && parentRange?.to) {
       setDateRange({ from: parentRange.from, to: parentRange.to });
     }
   }, [parentRange?.from, parentRange?.to]);
 
-  // Area configurations from storage / Supabase
   const [areaConfigs, setAreaConfigs] = useState(() => getAreaConfigs());
 
-  // Filter area configs based on user's assigned entity
   const targetAreaConfigs = useMemo(() => {
     if (isGlobalUser) return areaConfigs;
     if (userEntityScope?.isNonStl) return [];
@@ -258,7 +253,7 @@ export default function MultiAreaBettingRatioView({
   const [areaResults, setAreaResults] = useState({});
   const [loading, setLoading] = useState(false);
   const [syncProgress, setSyncProgress] = useState({ current: 0, total: 0, activeAreaName: "" });
-  const [selectedSort, setSelectedSort] = useState("gross"); // 'gross' | 'share' | 'productivity' | 'tellers'
+  const [selectedSort, setSelectedSort] = useState("gross");
   const [selectedCompanyFilter, setSelectedCompanyFilter] = useState(() => {
     if (!isGlobalUser && userEntityScope) {
       return userEntityScope.canonicalName;
@@ -274,7 +269,6 @@ export default function MultiAreaBettingRatioView({
     }
   }, [isGlobalUser, userEntityScope]);
 
-  // Fetch official finished draws and winning results for today
   useEffect(() => {
     const fetchTodayDraws = async () => {
       try {
@@ -294,7 +288,6 @@ export default function MultiAreaBettingRatioView({
     fetchTodayDraws();
   }, [todayStr]);
 
-  // Listen to external area config updates
   useEffect(() => {
     const handleUpdate = (e) => {
       if (e.detail && Array.isArray(e.detail)) {
@@ -313,7 +306,6 @@ export default function MultiAreaBettingRatioView({
     };
   }, []);
 
-  // Fetch all areas data
   const fetchAllAreasData = async () => {
     const activeAreas = targetAreaConfigs.filter((a) => a.isActive !== false);
     if (activeAreas.length === 0) return;
@@ -335,7 +327,6 @@ export default function MultiAreaBettingRatioView({
       const accountantId = area.accountantId || "2";
 
       try {
-        // 1. Fetch Active Tellers
         let activeTellers = [];
         let activeTellersUrlObj;
         try {
@@ -354,7 +345,6 @@ export default function MultiAreaBettingRatioView({
           console.warn(`[Betting Ratio] Active tellers fetch error for ${area.areaName}:`, tErr);
         }
 
-        // 2. Fetch Gross Report (Chunked by 14 days)
         let grossUrlObj;
         try {
           grossUrlObj = new URL(area.grossReportUrl || DEFAULT_GROSS_URL);
@@ -387,7 +377,6 @@ export default function MultiAreaBettingRatioView({
         const allRecords = chunkResults.flat();
         const durationMs = Math.round(performance.now() - startTime);
 
-        // Calculate Totals, Hits, Kabig & Breakdowns
         let grossSum = 0;
         let hitsSum = 0;
         const dailyGross = {};
@@ -418,13 +407,11 @@ export default function MultiAreaBettingRatioView({
           if (agId) uniqueAgentIds.add(String(agId));
         });
 
-        // If viewing Today and accountant ledger has not posted records yet, check live bets cache for finished draws
         if (allRecords.length === 0 && validFrom === todayStr && validTo === todayStr) {
           try {
             const liveCacheStr = sessionStorage.getItem("hrhub_live_bets_cache");
             if (liveCacheStr) {
               const liveCache = JSON.parse(liveCacheStr);
-              // Only count draws that are finished/posted
               const finishedDrawTimes = new Set(["10:30", "10", "14", "14:00", "2", "15", "15:00", "3"]);
               Object.values(liveCache).forEach((tellerInfo) => {
                 if (tellerInfo?.draws) {
@@ -506,12 +493,10 @@ export default function MultiAreaBettingRatioView({
     setLoading(false);
   };
 
-  // Initial fetch on mount or when date range changes
   useEffect(() => {
     fetchAllAreasData();
   }, [dateRange.from, dateRange.to, targetAreaConfigs.length]);
 
-  // Company options for filter
   const companyOptions = useMemo(() => {
     if (!isGlobalUser && userEntityScope) {
       return [userEntityScope.canonicalName];
@@ -523,7 +508,6 @@ export default function MultiAreaBettingRatioView({
     return Array.from(list);
   }, [targetAreaConfigs, isGlobalUser, userEntityScope]);
 
-  // Aggregate and calculate Ratios across all areas
   const aggregatedStats = useMemo(() => {
     const activeAreas = targetAreaConfigs.filter((a) => a.isActive !== false);
     const areaEntries = activeAreas.map((area, index) => {
@@ -546,12 +530,10 @@ export default function MultiAreaBettingRatioView({
       };
     });
 
-    // Apply company entity filter if not 'all'
     const filteredEntries = selectedCompanyFilter === "all"
       ? areaEntries
       : areaEntries.filter((item) => item.area.companyName === selectedCompanyFilter);
 
-    // Network Gross, Hits & Kabig Totals
     const totalNetworkGross = filteredEntries.reduce((sum, item) => sum + (item.totalGross || 0), 0);
     const totalNetworkHits = filteredEntries.reduce((sum, item) => sum + (item.totalHits || 0), 0);
     const totalNetworkKabig = totalNetworkGross - totalNetworkHits;
@@ -563,7 +545,6 @@ export default function MultiAreaBettingRatioView({
     const totalNetworkTickets = filteredEntries.reduce((sum, item) => sum + (item.ticketCount || 0), 0);
     const avgProductivity = totalNetworkTellers > 0 ? (totalNetworkGross / totalNetworkTellers) : 0;
 
-    // Calculate individual ratios
     const calculatedAreas = filteredEntries.map((item) => {
       const gross = item.totalGross || 0;
       const hits = item.totalHits || 0;
@@ -595,7 +576,6 @@ export default function MultiAreaBettingRatioView({
       };
     });
 
-    // Sort areas based on user preference
     calculatedAreas.sort((a, b) => {
       if (selectedSort === "gross") return b.totalGross - a.totalGross;
       if (selectedSort === "kabig") return b.totalKabig - a.totalKabig;
@@ -609,7 +589,6 @@ export default function MultiAreaBettingRatioView({
     const marketLeader = calculatedAreas[0] || null;
     const highestProductivityArea = [...calculatedAreas].sort((a, b) => b.productivityPerTeller - a.productivityPerTeller)[0] || null;
 
-    // Count online areas
     const onlineCount = calculatedAreas.filter((a) => a.status === "online").length;
 
     return {
@@ -630,7 +609,6 @@ export default function MultiAreaBettingRatioView({
     };
   }, [targetAreaConfigs, areaResults, selectedCompanyFilter, selectedSort]);
 
-  // Export to CSV
   const handleExportCsv = () => {
     if (aggregatedStats.areas.length === 0) return;
 
@@ -696,7 +674,6 @@ export default function MultiAreaBettingRatioView({
     document.body.removeChild(link);
   };
 
-  // Add Maguindanao preset if only 1 area exists
   const handleAddPresetArea = async () => {
     try {
       const newPreset = {
@@ -726,7 +703,6 @@ export default function MultiAreaBettingRatioView({
     }
   };
 
-  // Switch to an area and open live stream
   const handleFocusAreaLive = (areaId) => {
     setSelectedAreaId(areaId);
     if (onSelectAreaForLive) {
@@ -734,7 +710,6 @@ export default function MultiAreaBettingRatioView({
     }
   };
 
-  // Switch to Tools tab
   const handleOpenToolsApiHealth = () => {
     if (onNavigateToTools) {
       onNavigateToTools();
@@ -761,7 +736,6 @@ export default function MultiAreaBettingRatioView({
 
   return (
     <div className="space-y-6 p-4 sm:p-6 bg-slate-900/50 rounded-3xl border border-slate-800 text-slate-100">
-      {/* 1. HEADER SECTION & CONTROL BAR */}
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 pb-5 border-b border-slate-800">
         <div>
           <div className="flex items-center gap-2">
@@ -785,9 +759,7 @@ export default function MultiAreaBettingRatioView({
           </p>
         </div>
 
-        {/* Date Filter & Action Buttons */}
         <div className="flex flex-wrap items-center gap-2">
-          {/* Quick Date Presets */}
           <div className="inline-flex items-center rounded-xl border border-slate-800 bg-slate-950 p-1">
             <button
               type="button"
@@ -836,7 +808,6 @@ export default function MultiAreaBettingRatioView({
             </button>
           </div>
 
-          {/* Date Range Inputs */}
           <div className="inline-flex items-center gap-2 rounded-xl border border-slate-700/80 bg-slate-950 px-3 py-1.5 text-xs text-slate-300 shadow-inner">
             <CalendarDays size={14} className="text-white drop-shadow-xs shrink-0" />
             <input
@@ -854,7 +825,6 @@ export default function MultiAreaBettingRatioView({
             />
           </div>
 
-          {/* Sync / Refresh Button */}
           <button
             type="button"
             onClick={fetchAllAreasData}
@@ -866,7 +836,6 @@ export default function MultiAreaBettingRatioView({
             <span className="hidden sm:inline">{loading ? "Syncing..." : "Sync APIs"}</span>
           </button>
 
-          {/* Export CSV */}
           <button
             type="button"
             onClick={handleExportCsv}
@@ -878,7 +847,6 @@ export default function MultiAreaBettingRatioView({
             <span className="hidden sm:inline">CSV</span>
           </button>
 
-          {/* Manage APIs in Tools Shortcut */}
           <button
             type="button"
             onClick={handleOpenToolsApiHealth}
@@ -891,8 +859,6 @@ export default function MultiAreaBettingRatioView({
         </div>
       </div>
 
-
-      {/* Syncing Progress Banner (When active) */}
       {loading && (
         <div className="flex items-center justify-between rounded-2xl border border-emerald-500/30 bg-emerald-950/40 px-4 py-3 text-xs text-emerald-300 animate-pulse">
           <div className="flex items-center gap-2.5">
@@ -908,9 +874,7 @@ export default function MultiAreaBettingRatioView({
         </div>
       )}
 
-      {/* 2. EXECUTIVE KPI CARDS */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3.5">
-        {/* Total Turnover Across All Areas */}
         <div className="relative overflow-hidden rounded-2xl border border-slate-800 bg-gradient-to-br from-slate-900 to-slate-950 p-4 flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between">
@@ -929,7 +893,6 @@ export default function MultiAreaBettingRatioView({
           </div>
         </div>
 
-        {/* Total Net Retained Gross */}
         <div className="relative overflow-hidden rounded-2xl border border-emerald-500/30 bg-gradient-to-br from-emerald-950/30 to-slate-950 p-4 flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between">
@@ -950,7 +913,6 @@ export default function MultiAreaBettingRatioView({
           </div>
         </div>
 
-        {/* Total Payout Hits (Panalo) */}
         <div className="relative overflow-hidden rounded-2xl border border-rose-500/30 bg-gradient-to-br from-rose-950/30 to-slate-950 p-4 flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between">
@@ -971,7 +933,6 @@ export default function MultiAreaBettingRatioView({
           </div>
         </div>
 
-        {/* Active Betting Force (Tellers) */}
         <div className="relative overflow-hidden rounded-2xl border border-slate-800 bg-gradient-to-br from-slate-900 to-slate-950 p-4 flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between">
@@ -990,7 +951,6 @@ export default function MultiAreaBettingRatioView({
           </div>
         </div>
 
-        {/* Market Leader Area */}
         <div className="relative overflow-hidden rounded-2xl border border-slate-800 bg-gradient-to-br from-slate-900 to-slate-950 p-4 flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between">
@@ -1011,7 +971,6 @@ export default function MultiAreaBettingRatioView({
           </div>
         </div>
 
-        {/* Network Average Productivity */}
         <div className="relative overflow-hidden rounded-2xl border border-slate-800 bg-gradient-to-br from-slate-900 to-slate-950 p-4 flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between">
@@ -1031,7 +990,6 @@ export default function MultiAreaBettingRatioView({
         </div>
       </div>
 
-      {/* 3. MULTI-AREA MARKET SHARE VISUAL BAR */}
       <div className="rounded-2xl border border-slate-800 bg-slate-950 p-5 space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
           <div>
@@ -1050,7 +1008,6 @@ export default function MultiAreaBettingRatioView({
           )}
         </div>
 
-        {/* The Segmented Multi-Color Progress Bar */}
         <div className="h-6 w-full rounded-xl overflow-hidden bg-slate-800/80 flex shadow-inner border border-slate-800">
           {aggregatedStats.areas.map((item) => {
             const widthPct = Math.max(item.sharePercent, 0);
@@ -1072,7 +1029,6 @@ export default function MultiAreaBettingRatioView({
           })}
         </div>
 
-        {/* Legend */}
         <div className="flex flex-wrap items-center gap-x-6 gap-y-2 pt-2 border-t border-slate-800/60 text-xs">
           {aggregatedStats.areas.map((item) => (
             <div key={item.area.id} className="flex items-center gap-2">
@@ -1085,7 +1041,6 @@ export default function MultiAreaBettingRatioView({
         </div>
       </div>
 
-      {/* 4. AREA-BY-AREA COMPARATIVE CARDS GRID */}
       <div>
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
           <div>
@@ -1098,7 +1053,6 @@ export default function MultiAreaBettingRatioView({
             </p>
           </div>
 
-          {/* Quick Filters */}
           <div className="flex items-center gap-2">
             {!isGlobalUser ? (
               <div className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/10 text-emerald-400 font-bold text-xs rounded-xl border border-emerald-500/30">
@@ -1135,7 +1089,6 @@ export default function MultiAreaBettingRatioView({
           </div>
         </div>
 
-        {/* Grid of Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {aggregatedStats.areas.map((item, index) => {
             const isLeader = index === 0 && item.totalGross > 0;
@@ -1149,7 +1102,6 @@ export default function MultiAreaBettingRatioView({
                 }`}
               >
                 <div>
-                  {/* Top Bar of Card */}
                   <div className="flex items-start justify-between gap-2">
                     <div>
                       <div className="flex items-center gap-2">
@@ -1164,7 +1116,6 @@ export default function MultiAreaBettingRatioView({
                       </p>
                     </div>
 
-                    {/* API Status Pill */}
                     <span
                       className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold ${
                         item.status === "online"
@@ -1180,7 +1131,6 @@ export default function MultiAreaBettingRatioView({
                     </span>
                   </div>
 
-                  {/* Gross Turnover Big Number */}
                   <div className="mt-4 pt-3 border-t border-slate-800/80">
                     <div className="flex items-center justify-between">
                       <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total Gross Turnover</p>
@@ -1191,7 +1141,6 @@ export default function MultiAreaBettingRatioView({
                     </p>
                   </div>
 
-                  {/* Dual Net Retained & Hits (Payout) Breakdown Cards */}
                   <div className="mt-3 grid grid-cols-2 gap-2">
                     <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-2.5">
                       <div className="flex items-center justify-between text-[10px] text-emerald-400 font-bold uppercase tracking-wider">
@@ -1222,7 +1171,6 @@ export default function MultiAreaBettingRatioView({
                     </div>
                   </div>
 
-                  {/* Market Share Progress & Benchmark Ratio */}
                   <div className="mt-4 space-y-2">
                     <div className="flex items-center justify-between text-xs">
                       <span className="text-slate-400">Betting Share Ratio</span>
@@ -1236,7 +1184,6 @@ export default function MultiAreaBettingRatioView({
                     </div>
                   </div>
 
-                  {/* Benchmark Comparison & Productivity Matrix */}
                   <div className="mt-4 grid grid-cols-2 gap-2 rounded-xl bg-slate-900/90 p-3 border border-slate-800/70 text-xs">
                     <div>
                       <p className="text-[10px] text-slate-400">Benchmark Ratio</p>
@@ -1275,7 +1222,6 @@ export default function MultiAreaBettingRatioView({
                   </div>
                 </div>
 
-                {/* Bottom Quick Focus Action */}
                 <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between">
                   <span className="text-[10px] text-slate-500 font-mono">
                     Accountant #{item.area.accountantId || "2"}
@@ -1295,7 +1241,6 @@ export default function MultiAreaBettingRatioView({
         </div>
       </div>
 
-      {/* 5. MULTI-AREA COMPARISON TABLE */}
       <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-950">
         <div className="border-b border-slate-800 px-5 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
           <div>
@@ -1401,7 +1346,6 @@ export default function MultiAreaBettingRatioView({
                 </tr>
               ))}
             </tbody>
-            {/* Summary Row */}
             <tfoot>
               <tr className="border-t-2 border-emerald-500/40 bg-slate-900/90 font-black text-white">
                 <td className="py-3 px-4" colSpan={3}>
@@ -1439,7 +1383,6 @@ export default function MultiAreaBettingRatioView({
         </div>
       </div>
 
-      {/* 6. CALLOUT: If only 1 Area configured, offer 1-click Preset or Tools Guide */}
       {aggregatedStats.totalCount <= 1 && (
         <div className="rounded-2xl border border-amber-500/30 bg-amber-950/20 p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="flex items-start gap-3">

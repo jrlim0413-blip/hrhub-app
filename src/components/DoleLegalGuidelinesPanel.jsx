@@ -10,9 +10,6 @@ import {
 import { COMPANIES } from "./MemoGeneratorPanel";
 import { supabase } from "../lib/supabase";
 
-// ================= 2026 STATUTORY DOLE CONSTANTS & WAGE ORDERS (PHILIPPINES NATIONWIDE) =================
-// Official Regional Wage Orders issued by RTWPBs under the National Wages and Productivity Commission (NWPC - DOLE)
-// Source: https://nwpc.dole.gov.ph
 export const DEFAULT_REGIONAL_WAGE_RATES_2026 = {
   ncr: {
     id: "ncr",
@@ -232,10 +229,8 @@ export const DEFAULT_REGIONAL_WAGE_RATES_2026 = {
   }
 };
 
-
 export const REGIONAL_WAGE_RATES_2026 = DEFAULT_REGIONAL_WAGE_RATES_2026;
 
-// Official 2026 Philippine Proclaimed Holidays
 export const PHILIPPINE_HOLIDAYS_2026 = [
   { name: "New Year's Day", date: "January 1", type: "regular", rate: "200%" },
   { name: "Maundy Thursday", date: "April 2", type: "regular", rate: "200%" },
@@ -265,8 +260,7 @@ export default function DoleLegalGuidelinesPanel({
   onSwitchToApiConfig = () => {},
   onOpenAiBuddy = () => {}
 }) {
-  // Navigation Subtabs
-  const [activeTab, setActiveTab] = useState("due_process"); // 'due_process' | 'calculator' | 'grounds' | 'discipline' | 'wage_orders' | 'issuances'
+  const [activeTab, setActiveTab] = useState("due_process");
   const [selectedCompanyId, setSelectedCompanyId] = useState("lucky_betplay");
   const [searchQuery, setSearchQuery] = useState("");
   const [copiedKey, setCopiedKey] = useState(null);
@@ -275,14 +269,12 @@ export default function DoleLegalGuidelinesPanel({
     return COMPANIES.find((c) => c.id === selectedCompanyId) || COMPANIES[0];
   }, [selectedCompanyId]);
 
-  // Copy Citation Helper
   const handleCopyCitation = (text, key) => {
     navigator.clipboard.writeText(text);
     setCopiedKey(key);
     setTimeout(() => setCopiedKey(null), 2500);
   };
 
-  // ================= MODULE 1: DUE PROCESS SIMULATOR STATE =================
   const [nteServeDate, setNteServeDate] = useState(() => new Date().toISOString().split("T")[0]);
   const [dueProcessChecklist, setDueProcessChecklist] = useState({
     specificActs: true,
@@ -292,11 +284,9 @@ export default function DoleLegalGuidelinesPanel({
     secondNoticeServed: false
   });
 
-  // Calculate 5-Day Statutory Deadline under DOLE D.O. 147-15
   const statutoryExplanationDeadline = useMemo(() => {
     if (!nteServeDate) return "";
     const date = new Date(nteServeDate);
-    // Add 5 calendar days
     date.setDate(date.getDate() + 5);
     return date.toLocaleDateString("en-US", {
       weekday: "long",
@@ -312,26 +302,21 @@ export default function DoleLegalGuidelinesPanel({
     return Math.round((passed / checks.length) * 100);
   }, [dueProcessChecklist]);
 
-  // ================= MODULE 2: CALCULATOR STATE =================
-  const [calcType, setCalcType] = useState("holiday"); // 'holiday' | '13th_month' | 'overtime' | 'separation'
+  const [calcType, setCalcType] = useState("holiday");
   
-  // Holiday Pay inputs
   const [dailyRate, setDailyRate] = useState(468);
-  const [holidayType, setHolidayType] = useState("regular"); // 'regular' | 'special'
-  const [holidayWorkStatus, setHolidayWorkStatus] = useState("worked_8h"); // 'unworked' | 'worked_8h' | 'worked_ot' | 'worked_restday' | 'worked_restday_ot'
+  const [holidayType, setHolidayType] = useState("regular");
+  const [holidayWorkStatus, setHolidayWorkStatus] = useState("worked_8h");
   const [overtimeHours, setOvertimeHours] = useState(2);
 
-  // 13th Month inputs
   const [monthlyBasicSalary, setMonthlyBasicSalary] = useState(18000);
   const [monthsRendered, setMonthsRendered] = useState(12);
   const [unpaidAbsenceDeduction, setUnpaidAbsenceDeduction] = useState(0);
 
-  // Separation Pay inputs
-  const [separationCause, setSeparationCause] = useState("retrenchment"); // 'redundancy' | 'retrenchment' | 'closure_losses' | 'disease'
+  const [separationCause, setSeparationCause] = useState("retrenchment");
   const [yearsOfService, setYearsOfService] = useState(3);
   const [separationBasicSalary, setSeparationBasicSalary] = useState(20000);
 
-  // Computations
   const holidayComputation = useMemo(() => {
     const hourlyRate = dailyRate / 8;
     let gross = 0;
@@ -365,7 +350,6 @@ export default function DoleLegalGuidelinesPanel({
         breakdown = `First 8 hrs: ₱${base.toFixed(2)} + OT (${overtimeHours} hrs @ ₱${(hourlyRate * 3.38).toFixed(2)}/hr): ₱${otPay.toFixed(2)} = ₱${gross.toFixed(2)}`;
       }
     } else {
-      // Special Non-Working Day
       if (holidayWorkStatus === "unworked") {
         gross = 0;
         multiplierText = "No Work, No Pay (Unless Company Agreement)";
@@ -396,7 +380,6 @@ export default function DoleLegalGuidelinesPanel({
     return { hourlyRate, gross, multiplierText, breakdown };
   }, [dailyRate, holidayType, holidayWorkStatus, overtimeHours]);
 
-  // 13th Month Computation (P.D. 851)
   const thirteenthMonthComputation = useMemo(() => {
     const totalEarned = (monthlyBasicSalary * monthsRendered) - unpaidAbsenceDeduction;
     const computed13th = Math.max(0, totalEarned / 12);
@@ -409,17 +392,16 @@ export default function DoleLegalGuidelinesPanel({
     };
   }, [monthlyBasicSalary, monthsRendered, unpaidAbsenceDeduction]);
 
-  // Separation Pay Computation (Art. 298/299)
   const separationPayComputation = useMemo(() => {
     const fraction = yearsOfService >= 0.5 ? Math.ceil(yearsOfService) : 0;
-    let factor = 0.5; // default 1/2 month per year
+    let factor = 0.5;
     let description = "";
 
     if (separationCause === "redundancy") {
-      factor = 1.0; // 1 month or 1 month per year, whichever is higher
+      factor = 1.0;
       description = "1 month pay or 1 month pay per year of service (whichever is higher)";
     } else if (separationCause === "retrenchment") {
-      factor = 0.5; // 1 month pay or 1/2 month per year, whichever is higher
+      factor = 0.5;
       description = "1 month pay or 1/2 month pay per year of service (whichever is higher)";
     } else if (separationCause === "closure_losses") {
       factor = 0.0;
@@ -444,7 +426,6 @@ export default function DoleLegalGuidelinesPanel({
     };
   }, [separationCause, yearsOfService, separationBasicSalary]);
 
-  // ================= MODULE 5: 2026 REGIONAL WAGE ORDERS (PHILIPPINES NATIONWIDE - NWPC DOLE) =================
   const WAGE_STORAGE_KEY = "hrhub_dole_wage_orders_2026_v2";
   const DOLE_WAGE_CLOUD_USER_ID = "system_dole_wage_orders_2026";
   const [wageRates, setWageRates] = useState(() => {
@@ -465,7 +446,7 @@ export default function DoleLegalGuidelinesPanel({
   });
 
   const [wageSearch, setWageSearch] = useState("");
-  const [selectedIsland, setSelectedIsland] = useState("all"); // 'all' | 'Luzon' | 'Visayas' | 'Mindanao'
+  const [selectedIsland, setSelectedIsland] = useState("all");
   const [isWageModalOpen, setIsWageModalOpen] = useState(false);
   const [wageSuccessMsg, setWageSuccessMsg] = useState("");
   const [wageFormData, setWageFormData] = useState({
@@ -480,7 +461,6 @@ export default function DoleLegalGuidelinesPanel({
     orderNo: ""
   });
 
-  // Cloud Sync: Awtomatikong kukunin ang pinakabagong update mula sa Supabase cloud para sa lahat ng users
   useEffect(() => {
     let isMounted = true;
     async function loadCloudWages() {
@@ -582,7 +562,6 @@ export default function DoleLegalGuidelinesPanel({
     setWageSuccessMsg(`Wage Order ${wageFormData.orderNo || wageFormData.region} successfully updated and synced to cloud.`);
     setTimeout(() => setWageSuccessMsg(""), 3500);
 
-    // Sync to Supabase cloud para updated ang lahat ng gumagamit ng system nang walang code deployment
     if (supabase) {
       try {
         await supabase.from("user_settings").upsert({
@@ -627,9 +606,7 @@ export default function DoleLegalGuidelinesPanel({
 
   return (
     <div className="flex-1 flex flex-col min-h-0 bg-slate-100 font-sans">
-      {/* ================= TOP HERO BANNER ================= */}
       <header className="bg-slate-900 text-white border-b border-slate-800 p-4 sm:p-6 shrink-0 shadow-lg relative overflow-hidden">
-        {/* Subtle background glow */}
         <div className="absolute -right-20 -top-20 w-96 h-96 bg-blue-600/10 rounded-full blur-3xl pointer-events-none" />
         <div className="absolute right-80 -bottom-20 w-72 h-72 bg-emerald-600/10 rounded-full blur-3xl pointer-events-none" />
 
@@ -656,7 +633,6 @@ export default function DoleLegalGuidelinesPanel({
             </div>
           </div>
 
-          {/* Quick Tools & Entity Selector */}
           <div className="flex items-center gap-2.5 flex-wrap shrink-0">
             <div className="bg-slate-800/90 border border-slate-700/80 rounded-xl px-3 py-1.5 flex items-center gap-2">
               <Building2 size={14} className="text-amber-400" />
@@ -687,7 +663,6 @@ export default function DoleLegalGuidelinesPanel({
           </div>
         </div>
 
-        {/* Navigation Tabs Bar - Responsive 6-Column Grid with Zero Cutoff */}
         <div className="max-w-7xl mx-auto mt-5">
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 w-full">
             {[
@@ -756,14 +731,11 @@ export default function DoleLegalGuidelinesPanel({
         </div>
       </header>
 
-      {/* ================= MAIN CONTENT WORKSPACE ================= */}
       <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
         <div className="max-w-7xl mx-auto space-y-6">
 
-          {/* ================= TAB 1: PROCEDURAL DUE PROCESS SIMULATOR (D.O. 147-15) ================= */}
           {activeTab === "due_process" && (
             <div className="space-y-6 animate-in fade-in duration-200">
-              {/* Due Process Statutory Header Card */}
               <div className="bg-white rounded-3xl border border-slate-200/90 p-6 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-5">
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
@@ -797,7 +769,6 @@ export default function DoleLegalGuidelinesPanel({
                 </div>
               </div>
 
-              {/* 5-Step Visual Timeline */}
               <div className="grid grid-cols-1 md:grid-cols-5 gap-3.5">
                 {[
                   {
@@ -851,9 +822,7 @@ export default function DoleLegalGuidelinesPanel({
                 ))}
               </div>
 
-              {/* Interactive Audit & 5-Day Calculator Workspace */}
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                {/* Left: 5-Day Calendar Days Calculator (7 Cols) */}
                 <div className="lg:col-span-7 bg-white rounded-3xl border border-slate-200/90 p-6 shadow-sm space-y-5">
                   <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                     <div className="flex items-center gap-2">
@@ -894,7 +863,6 @@ export default function DoleLegalGuidelinesPanel({
                     </div>
                   </div>
 
-                  {/* Standard DOLE Due Process Clause to Copy */}
                   <div className="space-y-2 pt-2 border-t border-slate-100">
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-black text-slate-800">
@@ -919,7 +887,6 @@ export default function DoleLegalGuidelinesPanel({
                   </div>
                 </div>
 
-                {/* Right: Live Due Process Risk Detector (5 Cols) */}
                 <div className="lg:col-span-5 bg-white rounded-3xl border border-slate-200/90 p-6 shadow-sm space-y-4 flex flex-col justify-between">
                   <div className="space-y-3">
                     <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
@@ -979,10 +946,8 @@ export default function DoleLegalGuidelinesPanel({
             </div>
           )}
 
-          {/* ================= TAB 2: STATUTORY PAY & BENEFITS CALCULATOR ================= */}
           {activeTab === "calculator" && (
             <div className="space-y-6 animate-in fade-in duration-200">
-              {/* Calculator Subtabs */}
               <div className="flex items-center gap-2 border-b border-slate-200 pb-3">
                 {[
                   { id: "holiday", label: "Holiday Pay (Regular vs Special)", icon: Calendar },
@@ -1004,10 +969,8 @@ export default function DoleLegalGuidelinesPanel({
                 ))}
               </div>
 
-              {/* CALC 1: HOLIDAY PAY */}
               {calcType === "holiday" && (
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                  {/* Inputs */}
                   <div className="lg:col-span-7 bg-white rounded-3xl border border-slate-200/90 p-6 shadow-sm space-y-4">
                     <h3 className="text-base font-black text-slate-900 border-b border-slate-100 pb-2">
                       DOLE Holiday Pay Computation Engine
@@ -1102,7 +1065,6 @@ export default function DoleLegalGuidelinesPanel({
                       </div>
                     )}
 
-                    {/* Quick Upcoming Holidays Carousel */}
                     <div className="pt-2 border-t border-slate-100">
                       <span className="text-[11px] font-bold text-slate-500 uppercase block mb-1.5">
                         Official Statutory Holidays (Philippine Proclamation):
@@ -1118,7 +1080,6 @@ export default function DoleLegalGuidelinesPanel({
                     </div>
                   </div>
 
-                  {/* Output Card */}
                   <div className="lg:col-span-5 bg-gradient-to-br from-slate-900 to-slate-950 text-white rounded-3xl p-6 shadow-xl flex flex-col justify-between space-y-4">
                     <div>
                       <span className="text-[10px] font-black uppercase tracking-widest text-emerald-400 block">
@@ -1158,7 +1119,6 @@ export default function DoleLegalGuidelinesPanel({
                 </div>
               )}
 
-              {/* CALC 2: 13TH MONTH PAY */}
               {calcType === "13th_month" && (
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
                   <div className="lg:col-span-7 bg-white rounded-3xl border border-slate-200/90 p-6 shadow-sm space-y-4">
@@ -1264,7 +1224,6 @@ export default function DoleLegalGuidelinesPanel({
                 </div>
               )}
 
-              {/* CALC 3: SEPARATION PAY */}
               {calcType === "separation" && (
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
                   <div className="lg:col-span-7 bg-white rounded-3xl border border-slate-200/90 p-6 shadow-sm space-y-4">
@@ -1364,11 +1323,9 @@ export default function DoleLegalGuidelinesPanel({
             </div>
           )}
 
-          {/* ================= TAB 3: JUST CAUSES VS AUTHORIZED CAUSES ================= */}
           {activeTab === "grounds" && (
             <div className="space-y-6 animate-in fade-in duration-200">
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* ARTICLE 297: JUST CAUSES */}
                 <div className="bg-white rounded-3xl border border-slate-200/90 p-6 shadow-sm space-y-4">
                   <div className="flex items-center justify-between border-b border-rose-100 pb-3">
                     <div>
@@ -1426,7 +1383,6 @@ export default function DoleLegalGuidelinesPanel({
                   </div>
                 </div>
 
-                {/* ARTICLE 298 & 299: AUTHORIZED CAUSES */}
                 <div className="bg-white rounded-3xl border border-slate-200/90 p-6 shadow-sm space-y-4">
                   <div className="flex items-center justify-between border-b border-blue-100 pb-3">
                     <div>
@@ -1489,7 +1445,6 @@ export default function DoleLegalGuidelinesPanel({
             </div>
           )}
 
-          {/* ================= TAB 4: PROGRESSIVE DISCIPLINE PENALTY MATRIX ================= */}
           {activeTab === "discipline" && (
             <div className="bg-white rounded-3xl border border-slate-200/90 p-6 shadow-sm space-y-5 animate-in fade-in duration-200">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
@@ -1576,10 +1531,8 @@ export default function DoleLegalGuidelinesPanel({
             </div>
           )}
 
-          {/* ================= TAB 5: 2026 REGIONAL WAGE ORDERS (PHILIPPINES NATIONWIDE) ================= */}
           {activeTab === "wage_orders" && (
             <div className="space-y-6 animate-in fade-in duration-200">
-              {/* Notification Toast */}
               {wageSuccessMsg && (
                 <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-300 text-emerald-900 text-xs font-bold flex items-center justify-between shadow-xs">
                   <div className="flex items-center gap-2">
@@ -1596,7 +1549,6 @@ export default function DoleLegalGuidelinesPanel({
                 </div>
               )}
 
-              {/* Official NWPC / DOLE Source & Synchronize Banner */}
               <div className="bg-slate-900 text-white rounded-3xl p-6 shadow-sm border border-slate-800 flex flex-col lg:flex-row lg:items-center justify-between gap-5 relative overflow-hidden">
                 <div className="space-y-2 relative z-10">
                   <div className="flex items-center gap-2 flex-wrap">
@@ -1651,7 +1603,6 @@ export default function DoleLegalGuidelinesPanel({
                 </div>
               </div>
 
-              {/* QUICK STATS & BENCHMARK HIGHLIGHTS */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
                 <div className="p-4 rounded-2xl bg-white border border-slate-200/90 shadow-2xs">
                   <span className="text-[10px] font-extrabold uppercase text-slate-400 block">Highest Statutory Rate (NCR)</span>
@@ -1675,7 +1626,6 @@ export default function DoleLegalGuidelinesPanel({
                 </div>
               </div>
 
-              {/* FILTER BY ISLAND GROUP & SEARCH */}
               <div className="bg-white rounded-3xl border border-slate-200/90 p-5 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div className="flex items-center gap-1.5 flex-wrap">
                   {[
@@ -1727,7 +1677,6 @@ export default function DoleLegalGuidelinesPanel({
                 </div>
               </div>
 
-              {/* 17 REGIONAL WAGE ORDER CARDS */}
               {filteredWageOrders.length === 0 ? (
                 <div className="p-12 text-center bg-white rounded-3xl border border-slate-200 text-slate-400 text-xs">
                   No regions, cities, or provinces found matching &quot;{wageSearch}&quot;.
@@ -1821,7 +1770,6 @@ export default function DoleLegalGuidelinesPanel({
                 </div>
               )}
 
-              {/* De Minimis Statutory Tax-Exempt Caps */}
               <div className="bg-white rounded-3xl border border-slate-200/90 p-6 shadow-sm space-y-3">
                 <h4 className="text-sm font-black text-slate-900 uppercase tracking-wide border-b border-slate-100 pb-2">
                   BIR &amp; DOLE Mandatory De Minimis Benefits (Tax-Exempt Thresholds)
@@ -1852,7 +1800,6 @@ export default function DoleLegalGuidelinesPanel({
             </div>
           )}
 
-          {/* ================= TAB 6: DOLE DEPARTMENT ORDERS & ADVISORIES LIBRARY ================= */}
           {activeTab === "issuances" && (
             <div className="bg-white rounded-3xl border border-slate-200/90 p-6 shadow-sm space-y-5 animate-in fade-in duration-200">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
@@ -1949,7 +1896,6 @@ export default function DoleLegalGuidelinesPanel({
             </div>
           )}
 
-          {/* ================= EDIT / UPDATE WAGE ORDER MODAL ================= */}
           {isWageModalOpen && (
             <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-4">
               <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-lg w-full overflow-hidden animate-in fade-in zoom-in-95 duration-200">

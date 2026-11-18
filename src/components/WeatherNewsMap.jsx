@@ -25,7 +25,6 @@ import {
 } from "lucide-react";
 import { PHILIPPINE_AREAS } from "../lib/weatherService";
 
-// Map hotspot presets with coordinates
 const RADAR_CITIES = [
   {
     id: "makati",
@@ -85,13 +84,12 @@ export default function WeatherNewsMap({
 }) {
   const [activeCity, setActiveCity] = useState(RADAR_CITIES[0]);
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
-  const [activeFeed, setActiveFeed] = useState("satellite"); // 'satellite' | 'radar' | 'wind'
+  const [activeFeed, setActiveFeed] = useState("satellite");
   const [currentTime, setCurrentTime] = useState("");
-  const [zoomLevel, setZoomLevel] = useState(8); // 8 for city close-up, 5 for PAR wide
+  const [zoomLevel, setZoomLevel] = useState(8);
   const [iframeKey, setIframeKey] = useState(Date.now());
   const [hudExpanded, setHudExpanded] = useState(true);
 
-  // Clock for TV broadcast corner
   useEffect(() => {
     const updateTime = () => {
       const now = new Date();
@@ -109,7 +107,6 @@ export default function WeatherNewsMap({
     return () => clearInterval(interval);
   }, []);
 
-  // Sync active city if selectedLocation matches one of the presets
   useEffect(() => {
     if (selectedLocation) {
       const match = RADAR_CITIES.find(
@@ -125,7 +122,6 @@ export default function WeatherNewsMap({
     }
   }, [selectedLocation]);
 
-  // Speech synthesis for TV News Anchor Voice Report
   const handlePlayVoiceBroadcast = () => {
     if (!window.speechSynthesis) {
       alert("Speech synthesis is not supported on this browser.");
@@ -186,7 +182,6 @@ export default function WeatherNewsMap({
     };
   }, []);
 
-  // Construct live satellite / radar embed URL auto-centered on current location
   const getEmbedUrl = () => {
     const lat = selectedLocation?.lat || activeCity?.lat || 14.5547;
     const lon = selectedLocation?.lon || activeCity?.lon || 121.0244;
@@ -197,7 +192,6 @@ export default function WeatherNewsMap({
     if (activeFeed === "wind") {
       return `https://embed.windy.com/embed.html?type=map&location=coordinates&metricRain=default&metricTemp=default&metricWind=default&zoom=${zoomLevel}&overlay=wind&product=ecmwf&level=surface&lat=${lat}&lon=${lon}`;
     }
-    // Default: Live Himawari-9 Geostationary Infrared Satellite Feed
     return `https://embed.windy.com/embed.html?type=map&location=coordinates&metricRain=default&metricTemp=default&metricWind=default&zoom=${zoomLevel}&overlay=satellite&product=satellite&level=surface&lat=${lat}&lon=${lon}`;
   };
 
@@ -206,7 +200,6 @@ export default function WeatherNewsMap({
   const currentRain = current?.precipitation ?? 0;
   const rainProb = weatherData?.tomorrow?.rainProb ?? activeCity.rainProb;
 
-  // Cloud Density Category
   const cloudDesc =
     cloudCover >= 80
       ? "Dense Overcast (Thick Storm Clouds)"
@@ -216,13 +209,11 @@ export default function WeatherNewsMap({
       ? "Partly Cloudy"
       : "Clear Satellite Sky";
 
-  // Site Operational Status Assessment
   const isHighRisk = currentRain > 2 || rainProb >= 70;
   const isModerateRisk = currentRain > 0 || rainProb >= 40;
 
   return (
     <div className="relative rounded-3xl overflow-hidden bg-slate-950 text-white border border-slate-800 shadow-2xl animate-fade-in font-sans">
-      {/* 1. TV BROADCAST TOP BANNER */}
       <div className="bg-gradient-to-r from-slate-950 via-[#0b1b2b] to-slate-950 px-4 py-2.5 sm:px-6 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3 text-xs">
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-rose-600 font-black text-[10px] tracking-wider text-white shadow-xs">
@@ -247,7 +238,6 @@ export default function WeatherNewsMap({
             <span>{currentTime || "12:15:00 PM"} PHT</span>
           </div>
 
-          {/* Voice News Anchor Button */}
           <button
             type="button"
             onClick={handlePlayVoiceBroadcast}
@@ -272,7 +262,6 @@ export default function WeatherNewsMap({
         </div>
       </div>
 
-      {/* SATELLITE LAYER & ZOOM CONTROLS BAR */}
       <div className="bg-[#071321] px-4 py-2 sm:px-6 border-b border-slate-800/80 flex flex-wrap items-center justify-between gap-2 text-xs">
         <div className="flex items-center gap-1.5 flex-wrap">
           <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 mr-1 flex items-center gap-1">
@@ -329,7 +318,6 @@ export default function WeatherNewsMap({
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Zoom Toggle: City Close-up vs PAR Wide */}
           <div className="flex items-center p-0.5 rounded-lg bg-slate-900 border border-slate-800 text-[11px]">
             <button
               type="button"
@@ -370,9 +358,7 @@ export default function WeatherNewsMap({
         </div>
       </div>
 
-      {/* 2. MAIN SATELLITE STAGE WITH SITE TELEMETRY HUD OVERLAY */}
       <div className="grid grid-cols-1 lg:grid-cols-12 relative min-h-[500px]">
-        {/* SATELLITE VIEWER (8 Columns) */}
         <div className="lg:col-span-8 relative bg-black overflow-hidden flex items-center justify-center min-h-[440px] sm:min-h-[500px]">
           <div className="w-full h-full relative">
             <iframe
@@ -384,7 +370,6 @@ export default function WeatherNewsMap({
               allow="geolocation"
             />
 
-            {/* Top Left Watermark Tag */}
             <div className="absolute top-3 left-3 pointer-events-none z-10 flex items-center gap-2 bg-slate-950/85 backdrop-blur-md px-3 py-1.5 rounded-xl border border-white/10 text-[11px] shadow-lg">
               <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping" />
               <span className="font-extrabold text-white uppercase tracking-wider">
@@ -399,7 +384,6 @@ export default function WeatherNewsMap({
               </span>
             </div>
 
-            {/* FLOATING COMMAND CENTER: LIVE SITE SATELLITE STATUS HUD */}
             <div className="absolute bottom-3 left-3 right-3 sm:right-auto sm:max-w-md z-20 transition-all duration-300">
               <div className="rounded-2xl bg-slate-950/90 backdrop-blur-xl border border-slate-700/80 shadow-2xl p-3.5 text-xs text-white space-y-2.5">
                 <div className="flex items-center justify-between border-b border-slate-800 pb-2">
@@ -421,7 +405,6 @@ export default function WeatherNewsMap({
 
                 {hudExpanded ? (
                   <div className="space-y-2 animate-fade-in">
-                    {/* Cloud Cover & Rain Detection Row */}
                     <div className="grid grid-cols-2 gap-2">
                       <div className="p-2 rounded-xl bg-slate-900/80 border border-slate-800">
                         <div className="flex items-center justify-between text-[10px] text-slate-400 font-bold">
@@ -455,7 +438,6 @@ export default function WeatherNewsMap({
                       </div>
                     </div>
 
-                    {/* Ground Atmosphere Metrics */}
                     <div className="grid grid-cols-3 gap-1.5 text-[10px]">
                       <div className="p-1.5 rounded-lg bg-slate-900/60 border border-slate-800/80 text-center">
                         <span className="text-slate-400 block font-semibold">Heat Index</span>
@@ -471,7 +453,6 @@ export default function WeatherNewsMap({
                       </div>
                     </div>
 
-                    {/* Operational Safety Status Badge */}
                     <div
                       className={`p-2 rounded-xl border flex items-center gap-2 text-[10px] ${
                         isHighRisk
@@ -507,10 +488,8 @@ export default function WeatherNewsMap({
           </div>
         </div>
 
-        {/* 3. NEWS ANCHOR TELEPROMPTER REPORT CARD (4 Columns) */}
         <div className="lg:col-span-4 bg-gradient-to-b from-[#0b1726] to-[#08121f] p-4 sm:p-5 flex flex-col justify-between border-t lg:border-t-0 lg:border-l border-slate-800 space-y-4">
           <div className="space-y-4">
-            {/* Focus City Header */}
             <div className="flex items-start justify-between border-b border-slate-800/80 pb-3">
               <div>
                 <span className="text-[10px] font-black uppercase tracking-wider text-emerald-400">
@@ -528,7 +507,6 @@ export default function WeatherNewsMap({
               </div>
             </div>
 
-            {/* News Anchor Bulletin Script */}
             <div className="p-3.5 rounded-2xl bg-slate-900/90 border border-slate-700/70 text-xs space-y-2 shadow-inner">
               <div className="flex items-center gap-1.5 text-emerald-400 font-black text-[10px] uppercase tracking-wider">
                 <Radio size={12} className="animate-pulse" />
@@ -545,7 +523,6 @@ export default function WeatherNewsMap({
               </div>
             </div>
 
-            {/* Weather Disturbance / Tropical Cyclone Status */}
             <div
               className={`p-3 rounded-2xl border text-xs space-y-1.5 ${
                 activeCyclone.signal > 0
@@ -571,7 +548,6 @@ export default function WeatherNewsMap({
               <p className="text-[11px] opacity-85 leading-snug">{activeCyclone.desc}</p>
             </div>
 
-            {/* Operational Indicators */}
             <div className="grid grid-cols-2 gap-2 text-xs">
               <div className="p-2.5 rounded-xl bg-slate-900/60 border border-slate-800">
                 <div className="flex items-center gap-1 text-slate-400 text-[10px] font-semibold">
@@ -593,7 +569,6 @@ export default function WeatherNewsMap({
             </div>
           </div>
 
-          {/* Quick Select Buttons */}
           <div className="pt-2 border-t border-slate-800/80">
             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">
               Center Satellite on City:
@@ -623,7 +598,6 @@ export default function WeatherNewsMap({
         </div>
       </div>
 
-      {/* 4. LOWER-THIRD NEWS TICKER */}
       <div className="bg-[#b91c1c] text-white flex items-center overflow-hidden h-9 border-t border-rose-600 shadow-md">
         <div className="bg-amber-400 text-slate-950 font-black px-3.5 h-full flex items-center gap-1 text-xs shrink-0 tracking-wider shadow-sm z-10 uppercase">
           <span>BREAKING</span>

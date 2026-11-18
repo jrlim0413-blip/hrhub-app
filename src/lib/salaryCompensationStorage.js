@@ -1,12 +1,3 @@
-/**
- * salaryCompensationStorage.js
- * Cloud & Local Persistence Service for Salary & Compensation Payroll Batches and Payslips.
- *
- * Sync priority:
- * 1. Primary: Relational database tables ('payroll_batches', 'salary_compensation_records', 'cash_advances', 'employee_leave_records')
- * 2. Fallback / Redundancy: Cloud store ('user_settings')
- * 3. Offline Cache: localStorage and in-memory caching
- */
 
 import { supabase } from "./supabase";
 import { getUserAccountKey } from "./userSettingsStorage";
@@ -341,9 +332,6 @@ async function persistToRelationalTables(batchSummary, normalizedRecords, pruneR
   }
 }
 
-/**
- * Fetches all saved payroll batches from Supabase ('payroll_batches' primary + 'user_settings' fallback).
- */
 export async function fetchPayrollBatchesFromDb() {
   const localBatches = readLocalIndex();
   let relationalBatches = null;
@@ -431,9 +419,6 @@ export async function fetchPayrollBatchesFromDb() {
   };
 }
 
-/**
- * Fetches full compensation & payslip rows for a saved payroll batch from Supabase.
- */
 export async function fetchPayrollRecordsForBatch(batchId) {
   if (!batchId) return { batch: null, records: [], source: "empty" };
 
@@ -548,9 +533,6 @@ async function persistBatchPayloadToSupabase(batchId, payload) {
   }
 }
 
-/**
- * Saves an extracted/reviewed payroll batch and its employee compensation records to Supabase.
- */
 export async function savePayrollBatchToDb({ batchMeta = {}, records = [], currentUser = null }) {
   const accountKey = getUserAccountKey(currentUser);
   const now = new Date().toISOString();
@@ -598,14 +580,12 @@ export async function savePayrollBatchToDb({ batchMeta = {}, records = [], curre
     updatedAt: now
   };
 
-  // 1. Primary write: Dedicated relational tables (payroll_batches + salary_compensation_records)
   const relationalRes = await persistToRelationalTables(
     batchSummary,
     normalizedRecords,
     Boolean(batchMeta.id)
   );
 
-  // 2. Redundancy & offline cache: user_settings + localStorage
   const payloadRes = await persistBatchPayloadToSupabase(batchId, {
     batch: batchSummary,
     records: normalizedRecords
@@ -631,7 +611,6 @@ export async function savePayrollBatchToDb({ batchMeta = {}, records = [], curre
   memoryBatchIndex.list = nextBatches;
   writeLocalIndex(nextBatches);
 
-  // 3. Auto-reflect any Cash Advancement deductions from uploaded payroll rows into CA ledger
   await syncPayrollCashAdvancesForBatch(finalBatchSummary, normalizedRecords, currentUser);
 
   return {
@@ -648,10 +627,6 @@ export async function savePayrollBatchToDb({ batchMeta = {}, records = [], curre
   };
 }
 
-/**
- * Syncs existing backup batches (from user_settings or localStorage) into payroll_batches
- * and salary_compensation_records tables.
- */
 export async function syncPendingBatchesToRelationalTables() {
   const current = await fetchPayrollBatchesFromDb();
   const relSet = new Set(current.relationalBatchIds || []);
@@ -689,9 +664,6 @@ export async function syncPendingBatchesToRelationalTables() {
   };
 }
 
-/**
- * Updates records or batch status for an existing saved payroll batch in Supabase.
- */
 export async function updatePayrollBatchRecordsInDb(batchId, updatedRecords = [], batchPatch = {}) {
   const now = new Date().toISOString();
   const { batches: existingBatches } = await fetchPayrollBatchesFromDb();
@@ -741,9 +713,6 @@ export async function updatePayrollBatchRecordsInDb(batchId, updatedRecords = []
   };
 }
 
-/**
- * Deletes a saved payroll batch and its associated records from Supabase and local cache.
- */
 export async function deletePayrollBatchFromDb(batchId) {
   const { batches: existingBatches } = await fetchPayrollBatchesFromDb();
   const nextBatches = existingBatches.filter((b) => b.id !== batchId);
@@ -789,10 +758,6 @@ export async function deletePayrollBatchFromDb(batchId) {
     batches: nextBatches
   };
 }
-
-/* ============================================================================
- * CASH ADVANCEMENT (CA) LEDGER PERSISTENCE & PAYROLL REFLECTION
- * ============================================================================ */
 
 function normalizeCaSourceType(val) {
   return VALID_CA_SOURCES.has(val) ? val : "manual";
@@ -1132,10 +1097,6 @@ export async function deleteCashAdvanceEntryFromDb(caId) {
   };
 }
 
-/**
- * Syncs payroll CA deductions (records with cashAdvance > 0) for a given payroll batch
- * into the Cash Advancement ledger cleanly without duplicating or erasing manual entries.
- */
 export async function syncPayrollCashAdvancesForBatch(batchSummary, records = [], currentUser = null) {
   if (!batchSummary?.id) return { entries: [], synced: false };
 
@@ -1251,10 +1212,6 @@ export async function deleteCashAdvancesForBatch(batchId) {
   await persistCaLedgerToSettings(remaining);
 }
 
-/**
- * Pulls CA deductions from all saved payroll batches and pushes any backup CA rows
- * into public.cash_advances.
- */
 export async function syncCashAdvancesFromSavedBatches(currentUser = null) {
   const batchRes = await fetchPayrollBatchesFromDb();
   const batches = batchRes.batches || [];
@@ -1269,7 +1226,6 @@ export async function syncCashAdvancesFromSavedBatches(currentUser = null) {
     }
   }
 
-  // Push any manual or unsynced CA entries sitting in user_settings/localStorage to cash_advances table
   const currentCa = await fetchCashAdvancesFromDb();
   const relSet = new Set(currentCa.relationalCaIds || []);
   const pendingRows = (currentCa.entries || []).filter((e) => e?.id && !relSet.has(e.id));
@@ -1294,10 +1250,6 @@ export async function syncCashAdvancesFromSavedBatches(currentUser = null) {
   };
 }
 
-/**
- * Computes overall Cash Advancement KPI totals, per-employee balance ledger,
- * and chronological running-balance timeline for deduction transparency.
- */
 export function computeCashAdvanceSummaries(entries = []) {
   let totalIssued = 0;
   let totalPayrollDeducted = 0;
@@ -1444,11 +1396,6 @@ export function computeCashAdvanceSummaries(entries = []) {
     employeeSummaries
   };
 }
-
-
-/* ============================================================================
- * EMPLOYEE LEAVE RECORDS & REMAINING CREDITS LEDGER
- * ============================================================================ */
 
 function normalizeLeaveEntryType(val) {
   return VALID_LEAVE_ENTRY_TYPES.has(val) ? val : "leave_used";
@@ -1803,10 +1750,6 @@ export async function syncPendingLeaveRecordsToRelationalTables() {
   };
 }
 
-/**
- * Computes overall Leave Credit metrics, per-employee remaining leave balances,
- * per-leave-type allocations, and chronological running-balance timeline.
- */
 export function computeLeaveSummaries(entries = [], yearFilter = "ALL") {
   let totalCreditsAllocated = 0;
   let totalDaysUsed = 0;

@@ -1,16 +1,3 @@
-/**
- * ==============================================================================
- * HRHUB APP - CENTRALIZED GEO-TAGGED BOOTHS & KIOSKS SERVICE
- * ==============================================================================
- * Handles multi-user cloud synchronization with Supabase:
- * 1. Primary: public.geo_tagged_booths (dedicated table with Realtime replication)
- * 2. Fallback: public.user_settings (user_id: 'global_geo_tagged_booths')
- * 3. Offline Cache: localStorage ('hrhub_user_tagged_booths')
- *
- * Ensures all team members across all branches, devices, and sessions see
- * the exact same plotted kiosks, teller assignments, and cadastral locations live!
- * ==============================================================================
- */
 
 import { supabase } from "../lib/supabase";
 
@@ -18,9 +5,6 @@ export const LOCAL_STORAGE_KEY = "hrhub_user_tagged_booths";
 export const FALLBACK_USER_SETTINGS_ID = "global_geo_tagged_booths";
 export const PRIMARY_TABLE = "geo_tagged_booths";
 
-/**
- * Normalizes a database row or raw object into a standard Booth object for the map & inspectors
- */
 export function normalizeBooth(raw) {
   if (!raw || typeof raw !== "object") return null;
 
@@ -51,9 +35,6 @@ export function normalizeBooth(raw) {
   };
 }
 
-/**
- * Read cached booths from localStorage (instant, synchronous)
- */
 export function getLocalCachedBooths() {
   try {
     const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
@@ -69,9 +50,6 @@ export function getLocalCachedBooths() {
   return [];
 }
 
-/**
- * Save booths array to localStorage
- */
 export function setLocalCachedBooths(booths) {
   try {
     if (Array.isArray(booths)) {
@@ -82,9 +60,6 @@ export function setLocalCachedBooths(booths) {
   }
 }
 
-/**
- * Fetch all booths from Supabase Cloud Database (with automatic fallback to user_settings)
- */
 export async function fetchCentralBooths() {
   const localBooths = getLocalCachedBooths();
 
@@ -92,7 +67,6 @@ export async function fetchCentralBooths() {
     return localBooths;
   }
 
-  // 1. Try Primary Table: public.geo_tagged_booths
   try {
     const { data, error } = await supabase
       .from(PRIMARY_TABLE)
@@ -112,7 +86,6 @@ export async function fetchCentralBooths() {
     console.warn("[GeoBoothsService] Primary table query error, falling back:", err);
   }
 
-  // 2. Try Fallback: public.user_settings (user_id = 'global_geo_tagged_booths')
   try {
     const { data: fallbackData, error: fallbackError } = await supabase
       .from("user_settings")
@@ -132,20 +105,15 @@ export async function fetchCentralBooths() {
     console.warn("[GeoBoothsService] Fallback table query error:", err);
   }
 
-  // 3. Fallback to local cache if offline or initial load
   return localBooths;
 }
 
-/**
- * Save / Upsert a Booth into the Central Cloud Database & Local Storage
- */
 export async function saveCentralBooth(boothData) {
   const normalized = normalizeBooth(boothData);
   if (!normalized || !normalized.id) {
     throw new Error("Invalid booth data to save");
   }
 
-  // 1. Immediate local storage update for 0-latency UI
   const currentList = getLocalCachedBooths();
   const updatedList = [
     normalized,
@@ -153,12 +121,10 @@ export async function saveCentralBooth(boothData) {
   ];
   setLocalCachedBooths(updatedList);
 
-  // Notify active components in current window
   try {
     window.dispatchEvent(new CustomEvent("hrhub_geo_booths_updated", { detail: updatedList }));
   } catch {}
 
-  // 2. Cloud Database Sync (Dual-upsert for 100% resilience)
   if (supabase) {
     const row = {
       id: normalized.id,
@@ -177,7 +143,6 @@ export async function saveCentralBooth(boothData) {
       updated_at: new Date().toISOString()
     };
 
-    // A. Upsert into Primary Table
     try {
       const { error: primaryError } = await supabase.from(PRIMARY_TABLE).upsert(row);
       if (primaryError && primaryError.code !== "42P01") {
@@ -187,7 +152,6 @@ export async function saveCentralBooth(boothData) {
       console.warn("[GeoBoothsService] Primary table upsert exception:", e);
     }
 
-    // B. Dual-Sync into Fallback Table (ensures multi-user visibility even before table migration)
     try {
       await supabase.from("user_settings").upsert({
         user_id: FALLBACK_USER_SETTINGS_ID,
@@ -205,13 +169,9 @@ export async function saveCentralBooth(boothData) {
   return normalized;
 }
 
-/**
- * Delete a Booth from Central Cloud Database & Local Storage
- */
 export async function deleteCentralBooth(boothId) {
   if (!boothId) return;
 
-  // 1. Immediate local storage update
   const currentList = getLocalCachedBooths();
   const updatedList = currentList.filter((b) => b.id !== boothId);
   setLocalCachedBooths(updatedList);
@@ -220,9 +180,7 @@ export async function deleteCentralBooth(boothId) {
     window.dispatchEvent(new CustomEvent("hrhub_geo_booths_updated", { detail: updatedList }));
   } catch {}
 
-  // 2. Cloud Database Deletion
   if (supabase) {
-    // A. Delete from Primary Table
     try {
       const { error } = await supabase.from(PRIMARY_TABLE).delete().eq("id", boothId);
       if (error && error.code !== "42P01") {
@@ -232,7 +190,6 @@ export async function deleteCentralBooth(boothId) {
       console.warn("[GeoBoothsService] Primary table delete exception:", e);
     }
 
-    // B. Sync deletion to Fallback Table
     try {
       await supabase.from("user_settings").upsert({
         user_id: FALLBACK_USER_SETTINGS_ID,
@@ -250,13 +207,9 @@ export async function deleteCentralBooth(boothId) {
   return updatedList;
 }
 
-/**
- * Subscribe to real-time changes across all connected devices and users
- */
 export function subscribeToCentralBooths(onUpdate) {
   if (typeof onUpdate !== "function") return () => {};
 
-  // 1. Cross-tab & in-window event listener
   const handleWindowSync = (evt) => {
     if (evt.detail && Array.isArray(evt.detail)) {
       onUpdate(evt.detail);
@@ -264,7 +217,6 @@ export function subscribeToCentralBooths(onUpdate) {
   };
   window.addEventListener("hrhub_geo_booths_updated", handleWindowSync);
 
-  // 2. Supabase Realtime Channel
   let channel = null;
   if (supabase) {
     try {
@@ -297,7 +249,6 @@ export function subscribeToCentralBooths(onUpdate) {
     }
   }
 
-  // Cleanup function
   return () => {
     window.removeEventListener("hrhub_geo_booths_updated", handleWindowSync);
     if (channel && supabase) {

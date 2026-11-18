@@ -1,6 +1,3 @@
-// requirementsStorage.js - Persistent database storage for profile registration requirements
-// Utilizes IndexedDB for storing full-resolution requirement images and documents
-// with localStorage metadata caching for instant retrieval across logouts and page reloads.
 
 import { jsPDF } from "jspdf";
 import JSZip from "jszip";
@@ -13,18 +10,12 @@ const DB_VERSION = 1;
 const STORE_NAME = "requirements";
 const LOCAL_META_KEY = "hrhub_requirements_metadata";
 
-/**
- * Standardizes a unique profile key from an agent or employee object
- */
 export function getAgentIdentifier(agent, index = 0) {
   if (!agent) return `agent-${index}`;
   const raw = agent.id || agent.agent_id || agent.teller_id || agent.email || agent.username || agent.name || agent.fullName || `agent-${index}`;
   return String(raw).toLowerCase().trim();
 }
 
-/**
- * Opens or initializes the IndexedDB database
- */
 function openDB() {
   return new Promise((resolve, reject) => {
     if (typeof window === "undefined" || !window.indexedDB) {
@@ -48,9 +39,6 @@ function openDB() {
   });
 }
 
-/**
- * Reads local metadata cache
- */
 function getLocalMeta() {
   try {
     const raw = localStorage.getItem(LOCAL_META_KEY);
@@ -60,12 +48,6 @@ function getLocalMeta() {
   }
 }
 
-/**
- * Updates local metadata cache
- */
-/**
- * Updates local metadata cache
- */
 function updateLocalMeta(profileKey, items) {
   try {
     const meta = getLocalMeta();
@@ -87,9 +69,6 @@ function updateLocalMeta(profileKey, items) {
   }
 }
 
-/**
- * Formats bytes to readable size
- */
 export function formatFileSize(bytes) {
   if (!bytes || bytes === 0) return "0 B";
   const k = 1024;
@@ -98,14 +77,6 @@ export function formatFileSize(bytes) {
   return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
 }
 
-/**
- * Saves a requirement file for a specific profile into Supabase Storage Bucket 'requirements'
- * and registers metadata in PostgreSQL 'agent_requirements' and local cache.
- * @param {string} profileKey - The unique key for the profile
- * @param {File} file - The uploaded file object
- * @param {Object} [extraMeta] - Optional slot/category metadata and custom name
- * @returns {Promise<Object>} The saved requirement record
- */
 export async function saveRequirementFile(profileKey, file, extraMeta = {}) {
   const normKey = String(profileKey).toLowerCase().trim();
   const fileExt = file.name.split(".").pop() || "png";
@@ -120,7 +91,6 @@ export async function saveRequirementFile(profileKey, file, extraMeta = {}) {
   let publicUrl = null;
   let uploadSuccess = false;
 
-  // 1. Try uploading to Supabase Storage Bucket 'requirements'
   try {
     const { data: uploadData, error: uploadErr } = await supabase.storage
       .from("requirements")
@@ -142,8 +112,6 @@ export async function saveRequirementFile(profileKey, file, extraMeta = {}) {
     console.warn("Storage bucket upload exception:", err);
   }
 
-  // 2. If storage bucket upload succeeded, use the publicUrl.
-  // Otherwise, fallback to reading as base64 DataURL so uploads never fail.
   let dataUrl = publicUrl;
   if (!dataUrl) {
     dataUrl = await new Promise((resolve, reject) => {
@@ -170,7 +138,6 @@ export async function saveRequirementFile(profileKey, file, extraMeta = {}) {
     subOrder: typeof extraMeta.subOrder === "number" ? extraMeta.subOrder : null
   };
 
-  // 3. Persist to IndexedDB for instant offline preview & local fast retrieval
   try {
     const db = await openDB();
     await new Promise((resolve, reject) => {
@@ -192,7 +159,6 @@ export async function saveRequirementFile(profileKey, file, extraMeta = {}) {
     }
   }
 
-  // 4. Sync metadata to Supabase 'agent_requirements' table
   try {
     const metaPayload = JSON.stringify({
       categoryKey: record.categoryKey || null,
@@ -213,7 +179,6 @@ export async function saveRequirementFile(profileKey, file, extraMeta = {}) {
       created_at: record.createdAt
     };
 
-    // Attempt rich upsert with all slot-routing columns
     const { error: fullErr } = await supabase.from("agent_requirements").upsert({
       ...basePayload,
       category_key: record.categoryKey,
@@ -224,7 +189,6 @@ export async function saveRequirementFile(profileKey, file, extraMeta = {}) {
     });
 
     if (fullErr) {
-      // Fallback in case table schema lacks custom columns category_key / sub_order
       const { error: fallbackErr } = await supabase.from("agent_requirements").upsert({
         ...basePayload,
         classified_type: record.classifiedType,
@@ -239,24 +203,15 @@ export async function saveRequirementFile(profileKey, file, extraMeta = {}) {
     console.warn("Supabase requirements sync note:", sbErr);
   }
 
-  // 5. Update local metadata cache
   const currentList = await getRequirementsByProfile(normKey);
   updateLocalMeta(normKey, currentList);
 
   return record;
 }
 
-/**
- * Updates an existing requirement record with new name, classification, or snippet
- * @param {string} profileKey - Agent profile key
- * @param {string} recordId - Requirement item ID
- * @param {Object} updates - Fields to update (e.g., { name, classifiedType, ocrSnippet, sortOrder })
- * @returns {Promise<Object>} Updated record
- */
 export async function updateRequirementRecord(profileKey, recordId, updates = {}) {
   const normKey = String(profileKey).toLowerCase().trim();
 
-  // 1. Update in IndexedDB
   try {
     const db = await openDB();
     await new Promise((resolve, reject) => {
@@ -277,7 +232,6 @@ export async function updateRequirementRecord(profileKey, recordId, updates = {}
     console.warn("IndexedDB update notice:", err);
   }
 
-  // 2. Update in Supabase
   try {
     const sbUpdates = {};
     if (updates.name !== undefined) sbUpdates.file_name = updates.name;
@@ -293,7 +247,6 @@ export async function updateRequirementRecord(profileKey, recordId, updates = {}
         .eq("id", recordId);
 
       if (error && (sbUpdates.classified_type || sbUpdates.ocr_snippet || sbUpdates.sort_order)) {
-        // Fallback without classified fields if column not in DB
         await supabase
           .from("agent_requirements")
           .update({ file_name: updates.name })
@@ -304,7 +257,6 @@ export async function updateRequirementRecord(profileKey, recordId, updates = {}
     console.warn("Supabase update notice:", sbErr);
   }
 
-  // 3. Fallback localStorage update if any
   try {
     const fbKey = `hrhub_req_blob_${normKey}`;
     const raw = localStorage.getItem(fbKey);
@@ -317,22 +269,16 @@ export async function updateRequirementRecord(profileKey, recordId, updates = {}
       }
     }
   } catch {
-    // ignore
   }
 
-  // 4. Refresh local cache
   const currentList = await getRequirementsByProfile(normKey);
   updateLocalMeta(normKey, currentList);
   return currentList.find((i) => i.id === recordId) || null;
 }
 
-/**
- * Saves the drag-and-drop ordered sequence of requirements for an agent
- */
 export async function saveRequirementsOrder(profileKey, items = []) {
   const normKey = String(profileKey).toLowerCase().trim();
 
-  // 1. Update IndexedDB
   try {
     const db = await openDB();
     const tx = db.transaction(STORE_NAME, "readwrite");
@@ -349,7 +295,6 @@ export async function saveRequirementsOrder(profileKey, items = []) {
     console.warn("IndexedDB save order notice:", err);
   }
 
-  // 2. Fallback localStorage
   try {
     const fbKey = `hrhub_req_blob_${normKey}`;
     const raw = localStorage.getItem(fbKey);
@@ -362,16 +307,12 @@ export async function saveRequirementsOrder(profileKey, items = []) {
       localStorage.setItem(fbKey, JSON.stringify(updated));
     }
   } catch {
-    // ignore
   }
 
   updateLocalMeta(normKey, items);
   return items;
 }
 
-/**
- * Clears local cached requirements (IndexedDB and localStorage) for a specific profile
- */
 export async function clearLocalRequirements(profileKey) {
   const normKey = String(profileKey).toLowerCase().trim();
   try {
@@ -395,7 +336,6 @@ export async function clearLocalRequirements(profileKey) {
   try {
     localStorage.removeItem(`hrhub_req_blob_${normKey}`);
   } catch {
-    // ignore
   }
 
   const meta = getLocalMeta();
@@ -403,13 +343,9 @@ export async function clearLocalRequirements(profileKey) {
   try {
     localStorage.setItem(LOCAL_META_KEY, JSON.stringify(meta));
   } catch {
-    // ignore
   }
 }
 
-/**
- * Synchronizes local IndexedDB cache with remote records from Supabase
- */
 async function syncLocalCacheWithRemote(normKey, remoteRecords) {
   try {
     const db = await openDB();
@@ -431,9 +367,6 @@ async function syncLocalCacheWithRemote(normKey, remoteRecords) {
   }
 }
 
-/**
- * Purges all local requirements cache across all agents in IndexedDB and localStorage
- */
 export async function purgeAllLocalRequirementsCache() {
   try {
     const db = await openDB();
@@ -454,20 +387,12 @@ export async function purgeAllLocalRequirementsCache() {
       }
     });
   } catch {
-    // ignore
   }
 }
 
-/**
- * Retrieves all saved requirements for a specific profile
- * Supabase is the primary authoritative source of truth.
- * @param {string} profileKey - The unique key for the profile
- * @returns {Promise<Array>} Array of requirement records
- */
 export async function getRequirementsByProfile(profileKey) {
   const normKey = String(profileKey).toLowerCase().trim();
 
-  // 1. Try fetching from Supabase first (Supabase is Single Source of Truth)
   try {
     const { data, error } = await supabase
       .from("agent_requirements")
@@ -495,7 +420,6 @@ export async function getRequirementsByProfile(profileKey) {
           let sOrder = typeof d.sort_order === "number" ? d.sort_order : (typeof parsedMeta.sortOrder === "number" ? parsedMeta.sortOrder : null);
           let subOrd = typeof d.sub_order === "number" ? d.sub_order : (typeof parsedMeta.subOrder === "number" ? parsedMeta.subOrder : null);
 
-          // Auto-heal slot key if not explicitly in table column
           if (!catKey) {
             const rank = getItemSlotRank({ ...d, name: d.file_name, storagePath: d.storage_path });
             if (rank === 1) { catKey = "biodata"; classType = classType || "Biodata"; sOrder = sOrder ?? 1; }
@@ -509,7 +433,6 @@ export async function getRequirementsByProfile(profileKey) {
             else if (rank === 9) { catKey = "other_document"; classType = classType || "Other Document"; sOrder = sOrder ?? 9; }
           }
 
-          // Ensure robust public dataUrl resolution
           const fallbackUrl = d.storage_path
             ? `${API_CONFIG.SUPABASE_URL}/storage/v1/object/public/requirements/${d.storage_path}`
             : null;
@@ -532,7 +455,6 @@ export async function getRequirementsByProfile(profileKey) {
           };
         });
 
-        // Auto-heal any items that still don't have an assigned categoryKey
         const unassigned = mapped.filter((m) => !m.categoryKey);
         if (unassigned.length > 0) {
           const sortedUnassigned = [...unassigned].sort((a, b) => {
@@ -567,7 +489,6 @@ export async function getRequirementsByProfile(profileKey) {
             item.classifiedType = assignedSlot.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
             item.sortOrder = getSlotOrder(assignedSlot);
 
-            // Persist the slot prefix to Supabase so it remains permanent
             const newFileName = item.name.toLowerCase().includes(cleanPrefix.toLowerCase())
               ? item.name
               : `${cleanPrefix}_${item.name}`;
@@ -581,8 +502,6 @@ export async function getRequirementsByProfile(profileKey) {
         updateLocalMeta(normKey, ordered);
         return ordered;
       } else {
-        // Supabase confirmed 0 records exist (user deleted them in Supabase).
-        // Immediately purge any stale local IndexedDB & localStorage cache!
         await clearLocalRequirements(normKey);
         updateLocalMeta(normKey, []);
         return [];
@@ -592,7 +511,6 @@ export async function getRequirementsByProfile(profileKey) {
     console.warn("Supabase read note, falling back to local DB:", sbErr);
   }
 
-  // 2. Fetch from IndexedDB ONLY if Supabase is offline or error occurred
   try {
     const db = await openDB();
     const records = await new Promise((resolve, reject) => {
@@ -614,7 +532,6 @@ export async function getRequirementsByProfile(profileKey) {
     console.warn("IndexedDB read note, checking fallback:", err);
   }
 
-  // Check localStorage fallback
   try {
     const fbKey = `hrhub_req_blob_${normKey}`;
     const fbRecords = JSON.parse(localStorage.getItem(fbKey) || "[]");
@@ -622,23 +539,14 @@ export async function getRequirementsByProfile(profileKey) {
       return sortRequirementsBySlotSequence(fbRecords);
     }
   } catch {
-    // ignore
   }
 
   return [];
 }
 
-/**
- * Deletes a requirement file from database and Supabase storage bucket
- * @param {string} requirementId - ID of the requirement to delete
- * @param {string} profileKey - Profile key
- * @param {string|null} storagePath - Path in Supabase storage bucket if uploaded
- * @returns {Promise<boolean>}
- */
 export async function deleteRequirementFile(requirementId, profileKey, storagePath = null) {
   const normKey = String(profileKey).toLowerCase().trim();
 
-  // 1. Delete from Supabase Storage bucket if file was uploaded to bucket
   if (storagePath) {
     try {
       await supabase.storage.from("requirements").remove([storagePath]);
@@ -647,7 +555,6 @@ export async function deleteRequirementFile(requirementId, profileKey, storagePa
     }
   }
 
-  // 2. Delete from IndexedDB
   try {
     const db = await openDB();
     await new Promise((resolve, reject) => {
@@ -661,21 +568,18 @@ export async function deleteRequirementFile(requirementId, profileKey, storagePa
     console.warn("IndexedDB delete note:", err);
   }
 
-  // 3. Delete from Supabase table
   try {
     await supabase.from("agent_requirements").delete().eq("id", requirementId);
   } catch (sbErr) {
     console.warn("Supabase requirement delete note:", sbErr);
   }
 
-  // 4. Delete from localStorage fallback if exists
   try {
     const fbKey = `hrhub_req_blob_${normKey}`;
     const existing = JSON.parse(localStorage.getItem(fbKey) || "[]");
     const filtered = existing.filter((item) => item.id !== requirementId);
     localStorage.setItem(fbKey, JSON.stringify(filtered));
   } catch {
-    // ignore
   }
 
   const remaining = await getRequirementsByProfile(normKey);
@@ -683,27 +587,18 @@ export async function deleteRequirementFile(requirementId, profileKey, storagePa
   return true;
 }
 
-/**
- * Synchronously get count of requirements for quick badge display
- * @param {string} profileKey
- * @returns {number}
- */
 export function getRequirementCountSync(profileKey) {
   const normKey = String(profileKey).toLowerCase().trim();
   const meta = getLocalMeta();
   return meta[normKey]?.length || 0;
 }
 
-/**
- * Ensures image dataURL is compatible with PDF embedding (converts WebP/other to standard JPEG/PNG via canvas)
- */
 async function ensurePdfCompatibleDataUrl(dataUrl) {
   if (typeof window === "undefined" || !dataUrl) return dataUrl;
   if (dataUrl.startsWith("data:image/jpeg") || dataUrl.startsWith("data:image/png")) {
     return dataUrl;
   }
 
-  // If remote Supabase Storage URL, fetch as blob first for reliable CORS conversion
   if (dataUrl.startsWith("http://") || dataUrl.startsWith("https://")) {
     try {
       const response = await fetch(dataUrl);
@@ -745,9 +640,6 @@ async function ensurePdfCompatibleDataUrl(dataUrl) {
   }
 }
 
-/**
- * Measures dimensions of image for aspect-ratio preservation in PDF
- */
 function getImageDimensions(dataUrl) {
   return new Promise((resolve) => {
     if (typeof window === "undefined") {
@@ -768,10 +660,6 @@ function getImageDimensions(dataUrl) {
   });
 }
 
-/**
- * Automatically compiles requirement images for an agent into a PDF document object,
- * providing the jsPDF instance, blob, blobUrl for interactive preview, and download metadata.
- */
 export async function generateRequirementsPdfDoc({
   agentName = "Agent",
   agentId = "",
@@ -797,10 +685,10 @@ export async function generateRequirementsPdfDoc({
   const pageWidth = 210;
   const pageHeight = 297;
   const margin = 14;
-  const printableWidth = pageWidth - (margin * 2); // 182mm
+  const printableWidth = pageWidth - (margin * 2);
   const usableTop = 38;
   const usableBottom = pageHeight - 14;
-  const usableHeight = usableBottom - usableTop; // 245mm
+  const usableHeight = usableBottom - usableTop;
 
   const cleanName = String(agentName || "Agent").replace(/[^a-zA-Z0-9_\- ]/g, "").trim() || "Agent";
   const formattedDate = new Intl.DateTimeFormat("en-US", {
@@ -819,24 +707,20 @@ export async function generateRequirementsPdfDoc({
       doc.addPage("a4", "portrait");
     }
 
-    // --- SLEEK TOP HEADER ---
-    doc.setFillColor(15, 23, 42); // slate-900
+    doc.setFillColor(15, 23, 42);
     doc.rect(0, 0, pageWidth, 26, "F");
 
-    // Emerald accent line
-    doc.setFillColor(16, 185, 129); // emerald-500
+    doc.setFillColor(16, 185, 129);
     doc.rect(0, 26, pageWidth, 2.5, "F");
 
-    // Header Title
     doc.setTextColor(255, 255, 255);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(13);
     doc.text("HRHUB · REGISTRATION REQUIREMENTS", margin, 11);
 
-    // Agent Meta
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8.5);
-    doc.setTextColor(203, 213, 225); // slate-300
+    doc.setTextColor(203, 213, 225);
     const metaParts = [`Agent: ${cleanName}`];
     if (agentId && agentId !== "Not provided") metaParts.push(`ID: ${agentId}`);
     if (supervisorName && supervisorName !== "Not provided") metaParts.push(`Spvr: ${supervisorName}`);
@@ -844,12 +728,11 @@ export async function generateRequirementsPdfDoc({
     doc.text(metaParts.join("  |  "), margin, 18);
 
     doc.setFontSize(7.5);
-    doc.setTextColor(148, 163, 184); // slate-400
+    doc.setTextColor(148, 163, 184);
     doc.text(`Generated: ${formattedDate}`, pageWidth - margin, 18, { align: "right" });
 
-    // --- DOCUMENT SUBHEADER ---
-    doc.setFillColor(248, 250, 252); // slate-50
-    doc.setDrawColor(226, 232, 240); // slate-200
+    doc.setFillColor(248, 250, 252);
+    doc.setDrawColor(226, 232, 240);
     doc.roundedRect(margin, 31, printableWidth, 9, 2, 2, "FD");
 
     doc.setFont("helvetica", "bold");
@@ -865,7 +748,6 @@ export async function generateRequirementsPdfDoc({
     doc.setTextColor(100, 116, 139);
     doc.text(`File size: ${formatFileSize(item.size)}`, pageWidth - margin - 3, 37, { align: "right" });
 
-    // --- PROCESS & EMBED IMAGE ---
     try {
       const compatibleUrl = await ensurePdfCompatibleDataUrl(item.dataUrl);
       const dims = await getImageDimensions(compatibleUrl);
@@ -883,7 +765,6 @@ export async function generateRequirementsPdfDoc({
       const xOffset = margin + (printableWidth - renderWidth) / 2;
       const yOffset = 43 + (availH - renderHeight) / 2;
 
-      // Soft container border
       doc.setFillColor(248, 250, 252);
       doc.setDrawColor(226, 232, 240);
       doc.roundedRect(xOffset - 1, yOffset - 1, renderWidth + 2, renderHeight + 2, 1.5, 1.5, "FD");
@@ -897,7 +778,6 @@ export async function generateRequirementsPdfDoc({
       doc.text(`[Image could not be rendered: ${item.name}]`, margin, 60);
     }
 
-    // --- SLEEK FOOTER ---
     doc.setDrawColor(226, 232, 240);
     doc.line(margin, pageHeight - 10, pageWidth - margin, pageHeight - 10);
 
@@ -921,19 +801,12 @@ export async function generateRequirementsPdfDoc({
   };
 }
 
-/**
- * Automatically compiles all requirement images for an agent into a PDF
- * and directly downloads the file to disk.
- */
 export async function downloadRequirementsAsPdf(params) {
   const { doc, fileName } = await generateRequirementsPdfDoc(params);
   doc.save(fileName);
   return fileName;
 }
 
-/**
- * Generates a previewable PDF doc object for a single requirement item
- */
 export async function generateSingleRequirementPdfDoc({
   requirement,
   agentName = "Agent",
@@ -951,9 +824,6 @@ export async function generateSingleRequirementPdfDoc({
   });
 }
 
-/**
- * Downloads a single requirement document compiled into a clean 1-page PDF
- */
 export async function downloadSingleRequirementAsPdf({
   requirement,
   agentName = "Agent",
@@ -970,9 +840,6 @@ export async function downloadSingleRequirementAsPdf({
   return fileName;
 }
 
-/**
- * Downloads all requirement images in batch as a single ZIP archive
- */
 export async function downloadRequirementsAsZip({
   agentName = "Agent",
   requirements = []
@@ -1032,9 +899,6 @@ export async function downloadRequirementsAsZip({
   return link.download;
 }
 
-/**
- * Downloads all requirement images in batch as individual files directly to disk
- */
 export async function batchDownloadIndividualImages({
   agentName = "Agent",
   requirements = []

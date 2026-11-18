@@ -72,7 +72,6 @@ const App = () => {
       return true;
     }
 
-    // Only stay in PWA mode if launched as an installed PWA on mobile (standalone mode)
     const isStandalone =
       (typeof window.matchMedia === "function" && window.matchMedia("(display-mode: standalone)").matches) ||
       window.navigator?.standalone === true;
@@ -81,7 +80,6 @@ const App = () => {
       return true;
     }
 
-    // Regular browser visits to https://hrhub-app.vercel.app/ will always open the main HR Hub portal
     try {
       localStorage.removeItem("hrhub_pwa_supervisor_active");
     } catch {}
@@ -109,16 +107,15 @@ const App = () => {
       return false;
     }
   });
-  const [currentPage, setCurrentPage] = useState("dashboard"); // "dashboard" | "directory"
+  const [currentPage, setCurrentPage] = useState("dashboard");
   const [loginOpen, setLoginOpen] = useState(false);
-  const [authTab, setAuthTab] = useState("signin"); // "signin" | "activate" | "forgot"
+  const [authTab, setAuthTab] = useState("signin");
   const [showPassword, setShowPassword] = useState(false);
   const [form, setForm] = useState({ email: "", password: "", confirmPassword: "" });
   const [loginError, setLoginError] = useState("");
   const [authSuccessNotice, setAuthSuccessNotice] = useState("");
   const [isSubmittingAuth, setIsSubmittingAuth] = useState(false);
 
-  // Check existing persistent session or Supabase session on mount
   useEffect(() => {
     try {
       const savedUserStr = localStorage.getItem("hrhub_auth_user");
@@ -148,7 +145,6 @@ const App = () => {
       console.error(e);
     }
 
-    // Ensure HR Administrator account is registered in local storage and database
     const initSuperAdminAccount = async () => {
       try {
         const isMasterVerified = await verifyActivatedPassword("admin@hrhub.com", "admin123");
@@ -174,7 +170,6 @@ const App = () => {
     };
     initSuperAdminAccount();
 
-    // Clean up Supabase auth hash from URL if returning from verification link
     if (typeof window !== "undefined" && window.location.hash) {
       if (window.location.hash.includes("access_token") || window.location.hash.includes("error")) {
         setTimeout(() => {
@@ -242,7 +237,6 @@ const App = () => {
     });
   }, []);
 
-
   useEffect(() => {
     const phrase = PHRASES[currentPhraseIndex];
     const delay = isDeleting ? 50 : 100;
@@ -293,14 +287,12 @@ const App = () => {
     setIsSubmittingAuth(true);
 
     try {
-      // 1. Authenticate via Supabase Auth (Strict Email + Password verification)
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
         email: trimmedEmail,
         password: trimmedPassword
       });
 
       if (authData?.user) {
-        // Check HR approval status in profiles table
         const { data: profile } = await supabase
           .from("profiles")
           .select("*")
@@ -379,7 +371,6 @@ const App = () => {
         return;
       }
 
-      // 2. Database-verified credentials check (Activated accounts & HR Admin)
       const isVerified = await verifyActivatedPassword(trimmedEmail, trimmedPassword);
       if (isVerified) {
         let isApprovedStatus = true;
@@ -392,7 +383,6 @@ const App = () => {
         let dbProf = null;
 
         try {
-          // Check dedicated employees table first, then profiles
           try {
             const { data: emp } = await supabase
               .from("employees")
@@ -471,8 +461,6 @@ const App = () => {
         return;
       }
 
-
-      // If password check failed, check if the email exists in employees or profiles to provide helpful guidance
       let matchedProfile = null;
       try {
         const { data: empRecord } = await supabase
@@ -534,7 +522,6 @@ const App = () => {
     setIsSubmittingAuth(true);
 
     try {
-      // 1. Check if email exists in the company directory (Supabase employees OR profiles)
       let matchedProfile = null;
       try {
         const { data: empRecord } = await supabase
@@ -579,10 +566,8 @@ const App = () => {
         return;
       }
 
-      // 2. Persist activated password
       await saveActivatedPassword(trimmedEmail, trimmedPassword);
 
-      // 3. Attempt Supabase Auth registration in background
       let authUserId = null;
       try {
         const liveOrigin = typeof window !== "undefined" && window.location.origin && !/localhost:3000/i.test(window.location.origin)
@@ -603,7 +588,6 @@ const App = () => {
         console.info("Supabase signUp note:", authErr);
       }
 
-      // 4. Automatically Add or Update in Supabase 'profiles' table
       const isUuid = (str) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str || "");
       let targetProfileId = authUserId;
       if (!targetProfileId && isUuid(effectiveProfile.id)) {
@@ -647,7 +631,6 @@ const App = () => {
         console.warn("Profiles auto-add sync notice:", profSyncErr);
       }
 
-      // 5. Automatically ensure employee record is marked as approved and activated
       try {
         await supabase
           .from("employees")
@@ -666,7 +649,6 @@ const App = () => {
         console.warn("Employees table activation sync notice:", empSyncErr);
       }
 
-      // 6. Update in-memory employee record
       await saveStoredEmployee({
         ...effectiveProfile,
         id: targetProfileId || effectiveProfile.id,
@@ -736,7 +718,6 @@ const App = () => {
     try {
       await supabase.auth.signOut();
     } catch (err) {
-      // ignore
     }
     try {
       localStorage.removeItem("hrhub_auth_user");
@@ -1091,7 +1072,6 @@ const App = () => {
                   </button>
                 </div>
 
-                {/* Tab Switcher */}
                 {authTab !== "forgot" ? (
                   <div className="mt-5 flex rounded-2xl bg-slate-100 p-1.5 border border-slate-200/80">
                     <button

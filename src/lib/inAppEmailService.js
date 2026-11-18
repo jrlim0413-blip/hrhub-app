@@ -1,9 +1,3 @@
-/**
- * inAppEmailService.js
- * Comprehensive In-App Email Dispatch & Receiving Client for HR Hub.
- * Enables sending, receiving, threading, and storing official IR and NTE communications
- * without leaving the application or switching to external email providers.
- */
 
 import { supabase } from "./supabase";
 
@@ -15,7 +9,6 @@ if (typeof window !== "undefined" && "BroadcastChannel" in window) {
   try {
     emailBroadcastChannel = new BroadcastChannel("hrhub_inapp_emails_sync");
   } catch (e) {
-    // Ignore channel creation error
   }
 }
 
@@ -38,9 +31,6 @@ function saveLocalEmails(emails) {
   }
 }
 
-/**
- * Fetch all in-app emails (Inbox + Sent)
- */
 export async function fetchInAppEmails() {
   try {
     if (supabase) {
@@ -62,9 +52,6 @@ export async function fetchInAppEmails() {
   return getLocalEmails();
 }
 
-/**
- * Send an in-app email with instant cross-tab live sync and cloud backup
- */
 export async function sendInAppEmail({
   from,
   fromName,
@@ -90,7 +77,7 @@ export async function sendInAppEmail({
     subject: subject || "Official HR Communication",
     body: body || "",
     caseNumber,
-    documentType, // "INCIDENT_REPORT" | "NOTICE_TO_EXPLAIN" | "EMPLOYEE_DEFENSE"
+    documentType,
     attachments: Array.isArray(attachments) ? attachments : [],
     status: "DELIVERED",
     read: false,
@@ -100,7 +87,6 @@ export async function sendInAppEmail({
   const updated = [newEmail, ...current];
   saveLocalEmails(updated);
 
-  // Broadcast to other open tabs
   if (emailBroadcastChannel) {
     try {
       emailBroadcastChannel.postMessage({
@@ -109,11 +95,9 @@ export async function sendInAppEmail({
         emails: updated
       });
     } catch (e) {
-      // Ignore
     }
   }
 
-  // Cloud persistence
   if (supabase) {
     try {
       await supabase.from("user_settings").upsert(
@@ -135,9 +119,6 @@ export async function sendInAppEmail({
   return newEmail;
 }
 
-/**
- * Mark email as read
- */
 export async function markEmailAsRead(id) {
   const current = getLocalEmails();
   const updated = current.map((e) => (e.id === id ? { ...e, read: true } : e));
@@ -154,16 +135,12 @@ export async function markEmailAsRead(id) {
         { onConflict: "user_id" }
       );
     } catch {
-      // Ignore
     }
   }
 
   return updated;
 }
 
-/**
- * Delete an email message
- */
 export async function deleteInAppEmail(id) {
   const current = getLocalEmails();
   const updated = current.filter((e) => e.id !== id);
@@ -180,16 +157,12 @@ export async function deleteInAppEmail(id) {
         { onConflict: "user_id" }
       );
     } catch {
-      // Ignore
     }
   }
 
   return updated;
 }
 
-/**
- * Subscribe to live email updates across browser tabs
- */
 export function subscribeToLiveEmails(callback) {
   if (!emailBroadcastChannel) return () => {};
 
@@ -205,9 +178,6 @@ export function subscribeToLiveEmails(callback) {
   };
 }
 
-/**
- * Generate formal memo template for Incident Report transmittal
- */
 export function generateIrEmailTemplate(report = {}) {
   const dateStr = report.dateReported || new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
   return (
@@ -236,9 +206,6 @@ export function generateIrEmailTemplate(report = {}) {
   );
 }
 
-/**
- * Generate formal memo template for Notice to Explain issuance
- */
 export function generateNteEmailTemplate(report = {}) {
   const dateStr = report.nteDate || new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
   return (

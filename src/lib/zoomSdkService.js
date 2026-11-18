@@ -1,11 +1,5 @@
 import API_CONFIG from "../config/apiConfig";
 
-/**
- * Zoom Web Meeting SDK Service for HRHub
- * Handles JWT signature generation, script loading, and mounting Zoom Web SDK inside HRHub DOM.
- */
-
-// Simple Base64URL encoder for JWT signature
 function base64UrlEncode(str) {
   return btoa(str)
     .replace(/=/g, "")
@@ -13,14 +7,6 @@ function base64UrlEncode(str) {
     .replace(/\//g, "_");
 }
 
-/**
- * Generates Zoom Meeting SDK JWT Signature (HMAC-SHA256)
- * @param {Object} params
- * @param {string} params.meetingNumber - Zoom Meeting ID (numbers only)
- * @param {number} params.role - 0 for Attendee, 1 for Host
- * @param {string} params.sdkKey - Zoom SDK Key
- * @param {string} params.sdkSecret - Zoom SDK Secret
- */
 export async function generateZoomSDKSignature({
   meetingNumber,
   role = 0,
@@ -34,7 +20,7 @@ export async function generateZoomSDKSignature({
 
   const cleanMeetingNumber = String(meetingNumber).replace(/\D/g, "");
   const iat = Math.floor(Date.now() / 1000) - 30;
-  const exp = iat + 60 * 60 * 2; // 2 hours valid
+  const exp = iat + 60 * 60 * 2;
 
   const header = { alg: "HS256", typ: "JWT" };
   const payload = {
@@ -51,7 +37,6 @@ export async function generateZoomSDKSignature({
   const unsignedToken = `${encodedHeader}.${encodedPayload}`;
 
   try {
-    // Browser Web Crypto API for HMAC-SHA256
     const encoder = new TextEncoder();
     const keyData = encoder.encode(sdkSecret);
     const messageData = encoder.encode(unsignedToken);
@@ -76,9 +61,6 @@ export async function generateZoomSDKSignature({
   }
 }
 
-/**
- * Dynamically loads official Zoom Web SDK CDN scripts into document head
- */
 export function loadZoomWebSdkScripts() {
   return new Promise((resolve, reject) => {
     if (window.ZoomMtg) {
@@ -114,9 +96,6 @@ export function loadZoomWebSdkScripts() {
   });
 }
 
-/**
- * Check if Zoom credentials are ready in the frontend
- */
 export function isZoomConfigured() {
   return Boolean(
     API_CONFIG.ZOOM_CONFIG?.SDK_KEY &&
@@ -125,9 +104,6 @@ export function isZoomConfigured() {
   );
 }
 
-/**
- * Leave/End Zoom Web SDK session
- */
 export function leaveZoomMeeting() {
   if (window.ZoomMtg) {
     try {
@@ -138,9 +114,6 @@ export function leaveZoomMeeting() {
   }
 }
 
-/**
- * In-App Zoom SDK Join Room Controller
- */
 export async function joinZoomMeetingInApp({
   meetingNumber,
   passcode = "",
@@ -158,7 +131,6 @@ export async function joinZoomMeetingInApp({
       return false;
     }
 
-    // Ensure #zmmtg-root exists
     if (!document.getElementById("zmmtg-root")) {
       const zRoot = document.createElement("div");
       zRoot.id = "zmmtg-root";

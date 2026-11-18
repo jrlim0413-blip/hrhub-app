@@ -32,10 +32,6 @@ import {
 export const HR_OFFICIAL_EMAIL = "imsoroglohr@gmail.com";
 export const CORPORATE_GROUP_EMBLEM = "/logos/group_emblem.jpg";
 
-/**
- * Match an employee record with its target company entity accurately.
- * Uses exact matches and dedicated entity mapping to prevent substring collision (e.g. 'imp' matching 'simpal').
- */
 export function matchEmployeeToCompany(employee, comp) {
   if (!employee || !comp) return false;
   const empComp = (employee.company || "").trim().toLowerCase();
@@ -44,17 +40,14 @@ export function matchEmployeeToCompany(employee, comp) {
   const compName = (comp.name || "").trim().toLowerCase();
   const compLegal = (comp.legalName || "").trim().toLowerCase();
 
-  // If employee has no company assigned, default to Parent Holding (SGC)
   if (!empComp) {
     return compId === "sgc" || compCode === "sgc";
   }
 
-  // Exact matches first
   if (empComp === compName || empComp === compLegal || empComp === compCode || empComp === compId) {
     return true;
   }
 
-  // Specific Entity Discriminators
   switch (compId) {
     case "simcon":
       return empComp.includes("simcon") || empComp.includes("construction");
@@ -77,7 +70,6 @@ export function matchEmployeeToCompany(employee, comp) {
       return empComp.includes("glowing") || empComp.includes("fortune");
 
     case "sgc":
-      // Simpal Group (holding) - exclude construction, imperial, lucky, etc.
       return (
         empComp === "sgc" ||
         empComp === "simpal group" ||
@@ -318,11 +310,9 @@ export const formatAddressLines = (address) => {
   return [address];
 };
 
-// AUTOMATIC SYSTEM CLASSIFICATION ANALYZER (Based on Subject Line & Content)
 export function analyzeClassificationFromSubject(subjectText = "", contentText = "") {
   const text = `${subjectText} ${contentText}`.toLowerCase();
 
-  // 1. Mandatory Compliance
   if (
     text.includes("compliance") ||
     text.includes("biometric") ||
@@ -344,7 +334,6 @@ export function analyzeClassificationFromSubject(subjectText = "", contentText =
     return "Mandatory Compliance";
   }
 
-  // 2. Holiday Schedule
   if (
     text.includes("holiday") ||
     text.includes("non-working") ||
@@ -362,7 +351,6 @@ export function analyzeClassificationFromSubject(subjectText = "", contentText =
     return "Holiday Schedule";
   }
 
-  // 3. Safety & Health
   if (
     text.includes("safety") ||
     text.includes("ppe") ||
@@ -383,7 +371,6 @@ export function analyzeClassificationFromSubject(subjectText = "", contentText =
     return "Safety & Health";
   }
 
-  // 4. Executive Order
   if (
     text.includes("executive order") ||
     text.includes("appointment") ||
@@ -398,7 +385,6 @@ export function analyzeClassificationFromSubject(subjectText = "", contentText =
     return "Executive Order";
   }
 
-  // 5. Operational Directive
   if (
     text.includes("operation") ||
     text.includes("directive") ||
@@ -419,7 +405,6 @@ export function analyzeClassificationFromSubject(subjectText = "", contentText =
     return "Operational Directive";
   }
 
-  // 6. General Policy
   return "General Policy";
 }
 
@@ -459,17 +444,11 @@ export function cleanDirectivesBody(rawContent) {
   return body || rawContent;
 }
 
-/**
- * Remove HTML tags from text for plain text representations (clipboard, plaintext email, word count)
- */
 export function stripHtml(content) {
   if (!content) return "";
   return content.replace(/<[^>]*>/g, "");
 }
 
-/**
- * Convert integer to Roman Numeral string (e.g. 1 -> I, 4 -> IV)
- */
 export function toRoman(num) {
   const map = { M: 1000, CM: 900, D: 500, CD: 400, C: 100, XC: 90, L: 50, XL: 40, X: 10, IX: 9, V: 5, IV: 4, I: 1 };
   let roman = "";
@@ -482,23 +461,14 @@ export function toRoman(num) {
   return roman || "I";
 }
 
-/**
- * Render memorandum directives with rich HTML formatting and Markdown shortcuts support
- */
 export function renderMemoDirectivesHtml(content) {
   if (!content) return "";
   let html = content;
-  // Markdown bold **text** -> <b>$1</b>
   html = html.replace(/\*\*(.*?)\*\*/g, "<b>$1</b>");
-  // Markdown italic *text* (excluding text inside tags)
   html = html.replace(/(?<![<a-zA-Z0-9])\*([^*\n]+)\*(?![a-zA-Z0-9>])/g, "<i>$1</i>");
-  // Markdown highlight ==text== -> <mark ...>$1</mark>
   html = html.replace(/==(.*?)==/g, '<mark style="background-color: #fef08a; color: #713f12; padding: 1px 5px; border-radius: 3px; font-weight: 600;">$1</mark>');
-  // Markdown strikethrough ~~text~~ -> <s>$1</s>
   html = html.replace(/~~(.*?)~~/g, "<s>$1</s>");
 
-  // If content has markdown numbered lists ("1. " or "1) ") or bullets ("- ", "* ", "• ")
-  // and is not already wrapped in <ol> or <ul>, convert to clean HTML lists
   if (!html.includes("<ol") && !html.includes("<ul")) {
     const lines = html.split(/\r?\n/);
     let inOl = false;
@@ -570,15 +540,8 @@ export const DIRECTIVE_FONT_SIZES = [
   { label: "16 pt (Prominent)", value: 21.3 }
 ];
 
-/**
- * In-memory registry of references used in current active browser session
- * to guarantee immediate uniqueness across all tabs/drafts before DB persistence.
- */
 const sessionUsedRefs = new Set();
 
-/**
- * Normalizes legacy references to guarantee official company codes (e.g. SARG -> 5ARG).
- */
 export function sanitizeMemoRef(ref = "") {
   if (!ref) return "";
   return String(ref)
@@ -586,9 +549,6 @@ export function sanitizeMemoRef(ref = "") {
     .replace(/\bSARG\b/gi, "5ARG");
 }
 
-/**
- * Replace company code in a reference while strictly preserving the date-sequence suffix (e.g. 261023-01).
- */
 export function getCompanySpecificMemoRef(companyCode = "LBC", baseRef = "") {
   const sanitizedRef = sanitizeMemoRef(baseRef);
   if (!sanitizedRef) return `MEMO-${new Date().getFullYear()}-${companyCode}`;
@@ -598,28 +558,17 @@ export function getCompanySpecificMemoRef(companyCode = "LBC", baseRef = "") {
     if (existingCode === companyCode) {
       return sanitizedRef;
     }
-    const prefix = parts.slice(0, 2).join("-"); // "MEMO-2026"
-    const suffix = parts.slice(3).join("-"); // "261023-01" or "001"
+    const prefix = parts.slice(0, 2).join("-");
+    const suffix = parts.slice(3).join("-");
     return `${prefix}-${companyCode}-${suffix}`;
   }
   return sanitizedRef.replace(/-(?:LBC|5ARG|SIMCON|GFC|GLOW|IMP|SGC|GTI|RMC|FES|OPC)-/i, `-${companyCode}-`);
 }
 
-/**
- * Resolves the matching company entity strictly based on the memorandum reference string.
- * Example:
- * - "MEMO-2026-GFC-261104-09" -> Glowing Fortune OPC (code: GFC)
- * - "MEMO-2026-5ARG-261104-02" -> 5A Royal Gaming OPC (code: 5ARG)
- * - "MEMO-2026-LBC-..." -> Lucky Betplay Corporation (code: LBC)
- * - "MEMO-2026-SIMCON-..." -> Simpal Construction (code: SIMCON)
- * - "MEMO-2026-SGC-..." -> Simpal Group of Companies (code: SGC)
- * - "MEMO-2026-IMP-..." -> Imperial Gaming OPC (code: IMP)
- */
 export function resolveCompanyFromMemoRef(ref = "", m = null, allCompanies = COMPANIES) {
   const cleanRef = sanitizeMemoRef(String(ref || m?.ref || "").trim().toUpperCase());
 
   if (cleanRef) {
-    // 1. Direct segment check: MEMO-YYYY-CODE-... or MEMO-CODE-...
     const parts = cleanRef.split("-");
     const extractedCode = parts.length >= 3 ? parts[2] : (parts.length >= 2 ? parts[1] : "");
 
@@ -638,7 +587,6 @@ export function resolveCompanyFromMemoRef(ref = "", m = null, allCompanies = COM
       if (match) return match;
     }
 
-    // 2. Substring fallback within reference
     if (cleanRef.includes("-GFC-") || cleanRef.includes("-GLOW-") || cleanRef.includes("GFC")) {
       const c = allCompanies.find((x) => x.id === "glowing_fortune");
       if (c) return c;
@@ -665,13 +613,11 @@ export function resolveCompanyFromMemoRef(ref = "", m = null, allCompanies = COM
     }
   }
 
-  // 3. Fallback to m.companyId
   if (m?.companyId) {
     const comp = allCompanies.find((c) => c.id === m.companyId);
     if (comp) return comp;
   }
 
-  // 4. Fallback to m.companyCode
   if (m?.companyCode) {
     const cCode = sanitizeMemoRef(String(m.companyCode).toUpperCase());
     const comp = allCompanies.find((c) =>
@@ -681,7 +627,6 @@ export function resolveCompanyFromMemoRef(ref = "", m = null, allCompanies = COM
     if (comp) return comp;
   }
 
-  // 5. Fallback to m.companyName
   if (m?.companyName) {
     const nameLow = String(m.companyName).toLowerCase();
     const comp = allCompanies.find((c) =>
@@ -694,18 +639,13 @@ export function resolveCompanyFromMemoRef(ref = "", m = null, allCompanies = COM
   return allCompanies[0];
 }
 
-/**
- * Generate sequential, unique memorandum reference across all accounts.
- * Pattern: MEMO-[YEAR]-[CODE]-[YY][MMDD]-[SEQ (starting at 01)]
- * Example: MEMO-2026-LBC-261023-01
- */
 export function generateUniqueMemoRef(companyCode = "LBC", allKnownRefs = []) {
   const now = new Date();
   const fullYear = now.getFullYear();
   const yy = String(fullYear).slice(-2);
   const mm = String(now.getMonth() + 1).padStart(2, "0");
   const dd = String(now.getDate()).padStart(2, "0");
-  const dateTag = `${yy}${mm}${dd}`; // e.g. "261023"
+  const dateTag = `${yy}${mm}${dd}`;
 
   const candidatePool = new Set([
     ...sessionUsedRefs,
@@ -754,11 +694,9 @@ export default function MemoGeneratorPanel({
   const initialDraftRef = useRef(initialDraft);
   initialDraftRef.current = initialDraft;
 
-  // Stepper State: 1 = Header & Addressing, 2 = Body Directives, 3 = Signatories, 4 = Final Memo & Multi-Company
   const [currentStep, setCurrentStep] = useState(1);
   const [unlinkedNoticeModalOpen, setUnlinkedNoticeModalOpen] = useState(false);
 
-  // Selected Company State - Default to Lucky Betplay Corporation (LBC)
   const [selectedCompanyId, setSelectedCompanyId] = useState("lucky_betplay");
   const [organizationLetterheadDefaults, setOrganizationLetterheadDefaults] = useState(() => {
     return filterValidLetterheadFields(initialUserSettings.organizationLetterheadDefaults, COMPANY_IDS);
@@ -784,7 +722,6 @@ export default function MemoGeneratorPanel({
   const letterheadHeading = selectedCompany.legalName ?? selectedCompany.name ?? "";
   const isLetterheadHeadingInvalid = !letterheadHeading.trim();
 
-  // Step 1: Memo Header & Routing States
   const [memoRef, setMemoRef] = useState(() => generateUniqueMemoRef("LBC"));
   const [memoDate, setMemoDate] = useState(() => {
     const now = new Date();
@@ -800,11 +737,9 @@ export default function MemoGeneratorPanel({
     return initialUserSettings.headerDefaults?.defaultSubject || "IMMEDIATE RESPONSE AND COMMUNICATION ACCESSIBILITY";
   });
 
-  // Step 2: Memorandum Body Directives State (Starts clean / empty canvas or with loaded draft)
   const [memoContent, setMemoContent] = useState("");
   const [magnifyModalOpen, setMagnifyModalOpen] = useState(false);
 
-  // Directives Editor Refs & WYSIWYG Live Formatting States
   const liveEditorRef = useRef(null);
   const modalLiveEditorRef = useRef(null);
   const [directivesFontFamily, setDirectivesFontFamily] = useState(() => {
@@ -819,7 +754,6 @@ export default function MemoGeneratorPanel({
   const [colorMenuOpen, setColorMenuOpen] = useState(false);
   const [clausesMenuOpen, setClausesMenuOpen] = useState(false);
 
-  // Synchronize contentEditable div innerHTML when memoContent is changed externally
   useEffect(() => {
     const formattedHtml = memoContent ? renderMemoDirectivesHtml(memoContent) : "";
     if (liveEditorRef.current && document.activeElement !== liveEditorRef.current) {
@@ -834,7 +768,6 @@ export default function MemoGeneratorPanel({
     }
   }, [memoContent, currentStep, magnifyModalOpen, isSourceMode]);
 
-  // Auto-close toolbar popovers on outside click
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (!e.target.closest(".memo-toolbar-menu-container")) {
@@ -937,7 +870,6 @@ export default function MemoGeneratorPanel({
   };
 
   const handleEditorKeyDown = (e) => {
-    // Undo shortcut: Ctrl+Z / Cmd+Z (or Redo if Shift is held: Ctrl+Shift+Z)
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
       e.preventDefault();
       if (e.shiftKey) {
@@ -948,7 +880,6 @@ export default function MemoGeneratorPanel({
       return;
     }
 
-    // Redo shortcut: Ctrl+Y / Cmd+Y
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "y") {
       e.preventDefault();
       handleRedo();
@@ -963,14 +894,12 @@ export default function MemoGeneratorPanel({
       return;
     }
 
-    // Auto-detect list prefix when pressing Space at the beginning of a line (e.g. "1. " or "- ")
     if (e.key === " ") {
       const sel = window.getSelection();
       if (sel && sel.isCollapsed && sel.anchorNode) {
         const textNode = sel.anchorNode;
         if (textNode.nodeType === Node.TEXT_NODE) {
           const textBeforeCursor = textNode.textContent.slice(0, sel.anchorOffset).trim();
-          // Check for "1." or "1)"
           if (/^(\d+)[\.\)]$/.test(textBeforeCursor)) {
             e.preventDefault();
             textNode.textContent = textNode.textContent.slice(sel.anchorOffset);
@@ -979,7 +908,6 @@ export default function MemoGeneratorPanel({
             if (editor) setMemoContent(editor.innerHTML);
             return;
           }
-          // Check for "-", "*", "•"
           if (/^[\-\*\•]$/.test(textBeforeCursor)) {
             e.preventDefault();
             textNode.textContent = textNode.textContent.slice(sel.anchorOffset);
@@ -993,21 +921,18 @@ export default function MemoGeneratorPanel({
     }
   };
 
-  // AUTOMATIC CLASSIFICATION STATE (Auto-analyzed by system based on subject & content)
   const [memoCategory, setMemoCategory] = useState(() =>
     analyzeClassificationFromSubject("IMMEDIATE RESPONSE AND COMMUNICATION ACCESSIBILITY", "")
   );
 
-  // Auto-analyze category whenever Subject or Content changes
   useEffect(() => {
     const autoClass = analyzeClassificationFromSubject(memoSubject, memoContent);
     setMemoCategory(autoClass);
   }, [memoSubject, memoContent]);
 
-  // Step 3: Signatory Setup & E-Signature States
   const [signatoryLayout, setSignatoryLayout] = useState(() => {
     return initialUserSettings.signatoryLayout || "single";
-  }); // 'dual' | 'single'
+  });
   const [signatoryLabel, setSignatoryLabel] = useState(() => {
     return initialUserSettings.signatory?.label || "ISSUED BY:";
   });
@@ -1028,7 +953,6 @@ export default function MemoGeneratorPanel({
     return initialUserSettings.approver?.title || "President & CEO";
   });
 
-  // E-Signatures (Loaded from and saved to user account settings)
   const [signatorySignature, setSignatorySignature] = useState(() => {
     return initialUserSettings.signatory?.signature || null;
   });
@@ -1036,7 +960,6 @@ export default function MemoGeneratorPanel({
     return initialUserSettings.approver?.signature || null;
   });
 
-  // Signature Position Offsets & Sizes (Horizontal, Vertical alignment & Scale)
   const [signatoryOffsetX, setSignatoryOffsetX] = useState(() => {
     return initialUserSettings.signatory?.offsetX ?? -12;
   });
@@ -1079,11 +1002,10 @@ export default function MemoGeneratorPanel({
     });
   }, [approverOffsetX, approverOffsetY, approverSize, currentUser]);
 
-  // Step 4: Preview, Zoom & Watermark States
-  const [previewZoom, setPreviewZoom] = useState(100); // 90, 100, 110
-  const [paperSize, setPaperSize] = useState("auto"); // "auto" | "short" | "a4" | "legal13" | "legal14"
+  const [previewZoom, setPreviewZoom] = useState(100);
+  const [paperSize, setPaperSize] = useState("auto");
   const [previewEntityIndex, setPreviewEntityIndex] = useState(0);
-  const [previewViewMode, setPreviewViewMode] = useState("slide"); // "slide" | "scroll"
+  const [previewViewMode, setPreviewViewMode] = useState("slide");
   const [watermarkOpacity, setWatermarkOpacity] = useState(() => {
     return initialUserSettings.watermark?.opacity ?? 25;
   });
@@ -1097,12 +1019,9 @@ export default function MemoGeneratorPanel({
     return initialUserSettings.watermark?.diagonalStampText || "OFFICIAL MEMORANDUM";
   });
 
-  // Visibility toggles for Simpal Group of Companies (Parent Holding) and Non-STL Subsidiaries
-  // Default: hidden unless the active selected entity is SGC or Non-STL
   const [showSimpalGroup, setShowSimpalGroup] = useState(() => selectedCompanyId === HEAD_OFFICE_ID);
   const [showNonStl, setShowNonStl] = useState(() => NON_STL_COMPANY_IDS.includes(selectedCompanyId));
 
-  // Multi-Company Distribution Inclusion State (Default: strictly 4 STL Gaming Subsidiaries)
   const [includedCompanyIds, setIncludedCompanyIds] = useState(() => {
     if (Array.isArray(initialUserSettings.includedCompanyIds) && initialUserSettings.includedCompanyIds.length > 0) {
       const stlOnly = initialUserSettings.includedCompanyIds.filter((id) => STL_SUBSIDIARY_IDS.includes(id));
@@ -1128,7 +1047,6 @@ export default function MemoGeneratorPanel({
     Math.max(0, companiesToPreview.length - 1)
   );
 
-  // Keyboard navigation for Step 4 Memorandum Output Viewer (Left / Right Arrow Keys)
   useEffect(() => {
     if (currentStep !== 4) return;
     const handleKeyDown = (e) => {
@@ -1185,7 +1103,6 @@ export default function MemoGeneratorPanel({
     if (NON_STL_COMPANY_IDS.includes(companyId)) setShowNonStl(true);
   };
 
-  // Saved Memos Archive State (Loaded from and saved to Supabase 'saved_memos' table per account)
   const [savedMemos, setSavedMemos] = useState([]);
   const [isLoadingSavedMemos, setIsLoadingSavedMemos] = useState(true);
 
@@ -1225,7 +1142,6 @@ export default function MemoGeneratorPanel({
   const [archiveCompanyFilter, setArchiveCompanyFilter] = useState("ALL");
   const [saveSuccessNotice, setSaveSuccessNotice] = useState(false);
 
-  // Email & Dispatch States (Company-Specific Segregation)
   const [emailModalOpen, setEmailModalOpen] = useState(false);
   const [copiedNotice, setCopiedNotice] = useState(false);
   const [customWebhookUrl, setCustomWebhookUrl] = useState(() => {
@@ -1247,7 +1163,6 @@ export default function MemoGeneratorPanel({
   const [fadedWatermarkMap, setFadedWatermarkMap] = useState({});
   const [groupEmblemDataUrl, setGroupEmblemDataUrl] = useState("");
 
-  // Automatically load account default settings from Supabase ('user_settings' table) on mount
   useEffect(() => {
     let isMounted = true;
     (async () => {
@@ -1331,7 +1246,6 @@ export default function MemoGeneratorPanel({
     return () => { isMounted = false; };
   }, [currentUser]);
 
-  // Seamless Background Auto-Save: Automatically and seamlessly persists any changed defaults per account in Supabase
   useEffect(() => {
     if (!isSettingsInitialized.current) return;
 
@@ -1409,14 +1323,12 @@ export default function MemoGeneratorPanel({
     customWebhookUrl
   ]);
 
-  // Pre-process and cache company logo images and group emblem into self-contained base64 Data URLs
   useEffect(() => {
     let isMounted = true;
     const loadLogos = async () => {
       const rawMap = {};
       const fadedMap = {};
 
-      // 1. Process all company logos
       for (const comp of COMPANIES) {
         if (!comp.logoUrl) continue;
         try {
@@ -1429,7 +1341,6 @@ export default function MemoGeneratorPanel({
           });
 
           if (img.naturalWidth && img.naturalHeight) {
-            // Raw Logo Data URL
             const canvas = document.createElement("canvas");
             canvas.width = img.naturalWidth;
             canvas.height = img.naturalHeight;
@@ -1437,14 +1348,13 @@ export default function MemoGeneratorPanel({
             ctx.drawImage(img, 0, 0);
             rawMap[comp.id] = canvas.toDataURL("image/png");
 
-            // Faded Watermark Data URL (clean, transparent background for email card & PDF)
             const fCanvas = document.createElement("canvas");
             const targetW = 600;
             const targetH = Math.round((img.naturalHeight / img.naturalWidth) * targetW);
             fCanvas.width = targetW;
             fCanvas.height = targetH;
             const fCtx = fCanvas.getContext("2d");
-            fCtx.globalAlpha = 0.08; // subtle, readable behind text in email
+            fCtx.globalAlpha = 0.08;
             fCtx.drawImage(img, 0, 0, targetW, targetH);
             fadedMap[comp.id] = fCanvas.toDataURL("image/png");
           }
@@ -1453,7 +1363,6 @@ export default function MemoGeneratorPanel({
         }
       }
 
-      // 2. Process corporate group emblem
       try {
         const gImg = new window.Image();
         gImg.crossOrigin = "anonymous";
@@ -1493,7 +1402,6 @@ export default function MemoGeneratorPanel({
     setIsEditingWebhook(false);
   };
 
-  // Sync initial draft from HRHub Ai Buddy if provided or stored in user settings
   useEffect(() => {
     let draft = initialDraft;
     if (!draft && initialUserSettings.activeDraft) {
@@ -1521,7 +1429,6 @@ export default function MemoGeneratorPanel({
     }
   }, [initialDraft, initialUserSettings]);
 
-  // Company-Specific Dispatches List: Strictly pre-registered employees' work emails only!
   const companyDispatches = useMemo(() => {
     const allEmployees = mergeProfilesWithStored(profiles);
 
@@ -1530,14 +1437,12 @@ export default function MemoGeneratorPanel({
       const compEmailSet = new Set();
 
       matchingEmployees.forEach((emp) => {
-        // Must be a valid work email address from pre-registered employees
         const workEmail = (emp.email || emp.work_email || emp.workEmail || "").trim();
         if (workEmail && workEmail.includes("@")) {
           compEmailSet.add(workEmail);
         }
       });
 
-      // STRICT: Zero fallback to generic company contacts. Pre-registered work emails only!
       const recipients = Array.from(compEmailSet);
       const compMemoRef = getCompanySpecificMemoRef(comp.code, memoRef);
 
@@ -1554,17 +1459,14 @@ export default function MemoGeneratorPanel({
     });
   }, [activeCompanies, profiles, memoRef]);
 
-  // Companies with 0 linked pre-registered employee emails
   const unlinkedEntities = useMemo(() => {
     return companyDispatches.filter((d) => d.recipients.length === 0);
   }, [companyDispatches]);
 
-  // Companies with at least 1 linked pre-registered employee email
   const linkedEntities = useMemo(() => {
     return companyDispatches.filter((d) => d.recipients.length > 0);
   }, [companyDispatches]);
 
-  // Total unique recipients across all company entities
   const totalCompanyRecipients = useMemo(() => {
     const set = new Set();
     companyDispatches.forEach((d) => {
@@ -1573,7 +1475,6 @@ export default function MemoGeneratorPanel({
     return set.size;
   }, [companyDispatches]);
 
-  // All recipient emails combined for generic clients
   const recipientEmails = useMemo(() => {
     const set = new Set();
     companyDispatches.forEach((d) => {
@@ -1582,12 +1483,10 @@ export default function MemoGeneratorPanel({
     return Array.from(set);
   }, [companyDispatches]);
 
-  // Switch Company Entity
   const handleSelectCompany = (companyId) => {
     const comp = companies.find((company) => company.id === companyId);
     if (!comp) return;
     setSelectedCompanyId(companyId);
-    // Strictly scope distribution and viewer to this chosen entity only
     setIncludedCompanyIds([companyId]);
     setSignatoryCompany(comp.name);
     setMemoRef((prevRef) => getCompanySpecificMemoRef(comp.code, prevRef));
@@ -1654,7 +1553,6 @@ export default function MemoGeneratorPanel({
     }
   };
 
-  // E-Signature Upload & Removal Handlers (Per User Account)
   const handleSignatureUpload = async (event, setSignature, roleKey, roleLabel) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -1712,9 +1610,7 @@ export default function MemoGeneratorPanel({
     } catch { }
   };
 
-  // Save Memo to Records / Database Archive (Supabase 'saved_memos' table per account)
   const handleSaveMemoToArchive = async () => {
-    // 1. Strictly resolve the exact entity this memo is drafted for
     const currentViewing = companiesToPreview[safePreviewIndex];
     const targetComp = resolveCompanyFromMemoRef(
       memoRef,
@@ -1724,14 +1620,10 @@ export default function MemoGeneratorPanel({
 
     const actualRef = sanitizeMemoRef(getCompanySpecificMemoRef(targetComp.code, memoRef));
 
-    // Dynamic Multi-Entity Scope:
-    // If user is drafting for 4 entities (or multiple), save all included entities!
-    // If only 1 entity is selected, save only that single entity.
     const savedIncludedCompanyIds = (Array.isArray(includedCompanyIds) && includedCompanyIds.length > 0)
       ? [...includedCompanyIds]
       : [targetComp.id];
 
-    // Collect letterhead overrides for all saved entities
     const savedLetterheads = {};
     savedIncludedCompanyIds.forEach((cId) => {
       savedLetterheads[cId] = letterheadOverrides[cId] || savedLetterheadDefaults[cId];
@@ -1749,7 +1641,7 @@ export default function MemoGeneratorPanel({
       companyId: targetComp.id,
       companyName: targetComp.name,
       companyCode: targetComp.code,
-      includedCompanyIds: savedIncludedCompanyIds, // Saves 4 entities if 4 were saved, or 1 if 1 was saved!
+      includedCompanyIds: savedIncludedCompanyIds,
       signatoryLabel,
       signatoryName,
       signatoryTitle,
@@ -1797,7 +1689,6 @@ export default function MemoGeneratorPanel({
     setTimeout(() => setSaveSuccessNotice(false), 3500);
   };
 
-  // Delete saved memo from database
   const handleDeleteSavedMemo = async (id) => {
     const filtered = savedMemos.filter((m) => m.id !== id);
     setSavedMemos(filtered);
@@ -1808,15 +1699,11 @@ export default function MemoGeneratorPanel({
     }
   };
 
-  // Load saved memo into current editor
   const handleLoadSavedMemo = (m) => {
     if (!m) return;
     const cleanRef = sanitizeMemoRef(m.ref);
-    // 1. Resolve matching company entity strictly based on the memorandum reference!
     const memoCompany = resolveCompanyFromMemoRef(cleanRef, { ...m, ref: cleanRef }, companies);
 
-    // 2. Multi-Entity Dynamic Logic:
-    // "kapag apat na entity ang na save, dapat apat din ang mag appear, kung isang entity lang ang pag save, dapat isa lang din ang mag appear kapag e load memo."
     const rawSavedIds = Array.isArray(m.includedCompanyIds) && m.includedCompanyIds.length > 0
       ? m.includedCompanyIds
       : (Array.isArray(m.metadata?.includedCompanyIds) && m.metadata.includedCompanyIds.length > 0
@@ -1826,7 +1713,6 @@ export default function MemoGeneratorPanel({
     const validSavedIds = rawSavedIds.filter((id) => companies.some((c) => c.id === id));
     const finalIncludedIds = validSavedIds.length > 0 ? validSavedIds : [memoCompany.id];
 
-    // Auto-reveal toggles if SGC or Non-STL entities were included in the saved memo
     if (finalIncludedIds.includes(HEAD_OFFICE_ID)) {
       setShowSimpalGroup(true);
     }
@@ -1834,10 +1720,8 @@ export default function MemoGeneratorPanel({
       setShowNonStl(true);
     }
 
-    // Restore exact number of entities (4 if 4 saved, 1 if 1 saved)
     setIncludedCompanyIds(finalIncludedIds);
 
-    // Select primary company and active preview index
     if (finalIncludedIds.includes(memoCompany.id)) {
       setSelectedCompanyId(memoCompany.id);
       const targetIdx = finalIncludedIds.indexOf(memoCompany.id);
@@ -1847,13 +1731,11 @@ export default function MemoGeneratorPanel({
       setPreviewEntityIndex(0);
     }
 
-    // Restore letterhead overrides across all included entities if present
     if (m.letterheadOverrides || m.metadata?.letterheadOverrides) {
       const overrides = m.letterheadOverrides || m.metadata?.letterheadOverrides;
       setLetterheadOverrides((prev) => ({ ...prev, ...overrides }));
     }
 
-    // 5. Populate form fields
     if (cleanRef) setMemoRef(cleanRef);
     if (m.date) setMemoDate(m.date);
     if (m.to) setMemoTo(m.to);
@@ -1862,11 +1744,9 @@ export default function MemoGeneratorPanel({
     if (m.category) setMemoCategory(m.category);
     if (m.content) setMemoContent(m.content);
 
-    // Directives Styling
     if (m.directivesFontFamily) setDirectivesFontFamily(m.directivesFontFamily);
     if (m.directivesFontSize) setDirectivesFontSize(Number(m.directivesFontSize) || 14.6);
 
-    // Signatory setup & placement
     const sigLabel = m.signatoryLabel || m.metadata?.signatoryLabel || "ISSUED BY:";
     setSignatoryLabel(sigLabel);
     if (m.signatoryName) setSignatoryName(m.signatoryName);
@@ -1879,13 +1759,11 @@ export default function MemoGeneratorPanel({
     if (m.approverTitle) setApproverTitle(m.approverTitle);
     if (m.signatoryLayout) setSignatoryLayout(m.signatoryLayout);
 
-    // Signatures (from top-level mapped fields or metadata)
     const sigSignature = m.signatorySignature ?? m.metadata?.signatorySignature ?? null;
     setSignatorySignature(sigSignature);
     const appSignature = m.approverSignature ?? m.metadata?.approverSignature ?? null;
     setApproverSignature(appSignature);
 
-    // Precise signature sizing & alignment offsets
     const sigSize = m.signatorySize ?? m.metadata?.signatorySize;
     if (sigSize !== undefined && sigSize !== null && sigSize !== "") setSignatorySize(Number(sigSize));
     const sigOffX = m.signatoryOffsetX ?? m.metadata?.signatoryOffsetX;
@@ -1900,7 +1778,6 @@ export default function MemoGeneratorPanel({
     const appOffY = m.approverOffsetY ?? m.metadata?.approverOffsetY;
     if (appOffY !== undefined && appOffY !== null && appOffY !== "") setApproverOffsetY(Number(appOffY));
 
-    // Watermark configuration
     const wm = m.watermark || m.metadata?.watermark;
     if (wm) {
       if (wm.size !== undefined && wm.size !== null && wm.size !== "") setWatermarkSize(Number(wm.size));
@@ -1909,17 +1786,14 @@ export default function MemoGeneratorPanel({
       if (wm.diagonalStampText) setDiagonalStampText(wm.diagonalStampText);
     }
 
-    // Letterhead overrides
     const lhOverrides = m.letterheadOverrides || m.metadata?.letterheadOverrides;
     if (lhOverrides && typeof lhOverrides === "object") {
       setLetterheadOverrides((prev) => ({ ...prev, ...lhOverrides }));
     }
 
-    // Reset dirty state & clear notices
     setDirtyLetterheadCompanyIds([]);
     setLetterheadStatus(null);
 
-    // 6. Close archive modal and jump to Step 4 to immediately preview ONLY this authentic letterhead!
     setArchiveModalOpen(false);
     setCurrentStep(4);
     setImageCopyToast({
@@ -1928,7 +1802,6 @@ export default function MemoGeneratorPanel({
     });
   };
 
-  // Copy plain formatted memo text for clipboard
   const handleCopyMemoText = () => {
     const fullText = `=====================================================
 ${distributionCompany.legalName || distributionCompany.name}
@@ -1964,7 +1837,6 @@ ${distributionCompany.legalName || distributionCompany.name}
     });
   };
 
-  // Email & PDF Generators (Company-Tailored)
   const generateEmailBody = (targetComp = distributionCompany) => {
     const comp = targetComp || distributionCompany;
     const compMemoRef = getCompanySpecificMemoRef(comp.code, memoRef);
@@ -2020,22 +1892,20 @@ HR Contact: ${HR_OFFICIAL_EMAIL}`;
     const effectiveSigSize = Number(signatorySize) || 52;
     const effectiveAppSize = Number(approverSize) || 52;
 
-    // Exact email paper sheet height mirroring the selected bond paper size (width: 680px)
-    let emailMinHeightPx = 962; // Standard A4 (210 x 297 mm)
+    let emailMinHeightPx = 962;
     let emailPadding = "26px 34px 20px 34px";
 
     if (metrics.isShort) {
-      emailMinHeightPx = 880; // Short Bond / Letter (8.5 x 11 in)
+      emailMinHeightPx = 880;
       emailPadding = "24px 34px 20px 34px";
     } else if (metrics.effectivePaper === "legal14") {
-      emailMinHeightPx = 1120; // US Legal (8.5 x 14 in)
+      emailMinHeightPx = 1120;
       emailPadding = "18px 34px 16px 34px";
     } else if (metrics.isLegal) {
-      emailMinHeightPx = 1040; // Long Bond / Folio (8.5 x 13 in)
+      emailMinHeightPx = 1040;
       emailPadding = "20px 34px 16px 34px";
     }
 
-    // Category badge color accents
     let catBadgeBg = "#d1fae5";
     let catBadgeColor = "#065f46";
     let catBadgeBorder = "#6ee7b7";
@@ -2053,8 +1923,6 @@ HR Contact: ${HR_OFFICIAL_EMAIL}`;
       catBadgeBorder = "#fde68a";
     }
 
-    // Safe Background Watermark: Applied directly as CSS background-image on the paper sheet container.
-    // This prevents email clients (like Gmail / Outlook) from stripping position:absolute and pushing the watermark to the top!
     const watermarkUrl = fadedWatermarkMap[comp.id] || companyLogoDataMap[comp.id] || comp.logoUrl;
     const watermarkBgStyle = watermarkUrl
       ? `background-image: url('${watermarkUrl}'); background-repeat: no-repeat; background-position: center 48%; background-size: ${Math.round((watermarkSize || 280) * 0.95)}px auto;`
@@ -2212,18 +2080,11 @@ ${renderMemoDirectivesHtml(memoContent)}
 </div>`;
   };
 
-  /**
-   * Dynamic calculation to ensure the memorandum fits seamlessly on 1 sheet of bond paper.
-   * If text is long, automatically switches to Long Bond Paper (8.5 x 13 in / Folio)
-   * and compacts typography and margins so header, metadata, directives, signatures, and footer
-   * fit effortlessly without splitting to a 2nd page.
-   */
   const getMemoFitMetrics = (content = memoContent, preferredPaper = paperSize) => {
     const rawText = stripHtml(content || "").trim();
     const charLen = rawText.length;
     const lineCount = rawText.split(/\r?\n/).filter(Boolean).length;
 
-    // Determine target paper size (Auto, Short 8.5x11, A4, Long 8.5x13, Legal 8.5x14)
     let effectivePaper = preferredPaper || "auto";
     if (effectivePaper === "auto") {
       effectivePaper = (charLen > 950 || lineCount > 15) ? "legal13" : "a4";
@@ -2234,20 +2095,15 @@ ${renderMemoDirectivesHtml(memoContent)}
     const isLegal13 = effectivePaper === "legal13" || effectivePaper === "legal" || effectivePaper === "long";
     const isLegal = isLegal13 || isLegal14;
 
-    // Dynamically tuned print page margins:
-    // On Long Bond (8.5 × 13 in) and Legal (8.5 × 14 in), the top margin is reduced (from 8-10mm down to 3.5mm)
-    // so the header sits higher and the bottom division footer is 100% visible and not cut off on printouts.
-    // Standard sizes (A4 / Short) maintain safe 8mm top margin to avoid physical printer top-roller clipping.
     const topMarginMm = isLegal ? 3.5 : 8;
     const bottomMarginMm = isLegal ? 5.5 : 7;
     const pageMargin = `${topMarginMm}mm 6mm ${bottomMarginMm}mm 6mm`;
 
-    // Exact physical dimensions and printable heights (paper height minus top & bottom margins)
     let paperSizeCss = "A4 portrait";
     let paperLabel = "A4 (210 × 297 mm)";
     let paperBadgeLabel = "A4 (210×297)";
-    let sheetHeightMm = 281; // 297mm - 8mm - 7mm - 1mm buffer
-    let sheetWidthMm = 198;  // 210mm - 12mm
+    let sheetHeightMm = 281;
+    let sheetWidthMm = 198;
     let aspectRatioCss = "210 / 297";
     let previewMinHeightPx = 990;
 
@@ -2255,7 +2111,7 @@ ${renderMemoDirectivesHtml(memoContent)}
       paperSizeCss = "8.5in 11in";
       paperLabel = "Short Bond (8.5 × 11 in / Letter)";
       paperBadgeLabel = "Short (8.5×11)";
-      sheetHeightMm = 263; // 279.4mm - 8mm - 7mm - 1.4mm buffer
+      sheetHeightMm = 263;
       sheetWidthMm = 203.9;
       aspectRatioCss = "8.5 / 11";
       previewMinHeightPx = 920;
@@ -2263,7 +2119,7 @@ ${renderMemoDirectivesHtml(memoContent)}
       paperSizeCss = "8.5in 14in";
       paperLabel = "Legal (8.5 × 14 in)";
       paperBadgeLabel = "Legal (8.5×14)";
-      sheetHeightMm = 345; // 355.6mm - 3.5mm - 5.5mm - 1.6mm buffer
+      sheetHeightMm = 345;
       sheetWidthMm = 203.9;
       aspectRatioCss = "8.5 / 14";
       previewMinHeightPx = 1180;
@@ -2271,13 +2127,12 @@ ${renderMemoDirectivesHtml(memoContent)}
       paperSizeCss = "8.5in 13in";
       paperLabel = "Long Bond (8.5 × 13 in / Folio)";
       paperBadgeLabel = "Long (8.5×13)";
-      sheetHeightMm = 320; // 330.2mm - 3.5mm - 5.5mm - 1.2mm buffer
+      sheetHeightMm = 320;
       sheetWidthMm = 203.9;
       aspectRatioCss = "8.5 / 13";
       previewMinHeightPx = 1090;
     }
 
-    // Dynamic Density Tuning for Guaranteed 1-Page Fit across all paper sizes
     let isCompact = false;
     let isUltraCompact = false;
 
@@ -2304,7 +2159,6 @@ ${renderMemoDirectivesHtml(memoContent)}
       }
     }
 
-    // CRITICAL: Strictly respect user's configured directivesFontSize and signature sizes without auto-downscaling
     const directivesFontSizePx = Number(directivesFontSize) || 13.3;
     let directivesLineHeight = "1.6";
     let directivesPadding = "4px 0";
@@ -2523,7 +2377,6 @@ ${renderMemoDirectivesHtml(memoContent)}
     `;
   };
 
-  // Direct Send to Personnel via configured Google Apps Script Webhook
   const handleSendDirect = async () => {
     const effectiveUrl = (customWebhookUrl || "").trim();
     if (!effectiveUrl) {
@@ -2535,7 +2388,6 @@ ${renderMemoDirectivesHtml(memoContent)}
     setDirectSendStatus(null);
     const metrics = getMemoFitMetrics(memoContent, paperSize);
 
-    // Build segregated packages for active companies that have recipients
     const dispatchesPayload = companyDispatches
       .filter((d) => d.recipients.length > 0)
       .map((d) => {
@@ -2624,7 +2476,6 @@ ${renderMemoDirectivesHtml(memoContent)}
     setEmailModalOpen(false);
   };
 
-  // Print Document with embedded CSS to preserve watermark, page breaks, and exact 1-page paper dimensions
   const handlePrintMemo = (targetCompany = null) => {
     const printWindow = window.open("", "_blank", "width=920,height=1100");
     if (!printWindow) {
@@ -2634,7 +2485,6 @@ ${renderMemoDirectivesHtml(memoContent)}
 
     const metrics = getMemoFitMetrics(memoContent, paperSize);
 
-    // Strictly respect Final Memo Distribution selections
     let companiesToPrint = [];
     if (targetCompany && targetCompany !== "all") {
       const single = typeof targetCompany === "string"
@@ -2642,7 +2492,6 @@ ${renderMemoDirectivesHtml(memoContent)}
         : targetCompany;
       companiesToPrint = [single];
     } else {
-      // Print All: Filter strictly by active / included companies in Final Memo Distribution
       companiesToPrint = companies.filter((comp) => includedCompanyIds.includes(comp.id));
       if (companiesToPrint.length === 0) {
         companiesToPrint = [distributionCompany];
@@ -2800,7 +2649,6 @@ ${renderMemoDirectivesHtml(memoContent)}
     }, 350);
   };
 
-  // Generate high-resolution image Blob of a company's executive memo sheet
   const generateMemoSheetBlob = async (sheetEl) => {
     const originalZoom = sheetEl.style.zoom;
     const originalTransform = sheetEl.style.transform;
@@ -2810,7 +2658,6 @@ ${renderMemoDirectivesHtml(memoContent)}
       sheetEl.style.transform = "none";
       await new Promise((r) => setTimeout(r, 60));
 
-      // Engine 1: html-to-image (Native SVG foreignObject - supports modern CSS & oklch)
       try {
         const blob = await htmlToImageBlob(sheetEl, {
           pixelRatio: 2.2,
@@ -2825,7 +2672,6 @@ ${renderMemoDirectivesHtml(memoContent)}
         console.warn("html-to-image failed, falling back to html2canvas:", errHtmlToImage);
       }
 
-      // Engine 2: html2canvas fallback
       const canvas = await html2canvas(sheetEl, {
         scale: 2.2,
         useCORS: true,
@@ -2847,7 +2693,6 @@ ${renderMemoDirectivesHtml(memoContent)}
     }
   };
 
-  // High-Resolution Image Generation & Clipboard Copying (for chat apps: Viber, Messenger, Telegram, WhatsApp, Gmail)
   const handleCopyMemoAsImage = async (company) => {
     const sheetEl = document.getElementById(`memo-sheet-preview-${company.id}`);
     if (!sheetEl) return;
@@ -2860,7 +2705,6 @@ ${renderMemoDirectivesHtml(memoContent)}
 
       let copiedSuccessfully = false;
 
-      // Modern Clipboard API
       if (navigator.clipboard && window.ClipboardItem) {
         try {
           const item = new ClipboardItem({ "image/png": blob });
@@ -2882,7 +2726,6 @@ ${renderMemoDirectivesHtml(memoContent)}
           setImageCopyToast(null);
         }, 5000);
       } else {
-        // Fallback: automatically trigger direct PNG download so user always gets the image file!
         const compMemoRef = getCompanySpecificMemoRef(company.code, memoRef);
         const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
@@ -2956,10 +2799,8 @@ ${renderMemoDirectivesHtml(memoContent)}
     }
   };
 
-  // Render Directives Formatting Toolbar for both Step 2 and Full-Screen Editor
   const renderDirectivesToolbar = () => (
     <div className="memo-toolbar-menu-container flex flex-wrap items-center gap-1.5 p-2 bg-slate-50 border border-slate-200 rounded-xl relative select-none z-30">
-      {/* 0. History: Undo / Redo */}
       <div className="flex items-center gap-1">
         <button
           type="button"
@@ -2981,7 +2822,6 @@ ${renderMemoDirectivesHtml(memoContent)}
 
       <div className="h-5 w-px bg-slate-300 mx-0.5" />
 
-      {/* 1. Font Style (Family) Selector */}
       <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-lg px-2 py-1 shadow-2xs">
         <Type size={13} className="text-slate-500 shrink-0" />
         <select
@@ -2998,7 +2838,6 @@ ${renderMemoDirectivesHtml(memoContent)}
         </select>
       </div>
 
-      {/* 2. Font Size Selector & Quick Controls */}
       <div className="flex items-center gap-0.5 bg-white border border-slate-200 rounded-lg p-0.5 shadow-2xs">
         <button
           type="button"
@@ -3032,7 +2871,6 @@ ${renderMemoDirectivesHtml(memoContent)}
 
       <div className="h-5 w-px bg-slate-300 mx-0.5" />
 
-      {/* 3. Basic Formatting: Bold, Italic, Underline, Strikethrough */}
       <div className="flex items-center gap-1">
         <button
           type="button"
@@ -3070,7 +2908,6 @@ ${renderMemoDirectivesHtml(memoContent)}
 
       <div className="h-5 w-px bg-slate-300 mx-0.5" />
 
-      {/* 4. Highlight Popover */}
       <div className="relative">
         <button
           type="button"
@@ -3139,7 +2976,6 @@ ${renderMemoDirectivesHtml(memoContent)}
         )}
       </div>
 
-      {/* 5. Text Color Popover */}
       <div className="relative">
         <button
           type="button"
@@ -3210,7 +3046,6 @@ ${renderMemoDirectivesHtml(memoContent)}
 
       <div className="h-5 w-px bg-slate-300 mx-0.5" />
 
-      {/* 6. Shapes & Badges Popover ("mag lagay ng shape") */}
       <div className="relative">
         <button
           type="button"
@@ -3230,7 +3065,6 @@ ${renderMemoDirectivesHtml(memoContent)}
 
         {shapesMenuOpen && (
           <div className="absolute left-0 sm:left-auto sm:right-0 md:left-0 top-full mt-1.5 w-76 sm:w-84 bg-white border border-slate-200 rounded-2xl shadow-2xl p-3 z-50 space-y-3 animate-in fade-in duration-100 max-h-[460px] overflow-y-auto">
-            {/* Geometric Shapes & Bullet Symbols */}
             <div>
               <div className="text-[10px] font-black uppercase tracking-wider text-slate-400 px-1 mb-1.5">
                 Geometric Shapes &amp; Bullet Symbols
@@ -3263,7 +3097,6 @@ ${renderMemoDirectivesHtml(memoContent)}
               </div>
             </div>
 
-            {/* Official Directive Shape Badges */}
             <div className="border-t border-slate-100 pt-2">
               <div className="text-[10px] font-black uppercase tracking-wider text-slate-400 px-1 mb-1.5">
                 Official Compliance Shape Badges
@@ -3327,7 +3160,6 @@ ${renderMemoDirectivesHtml(memoContent)}
               </div>
             </div>
 
-            {/* Directive Shape Callout Boxes */}
             <div className="border-t border-slate-100 pt-2">
               <div className="text-[10px] font-black uppercase tracking-wider text-slate-400 px-1 mb-1.5">
                 Structured Directive Shape Boxes
@@ -3376,7 +3208,6 @@ ${renderMemoDirectivesHtml(memoContent)}
 
       <div className="h-5 w-px bg-slate-300 mx-0.5" />
 
-      {/* 7. Lists: Numbers, Bullets, Alphabet, Roman */}
       <div className="flex items-center gap-1">
         <button
           type="button"
@@ -3400,7 +3231,6 @@ ${renderMemoDirectivesHtml(memoContent)}
 
       <div className="h-5 w-px bg-slate-300 mx-0.5" />
 
-      {/* 8. Structural: Section Title & Divider */}
       <div className="flex items-center gap-1">
         <button
           type="button"
@@ -3422,7 +3252,6 @@ ${renderMemoDirectivesHtml(memoContent)}
 
       <div className="h-5 w-px bg-slate-300 mx-0.5" />
 
-      {/* 9. Text Utilities: UPPERCASE, Indent & Clear Tags */}
       <div className="flex items-center gap-1">
         <button
           type="button"
@@ -3453,7 +3282,6 @@ ${renderMemoDirectivesHtml(memoContent)}
 
       <div className="h-5 w-px bg-slate-300 mx-0.5" />
 
-      {/* 10. HR Quick Clauses Popover */}
       <div className="relative">
         <button
           type="button"
@@ -3520,7 +3348,6 @@ ${renderMemoDirectivesHtml(memoContent)}
     </div>
   );
 
-  // Render Individual Company Memo Sheet Card (used in both Slide View and View All)
   const renderCompanyMemoCard = (company, index) => {
     if (!company) return null;
     const compMemoRef = getCompanySpecificMemoRef(company.code, memoRef);
@@ -3533,9 +3360,7 @@ ${renderMemoDirectivesHtml(memoContent)}
         id={`memo-sheet-${company.id}`}
         className="w-full max-w-[760px] flex flex-col items-center space-y-2.5 scroll-mt-24"
       >
-        {/* Executive Company Section Header Bar */}
         <div className="w-full rounded-xl border border-slate-200/90 bg-white px-3.5 py-2.5 shadow-xs flex flex-col md:flex-row md:items-center md:justify-between gap-2.5">
-          {/* Left: Entity Identifier, Code, and Status Badges */}
           <div className="flex items-center gap-2 flex-wrap">
             <span className={`h-5 w-5 rounded-md flex items-center justify-center text-[10.5px] font-black shrink-0 ${isIncluded ? "bg-slate-900 text-white" : "bg-slate-400 text-white"
               }`}>
@@ -3558,7 +3383,6 @@ ${renderMemoDirectivesHtml(memoContent)}
             </span>
           </div>
 
-          {/* Right: Actions Group */}
           <div className="flex items-center gap-1.5 flex-wrap sm:flex-nowrap shrink-0">
             {isIncluded && (
               <>
@@ -3634,7 +3458,6 @@ ${renderMemoDirectivesHtml(memoContent)}
           </div>
         </div>
 
-        {/* Excluded notice banner if company is untoggled */}
         {!isIncluded && (
           <div className="w-full rounded-2xl border border-dashed border-rose-300 bg-rose-50/80 p-3 text-center space-y-1">
             <div className="flex items-center justify-center gap-1.5 text-xs font-black text-rose-800 uppercase tracking-wide">
@@ -3647,7 +3470,6 @@ ${renderMemoDirectivesHtml(memoContent)}
           </div>
         )}
 
-        {/* Executive Sheet Representation - Sagad sa taas at sagad sa baba */}
         <div
           id={`memo-sheet-preview-${company.id}`}
           style={{
@@ -3659,7 +3481,6 @@ ${renderMemoDirectivesHtml(memoContent)}
             } overflow-hidden select-none transition-all duration-150 flex flex-col justify-between ${!isIncluded ? "opacity-40 grayscale-[25%] pointer-events-none" : ""
             }`}
         >
-          {/* Watermark Layer */}
           <div
             className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none z-0 flex items-center justify-center transition-opacity duration-200"
             style={{
@@ -3675,18 +3496,14 @@ ${renderMemoDirectivesHtml(memoContent)}
             />
           </div>
 
-          {/* Optional Diagonal Stamp */}
           {showDiagonalStamp && (
             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 -rotate-[35deg] pointer-events-none z-10 whitespace-nowrap border-3 border-dashed border-rose-600/20 text-rose-600/20 font-black text-xl px-8 py-2.5 tracking-[0.25em] uppercase">
               {diagonalStampText}
             </div>
           )}
 
-          {/* Foreground Content (Flush Top, Natural Signatory Flow, Flush Bottom Footer) */}
           <div className="relative z-10 flex flex-col flex-1 h-full">
-            {/* Top Section: Letterhead + Memorandum Title Banner + Metadata Grid + Directives */}
             <div className="flex flex-col space-y-2">
-              {/* Corporate Letterhead (Left Logo, Center Info, Right Corporate Group Emblem) */}
               <div className="flex items-center justify-between gap-4 pb-1">
                 <div className="h-18 w-18 p-1 flex items-center justify-center shrink-0">
                   <img
@@ -3722,10 +3539,8 @@ ${renderMemoDirectivesHtml(memoContent)}
                 </div>
               </div>
 
-              {/* Top Letterhead Divider Line */}
               <div className="mt-1 mb-1 border-b-2 border-slate-900"></div>
 
-              {/* Prominent MEMORANDUM Title Banner with Ref No & Classification */}
               <div className="py-2 my-1 border-y-2 border-slate-900 text-center space-y-1">
                 <h2 className="text-lg sm:text-xl font-black tracking-[0.35em] text-slate-950 uppercase leading-none font-sans">
                   MEMORANDUM
@@ -3740,7 +3555,6 @@ ${renderMemoDirectivesHtml(memoContent)}
                 </div>
               </div>
 
-              {/* Official HR Memo Header Grid - Standard 12pt (12px) */}
               <div className="space-y-1 text-xs py-1.5">
                 <div className="grid grid-cols-[90px_1fr] items-baseline">
                   <span className="font-black text-[12pt] text-slate-900 uppercase">TO:</span>
@@ -3760,10 +3574,8 @@ ${renderMemoDirectivesHtml(memoContent)}
                 </div>
               </div>
 
-              {/* Bottom Metadata Divider Line */}
               <div className="my-1 border-b-2 border-slate-900"></div>
 
-              {/* Directives / Guidelines Body Section - Strictly Preserved User Font Size */}
               {memoContent && (
                 <div
                   style={{
@@ -3778,11 +3590,9 @@ ${renderMemoDirectivesHtml(memoContent)}
                 />
               )}
 
-              {/* Signatory Block with E-Signatures: Auto-adjusted fit */}
               <div style={{ marginTop: metrics.sigMarginTop }} className="pt-1">
                 {signatoryLayout === "dual" ? (
                   <div className="grid grid-cols-2 gap-8 items-start">
-                    {/* Left: Issued By */}
                     <div>
                       {signatoryLabel?.trim() ? (
                         <p className="text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-0.5">
@@ -3823,7 +3633,6 @@ ${renderMemoDirectivesHtml(memoContent)}
                       </p>
                     </div>
 
-                    {/* Right: Approved By */}
                     <div>
                       {approverLabel?.trim() ? (
                         <p className="text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-0.5">
@@ -3910,7 +3719,6 @@ ${renderMemoDirectivesHtml(memoContent)}
               </div>
             </div>
 
-            {/* Bottom Section: Official Division Footer - Thin, Crisp & Professional */}
             <div className="mt-auto pt-3 pb-0">
               <div className="border-t border-slate-300 pt-2 flex items-center justify-between text-[8.5px] sm:text-[9px] font-medium text-slate-600 uppercase tracking-[0.08em]">
                 <span className="font-medium text-slate-600">HUMAN RESOURCES &amp; ADMINISTRATION</span>
@@ -3929,7 +3737,6 @@ ${renderMemoDirectivesHtml(memoContent)}
 
   return (
     <section className="mb-8 overflow-hidden rounded-3xl border border-emerald-200/80 bg-white shadow-xl animate-in fade-in duration-200">
-      {/* 1. EXECUTIVE TOP COMMAND BAR (Green & White Concept) */}
       <div className="border-b border-emerald-950 bg-[#06281f] px-6 py-4 text-white">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3.5">
@@ -3952,7 +3759,6 @@ ${renderMemoDirectivesHtml(memoContent)}
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
-            {/* View Saved Memos Archive Button */}
             <button
               type="button"
               onClick={() => setArchiveModalOpen(true)}
@@ -3974,7 +3780,6 @@ ${renderMemoDirectivesHtml(memoContent)}
                 <span>Document Studio</span>
               </button>
             )}
-
 
             {onOpenAiBuddy && (
               <button
@@ -4002,7 +3807,6 @@ ${renderMemoDirectivesHtml(memoContent)}
         </div>
       </div>
 
-      {/* 2. MODERN 4-STEP WIZARD NAVIGATION BAR (Green & White) */}
       <div className="border-b border-emerald-100 bg-emerald-50/40 px-6 py-3.5">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3">
           {[
@@ -4070,7 +3874,6 @@ ${renderMemoDirectivesHtml(memoContent)}
         </div>
       </div>
 
-      {/* Save Notification Banners */}
       {saveSuccessNotice && (
         <div className="bg-emerald-50 border-b border-emerald-200 px-6 py-2.5 flex items-center justify-between text-xs text-emerald-900 font-bold animate-in fade-in duration-150">
           <div className="flex items-center gap-2">
@@ -4086,12 +3889,9 @@ ${renderMemoDirectivesHtml(memoContent)}
           </button>
         </div>
       )}
-      {/* 3. STEP CONTENT BODY */}
       <div className="p-6 bg-slate-50/70 min-h-[580px]">
-        {/* ================= STEP 1: HEADER & ADDRESSING ================= */}
         {currentStep === 1 && (
           <div className="max-w-4xl mx-auto space-y-6 animate-in fade-in duration-150">
-            {/* Step 1 Introduction Card */}
             <div className="rounded-2xl border border-emerald-200 bg-emerald-50/80 p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <div className="flex items-center gap-3">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-600 text-white shadow-sm">
@@ -4111,7 +3911,6 @@ ${renderMemoDirectivesHtml(memoContent)}
               </span>
             </div>
 
-            {/* Main Header Input Form */}
             <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm space-y-5">
               <section
                 aria-labelledby="letterhead-defaults-title"
@@ -4240,7 +4039,6 @@ ${renderMemoDirectivesHtml(memoContent)}
                 </div>
               </section>
 
-              {/* Reference # and Date */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <label className="text-xs font-black uppercase tracking-wider text-slate-700 flex items-center justify-between">
@@ -4330,7 +4128,6 @@ ${renderMemoDirectivesHtml(memoContent)}
                 </div>
               </div>
 
-              {/* TO: Recipients */}
               <div className="space-y-1.5">
                 <label className="text-xs font-black uppercase tracking-wider text-slate-700 flex items-center justify-between">
                   <span>TO: (Recipients / Addressee)</span>
@@ -4363,7 +4160,6 @@ ${renderMemoDirectivesHtml(memoContent)}
                 </div>
               </div>
 
-              {/* FROM: Originating Department */}
               <div className="space-y-1.5">
                 <label className="text-xs font-black uppercase tracking-wider text-slate-700">
                   FROM: (Originating Department / Office)
@@ -4377,7 +4173,6 @@ ${renderMemoDirectivesHtml(memoContent)}
                 />
               </div>
 
-              {/* SUBJECT: Subject Line */}
               <div className="space-y-1.5">
                 <label className="text-xs font-black uppercase tracking-wider text-slate-700">
                   SUBJECT: (Official Directive Subject)
@@ -4391,7 +4186,6 @@ ${renderMemoDirectivesHtml(memoContent)}
                 />
               </div>
 
-              {/* SYSTEM AUTO-ANALYZED CLASSIFICATION BADGE (Automatic AI Analyzer - No manual user pick) */}
               <div className="space-y-2 pt-2 border-t border-slate-100">
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-black uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
@@ -4434,7 +4228,6 @@ ${renderMemoDirectivesHtml(memoContent)}
               </div>
             </div>
 
-            {/* Step 1 Bottom Navigation Button */}
             <div className="flex justify-end pt-2">
               <button
                 type="button"
@@ -4448,10 +4241,8 @@ ${renderMemoDirectivesHtml(memoContent)}
           </div>
         )}
 
-        {/* ================= STEP 2: MEMORANDUM BODY DIRECTIVES ================= */}
         {currentStep === 2 && (
           <div className="max-w-4xl mx-auto space-y-6 animate-in fade-in duration-150">
-            {/* Step 2 Introduction Card */}
             <div className="rounded-2xl border border-emerald-200 bg-emerald-50/80 p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <div className="flex items-center gap-3">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-600 text-white shadow-sm">
@@ -4471,7 +4262,6 @@ ${renderMemoDirectivesHtml(memoContent)}
               </span>
             </div>
 
-            {/* Large writing canvas for memorandum directives with Rich Formatting Toolbar */}
             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm space-y-3">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
                 <label className="text-xs font-black uppercase tracking-wider text-slate-900 flex items-center gap-2">
@@ -4509,10 +4299,8 @@ ${renderMemoDirectivesHtml(memoContent)}
                 </div>
               </div>
 
-              {/* Rich Formatting Toolbar (Font Style, Font Size, Bold, Italic, Underline, Highlight, Shapes & Badges, Lists, etc.) */}
               {renderDirectivesToolbar()}
 
-              {/* Real-Time Live Formatted Output Canvas */}
               {!isSourceMode ? (
                 <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-2 sm:p-3 shadow-inner">
                   <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs min-h-[380px] p-5 sm:p-6 transition-all">
@@ -4559,7 +4347,6 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
               </div>
             </div>
 
-            {/* Step 2 Bottom Navigation Buttons */}
             <div className="flex items-center justify-between pt-2">
               <button
                 type="button"
@@ -4582,10 +4369,8 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
           </div>
         )}
 
-        {/* ================= STEP 3: SIGNATORY CONFIGURATION ================= */}
         {currentStep === 3 && (
           <div className="max-w-4xl mx-auto space-y-6 animate-in fade-in duration-150">
-            {/* Step 3 Introduction Card */}
             <div className="rounded-2xl border border-emerald-200 bg-emerald-50/80 p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <div className="flex items-center gap-3">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-600 text-white shadow-sm">
@@ -4605,7 +4390,6 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
               </span>
             </div>
 
-            {/* Layout Mode Selector (Dual vs Single) */}
             <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm flex items-center justify-between">
               <div>
                 <span className="text-xs font-black uppercase tracking-wider text-slate-900">
@@ -4640,9 +4424,7 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
               </div>
             </div>
 
-            {/* Signatory Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Card 1: Issued By */}
               <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm space-y-4">
                 <div className="flex items-center justify-between pb-2 border-b border-slate-100">
                   <span className="text-xs font-black text-emerald-700 uppercase tracking-wider">
@@ -4700,7 +4482,6 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                   </div>
                 </div>
 
-                {/* Official E-Signature Upload */}
                 <div className="pt-2 border-t border-slate-100 space-y-2">
                   <div className="flex items-center justify-between">
                     <span className="text-[10px] font-bold uppercase text-slate-500">
@@ -4741,7 +4522,6 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                     )}
                   </div>
 
-                  {/* Signature Alignment, Position & Size Controls (Always Accessible) */}
                   <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-2.5 text-xs">
                     <div className="flex items-center justify-between">
                       <span className="text-[10px] font-black text-slate-700 uppercase tracking-wide flex items-center gap-1">
@@ -4819,7 +4599,6 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                       </div>
                     </div>
 
-                    {/* Quick Nudge Buttons */}
                     <div className="flex flex-wrap items-center gap-1.5 pt-1.5 border-t border-slate-200/60">
                       <span className="text-[9.5px] text-slate-500 font-bold mr-1">Quick Nudge:</span>
                       <button
@@ -4872,7 +4651,6 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                   </div>
                 </div>
 
-                {/* Signature Line Preview */}
                 <div className="pt-2 border-t border-slate-100 space-y-1">
                   <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
                     Signature Line Preview:
@@ -4913,7 +4691,6 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                 </div>
               </div>
 
-              {/* Card 2: Noted & Approved By */}
               {signatoryLayout === "dual" ? (
                 <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm space-y-4 animate-in fade-in duration-150">
                   <div className="flex items-center justify-between pb-2 border-b border-slate-100">
@@ -4971,7 +4748,6 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                     </div>
                   </div>
 
-                  {/* Official Approver E-Signature Upload */}
                   <div className="pt-2 border-t border-slate-100 space-y-2">
                     <div className="flex items-center justify-between">
                       <span className="text-[10px] font-bold uppercase text-slate-500">
@@ -5013,7 +4789,6 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                     </div>
                   </div>
 
-                  {/* Approver Alignment, Position & Size Controls (Always Accessible) */}
                   <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-2.5 text-xs">
                     <div className="flex items-center justify-between">
                       <span className="text-[10px] font-black text-slate-700 uppercase tracking-wide flex items-center gap-1">
@@ -5091,7 +4866,6 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                       </div>
                     </div>
 
-                    {/* Quick Nudge Buttons */}
                     <div className="flex flex-wrap items-center gap-1.5 pt-1.5 border-t border-slate-200/60">
                       <span className="text-[9.5px] text-slate-500 font-bold mr-1">Quick Nudge:</span>
                       <button
@@ -5143,7 +4917,6 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                     </div>
                   </div>
 
-                  {/* Signature Line Preview */}
                   <div className="pt-2 border-t border-slate-100 space-y-1">
                     <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
                       Signature Line Preview:
@@ -5203,7 +4976,6 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
               )}
             </div>
 
-            {/* Step 3 Bottom Navigation Buttons */}
             <div className="flex items-center justify-between pt-2">
               <button
                 type="button"
@@ -5226,10 +4998,8 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
           </div>
         )}
 
-        {/* ================= STEP 4: FINAL MEMO & MULTI-COMPANY DISTRIBUTION ================= */}
         {currentStep === 4 && (
           <div className="max-w-5xl mx-auto space-y-6 animate-in fade-in duration-150">
-            {/* Multi-Company Synchronized Overview Banner */}
             <div className="rounded-2xl border border-emerald-200 bg-emerald-50/80 p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <div className="flex items-center gap-3">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-600 text-white shadow-sm">
@@ -5249,7 +5019,6 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
               </span>
             </div>
 
-            {/* COMPANY DISTRIBUTION SCOPE SELECTOR (4 STL DEFAULT, TOGGLES FOR SGC & NON-STL) */}
             <div className="rounded-2xl border border-emerald-200 bg-white p-4 shadow-sm space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-3 border-b border-slate-100">
                 <div>
@@ -5265,7 +5034,6 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                 </div>
 
                 <div className="flex items-center gap-2 flex-wrap shrink-0">
-                  {/* Toggle: Simpal Group of Companies (Parent Holding) */}
                   <button
                     type="button"
                     onClick={() => {
@@ -5290,7 +5058,6 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                     </span>
                   </button>
 
-                  {/* Toggle: Non-STL Entities */}
                   <button
                     type="button"
                     onClick={() => {
@@ -5315,7 +5082,6 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                     </span>
                   </button>
 
-                  {/* Reset to STL Only */}
                   <button
                     type="button"
                     onClick={selectStlCompanies}
@@ -5327,7 +5093,6 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                 </div>
               </div>
 
-              {/* Section 1: 🎰 STL Gaming Subsidiaries (Default Display: 4 entities) */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1.5">
@@ -5388,7 +5153,6 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                 </div>
               </div>
 
-              {/* Section 2: Simpal Group of Companies (Parent Holding) - Hidden by default, toggled via button */}
               {showSimpalGroup && (
                 <div className="space-y-2 pt-3 border-t border-slate-200 animate-in fade-in slide-in-from-top-2 duration-150">
                   <div className="flex items-center justify-between">
@@ -5451,7 +5215,6 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                 </div>
               )}
 
-              {/* Section 3: Non-STL Subsidiaries (MC POWER GAS & SIMCON) - Hidden by default, toggled via button */}
               {showNonStl && (
                 <div className="space-y-2 pt-3 border-t border-slate-200 animate-in fade-in slide-in-from-top-2 duration-150">
                   <div className="flex items-center justify-between">
@@ -5515,7 +5278,6 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
               )}
             </div>
 
-            {/* Quick Entity Jumper Navigation */}
             <div className="rounded-2xl border border-emerald-200 bg-white p-3.5 shadow-sm flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5">
               <div className="flex items-center gap-2">
                 <Layers size={15} className="text-emerald-700" />
@@ -5551,9 +5313,7 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
               </div>
             </div>
 
-            {/* Document Action Toolbar (Executive Corporate Command Bar) */}
             <div className="rounded-2xl border border-slate-200 bg-white shadow-md sticky top-3 z-30 overflow-hidden divide-y divide-slate-100">
-              {/* Tier 1: Primary Dispatch & Archive Actions */}
               <div className="p-2.5 sm:px-4 sm:py-3 flex flex-wrap items-center justify-between gap-2.5 bg-white">
                 <div className="flex flex-wrap items-center gap-2">
                   <button
@@ -5615,7 +5375,6 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                   </button>
                 </div>
 
-                {/* Right: Selected Entities Indicator */}
                 <div className="hidden lg:flex items-center gap-2 text-xs font-semibold text-slate-500">
                   <span className="inline-flex items-center gap-1.5 bg-slate-50 text-slate-700 px-2.5 py-1 rounded-md border border-slate-200 text-[11px]">
                     <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
@@ -5624,9 +5383,7 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                 </div>
               </div>
 
-              {/* Tier 2: Bond Paper Format Calibration & View Controls */}
               <div className="px-3 sm:px-4 py-2 bg-slate-50/90 flex flex-wrap items-center justify-between gap-3 text-xs">
-                {/* Left: Paper Format Selector */}
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-[10px] font-black text-slate-600 uppercase tracking-wider flex items-center gap-1">
                     <FileText size={13} className="text-slate-500" />
@@ -5691,9 +5448,7 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                   </div>
                 </div>
 
-                {/* Right: Watermark & Zoom Controls */}
                 <div className="flex items-center gap-3 sm:gap-4">
-                  {/* Watermark opacity */}
                   <div className="flex items-center gap-1.5 text-slate-600">
                     <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Watermark:</span>
                     <input
@@ -5712,7 +5467,6 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
 
                   <div className="h-4 w-px bg-slate-200"></div>
 
-                  {/* Zoom scale */}
                   <div className="flex items-center gap-1.5 text-slate-600">
                     <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Zoom:</span>
                     <div className="inline-flex items-center rounded-lg border border-slate-200 bg-white p-0.5 text-[10.5px] font-medium text-slate-700 shadow-2xs">
@@ -5742,14 +5496,12 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                 </div>
               </div>
 
-              {/* Tier 3: E-Signature Alignment & Scale Quick Controls (Realtime on Viewer & Print) */}
               <div className="px-3 sm:px-4 py-2 bg-slate-50/60 flex flex-wrap items-center justify-between gap-3 text-xs border-t border-slate-100">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-[10px] font-black text-slate-700 uppercase tracking-wider flex items-center gap-1 bg-white px-2 py-1 rounded border border-slate-200 shadow-2xs">
                     ✍ E-Sig Alignment:
                   </span>
 
-                  {/* Horizontal Left ↔ Right Nudge & Controls */}
                   <div className="inline-flex items-center gap-1 bg-white border border-slate-200 rounded-lg px-2 py-1 shadow-2xs">
                     <span className="text-[10px] font-bold text-slate-500 uppercase">Pos:</span>
                     <button
@@ -5773,7 +5525,6 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                     </button>
                   </div>
 
-                  {/* Signature Size Scale */}
                   <div className="inline-flex items-center gap-1 bg-white border border-slate-200 rounded-lg px-2 py-1 shadow-2xs">
                     <span className="text-[10px] font-bold text-slate-500 uppercase">Size:</span>
                     <button
@@ -5797,7 +5548,6 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                     </button>
                   </div>
 
-                  {/* Vertical Position */}
                   <div className="inline-flex items-center gap-1 bg-white border border-slate-200 rounded-lg px-2 py-1 shadow-2xs">
                     <span className="text-[10px] font-bold text-slate-500 uppercase">Y:</span>
                     <button
@@ -5831,7 +5581,6 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                   </button>
                 </div>
 
-                {/* If dual signatory mode is active, Approver quick adjust */}
                 {signatoryLayout === "dual" && (
                   <div className="flex items-center gap-2 flex-wrap text-slate-600">
                     <span className="text-[10px] font-bold text-slate-500 uppercase">Approver E-Sig:</span>
@@ -5877,12 +5626,8 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
               </div>
             </div>
 
-            {/* ================= MEMORANDUM OUTPUT VIEWER ================= */}
-            {/* Navigation Shell & Entity Selector */}
             <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-xs space-y-2.5">
-              {/* Top Row: Left / Right Navigation & View Mode Toggle */}
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5">
-                {/* Left: Previous, Active Entity Details, Next */}
                 <div className="flex items-center gap-2 flex-wrap">
                   {companiesToPreview.length > 1 && (
                     <button
@@ -5932,7 +5677,6 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                   )}
                 </div>
 
-                {/* Right: Keyboard Hint & View Mode Switcher */}
                 <div className="flex items-center gap-2 self-end sm:self-auto">
                   <span className="hidden md:inline-flex items-center gap-1 text-[11px] font-semibold text-slate-400 bg-slate-50 border border-slate-200 px-2 py-1 rounded-md">
                     ⌨ Use ← / → keys
@@ -5967,7 +5711,6 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                 </div>
               </div>
 
-              {/* Bottom Entity Tab Strip: Quick Pill Picker */}
               <div className="flex items-center gap-1.5 overflow-x-auto pt-1 pb-0.5 scrollbar-thin">
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider shrink-0 mr-1">
                   Entities:
@@ -6003,10 +5746,8 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
               </div>
             </div>
 
-            {/* Memorandum Output Viewer Stage with Coverflow 3D Animation */}
             {previewViewMode === "slide" ? (
               <div className="relative w-full overflow-hidden py-8 px-0 bg-slate-100/80 border border-slate-200/90 rounded-3xl shadow-inner select-none flex flex-col items-center">
-                {/* Floating Left Navigation Arrow Button */}
                 {companiesToPreview.length > 1 && (
                   <button
                     type="button"
@@ -6019,7 +5760,6 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                   </button>
                 )}
 
-                {/* Floating Right Navigation Arrow Button */}
                 {companiesToPreview.length > 1 && (
                   <button
                     type="button"
@@ -6032,7 +5772,6 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                   </button>
                 )}
 
-                {/* Coverflow Sliding Track: All cards visible in horizontal line, center card highlighted & full size */}
                 <div
                   className="w-full flex items-center transition-transform duration-500 ease-out py-2"
                   style={{
@@ -6071,7 +5810,6 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                   })}
                 </div>
 
-                {/* Bottom Pagination Pill Indicators */}
                 {companiesToPreview.length > 1 && (
                   <div className="flex items-center justify-center gap-1.5 pt-6 pb-1">
                     {companiesToPreview.map((comp, idx) => {
@@ -6093,13 +5831,11 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                 )}
               </div>
             ) : (
-              /* Continuous Scroll: View All */
               <div className="w-full flex flex-col items-center gap-10 py-2">
                 {companiesToPreview.map((company, index) => renderCompanyMemoCard(company, index))}
               </div>
             )}
 
-            {/* Step 4 Bottom Navigation Buttons */}
             <div className="flex items-center justify-between pt-2">
               <button
                 type="button"
@@ -6131,11 +5867,9 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
         )}
       </div>
 
-      {/* ================= MODAL: DIRECT EMAIL & PDF DISPATCH WITH COMPANY SEGREGATION ================= */}
       {emailModalOpen && (
         <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/75 p-3 sm:p-5 pt-4 sm:pt-6 md:pt-8 backdrop-blur-xs animate-in fade-in duration-150">
           <div className="w-full max-w-2xl rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl space-y-4 max-h-[92vh] overflow-y-auto custom-scrollbar">
-            {/* Modal Header */}
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2.5">
                 <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700">
@@ -6160,7 +5894,6 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
               </button>
             </div>
 
-            {/* Overview Summary Banner */}
             <div className="rounded-2xl border border-emerald-200 bg-gradient-to-r from-emerald-50 via-teal-50 to-sky-50 p-3.5 flex items-center justify-between flex-wrap gap-2 text-xs">
               <div className="flex items-center gap-2">
                 <ShieldCheck size={18} className="text-emerald-600 shrink-0" />
@@ -6176,7 +5909,6 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
               </span>
             </div>
 
-            {/* Unlinked Entities Alert Banner (If some active companies have 0 pre-registered emails) */}
             {unlinkedEntities.length > 0 && (
               <div className="rounded-2xl border border-amber-300 bg-amber-50/90 p-3.5 flex items-center justify-between gap-3 flex-wrap">
                 <div className="flex items-center gap-2.5">
@@ -6200,7 +5932,6 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
               </div>
             )}
 
-            {/* List of Company Segregated Dispatches */}
             <div className="space-y-2.5">
               <p className="text-[10.5px] font-extrabold uppercase tracking-wider text-slate-500">
                 Company Distribution Roster ({companyDispatches.length} Active {companyDispatches.length === 1 ? "Entity" : "Entities"}):
@@ -6235,7 +5966,6 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                       </span>
                     </div>
 
-                    {/* Recipients Email Badges for this company */}
                     <div className="flex flex-wrap gap-1.5 pt-0.5">
                       {dispatch.recipients.length > 0 ? (
                         dispatch.recipients.map((email) => (
@@ -6268,7 +5998,6 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
               </div>
             </div>
 
-            {/* Google Apps Script Webhook Configuration Bar */}
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3.5 space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-[11px] font-bold text-slate-700 flex items-center gap-1.5">
@@ -6327,7 +6056,6 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
               )}
             </div>
 
-            {/* Direct Send Status Feedback */}
             {directSendStatus && (
               <div
                 className={`rounded-2xl p-3 text-xs flex items-center gap-2 border ${directSendStatus.type === "success"
@@ -6344,7 +6072,6 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
               </div>
             )}
 
-            {/* Main Action Button */}
             <button
               type="button"
               disabled={isSendingDirect}
@@ -6378,7 +6105,6 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
               )}
             </button>
 
-            {/* Alternative Dispatch Options */}
             <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2 text-xs flex-wrap">
               <button
                 type="button"
@@ -6412,11 +6138,9 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
         </div>
       )}
 
-      {/* ================= MODAL: UNLINKED WORK EMAIL NOTIFICATION & EXPLANATION ================= */}
       {unlinkedNoticeModalOpen && (
         <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/80 p-3 sm:p-5 pt-4 sm:pt-6 md:pt-8 backdrop-blur-sm animate-in fade-in duration-150">
           <div className="w-full max-w-2xl rounded-3xl border border-amber-200/90 bg-white p-6 shadow-2xl space-y-4 max-h-[92vh] flex flex-col">
-            {/* Modal Header */}
             <div className="flex items-center justify-between border-b border-slate-100 pb-3 shrink-0">
               <div className="flex items-center gap-2.5">
                 <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-amber-100 text-amber-800 shrink-0">
@@ -6442,7 +6166,6 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
             </div>
 
             <div className="flex-1 overflow-y-auto custom-scrollbar space-y-4 pr-1 text-xs text-slate-700">
-              {/* Core Explanation Box */}
               <div className="rounded-2xl border border-amber-200 bg-amber-50/70 p-4 space-y-2">
                 <h5 className="font-black text-amber-950 text-xs flex items-center gap-1.5">
                   <ShieldCheck size={16} className="text-amber-700" />
@@ -6457,7 +6180,6 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                 </p>
               </div>
 
-              {/* List of Affected Entities with 0 emails */}
               <div className="space-y-2">
                 <p className="text-[11px] font-black uppercase tracking-wider text-slate-500">
                   Entities with No Pre-Registered Work Emails ({unlinkedEntities.length} {unlinkedEntities.length === 1 ? "Entity" : "Entities"}):
@@ -6491,7 +6213,6 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                 </div>
               </div>
 
-              {/* Step-by-Step Resolution Guide */}
               <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 space-y-2">
                 <h6 className="font-black text-slate-900 text-xs flex items-center gap-1.5">
                   <UserPlus size={15} className="text-emerald-700" />
@@ -6514,7 +6235,6 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
               </div>
             </div>
 
-            {/* Modal Actions */}
             <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-3 shrink-0 flex-wrap">
               {onNavigateToDirectory && (
                 <button
@@ -6543,7 +6263,6 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
         </div>
       )}
 
-      {/* ================= MODAL: GOOGLE APPS SCRIPT DEPLOYMENT GUIDE ================= */}
       {showScriptGuideModal && (
         <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/80 p-3 sm:p-5 pt-4 sm:pt-6 md:pt-8 backdrop-blur-sm animate-in fade-in duration-150">
           <div className="w-full max-w-3xl rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl space-y-4 max-h-[92vh] flex flex-col">
@@ -6572,7 +6291,6 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
             </div>
 
             <div className="flex-1 overflow-y-auto custom-scrollbar space-y-4 pr-1 text-xs text-slate-700">
-              {/* Step by Step Instructions */}
               <div className="rounded-2xl border border-blue-200 bg-blue-50/70 p-4 space-y-2">
                 <h5 className="font-extrabold text-blue-950 text-xs flex items-center gap-1.5">
                   <span>📋 4-Step Setup Instructions:</span>
@@ -6597,7 +6315,6 @@ Use the toolbar above for Font Style, Font Size, Bold, Italic, Underline, Highli
                 </ol>
               </div>
 
-              {/* Script Code Block */}
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
                   <span className="font-bold text-xs text-slate-800">Apps Script Source Code (Code.gs):</span>
@@ -6705,7 +6422,6 @@ function doGet(e) {
         </div>
       )}
 
-      {/* ================= MODAL: MAGNIFIED CANVAS EDITOR ================= */}
       {magnifyModalOpen && (
         <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/75 p-3 sm:p-5 pt-4 sm:pt-6 md:pt-8 backdrop-blur-sm animate-in fade-in duration-150">
           <div className="w-full max-w-5xl rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl space-y-4 max-h-[92vh] flex flex-col">
@@ -6734,7 +6450,6 @@ function doGet(e) {
             </div>
 
             <div className="flex-1 min-h-[420px] flex flex-col space-y-2">
-              {/* Rich Directives Formatting Toolbar */}
               {renderDirectivesToolbar()}
 
               <div className="flex-1 min-h-[350px] rounded-2xl border border-slate-200 bg-slate-50/60 p-3 sm:p-4 shadow-inner flex flex-col">
@@ -6777,7 +6492,6 @@ function doGet(e) {
         </div>
       )}
 
-      {/* ================= MODAL: SAVED MEMOS ARCHIVE ================= */}
       {archiveModalOpen && (() => {
         const filteredMemos = savedMemos.filter((m) => {
           const comp = resolveCompanyFromMemoRef(m.ref, m, companies);
@@ -6801,7 +6515,6 @@ function doGet(e) {
           );
         });
 
-        // Compute company filter badges
         const companyCodes = [
           { code: "ALL", label: "All Memos", count: savedMemos.length },
           { code: "GFC", label: "GFC", count: savedMemos.filter(m => resolveCompanyFromMemoRef(m.ref, m, companies).id === "glowing_fortune" || String(m.ref).includes("GFC")).length },
@@ -6815,7 +6528,6 @@ function doGet(e) {
         return (
           <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/75 p-3 sm:p-5 pt-4 sm:pt-6 md:pt-8 backdrop-blur-sm animate-in fade-in duration-150">
             <div className="w-full max-w-4xl lg:max-w-5xl rounded-3xl border border-slate-200 bg-white p-5 sm:p-7 shadow-2xl space-y-4 max-h-[92vh] flex flex-col">
-              {/* Header */}
               <div className="flex items-center justify-between border-b border-slate-100 pb-3 shrink-0">
                 <div className="flex items-center gap-3">
                   <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-800 shadow-2xs">
@@ -6863,7 +6575,6 @@ function doGet(e) {
                 </div>
               </div>
 
-              {/* Search and Company Filter Controls */}
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 shrink-0">
                 <div className="relative flex-1">
                   <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -6885,7 +6596,6 @@ function doGet(e) {
                   )}
                 </div>
 
-                {/* Company Filter Badges */}
                 <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
                   {companyCodes.map((item) => {
                     const isActive = archiveCompanyFilter === item.code;
@@ -6910,7 +6620,6 @@ function doGet(e) {
                 </div>
               </div>
 
-              {/* Records List Container */}
               <div className="flex-1 overflow-y-auto space-y-3 pr-1.5">
                 {savedMemos.length === 0 ? (
                   <div className="py-16 text-center text-slate-400 space-y-2">
@@ -6942,7 +6651,6 @@ function doGet(e) {
                         className="p-4 sm:p-4.5 rounded-2xl border border-slate-200/90 bg-slate-50/60 hover:bg-white hover:border-emerald-400 hover:shadow-md transition-all duration-150 flex flex-col md:flex-row md:items-center justify-between gap-3.5 group shadow-2xs"
                       >
                         <div className="flex items-start gap-3.5 min-w-0 flex-1">
-                          {/* Company Logo Badge */}
                           <div className="w-13 h-13 p-1 rounded-2xl bg-white border border-slate-200 flex items-center justify-center shrink-0 shadow-2xs group-hover:border-emerald-300 transition">
                             <img
                               src={comp.logoUrl}
@@ -6952,7 +6660,6 @@ function doGet(e) {
                             />
                           </div>
 
-                          {/* Memo Metadata & Subject */}
                           <div className="min-w-0 flex-1 space-y-1">
                             <div className="flex items-center gap-2 flex-wrap">
                               <span className="font-mono text-xs font-black text-emerald-900 bg-emerald-100 px-2.5 py-0.5 rounded-md border border-emerald-300 shadow-2xs">
@@ -6992,7 +6699,6 @@ function doGet(e) {
                           </div>
                         </div>
 
-                        {/* Actions */}
                         <div className="flex items-center gap-2 shrink-0 self-end md:self-center">
                           <button
                             type="button"
@@ -7023,7 +6729,6 @@ function doGet(e) {
                 )}
               </div>
 
-              {/* Modal Footer */}
               <div className="pt-3 border-t border-slate-100 flex items-center justify-between shrink-0">
                 <span className="text-xs text-slate-400 font-semibold">
                   Showing {filteredMemos.length} of {savedMemos.length} memorandums
@@ -7042,7 +6747,6 @@ function doGet(e) {
         );
       })()}
 
-      {/* Floating Action Feedback Toast for Image Copy & Download */}
       {imageCopyToast && (
         <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 px-4 py-3 rounded-2xl bg-slate-950 text-white shadow-2xl border border-slate-800 animate-in fade-in slide-in-from-bottom-3 duration-200">
           <div

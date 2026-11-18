@@ -3,10 +3,6 @@ import { X, ChevronDown, Sparkles, MessageSquare, Volume2, VolumeX } from "lucid
 import AiAssistantLiveCanvas from "./AiAssistantLiveCanvas";
 import { isHeadOfficeHrAdminUser } from "../lib/aiAssistantService";
 
-/**
- * High-Definition Neural Voice Playlist (Microsoft Jenny Neural AI)
- * 100% natural, warm, human English voice with millisecond word boundaries.
- */
 const DIALOG_PLAYLIST = [
   {
     audioUrl: "/audio/greeting_0.mp3",
@@ -92,7 +88,6 @@ const DIALOG_PLAYLIST = [
   }
 ];
 
-// Helper: Generate proportional word reveal boundaries synced to speech duration
 function buildProportionalBoundaries(words, totalSpeakMs = 5400) {
   const cleanWords = words.filter((w) => w && !/^[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]+$/u.test(w));
   const weights = cleanWords.map((w) => Math.max(2, w.replace(/[^a-zA-Z0-9]/g, "").length));
@@ -106,10 +101,6 @@ function buildProportionalBoundaries(words, totalSpeakMs = 5400) {
   });
 }
 
-/**
- * Subsidiary / STL Operations Voice Playlist (Dedicated MP3 files for Subsidiary Accounts)
- * Covers: Studying STL Gross, Suggestions on Gross Up/Down, Computing Winnings (Panalo), & AWOL Agent protocol.
- */
 const SUBSIDIARY_DIALOG_PLAYLIST = [
   {
     audioUrl: "/audio/sub_greeting_0.mp3",
@@ -141,7 +132,6 @@ const SUBSIDIARY_DIALOG_PLAYLIST = [
   }
 ];
 
-// Helper: Select natural female voice for speech synthesis fallback
 export function getFemaleVoice() {
   if (typeof window === "undefined" || !window.speechSynthesis) return null;
   const voices = window.speechSynthesis.getVoices();
@@ -174,19 +164,15 @@ export default function AiAssistantGirlWidget({
   currentUser = null,
   isHRMD = null
 }) {
-  // Determine playlist based on logged-in account:
-  // - Head Office HR Administrator (Simpal Group of Companies) -> keeps original DIALOG_PLAYLIST & MP3s AS-IS
-  // - Subsidiary / STL Branch Accounts -> uses SUBSIDIARY_DIALOG_PLAYLIST & dedicated MP3s
   const isHeadOfficeHr = isHeadOfficeHrAdminUser(currentUser, isHRMD);
   const activePlaylist = isHeadOfficeHr ? DIALOG_PLAYLIST : SUBSIDIARY_DIALOG_PLAYLIST;
 
-  const [isMinimized, setIsMinimized] = useState(false); // Animated waving anime character visible by default
+  const [isMinimized, setIsMinimized] = useState(false);
   const [bubbleDismissed, setBubbleDismissed] = useState(false);
   const [isBlinking, setIsBlinking] = useState(false);
-  const [mouthState, setMouthState] = useState("resting"); // "resting", "open", "shut"
-  const [voiceEnabled, setVoiceEnabled] = useState(true); // Natural female voice
+  const [mouthState, setMouthState] = useState("resting");
+  const [voiceEnabled, setVoiceEnabled] = useState(true);
 
-  // Strict GeoTagging suppression listener
   const [geoTaggingActive, setGeoTaggingActive] = useState(() => {
     return typeof window !== "undefined" && (window.__hrhub_geotagging_active === true || localStorage.getItem("hrhub_geotagging_active") === "true");
   });
@@ -199,7 +185,6 @@ export default function AiAssistantGirlWidget({
     return () => window.removeEventListener("hrhub_geotagging_visibility", handleGeoTagging);
   }, []);
 
-  // Synchronized Word-by-Word Typing & Lip-Flap State
   const [msgIndex, setMsgIndex] = useState(0);
   const [displayedWords, setDisplayedWords] = useState([]);
   const [isTyping, setIsTyping] = useState(false);
@@ -212,7 +197,6 @@ export default function AiAssistantGirlWidget({
     activeTimersRef.current = [];
   };
 
-  // Stop audio and timers when hidden, chat is open, or GeoTagging is active
   useEffect(() => {
     if (hidden || isChatOpen || geoTaggingActive) {
       clearAllTimers();
@@ -227,7 +211,6 @@ export default function AiAssistantGirlWidget({
     }
   }, [hidden, isChatOpen, geoTaggingActive]);
 
-  // 1. Natural Anime Blinking Engine (Eyes are wide OPEN by default, blinks naturally)
   useEffect(() => {
     if (hidden || isChatOpen || geoTaggingActive || isMinimized) return;
     let t1, t2, t3;
@@ -252,7 +235,6 @@ export default function AiAssistantGirlWidget({
     };
   }, [hidden, isChatOpen, isMinimized]);
 
-  // 2. Play Natural Neural Voice Greeting with Exact Millisecond Word Sync
   const playGreeting = (index) => {
     if (hidden || isChatOpen || isMinimized) return;
     clearAllTimers();
@@ -272,7 +254,6 @@ export default function AiAssistantGirlWidget({
     setDisplayedWords([]);
     setIsTyping(true);
 
-    // Play Studio Neural Voice Audio
     if (voiceEnabled) {
       try {
         const audio = new Audio(item.audioUrl);
@@ -287,7 +268,6 @@ export default function AiAssistantGirlWidget({
       }
     }
 
-    // Schedule millisecond-accurate word reveals and mouth flaps
     item.boundaries.forEach((b, bIdx) => {
       const tWord = setTimeout(() => {
         setDisplayedWords(item.words.slice(0, bIdx + 1));
@@ -301,11 +281,10 @@ export default function AiAssistantGirlWidget({
       activeTimersRef.current.push(tShut);
     });
 
-    // Complete sentence
     const tEnd = setTimeout(() => {
       setDisplayedWords(item.words);
       setIsTyping(false);
-      setMouthState("resting"); // Resting closed smile
+      setMouthState("resting");
 
       const tNext = setTimeout(() => {
         setMsgIndex((prev) => (prev + 1) % activePlaylist.length);
@@ -351,7 +330,6 @@ export default function AiAssistantGirlWidget({
     }
   };
 
-  // If hidden (active page has its own AI button), chat modal is open, or GeoTagging is active, completely hide floating widget
   if (hidden || isChatOpen || geoTaggingActive) return null;
 
   if (isMinimized) {
@@ -365,10 +343,8 @@ export default function AiAssistantGirlWidget({
           className="group relative flex items-center gap-3.5 rounded-full bg-slate-900/90 hover:bg-slate-900 backdrop-blur-xl pl-2.5 pr-4 py-2 text-white shadow-[0_10px_35px_-5px_rgba(0,0,0,0.5),0_0_20px_-3px_rgba(16,185,129,0.3)] hover:shadow-[0_16px_45px_-5px_rgba(0,0,0,0.6),0_0_30px_0_rgba(16,185,129,0.45)] transition-all duration-300 hover:scale-[1.03] active:scale-[0.97] border border-emerald-500/30 hover:border-emerald-400/70 cursor-pointer ring-1 ring-emerald-500/20 hover:ring-emerald-400/50"
           title="Open HRHub AI Assistant"
         >
-          {/* Subtle glowing ambient backdrop mesh */}
           <div className="absolute inset-0 rounded-full bg-gradient-to-r from-emerald-500/15 via-teal-500/10 to-indigo-500/15 opacity-60 group-hover:opacity-100 transition-opacity pointer-events-none" />
 
-          {/* Circular mini avatar */}
           <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-950 border-2 border-emerald-400 shadow-md ring-2 ring-emerald-500/30 overflow-hidden group-hover:ring-emerald-400/70 transition-all">
             <img
               src="/ai_buddy_avatar.png"
@@ -397,7 +373,6 @@ export default function AiAssistantGirlWidget({
             </span>
           </div>
 
-          {/* Glowing launcher trigger */}
           <div className="z-10 pl-1 text-slate-400 group-hover:text-emerald-400 group-hover:translate-x-0.5 transition-all">
             <Sparkles size={14} className="animate-pulse" />
           </div>
@@ -408,7 +383,6 @@ export default function AiAssistantGirlWidget({
 
   return (
     <div className="fixed bottom-0 right-2 sm:right-6 z-40 pointer-events-none select-none flex flex-col items-end">
-      {/* CSS Keyframe Animations for Floating, Blink, Arm, Foot, & Neon Halo */}
       <style>{`
         @keyframes ai-character-float {
           0%, 100% {
@@ -470,10 +444,8 @@ export default function AiAssistantGirlWidget({
         }
       `}</style>
 
-      {/* Main Floating Wrapper */}
       <div className="relative pointer-events-auto flex flex-col items-end ai-floating-character">
 
-        {/* Top Controls: Minimize Button */}
         <div className="mb-1 flex items-center gap-1.5 self-end z-20">
           <button
             type="button"
@@ -486,14 +458,12 @@ export default function AiAssistantGirlWidget({
           </button>
         </div>
 
-        {/* INTERACTIVE SPEECH BUBBLE (Above/Beside Head) */}
         {!bubbleDismissed && (
           <div className="absolute -top-16 sm:-top-20 right-20 sm:right-28 z-30 ai-floating-bubble">
             <div
               onClick={onOpenChat}
               className="group relative cursor-pointer rounded-2xl border border-cyan-400/40 bg-slate-950/90 p-3 text-white shadow-2xl backdrop-blur-md transition-all duration-200 hover:scale-105 hover:border-cyan-300 w-[220px] sm:w-[260px]"
             >
-              {/* Top row: Status indicator & Female Voice Toggle */}
               <div className="flex items-center justify-between pb-1.5 mb-1.5 border-b border-slate-800">
                 <div className="flex items-center gap-1.5">
                   <span className="flex h-2 w-2 relative">
@@ -505,7 +475,6 @@ export default function AiAssistantGirlWidget({
                   </span>
                 </div>
                 <div className="flex items-center gap-1">
-                  {/* Female Voice Mute / Unmute Toggle Button */}
                   <button
                     type="button"
                     onClick={(e) => {
@@ -547,7 +516,6 @@ export default function AiAssistantGirlWidget({
                 </div>
               </div>
 
-              {/* Message Content: Word-by-word synchronized */}
               <p className="text-xs sm:text-[13px] font-bold text-slate-100 leading-snug group-hover:text-cyan-300 transition-colors min-h-[42px]">
                 {displayedWords.join(" ")}
                 {isTyping && (
@@ -559,13 +527,11 @@ export default function AiAssistantGirlWidget({
                 <span className="text-cyan-400 font-semibold group-hover:underline">Click to chat →</span>
               </div>
 
-              {/* Speech bubble pointy arrow */}
               <div className="absolute -bottom-2 right-8 w-3.5 h-3.5 rotate-45 bg-slate-950/90 border-r border-b border-cyan-400/40"></div>
             </div>
           </div>
         )}
 
-        {/* FULL BODY ANIMATED ANIME CHARACTER (Live2D-style WebGL Mesh + SVG Blinking Eyelids + Talking Mouth) */}
         <div
           onClick={() => {
             handleCharacterInteraction();
@@ -574,17 +540,14 @@ export default function AiAssistantGirlWidget({
           className="relative cursor-pointer group transition-transform duration-300 hover:scale-102"
           title="Click to talk with HRHub Ai Buddy"
         >
-          {/* Layer 1: Seamless 2.5D Animated Character Canvas (Pristine original image, realistic waving hand & breathing) */}
           <AiAssistantLiveCanvas
             className="h-[360px] sm:h-[440px] md:h-[480px] w-auto object-contain ai-pulsing-neon drop-shadow-2xl transition-all duration-300 select-none pointer-events-none"
           />
 
-          {/* Layer 2: Animated Blinking Eyes & Talking Mouth SVG */}
           <svg
             viewBox="0 0 768 1376"
             className="absolute inset-0 h-full w-full pointer-events-none overflow-visible"
           >
-            {/* Blinking Eyelids Layer (Controlled by React isBlinking state) */}
             <g
               className="ai-girl-blinking-eyes"
               style={{
@@ -594,14 +557,12 @@ export default function AiAssistantGirlWidget({
                 pointerEvents: "none",
               }}
             >
-              {/* Left Eye Eyelid */}
               <g id="left-eye-blink">
                 <path d="M 338,224 Q 355,221 372,225 Q 371,239 355,239 Q 339,238 338,224 Z" fill="#f9ccb7" />
                 <path d="M 342,222 Q 355,220 367,223" stroke="#d59a85" strokeWidth="1.0" strokeLinecap="round" fill="none" />
                 <path d="M 338,235 Q 355,239 372,234" stroke="#231c26" strokeWidth="2.8" strokeLinecap="round" fill="none" />
                 <path d="M 344,237 Q 355,240 366,237" stroke="#684249" strokeWidth="0.8" strokeLinecap="round" fill="none" />
               </g>
-              {/* Right Eye Eyelid */}
               <g id="right-eye-blink">
                 <path d="M 395,224 Q 412,221 428,225 Q 427,239 412,239 Q 396,238 395,224 Z" fill="#f9ccb7" />
                 <path d="M 398,222 Q 412,220 424,223" stroke="#d59a85" strokeWidth="1.0" strokeLinecap="round" fill="none" />
@@ -610,7 +571,6 @@ export default function AiAssistantGirlWidget({
               </g>
             </g>
 
-            {/* Talking Mouth Lip-Flap Animation (Active only when mouthState === 'open') */}
             <g
               className="ai-girl-talking-mouth"
               style={{
@@ -622,22 +582,15 @@ export default function AiAssistantGirlWidget({
                 pointerEvents: "none",
               }}
             >
-              {/* Skin blend under mouth */}
               <path d="M 364,269 Q 384,265 404,269 Q 402,286 384,287 Q 366,286 364,269 Z" fill="#f9ccb7" />
-              {/* Open speaking mouth interior cavity */}
               <path d="M 368,271 Q 384,267 400,271 Q 398,284 384,285 Q 370,284 368,271 Z" fill="#6d1e26" />
-              {/* Upper white teeth line */}
               <path d="M 371,271 Q 384,268 397,271 Q 394,275 384,275 Q 374,275 371,271 Z" fill="#ffffff" />
-              {/* Tongue highlight */}
               <path d="M 374,281 Q 384,277 394,281 Q 389,284 384,284 Q 379,284 374,281 Z" fill="#ea7781" />
-              {/* Lip contour line */}
               <path d="M 368,271 Q 384,267 400,271 Q 398,284 384,285 Q 370,284 368,271" stroke="#4a151b" strokeWidth="1.4" fill="none" />
-              {/* Lower lip shadow */}
               <path d="M 375,287 Q 384,289 393,287" stroke="#d58983" strokeWidth="1.2" strokeLinecap="round" fill="none" />
             </g>
           </svg>
 
-          {/* Glowing bottom ground spotlight halo */}
           <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-48 h-6 bg-cyan-400/25 blur-md rounded-full pointer-events-none ai-platform-pulse"></div>
         </div>
       </div>

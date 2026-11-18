@@ -17,15 +17,13 @@ export default function PwaInstallModal({ isOpen, onClose }) {
   const [deferredPrompt, setDeferredPrompt] = useState(null);
   const [isCopied, setIsCopied] = useState(false);
   const [isInstalled, setIsInstalled] = useState(false);
-  const [activeTab, setActiveTab] = useState("android"); // 'android' | 'ios'
+  const [activeTab, setActiveTab] = useState("android");
 
-  // Get current portal link or default to live Vercel URL
   const appUrl = typeof window !== "undefined" && window.location?.origin?.includes("vercel.app")
     ? window.location.origin
     : "https://hrhub-app.vercel.app";
 
   useEffect(() => {
-    // Check if already running as standalone PWA
     if (typeof window !== "undefined") {
       const isStandalone =
         window.matchMedia("(display-mode: standalone)").matches ||
@@ -33,7 +31,6 @@ export default function PwaInstallModal({ isOpen, onClose }) {
       setIsInstalled(isStandalone);
     }
 
-    // Capture the beforeinstallprompt event for 1-click native install
     const handleBeforeInstallPrompt = (e) => {
       e.preventDefault();
       setDeferredPrompt(e);
@@ -72,7 +69,6 @@ export default function PwaInstallModal({ isOpen, onClose }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 p-4 backdrop-blur-sm animate-in fade-in duration-200">
       <div className="w-full max-w-lg rounded-3xl border border-slate-200 bg-white shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
-        {/* Header with Brand Gradient */}
         <div className="bg-gradient-to-r from-emerald-800 via-teal-800 to-slate-900 p-6 text-white relative">
           <button
             type="button"
@@ -101,9 +97,7 @@ export default function PwaInstallModal({ isOpen, onClose }) {
           </p>
         </div>
 
-        {/* Content Body */}
         <div className="p-6 space-y-5 overflow-y-auto flex-1">
-          {/* Quick Copy Link Box */}
           <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 space-y-2">
             <label className="text-[11px] font-black uppercase tracking-wider text-slate-500 flex items-center justify-between">
               <span>Official Mobile Portal Link:</span>
@@ -136,7 +130,6 @@ export default function PwaInstallModal({ isOpen, onClose }) {
             )}
           </div>
 
-          {/* 1-Click Native Install Button (if browser supports it) */}
           {deferredPrompt && (
             <div className="p-3.5 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white flex items-center justify-between gap-3 shadow-md">
               <div className="min-w-0">
@@ -153,7 +146,6 @@ export default function PwaInstallModal({ isOpen, onClose }) {
             </div>
           )}
 
-          {/* Step-by-Step Instructions Toggle */}
           <div className="space-y-3">
             <div className="flex items-center justify-between border-b border-slate-200 pb-2">
               <h4 className="text-xs font-black uppercase tracking-wider text-slate-800">
@@ -185,7 +177,6 @@ export default function PwaInstallModal({ isOpen, onClose }) {
               </div>
             </div>
 
-            {/* Android Instructions */}
             {activeTab === "android" && (
               <div className="space-y-2.5 text-xs text-slate-700 bg-slate-50 rounded-2xl p-4 border border-slate-200">
                 <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-[11px] text-amber-900 flex items-start gap-2 mb-2">
@@ -229,7 +220,6 @@ export default function PwaInstallModal({ isOpen, onClose }) {
               </div>
             )}
 
-            {/* iOS Instructions */}
             {activeTab === "ios" && (
               <div className="space-y-2.5 text-xs text-slate-700 bg-slate-50 rounded-2xl p-4 border border-slate-200">
                 <div className="flex items-start gap-2.5">
@@ -268,7 +258,6 @@ export default function PwaInstallModal({ isOpen, onClose }) {
             )}
           </div>
 
-          {/* Benefits Info Pill */}
           <div className="p-3 bg-emerald-50 rounded-2xl border border-emerald-100 flex items-center gap-3">
             <ShieldCheck size={20} className="text-emerald-700 shrink-0" />
             <div className="text-[11px] text-emerald-900 leading-tight">
@@ -277,7 +266,6 @@ export default function PwaInstallModal({ isOpen, onClose }) {
           </div>
         </div>
 
-        {/* Modal Footer */}
         <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between shrink-0">
           <p className="text-[11px] text-slate-500 font-mono">
             {isInstalled ? "✅ App is installed on this device" : "Ready for Mobile Installation"}

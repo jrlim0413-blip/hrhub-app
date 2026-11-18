@@ -92,7 +92,6 @@ import {
   setVoiceMuted
 } from "../lib/voiceAnnouncer";
 
-// Helper: Convert Numeric Amount to Formal Words (e.g., 1445 -> "One Thousand Four Hundred Forty-Five Pesos (PHP 1,445.00)")
 function numberToEnglishWords(num) {
   if (num === 0) return "Zero";
   const ones = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"];
@@ -144,7 +143,6 @@ function formatPesosInWords(amount) {
   return `${words}${centsText} Pesos (PHP ${formattedFigure})`;
 }
 
-// Standard Philippine Legal & Company Due Process Constants
 const DEFAULT_COMPANY_ADDRESS =
   "Purok Daisy, New Isabela, Tacurong City, Sultan Kudarat, Philippines";
 const DEFAULT_COMPANY_EMAIL = "imsoroglohr@gmail.com";
@@ -158,7 +156,6 @@ export const SUBSIDIARY_OPTIONS = [
   "Simpal Group of Companies"
 ];
 
-// Official Company / Entity Logo & Branding Mapping
 export const COMPANY_LOGO_MAP = {
   "5A Royal Gaming OPC": "/logos/5A.png",
   "Glowing Fortune OPC": "/logos/GLOW.png",
@@ -205,27 +202,24 @@ export default function IncidentReportPanel({
   const [searchQuery, setSearchQuery] = useState("");
   const [voiceMutedState, setVoiceMutedState] = useState(isVoiceMuted());
 
-  // Modals
   const [isPermissionMatrixOpen, setIsPermissionMatrixOpen] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isIrViewerOpen, setIsIrViewerOpen] = useState(false);
-  const [irPaperFormat, setIrPaperFormat] = useState("A4"); // "A4" (Standard) | "SHORT" (Letter) | "LONG" (Long)
-  const [ntePaperFormat, setNtePaperFormat] = useState("A4"); // "A4" (Standard) | "SHORT" (Letter) | "LONG" (Long)
+  const [irPaperFormat, setIrPaperFormat] = useState("A4");
+  const [ntePaperFormat, setNtePaperFormat] = useState("A4");
   const [isNteViewerOpen, setIsNteViewerOpen] = useState(false);
   const [isNteDraftModalOpen, setIsNteDraftModalOpen] = useState(false);
   const [isExplanationModalOpen, setIsExplanationModalOpen] = useState(false);
   const [selectedReport, setSelectedReport] = useState(null);
 
-  // Employee/Respondent Receipt & Digital Signature states
   const [isSignReceiptModalOpen, setIsSignReceiptModalOpen] = useState(false);
   const [signReportTarget, setSignReportTarget] = useState(null);
-  const [signMode, setSignMode] = useState("DRAW"); // "DRAW" | "TYPE"
+  const [signMode, setSignMode] = useState("DRAW");
   const [typedSignature, setTypedSignature] = useState("");
   const [signRemarks, setSignRemarks] = useState("I acknowledge receipt of this Incident Report and take notice of its contents.");
   const sigCanvasRef = useRef(null);
   const isDrawingRef = useRef(false);
 
-  // New Disciplinary Lifecycle Modals (Head Office & Branch HR)
   const [isAddToFilingsModalOpen, setIsAddToFilingsModalOpen] = useState(false);
   const [filingRemarksInput, setFilingRemarksInput] = useState("Reviewed by SGC Head Office HRMD. Noted and retained for 201 file records. Minor discrepancy resolved on-site without formal disciplinary proceeding.");
 
@@ -233,10 +227,10 @@ export default function IncidentReportPanel({
   const [isViewSignedNteProofModalOpen, setIsViewSignedNteProofModalOpen] = useState(false);
   const [activeProofRecord, setActiveProofRecord] = useState(null);
   const [activeExplanationRecord, setActiveExplanationRecord] = useState(null);
-  const [activeProofViewerTab, setActiveProofViewerTab] = useState("SIGNED_NTE"); // "SIGNED_NTE" | "EXPLANATION_DOC"
+  const [activeProofViewerTab, setActiveProofViewerTab] = useState("SIGNED_NTE");
   const [isLoadingProof, setIsLoadingProof] = useState(false);
   const [proofZoomLevel, setProofZoomLevel] = useState(1);
-  const [uploadActiveTab, setUploadActiveTab] = useState("ALL"); // "ALL" | "SIGNED_NTE" | "EXPLANATION"
+  const [uploadActiveTab, setUploadActiveTab] = useState("ALL");
   const [nteProofData, setNteProofData] = useState({ fileData: "", fileName: "", fileSize: 0, dateServed: new Date().toISOString().slice(0, 10), remarks: "" });
   const [explanationProofData, setExplanationProofData] = useState({
     fileData: "",
@@ -248,7 +242,7 @@ export default function IncidentReportPanel({
 
   const [isWarningModalOpen, setIsWarningModalOpen] = useState(false);
   const [isWarningViewerOpen, setIsWarningViewerOpen] = useState(false);
-  const [warningPaperFormat, setWarningPaperFormat] = useState("A4"); // "A4" | "SHORT" | "LONG" | "LEGAL"
+  const [warningPaperFormat, setWarningPaperFormat] = useState("A4");
   const [warningForm, setWarningForm] = useState({
     penalty: "Final Stern Warning",
     companyName: "5A ROYAL GAMING OPC",
@@ -271,7 +265,7 @@ export default function IncidentReportPanel({
   });
 
   const [isNoiViewerOpen, setIsNoiViewerOpen] = useState(false);
-  const [noiPaperFormat, setNoiPaperFormat] = useState("A4"); // "A4" | "SHORT" | "LONG" | "LEGAL"
+  const [noiPaperFormat, setNoiPaperFormat] = useState("A4");
   const [isNoiModalOpen, setIsNoiModalOpen] = useState(false);
   const [noiForm, setNoiForm] = useState({
     date: "OCTOBER 12, 2026",
@@ -303,7 +297,7 @@ export default function IncidentReportPanel({
   });
 
   const [isAdminDecisionViewerOpen, setIsAdminDecisionViewerOpen] = useState(false);
-  const [adminDecisionPaperFormat, setAdminDecisionPaperFormat] = useState("A4"); // "A4" | "SHORT" | "LONG" | "LEGAL"
+  const [adminDecisionPaperFormat, setAdminDecisionPaperFormat] = useState("A4");
   const [isAdminDecisionModalOpen, setIsAdminDecisionModalOpen] = useState(false);
   const [adminDecisionForm, setAdminDecisionForm] = useState({
     date: "October 21, 2026",
@@ -329,7 +323,6 @@ export default function IncidentReportPanel({
   const [transmittingMessage, setTransmittingMessage] = useState("");
   const [openDossierCaseId, setOpenDossierCaseId] = useState(null);
 
-  // Custom High-Fidelity Confirmation Modal State (Replaces native browser window.confirm & alerts)
   const [confirmDialog, setConfirmDialog] = useState({
     isOpen: false,
     title: "",
@@ -340,8 +333,8 @@ export default function IncidentReportPanel({
     impactItems: [],
     confirmText: "Confirm",
     cancelText: "Cancel",
-    confirmVariant: "danger", // "danger" | "emerald" | "amber"
-    iconType: "purge", // "purge" | "archive" | "warning"
+    confirmVariant: "danger",
+    iconType: "purge",
     isAlert: false,
     isProcessing: false,
     onConfirm: null
@@ -366,7 +359,6 @@ export default function IncidentReportPanel({
     });
   };
 
-  // Auto-dismiss Dossier popovers on outside clicks
   useEffect(() => {
     const handleGlobalClick = (e) => {
       if (!e.target.closest(".dossier-dropdown-container")) {
@@ -377,7 +369,6 @@ export default function IncidentReportPanel({
     return () => document.removeEventListener("click", handleGlobalClick);
   }, []);
 
-  // Secret Key State: Clean Process (Purge) Button is hidden by default
   const [showCleanProcessBtn, setShowCleanProcessBtn] = useState(() => {
     try {
       return sessionStorage.getItem("hrhub_show_clean_process") === "true";
@@ -404,13 +395,11 @@ export default function IncidentReportPanel({
     });
   };
 
-  // Keyboard shortcut listener: Ctrl+Alt+C, Alt+Shift+C, or typing "clean" / "purge"
   useEffect(() => {
     let keyBuffer = "";
     let bufferTimer = null;
 
     const handleKeyDown = (e) => {
-      // Hotkey: Ctrl+Alt+C or Alt+Shift+C or Ctrl+Alt+P
       const isCtrlAltC = (e.ctrlKey || e.metaKey) && e.altKey && e.key?.toLowerCase() === "c";
       const isAltShiftC = e.altKey && e.shiftKey && e.key?.toLowerCase() === "c";
       const isPurgeHotkey = (e.ctrlKey || e.metaKey) && e.altKey && e.key?.toLowerCase() === "p";
@@ -421,13 +410,11 @@ export default function IncidentReportPanel({
         return;
       }
 
-      // Ignore typing when focused in an input, textarea, or contentEditable
       const tag = e.target?.tagName?.toUpperCase();
       if (tag === "INPUT" || tag === "TEXTAREA" || e.target?.isContentEditable) {
         return;
       }
 
-      // Secret keyword typing sequence: "clean" or "purge"
       if (e.key && e.key.length === 1) {
         keyBuffer += e.key.toLowerCase();
         if (keyBuffer.length > 10) {
@@ -454,7 +441,6 @@ export default function IncidentReportPanel({
     };
   }, []);
 
-  // Multi-click secret trigger: clicking the role badge / user identity 5 times quickly
   const handleSecretBadgeClick = () => {
     secretClickCountRef.current += 1;
     clearTimeout(secretClickTimerRef.current);
@@ -469,18 +455,13 @@ export default function IncidentReportPanel({
     }
   };
 
-  // Compute effective role & capabilities STRICTLY based on the logged-in account (currentUser)
   const effectiveRole = useMemo(() => {
     return resolveUserHrRole(currentUser, profiles);
   }, [currentUser, profiles]);
 
-  // Dynamic entity branding strictly aligned with logged-in account
   const loggedInCompany = effectiveRole?.company || currentUser?.company || "5A Royal Gaming OPC";
   const loggedInLogo = resolveEntityLogo(loggedInCompany);
 
-  // Dynamic paper logo resolver:
-  // If user is branch HR, strictly use their logged-in company logo.
-  // If user is Head Office (SGC), check if report/memo specifies a subsidiary, otherwise default to loggedInLogo.
   const getPaperLogo = (docCompany = null) => {
     if (!effectiveRole.isHeadOffice) {
       return loggedInLogo;
@@ -501,7 +482,6 @@ export default function IncidentReportPanel({
     return resolveCompanyOfficialName(loggedInCompany);
   };
 
-  // Form states for creating a new Incident Report (Subsidiary HR -> SGC HRMD)
   const initialCompany = effectiveRole.isHeadOffice ? "5A Royal Gaming OPC" : effectiveRole.company;
   const initialSenderHr = lookupAssignedHrForCompany(initialCompany, profiles);
   const initialSgcHr = lookupSgcCentralHr(profiles);
@@ -560,7 +540,6 @@ export default function IncidentReportPanel({
     approvedBySignature: ""
   });
 
-  // When Originating Subsidiary Company changes, dynamically lookup the assigned HR from Employee Directory
   const handleCompanyChange = (newCompany) => {
     const assigned = lookupAssignedHrForCompany(newCompany, profiles);
     const sgcHr = lookupSgcCentralHr(profiles);
@@ -583,7 +562,6 @@ export default function IncidentReportPanel({
   const prevPendingCountRef = useRef(null);
   const isFetchingRef = useRef(false);
 
-  // Load records (with optional silent background mode and concurrency protection)
   const loadRecords = async (isSilent = false) => {
     if (isFetchingRef.current) return;
     isFetchingRef.current = true;
@@ -594,7 +572,6 @@ export default function IncidentReportPanel({
         setReports(data);
         setLastSyncedTime(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
 
-        // Voice notification for Head Office when incoming report arrives
         const incomingCount = data.filter((r) => r.status === "SUBMITTED_TO_CENTRAL_HR").length;
         if (effectiveRole.isHeadOffice && prevPendingCountRef.current !== null) {
           if (incomingCount > prevPendingCountRef.current) {
@@ -614,17 +591,14 @@ export default function IncidentReportPanel({
     }
   };
 
-  // Real-time synchronization: Supabase postgres_changes + BroadcastChannel + Window Focus + Resilient Polling
   useEffect(() => {
     loadRecords(false);
 
-    // 1. Cross-tab instant broadcast listener
     const unsubBroadcast = subscribeToLiveReports((liveList) => {
       setReports(liveList);
       setLastSyncedTime(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
     });
 
-    // 2. Supabase Realtime channel subscription (dedicated to incident_reports table)
     let realtimeChannel = null;
     try {
       if (supabase) {
@@ -639,11 +613,9 @@ export default function IncidentReportPanel({
       console.debug("Realtime channel subscription notice:", realtimeErr?.message);
     }
 
-    // 3. Instant sync whenever user refocuses tab / window
     const handleWindowFocus = () => loadRecords(true);
     window.addEventListener("focus", handleWindowFocus);
 
-    // 4. Gentle background safety polling (every 25 seconds)
     const pollInterval = setInterval(() => {
       loadRecords(true);
     }, 25000);
@@ -658,12 +630,10 @@ export default function IncidentReportPanel({
     };
   }, [effectiveRole.isHeadOffice]);
 
-  // Persistent Default Signatories State (Saved in LocalStorage & Supabase user_settings)
   const [defaultSignatories, setDefaultSignatories] = useState(null);
   const [isSavingDefaults, setIsSavingDefaults] = useState(false);
   const [defaultsSavedSuccess, setDefaultsSavedSuccess] = useState(false);
 
-  // Load default signatories on mount
   useEffect(() => {
     let mounted = true;
     const fetchDefaults = async () => {
@@ -696,7 +666,6 @@ export default function IncidentReportPanel({
     };
   }, []);
 
-  // Voice toggle handler
   const handleToggleVoice = () => {
     const nextState = !voiceMutedState;
     setVoiceMuted(nextState);
@@ -708,10 +677,8 @@ export default function IncidentReportPanel({
     }
   };
 
-  // Filtered reports: Head Office sees all, Subsidiary HR only sees their own company's reports
   const filteredReports = useMemo(() => {
     return reports.filter((item) => {
-      // Role scoping:
       if (!effectiveRole.isHeadOffice) {
         const itemComp = (item.senderCompany || item.company || "").toLowerCase();
         const userComp = (effectiveRole.company || "").toLowerCase();
@@ -720,7 +687,6 @@ export default function IncidentReportPanel({
         }
       }
 
-      // Filter status
       if (activeFilter === "PENDING_SGC" && item.status !== "SUBMITTED_TO_CENTRAL_HR") return false;
       if (activeFilter === "FILED_RECORD" && item.status !== "FILED_FOR_RECORD") return false;
       if (
@@ -745,7 +711,6 @@ export default function IncidentReportPanel({
       )
         return false;
 
-      // Search
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
         const matchEmp = item.employeeName?.toLowerCase().includes(q);
@@ -759,7 +724,6 @@ export default function IncidentReportPanel({
     });
   }, [reports, activeFilter, effectiveRole, searchQuery]);
 
-  // Toggle violation checkbox in IR create form
   const handleToggleViolation = (item) => {
     setIrForm((prev) => {
       const list = Array.isArray(prev.violations) ? prev.violations : [];
@@ -771,7 +735,6 @@ export default function IncidentReportPanel({
     });
   };
 
-  // Toggle attachment checkbox in IR create form
   const handleToggleAttachment = (item) => {
     setIrForm((prev) => {
       const list = Array.isArray(prev.attachments) ? prev.attachments : [];
@@ -783,13 +746,11 @@ export default function IncidentReportPanel({
     });
   };
 
-  // Open Create IR Modal
   const handleOpenCreateModal = async () => {
     const targetComp = effectiveRole.company || "5A Royal Gaming OPC";
     const assigned = lookupAssignedHrForCompany(targetComp, profiles);
     const sgcHr = lookupSgcCentralHr(profiles);
 
-    // Pull persistent defaults if not yet cached in state
     let defs = defaultSignatories;
     if (!defs) {
       try {
@@ -857,7 +818,6 @@ export default function IncidentReportPanel({
     setIsCreateModalOpen(true);
   };
 
-  // Open Create IR Modal pre-populated with a specific employee profile
   const handleOpenCreateModalWithEmployee = async (emp) => {
     if (!emp) return;
     const targetComp = emp.company || effectiveRole.company || "5A Royal Gaming OPC";
@@ -931,7 +891,6 @@ export default function IncidentReportPanel({
     setIsCreateModalOpen(true);
   };
 
-  // Automatically check for target employee to file IR on mount or custom event
   useEffect(() => {
     const checkTargetEmployee = () => {
       try {
@@ -960,7 +919,6 @@ export default function IncidentReportPanel({
     return () => window.removeEventListener("hrhub_file_incident_report", handleFileIrEvent);
   }, []);
 
-  // Submit IR from Subsidiary Company HR -> Simpal Group of Companies (SGC HRMD)
   const handleSubmitIrToCentralHr = async (e) => {
     e.preventDefault();
     if (!irForm.employeeName.trim()) {
@@ -993,7 +951,7 @@ export default function IncidentReportPanel({
     const newReport = {
       id: caseId,
       caseNumber: caseId,
-      status: "SUBMITTED_TO_CENTRAL_HR", // Transmitted to Head Office (Simpal Group of Companies)
+      status: "SUBMITTED_TO_CENTRAL_HR",
       ...irForm,
       typeOfIncident: irForm.typeOfIncident || irForm.incidentCategory || "Cash Shortage & Non-observance of SOPs",
       type_of_incident: irForm.typeOfIncident || irForm.incidentCategory || "Cash Shortage & Non-observance of SOPs",
@@ -1027,7 +985,6 @@ export default function IncidentReportPanel({
       companyEmail: DEFAULT_COMPANY_EMAIL,
       forwardedAt: new Date().toISOString(),
 
-      // Professional Structured NTE Defaults (Manual editable)
       nteSubject: defaultNteSubject,
       nteDate: dateFormatted,
       nteBodyParagraph1: defaultNteBodyParagraph1,
@@ -1064,7 +1021,6 @@ export default function IncidentReportPanel({
       setSelectedReport(saved || newReport);
       setIsIrViewerOpen(true);
 
-      // AI Voice Announcement
       const announcement = `Transmitted! Incident report for ${irForm.employeeName} has been officially sent from ${irForm.company} to Simpal Group of Companies Head Office for Notice to Explain evaluation.`;
       playAiVoiceAnnouncement(announcement);
     } catch (err) {
@@ -1076,7 +1032,6 @@ export default function IncidentReportPanel({
     }
   };
 
-  // Simpal Group of Companies (SGC HRMD) Evaluates & Issues NTE (Returns to Originating Company)
   const handleOpenDraftNte = (report) => {
     const findingsText =
       report.specificFindings ||
@@ -1117,16 +1072,13 @@ export default function IncidentReportPanel({
     setIsNteDraftModalOpen(true);
   };
 
-  // Direct Simpal Group of Companies (Head Office) NTE Action
   const handleOpenDirectSgcNte = () => {
-    // If there is an existing pending report submitted to central HR, open it directly
     const pending = reports.find((r) => r.status === "SUBMITTED_TO_CENTRAL_HR");
     if (pending) {
       handleOpenDraftNte(pending);
       return;
     }
 
-    // Otherwise, generate a fresh direct Head Office NTE draft for Simpal Group of Companies
     const sgcHr = lookupSgcCentralHr(profiles);
     const dateFormatted = new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
     const directCaseNumber = `NTE-${new Date().getFullYear()}-${String(Date.now()).slice(-4)}`;
@@ -1170,9 +1122,6 @@ export default function IncidentReportPanel({
     setIsNteDraftModalOpen(true);
   };
 
-  // ---------------------------------------------------------------------------
-  // RESPONDENT / EMPLOYEE RECEIPT & DIGITAL SIGNATURE HANDLERS
-  // ---------------------------------------------------------------------------
   const handleOpenSignModal = (report) => {
     setSignReportTarget(report);
     setTypedSignature(report.employeeName || "");
@@ -1232,7 +1181,6 @@ export default function IncidentReportPanel({
         signatureDataUrl = canvas.toDataURL("image/png");
       }
     } else {
-      // Create off-screen canvas to render stylish typed signature
       const offscreen = document.createElement("canvas");
       offscreen.width = 400;
       offscreen.height = 100;
@@ -1293,7 +1241,6 @@ export default function IncidentReportPanel({
     }
   };
 
-  // Helper: Read and compress signature image file to lightweight transparent PNG DataURL
   const handleSignatureUpload = async (file, targetField) => {
     if (!file) return;
     try {
@@ -1319,7 +1266,6 @@ export default function IncidentReportPanel({
     }
   };
 
-  // Helper: Save current IR signatories as persistent defaults in Database & LocalStorage
   const handleSaveDefaultSignatories = async () => {
     setIsSavingDefaults(true);
     const defs = {
@@ -1349,7 +1295,6 @@ export default function IncidentReportPanel({
     }
   };
 
-  // 1. Head Office Discretion 1: Add to Filings (File for Record Only)
   const handleOpenAddToFilings = (report) => {
     setSelectedReport(report);
     setFilingRemarksInput("Reviewed by SGC Head Office HRMD. Incident report noted and officially retained for 201 file records. Minor discrepancy resolved on-site without formal disciplinary proceeding.");
@@ -1401,7 +1346,6 @@ export default function IncidentReportPanel({
     }
   };
 
-  // 2. Branch HR ONLY: Upload Employee Signed NTE Proof & Employee Written Explanation
   const handleOpenUploadNteProof = async (report, initialUploadFocus = "ALL") => {
     if (effectiveRole.isHeadOffice) {
       alert("Notice: SGC Head Office evaluates cases. Only Branch HR is authorized to serve and upload the employee's signed NTE acknowledgment copy and employee written explanation.");
@@ -1410,7 +1354,6 @@ export default function IncidentReportPanel({
     setSelectedReport(report);
     setUploadActiveTab(initialUploadFocus);
 
-    // Initial NTE Proof data
     let initialNteData = report.nteSignedProof || "";
     let initialNteName = report.nteSignedProofName || "";
     let initialNteDate = report.nteServedAt || new Date().toISOString().slice(0, 10);
@@ -1422,7 +1365,6 @@ export default function IncidentReportPanel({
         initialNteDate = bucketRecord.dateServed || initialNteDate;
       }
     } catch {
-      // fallback
     }
 
     setNteProofData({
@@ -1433,7 +1375,6 @@ export default function IncidentReportPanel({
       remarks: "Employee personally served physical copy of NTE on-site and affixed signature acknowledging receipt."
     });
 
-    // Initial Explanation Proof data
     let initialExpData = report.explanationProof || "";
     let initialExpName = report.explanationProofName || "";
     let initialExpDate = report.explanationReceivedAt || new Date().toISOString().slice(0, 10);
@@ -1447,7 +1388,6 @@ export default function IncidentReportPanel({
         if (expBucketRecord.explanationText) initialExpText = expBucketRecord.explanationText;
       }
     } catch {
-      // fallback
     }
 
     setExplanationProofData({
@@ -1502,7 +1442,6 @@ export default function IncidentReportPanel({
         "Lucky Betplay Corporation";
       const servingHrLabel = `${hrName} (${hrCompany} HR)`;
 
-      // 1. Process Signed NTE proof
       let nteFinalUrl = selectedReport.nteSignedProof || "";
       let nteBucketKey = selectedReport.nteSignedProofKey || "";
       let nteFileName = selectedReport.nteSignedProofName || "";
@@ -1535,7 +1474,6 @@ export default function IncidentReportPanel({
         nteFileName = bucketResult.fileName;
       }
 
-      // 2. Process Employee In-Written Explanation proof & text
       let expFinalUrl = selectedReport.explanationProof || "";
       let expBucketKey = selectedReport.explanationProofKey || "";
       let expFileName = selectedReport.explanationProofName || "";
@@ -1570,7 +1508,6 @@ export default function IncidentReportPanel({
         expFileName = expBucketResult.fileName;
       }
 
-      // Determine lifecycle status
       const hasExplanationNow = Boolean(expFinalUrl || expText);
       const hasSignedNteNow = Boolean(nteFinalUrl || selectedReport.hasSignedNteProof);
       const newStatus = hasExplanationNow ? "EXPLANATION_RECEIVED" : "NTE_SERVED_ACKNOWLEDGED";
@@ -1582,14 +1519,12 @@ export default function IncidentReportPanel({
       const updated = {
         ...selectedReport,
         status: newStatus,
-        // Signed NTE
         hasSignedNteProof: hasSignedNteNow,
         nteSignedProofKey: nteBucketKey,
         nteSignedProofName: nteFileName,
         nteServedAt: nteDateServed,
         nteServedBy: servingHrLabel,
         nteSignedProof: nteFinalUrl,
-        // In-Written Explanation
         hasExplanationProof: hasExplanationNow,
         explanationProof: expFinalUrl,
         explanationProofName: expFileName,
@@ -1627,7 +1562,6 @@ export default function IncidentReportPanel({
     }
   };
 
-  // 3. View Signed NTE Proof & Employee Written Explanation (Head Office Audit & Branch HR)
   const handleOpenViewSignedNteProof = async (report, initialTab = "SIGNED_NTE") => {
     setSelectedReport(report);
     setActiveProofViewerTab(initialTab);
@@ -1636,7 +1570,6 @@ export default function IncidentReportPanel({
     setIsLoadingProof(true);
 
     try {
-      // 1. Fetch Signed NTE proof
       let bucketRecord = await getNteProofFromBucket(report.id);
       if (!bucketRecord && report.caseNumber) {
         bucketRecord = await getNteProofFromBucket(report.caseNumber);
@@ -1680,7 +1613,6 @@ export default function IncidentReportPanel({
         company: report.company || report.senderCompany
       });
 
-      // 2. Fetch Employee Written Explanation proof
       let expBucketRecord = await getExplanationProofFromBucket(report.id);
       if (!expBucketRecord && report.caseNumber) {
         expBucketRecord = await getExplanationProofFromBucket(report.caseNumber);
@@ -1726,7 +1658,6 @@ export default function IncidentReportPanel({
         company: report.company || report.senderCompany
       });
 
-      // Determine initial tab smartly
       if (initialTab === "EXPLANATION_DOC") {
         setActiveProofViewerTab("EXPLANATION_DOC");
       } else if (!nteFileData && (expFileData || expText)) {
@@ -1768,8 +1699,6 @@ export default function IncidentReportPanel({
     }
   };
 
-
-  // 3. Head Office Discretion 2A: Issue Notice of Warning
   const handleOpenWarningModal = (report) => {
     setSelectedReport(report);
     const dateFormatted = report.warningIssuedAt || new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
@@ -1901,7 +1830,6 @@ export default function IncidentReportPanel({
     }
   };
 
-  // 4. Head Office Discretion 2B: Notice of Investigation (NOI) with REQUIRED Zoom Meeting Schedule
   const handleOpenNoiModal = (report) => {
     setSelectedReport(report);
     const dateFormatted = report.noiIssuedAt || new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }).toUpperCase();
@@ -2043,7 +1971,6 @@ export default function IncidentReportPanel({
     }
   };
 
-  // 5. Post-NOI: Decision on Administrative Case
   const handleOpenAdminDecisionModal = (report) => {
     setSelectedReport(report);
     const dateFormatted = report.adminDecisionIssuedAt || "October 21, 2026";
@@ -2175,7 +2102,6 @@ export default function IncidentReportPanel({
     }
   };
 
-  // 6. Direct Case Closure (No file upload required for Decision)
   const executeCloseCaseDirectly = async (report) => {
     const timestampStr = new Date().toLocaleString("en-US", {
       month: "long",
@@ -2254,7 +2180,6 @@ export default function IncidentReportPanel({
     });
   };
 
-  // Purge test / mock data to start with pure live process
   const executeClearAllMockData = async () => {
     setIsTransmitting(true);
     setTransmittingMessage("Purging all incident reports and resetting database...");
@@ -2315,7 +2240,7 @@ export default function IncidentReportPanel({
     const updated = {
       ...selectedReport,
       ...updatedDraft,
-      status: "NTE_ISSUED", // NTE Approved by SGC Head Office and returned to Branch HR
+      status: "NTE_ISSUED",
       nteIssuedAt: new Date().toISOString(),
       activityLog: [
         ...(selectedReport.activityLog || []),
@@ -2337,7 +2262,6 @@ export default function IncidentReportPanel({
       setIsNteDraftModalOpen(false);
       setSelectedReport(updated);
 
-      // Voice announcement
       const announcement = `Approved and returned! Official Notice to Explain has been issued by Simpal Group of Companies Head Office and dispatched back to ${senderCompany} HR ${senderHrName}. Please serve the document to ${updated.employeeName}.`;
       playAiVoiceAnnouncement(announcement);
     } catch (err) {
@@ -2349,7 +2273,6 @@ export default function IncidentReportPanel({
     }
   };
 
-  // Subsidiary Company HR marks NTE as Served to Employee
   const handleServeNte = async (report) => {
     const senderComp = report.senderCompany || report.company || "Subsidiary Company";
     const senderHr = currentUser?.name || report.senderHrName || report.reportingHrName || "Area HR Admin";
@@ -2378,7 +2301,6 @@ export default function IncidentReportPanel({
       await loadRecords();
       if (selectedReport?.id === report.id) setSelectedReport(updated);
 
-      // Voice announcement
       const announcement = `Notice to Explain has been officially served to ${report.employeeName} by ${senderComp} HR. The one-working-day explanation period has commenced.`;
       playAiVoiceAnnouncement(announcement);
     } catch (err) {
@@ -2390,7 +2312,6 @@ export default function IncidentReportPanel({
     }
   };
 
-  // Log written explanation received from employee
   const handleLogExplanation = async (reportId, explanationText) => {
     const report = reports.find((r) => r.id === reportId);
     if (!report) return;
@@ -2420,7 +2341,6 @@ export default function IncidentReportPanel({
       await loadRecords();
       setIsExplanationModalOpen(false);
 
-      // Voice announcement
       const announcement = `Employee written explanation has been received and transmitted to Simpal Group of Companies Head Office for administrative ruling on case ${report.caseNumber}.`;
       playAiVoiceAnnouncement(announcement);
     } catch (err) {
@@ -2432,19 +2352,16 @@ export default function IncidentReportPanel({
     }
   };
 
-  // View Authentic NTE Document
   const handleViewNteDocument = (report) => {
     setSelectedReport(report);
     setIsNteViewerOpen(true);
   };
 
-  // View Authentic IR Document
   const handleViewIrDocument = (report) => {
     setSelectedReport(report);
     setIsIrViewerOpen(true);
   };
 
-  // Print Document Trigger: Dynamically supports IR, NTE, Notice of Warning, Notice of Investigation, and Decision of Administrative Case in Standard (A4), Short (Letter 8.5x11), Long (Folio 8.5x13), and Legal paper formats with guaranteed 1-Page Coupon Bond Fit
   const handlePrintDocument = (targetType = null) => {
     const isPrintingAdminDecision = targetType === "adminDecision" || (isAdminDecisionViewerOpen && !isIrViewerOpen && !isNteViewerOpen && !isWarningViewerOpen && !isNoiViewerOpen);
     const isPrintingNoi = targetType === "noi" || (isNoiViewerOpen && !isIrViewerOpen && !isNteViewerOpen && !isWarningViewerOpen && !isAdminDecisionViewerOpen);
@@ -2466,7 +2383,6 @@ export default function IncidentReportPanel({
     const isLegal = paperFormat === "LEGAL";
     const isLong = paperFormat === "LONG";
 
-    // Set exact page size for @page print rule (W3C CSS compliant length notation)
     const pageSize = isA4
       ? "A4 portrait"
       : isShort
@@ -2484,7 +2400,6 @@ export default function IncidentReportPanel({
       return;
     }
 
-    // Dynamic scale computation to fit exactly 1 coupon bond page without spill
     const targetHeightPx = isShort ? 1000 : isA4 ? 1070 : isLegal ? 1280 : 1190;
     const actualHeightPx = printableEl.scrollHeight || printableEl.offsetHeight || 920;
     
@@ -2496,7 +2411,6 @@ export default function IncidentReportPanel({
     }
     const printWidthPct = Number((100 / printScale).toFixed(2));
 
-    // Dedicated clean print iframe (isolates from screen modals, headers, and scrollbars)
     let iframe = document.getElementById("dedicated-hr-print-iframe");
     if (iframe) {
       try { document.body.removeChild(iframe); } catch (e) {}
@@ -2512,13 +2426,11 @@ export default function IncidentReportPanel({
     iframe.style.zIndex = "-9999";
     document.body.appendChild(iframe);
 
-    // Extract all styles (Tailwind, fonts, custom rules)
     const headStyles = Array.from(document.querySelectorAll("link[rel='stylesheet'], style"))
       .map((node) => node.outerHTML)
       .join("\n");
 
     const clonedEl = printableEl.cloneNode(true);
-    // Strip fixed screen heights so it flows naturally in the 1-page wrapper
     clonedEl.style.minHeight = "auto";
     clonedEl.style.height = "auto";
     clonedEl.style.maxHeight = "none";
@@ -2624,7 +2536,6 @@ export default function IncidentReportPanel({
         }, 4000);
       };
 
-      // Ensure images in iframe are fully loaded before printing
       const checkAndPrint = () => {
         const imgs = Array.from(iframeDoc.images || []);
         if (imgs.length === 0) {
@@ -2655,23 +2566,18 @@ export default function IncidentReportPanel({
     }
   };
 
-  // Pending counts for live hero indicators
   const pendingSgcReviewCount = reports.filter((r) => r.status === "SUBMITTED_TO_CENTRAL_HR").length;
   const nteReadyToServeCount = reports.filter((r) => r.status === "NTE_ISSUED").length;
   const activeDueProcessCount = reports.filter((r) => r.status === "SERVED_TO_EMPLOYEE").length;
 
   return (
     <div className="space-y-6">
-      {/* ========================================================================= */}
-      {/* 1. LOGGED-IN ACCOUNT IDENTITY & ROLE BANNER                                */}
-      {/* ========================================================================= */}
       <div className="rounded-2xl border border-slate-200 bg-white p-3.5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3">
         <div
           className="flex items-center gap-2.5 flex-wrap cursor-pointer select-none"
           onClick={handleSecretBadgeClick}
           title="Administrative Profile • (Tap 5 times or press Ctrl+Alt+C to toggle maintenance tools)"
         >
-          {/* Identity of Logged-In User */}
           <div className="flex items-center gap-1.5">
             <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">Signed In:</span>
             <span className="text-xs font-black text-slate-900 bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-200">
@@ -2681,7 +2587,6 @@ export default function IncidentReportPanel({
 
           <span className="text-xs text-slate-300 hidden sm:inline">•</span>
 
-          {/* Role Status Tag */}
           {effectiveRole.isHeadOffice ? (
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl font-black text-xs bg-emerald-100 text-emerald-900 border border-emerald-300 shadow-2xs">
               <Building2 size={13} className="text-emerald-700" />
@@ -2695,7 +2600,6 @@ export default function IncidentReportPanel({
           )}
         </div>
 
-        {/* Right side: Action button strictly corresponding to the logged-in account */}
         <div className="flex items-center gap-2 flex-wrap">
           {effectiveRole.isHeadOffice ? (
             <button
@@ -2730,7 +2634,6 @@ export default function IncidentReportPanel({
             <span className="hidden sm:inline">{isRefreshing ? "Syncing..." : "Sync Cloud"}</span>
           </button>
 
-          {/* Clean Process Button: HIDDEN BY DEFAULT. Unlocked via secret key (Ctrl+Alt+C or 5 clicks on Signed In badge) */}
           {showCleanProcessBtn && (
             <button
               type="button"
@@ -2745,11 +2648,7 @@ export default function IncidentReportPanel({
         </div>
       </div>
 
-      {/* ========================================================================= */}
-      {/* 2. DISTINCT HERO VIEWS: HEAD OFFICE (SGC) vs SUBSIDIARY BRANCH HR         */}
-      {/* ========================================================================= */}
       {effectiveRole.isHeadOffice ? (
-        /* ======================== HEAD OFFICE HRMD VIEW ======================== */
         <div className="bg-gradient-to-br from-emerald-900 via-slate-900 to-slate-950 text-white rounded-3xl p-6 shadow-xl border border-emerald-800/40 relative overflow-hidden">
           <div className="absolute right-0 top-0 translate-x-12 -translate-y-12 w-64 h-64 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
 
@@ -2784,7 +2683,6 @@ export default function IncidentReportPanel({
                 <span>{voiceMutedState ? "Voice Muted" : "Head Office AI Voice Active"}</span>
               </button>
 
-              {/* Simpal Group of Companies Action Button */}
               <button
                 type="button"
                 onClick={handleOpenDirectSgcNte}
@@ -2796,7 +2694,6 @@ export default function IncidentReportPanel({
             </div>
           </div>
 
-          {/* SGC Head Office Live Action Alert Banner */}
           {pendingSgcReviewCount > 0 && (
             <div className="mt-5 p-3.5 rounded-2xl bg-amber-500/20 border border-amber-400/40 text-amber-200 flex items-center justify-between gap-3 text-xs animate-in fade-in duration-300">
               <div className="flex items-center gap-2.5">
@@ -2824,7 +2721,6 @@ export default function IncidentReportPanel({
           )}
         </div>
       ) : (
-        /* ======================== SUBSIDIARY BRANCH HR VIEW ======================== */
         <div className="bg-gradient-to-br from-[#7ea741] via-[#8cb84a] to-[#55782a] text-white rounded-3xl p-6 shadow-xl relative overflow-hidden">
           <div className="absolute right-0 top-0 translate-x-12 -translate-y-12 w-64 h-64 bg-white/10 rounded-full blur-3xl pointer-events-none" />
 
@@ -2870,7 +2766,6 @@ export default function IncidentReportPanel({
             </div>
           </div>
 
-          {/* Branch HR Live Action Alert: When NTE is returned from Head Office */}
           {nteReadyToServeCount > 0 && (
             <div className="mt-5 p-3.5 rounded-2xl bg-white/20 backdrop-blur-sm border border-white/40 text-white flex items-center justify-between gap-3 text-xs animate-in fade-in duration-300">
               <div className="flex items-center gap-2.5">
@@ -2899,9 +2794,6 @@ export default function IncidentReportPanel({
         </div>
       )}
 
-      {/* ========================================================================= */}
-      {/* 3. PIPELINE METRIC CARDS                                                  */}
-      {/* ========================================================================= */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-2xs flex items-center gap-3">
           <div className="w-11 h-11 rounded-xl bg-slate-100 text-slate-700 flex items-center justify-center font-black">
@@ -2952,7 +2844,6 @@ export default function IncidentReportPanel({
         </div>
       </div>
 
-      {/* Filter Tabs & Search */}
       <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-xs flex flex-col md:flex-row items-center justify-between gap-3">
         <div className="flex items-center gap-1.5 overflow-x-auto w-full md:w-auto pb-1">
           {[
@@ -3041,9 +2932,6 @@ export default function IncidentReportPanel({
         </div>
       </div>
 
-      {/* ========================================================================= */}
-      {/* 4. ACTIVE CASE LIST (TAILORED TO ROLE)                                     */}
-      {/* ========================================================================= */}
       <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs">
         <div className="px-5 py-3.5 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
           <span className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2">
@@ -3106,10 +2994,8 @@ export default function IncidentReportPanel({
               const receiverComp = report.receiverCompany || "Simpal Group of Companies";
               const receiverHr = report.receiverHrName || report.assignedCentralHrName || "JEVINCE JAYE S. JUBAY, CHRP";
 
-              // Compute completed historical documents for this case (Step Dossier)
               const pastDossier = [];
 
-              // 1. Initial Incident Report (always completed once case moves past pending evaluation)
               if (!isPendingSgc) {
                 pastDossier.push({
                   id: "ir",
@@ -3123,7 +3009,6 @@ export default function IncidentReportPanel({
                 });
               }
 
-              // Check actual completion of each due process instrument
               const hasActualAdminDecision = Boolean(
                 report.status === "ADMIN_DECISION_ISSUED" ||
                 (report.adminDecisionIssuedAt && (report.adminDecisionPenalty || report.adminDecisionSanction || report.adminDecisionSubject))
@@ -3162,7 +3047,6 @@ export default function IncidentReportPanel({
                 hasActualAdminDecision
               );
 
-              // 2. Official Notice to Explain (NTE)
               if (hasActualNte && !isNteIssued && !isServed) {
                 pastDossier.push({
                   id: "nte",
@@ -3176,7 +3060,6 @@ export default function IncidentReportPanel({
                 });
               }
 
-              // 3. Signed NTE & Employee Written Explanation
               if (hasActualExplanation && (hasActualWarning || hasActualNoi || hasActualAdminDecision || isClosed)) {
                 pastDossier.push({
                   id: "explanation",
@@ -3193,7 +3076,6 @@ export default function IncidentReportPanel({
                 });
               }
 
-              // 4. Notice of Investigation (if NOI was conducted and case moved forward)
               if (hasActualNoi && (hasActualAdminDecision || isClosed)) {
                 pastDossier.push({
                   id: "noi",
@@ -3207,7 +3089,6 @@ export default function IncidentReportPanel({
                 });
               }
 
-              // 5. Notice of Warning (if warning was issued and case is archived/closed)
               if (hasActualWarning && isClosed) {
                 pastDossier.push({
                   id: "warning",
@@ -3221,7 +3102,6 @@ export default function IncidentReportPanel({
                 });
               }
 
-              // 6. Decision of Administrative Case (ONLY if decision actually proceeded and was issued!)
               if (hasActualAdminDecision && isClosed) {
                 pastDossier.push({
                   id: "adminDecision",
@@ -3235,7 +3115,6 @@ export default function IncidentReportPanel({
                 });
               }
 
-              // Compute accurate Due Process Level:
               let currentLevelNumber = 1;
               if (hasActualAdminDecision || isAdminDecision) {
                 currentLevelNumber = 5;
@@ -3261,23 +3140,18 @@ export default function IncidentReportPanel({
                         ? 40
                         : 20;
 
-              // Level 1: Incident Filing (IR)
               const isLv1Done = !isPendingSgc || isClosed;
               const isLv1Active = isPendingSgc && !isClosed;
 
-              // Level 2: Notice to Explain (NTE)
               const isLv2Done = hasActualNte && !isNteIssued && !isServed;
               const isLv2Active = (isNteIssued || isServed) && !isClosed;
 
-              // Level 3: Explanation & Evidence
               const isLv3Done = hasActualExplanation && (hasActualWarning || hasActualNoi || hasActualAdminDecision || (isClosed && !isNteAcknowledged && !isExplanation));
               const isLv3Active = (isNteAcknowledged || isExplanation) && !isClosed;
 
-              // Level 4: Investigation / Hearing / Warning
               const isLv4Done = hasActualWarning || hasActualNoi || hasActualAdminDecision;
               const isLv4Active = (isWarning || isNoi) && !isClosed;
 
-              // Level 5: Administrative Decision & Closure
               const isLv5Done = hasActualAdminDecision && isClosed;
               const isLv5Active = isAdminDecision && !isClosed;
 
@@ -3286,11 +3160,7 @@ export default function IncidentReportPanel({
                   key={report.id}
                   className="p-4 sm:p-5 hover:bg-slate-50/60 transition flex flex-col xl:flex-row items-stretch justify-between gap-5 relative border-b border-slate-100 last:border-b-0"
                 >
-                  {/* ========================================================================= */}
-                  {/* ZONE 1 (LEFT ~60%): EMPLOYEE, INCIDENT DETAILS & SENDER-RECEIVER ROUTING  */}
-                  {/* ========================================================================= */}
                   <div className="space-y-3 flex-1 min-w-0 pr-0 xl:pr-3">
-                    {/* Header Row: Case ID, Entity Tag, AI Voice & Status Badge */}
                     <div className="flex items-center gap-2 flex-wrap">
                       <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg bg-slate-900 text-white shadow-2xs">
                         <span className="font-mono text-xs font-bold tracking-wide">
@@ -3333,7 +3203,6 @@ export default function IncidentReportPanel({
                         </button>
                       </div>
 
-                      {/* Entity Branding Badge */}
                       <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-slate-100 text-slate-800 border border-slate-200">
                         <img
                           src={getPaperLogo(report.company || senderComp)}
@@ -3344,7 +3213,6 @@ export default function IncidentReportPanel({
                         <span className="text-[11px] font-bold text-slate-800">{report.company || senderComp}</span>
                       </div>
 
-                      {/* Due Process Stage Capsule */}
                       <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold border ${
                         isClosed
                           ? "bg-emerald-50 text-emerald-800 border-emerald-300"
@@ -3406,7 +3274,6 @@ export default function IncidentReportPanel({
                       </span>
                     </div>
 
-                    {/* Employee Profile Header */}
                     <div>
                       <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
                         <span>{report.employeeName}</span>
@@ -3439,7 +3306,6 @@ export default function IncidentReportPanel({
                         )}
                       </p>
 
-                      {/* Transmitted Incident Details Preview */}
                       {(report.specificFindings || report.specific_findings || report.fullIncidentNarrative) && (
                         <div className="mt-2 p-3 rounded-xl bg-slate-50 border border-slate-200/90 text-xs text-slate-700 leading-relaxed">
                           <span className="font-extrabold text-[10px] uppercase tracking-wider text-slate-500 block mb-0.5">
@@ -3452,7 +3318,6 @@ export default function IncidentReportPanel({
                       )}
                     </div>
 
-                    {/* Sender vs Receiver Routing Bar */}
                     <div className="flex items-center gap-2 flex-wrap text-xs pt-0.5">
                       <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700 border border-slate-200">
                         <span className="font-bold text-[10px] uppercase tracking-wider text-slate-500">ORIGIN:</span>
@@ -3470,12 +3335,8 @@ export default function IncidentReportPanel({
                     </div>
                   </div>
 
-                  {/* ========================================================================= */}
-                  {/* ZONE 2 (RIGHT ~40%): DUE PROCESS LEVELS VISUAL TIMELINE & ACTION DOCK      */}
-                  {/* ========================================================================= */}
                   <div className="w-full xl:w-[410px] 2xl:w-[450px] shrink-0 bg-white rounded-2xl border border-slate-200/90 shadow-xs p-3.5 sm:p-4 flex flex-col justify-between self-stretch">
                     <div>
-                      {/* Box Header: Pipeline Title & Level Counter */}
                       <div className="flex items-center justify-between gap-2 mb-2 pb-2 border-b border-slate-100">
                         <div className="flex items-center gap-1.5">
                           <Scale size={14} className="text-slate-800" />
@@ -3508,7 +3369,6 @@ export default function IncidentReportPanel({
                         </span>
                       </div>
 
-                      {/* Visual Progress Bar */}
                       <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden mb-3 border border-slate-200/60">
                         <div
                           className={`h-full transition-all duration-500 rounded-full ${
@@ -3528,9 +3388,7 @@ export default function IncidentReportPanel({
                         />
                       </div>
 
-                      {/* 5-Level Vertical Timeline */}
                       <div className="relative pl-6 space-y-2.5 before:absolute before:left-[10px] before:top-2 before:bottom-2 before:w-[2px] before:bg-slate-200">
-                        {/* Level 1: Incident Filing */}
                         <div className="relative flex items-center justify-between gap-2">
                           <div className={`absolute -left-6 top-0.5 w-[22px] h-[22px] rounded-full flex items-center justify-center text-[10px] font-black border transition ${
                             isLv1Done
@@ -3560,7 +3418,6 @@ export default function IncidentReportPanel({
                           </button>
                         </div>
 
-                        {/* Level 2: Notice to Explain (NTE) */}
                         <div className="relative flex items-center justify-between gap-2">
                           <div className={`absolute -left-6 top-0.5 w-[22px] h-[22px] rounded-full flex items-center justify-center text-[10px] font-black border transition ${
                             isLv2Done
@@ -3612,7 +3469,6 @@ export default function IncidentReportPanel({
                           )}
                         </div>
 
-                        {/* Level 3: Explanation & Evidence */}
                         <div className="relative flex items-center justify-between gap-2">
                           <div className={`absolute -left-6 top-0.5 w-[22px] h-[22px] rounded-full flex items-center justify-center text-[10px] font-black border transition ${
                             isLv3Done
@@ -3667,7 +3523,6 @@ export default function IncidentReportPanel({
                           )}
                         </div>
 
-                        {/* Level 4: Investigation / Hearing / Warning */}
                         <div className="relative flex items-center justify-between gap-2">
                           <div className={`absolute -left-6 top-0.5 w-[22px] h-[22px] rounded-full flex items-center justify-center text-[10px] font-black border transition ${
                             isLv4Done
@@ -3751,7 +3606,6 @@ export default function IncidentReportPanel({
                           )}
                         </div>
 
-                        {/* Level 5: Administrative Decision & Closure */}
                         <div className="relative flex items-center justify-between gap-2">
                           <div className={`absolute -left-6 top-0.5 w-[22px] h-[22px] rounded-full flex items-center justify-center text-[10px] font-black border transition ${
                             isLv5Done
@@ -3817,16 +3671,12 @@ export default function IncidentReportPanel({
                       </div>
                     </div>
 
-                    {/* ========================================================================= */}
-                    {/* BOTTOM ACTION DOCK: ROLE-AWARE ACTIONS FOR CURRENT ACTIVE STAGE           */}
-                    {/* ========================================================================= */}
                     <div className="mt-3.5 pt-3 border-t border-slate-100 space-y-2">
                       <div className="flex items-center justify-between text-[10px] font-extrabold uppercase tracking-wider text-slate-500">
                         <span>Current Stage Action:</span>
                         <span className="text-slate-400 font-mono text-[9px]">{report.caseNumber}</span>
                       </div>
 
-                      {/* 1. STAGE: PENDING SGC EVALUATION */}
                       {isPendingSgc && (
                         <div className="space-y-1.5">
                           {effectiveRole.isHeadOffice ? (
@@ -3879,7 +3729,6 @@ export default function IncidentReportPanel({
                         </div>
                       )}
 
-                      {/* 2. STAGE: FILED FOR RECORD ONLY */}
                       {isFiledForRecord && (
                         <button
                           type="button"
@@ -3897,7 +3746,6 @@ export default function IncidentReportPanel({
                         </button>
                       )}
 
-                      {/* 3. STAGE: NTE ISSUED / SERVED */}
                       {(isNteIssued || isServed) && (
                         <div className="space-y-1.5">
                           <button
@@ -3909,7 +3757,6 @@ export default function IncidentReportPanel({
                             <span>View Official NTE Document</span>
                           </button>
 
-                          {/* Branch HR Upload Submissions */}
                           {!effectiveRole.isHeadOffice && (!report.hasSignedNteProof || !report.hasExplanationProof) && (
                             <button
                               type="button"
@@ -3936,7 +3783,6 @@ export default function IncidentReportPanel({
                         </div>
                       )}
 
-                      {/* 4. STAGE: EXPLANATION SUBMITTED */}
                       {isExplanation && (
                         <div className="space-y-1.5">
                           <button
@@ -3984,7 +3830,6 @@ export default function IncidentReportPanel({
                         </div>
                       )}
 
-                      {/* 5. STAGE: NOTICE OF WARNING ISSUED */}
                       {isWarning && (
                         <div className="space-y-1.5">
                           <button
@@ -4021,7 +3866,6 @@ export default function IncidentReportPanel({
                         </div>
                       )}
 
-                      {/* 6. STAGE: NOTICE OF INVESTIGATION (NOI) */}
                       {isNoi && (
                         <div className="space-y-1.5">
                           <button
@@ -4074,10 +3918,8 @@ export default function IncidentReportPanel({
                         </div>
                       )}
 
-                      {/* 7. STAGE: DECISION ON ADMINISTRATIVE CASE ISSUED */}
                       {isAdminDecision && (
                         <div className="space-y-1.5">
-                          {/* Primary View & Print button */}
                           <button
                             type="button"
                             onClick={() => handleViewAdminDecisionDocument(report)}
@@ -4101,7 +3943,6 @@ export default function IncidentReportPanel({
                               </button>
                             )}
 
-                            {/* Direct Close & Archive Case without file upload */}
                             <button
                               type="button"
                               onClick={() => handleCloseCaseDirectly(report)}
@@ -4115,7 +3956,6 @@ export default function IncidentReportPanel({
                         </div>
                       )}
 
-                      {/* 8. STAGE: CASE CLOSED */}
                       {isClosed && (
                         <div className="space-y-1.5">
                           {hasActualAdminDecision ? (
@@ -4171,9 +4011,6 @@ export default function IncidentReportPanel({
         )}
       </div>
 
-      {/* ========================================================================= */}
-      {/* MODAL 0: ROLE PERMISSION MATRIX MODAL                                     */}
-      {/* ========================================================================= */}
       {isPermissionMatrixOpen && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-3 md:p-6 overflow-y-auto">
           <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-5xl w-full max-h-[92vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
@@ -4342,13 +4179,9 @@ export default function IncidentReportPanel({
         </div>
       )}
 
-      {/* ========================================================================= */}
-      {/* MODAL 1: CREATE NEW INCIDENT REPORT (Subsidiary HR -> SGC HRMD)            */}
-      {/* ========================================================================= */}
       {isCreateModalOpen && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 md:p-6 overflow-y-auto">
           <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-5xl w-full max-h-[94vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-            {/* Top Green Banner */}
             <div className="bg-[#96c158] text-white px-6 py-4 flex items-center justify-between shrink-0 shadow-sm">
               <div className="flex items-center gap-3">
                 <img
@@ -4374,9 +4207,7 @@ export default function IncidentReportPanel({
               </button>
             </div>
 
-            {/* Modal Form Content */}
             <form onSubmit={handleSubmitIrToCentralHr} className="flex-1 overflow-y-auto p-5 sm:p-8 space-y-7 custom-scrollbar bg-slate-50/30">
-              {/* SENDER & RECEIVER DIRECTORY ROUTING BOX */}
               <div className="p-4 rounded-xl border border-emerald-200 bg-emerald-50/50 space-y-3">
                 <div className="text-[11px] font-black uppercase tracking-wider text-emerald-800 flex items-center gap-2">
                   <Briefcase size={14} className="text-emerald-600" />
@@ -4384,7 +4215,6 @@ export default function IncidentReportPanel({
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-                  {/* SENDER COMPANY */}
                   <div className="p-3 rounded-lg bg-white border border-slate-200">
                     <label className="block text-[10px] font-black uppercase tracking-wide text-slate-500 mb-1">
                       1. SENDER: Originating Company
@@ -4405,7 +4235,6 @@ export default function IncidentReportPanel({
                     </div>
                   </div>
 
-                  {/* RECEIVER: SGC */}
                   <div className="p-3 rounded-lg bg-white border border-emerald-300">
                     <label className="block text-[10px] font-black uppercase tracking-wide text-emerald-700 mb-1">
                       2. RECEIVER: Head Office Notice to Explain (NTE) Authority
@@ -4422,7 +4251,6 @@ export default function IncidentReportPanel({
                 </div>
               </div>
 
-              {/* SECTION 1: EMPLOYEE INFORMATION */}
               <div className="space-y-4">
                 <div className="bg-[#153459] text-white px-4 py-2 rounded-xl font-black text-xs uppercase tracking-wider flex items-center gap-2">
                   <User size={15} />
@@ -4431,7 +4259,6 @@ export default function IncidentReportPanel({
 
                 <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-3.5">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                    {/* FULL NAME */}
                     <div>
                       <label className="block text-[11px] font-extrabold uppercase tracking-wide text-slate-700 mb-1">
                         FULL NAME <span className="text-rose-600">*</span>
@@ -4449,7 +4276,6 @@ export default function IncidentReportPanel({
                       </div>
                     </div>
 
-                    {/* EMPLOYEE ID */}
                     <div>
                       <label className="block text-[11px] font-extrabold uppercase tracking-wide text-slate-700 mb-1">
                         EMPLOYEE ID
@@ -4465,7 +4291,6 @@ export default function IncidentReportPanel({
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                    {/* DEPARTMENT / UNIT */}
                     <div>
                       <label className="block text-[11px] font-extrabold uppercase tracking-wide text-slate-700 mb-1">
                         DEPARTMENT / UNIT
@@ -4482,7 +4307,6 @@ export default function IncidentReportPanel({
                       </div>
                     </div>
 
-                    {/* POSITION */}
                     <div>
                       <label className="block text-[11px] font-extrabold uppercase tracking-wide text-slate-700 mb-1">
                         POSITION
@@ -4498,7 +4322,6 @@ export default function IncidentReportPanel({
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                    {/* AREA / BRANCH */}
                     <div>
                       <label className="block text-[11px] font-extrabold uppercase tracking-wide text-slate-700 mb-1">
                         AREA / BRANCH
@@ -4515,7 +4338,6 @@ export default function IncidentReportPanel({
                       </div>
                     </div>
 
-                    {/* PHONE NUMBER */}
                     <div>
                       <label className="block text-[11px] font-extrabold uppercase tracking-wide text-slate-700 mb-1">
                         PHONE NUMBER
@@ -4535,7 +4357,6 @@ export default function IncidentReportPanel({
                 </div>
               </div>
 
-              {/* SECTION 2: INCIDENT DETAILS */}
               <div className="space-y-4 pt-1">
                 <div className="bg-[#153459] text-white px-4 py-2 rounded-xl font-black text-xs uppercase tracking-wider flex items-center gap-2">
                   <FileText size={15} />
@@ -4543,7 +4364,6 @@ export default function IncidentReportPanel({
                 </div>
 
                 <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-4">
-                  {/* Date of Incident & Type of Incident (Location removed to avoid redundancy) */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                     <div>
                       <label className="block text-[11px] font-extrabold uppercase tracking-wide text-slate-700 mb-1">
@@ -4588,7 +4408,6 @@ export default function IncidentReportPanel({
                     </div>
                   </div>
 
-                  {/* Factual Description of the Incident */}
                   <div>
                     <label className="block text-[11px] font-extrabold uppercase tracking-wide text-slate-700 mb-1">
                       FACTUAL DESCRIPTION OF THE INCIDENT <span className="text-rose-600">*</span>
@@ -4606,7 +4425,6 @@ export default function IncidentReportPanel({
                     </p>
                   </div>
 
-                  {/* Witnesses (if any) */}
                   <div>
                     <label className="block text-[11px] font-extrabold uppercase tracking-wide text-slate-700 mb-1">
                       WITNESSES (IF ANY)
@@ -4622,7 +4440,6 @@ export default function IncidentReportPanel({
                 </div>
               </div>
 
-              {/* SECTION 3: VIOLATION (Exact Corporate Layout) */}
               <div className="space-y-4 pt-1">
                 <div
                   className="bg-[#c81e1e] text-white px-4 py-2 font-black text-xs uppercase tracking-wider flex items-center gap-2 rounded-t-xl"
@@ -4638,7 +4455,6 @@ export default function IncidentReportPanel({
                   </p>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3.5">
-                    {/* Column 1 */}
                     <div className="space-y-2.5 p-3 rounded-xl bg-white/80 border border-rose-100">
                       {[
                         "Company Policies and Procedures",
@@ -4662,7 +4478,6 @@ export default function IncidentReportPanel({
                       })}
                     </div>
 
-                    {/* Column 2 */}
                     <div className="space-y-2.5 p-3 rounded-xl bg-white/80 border border-rose-100">
                       {[
                         "Cash Handling / Collection",
@@ -4686,7 +4501,6 @@ export default function IncidentReportPanel({
                       })}
                     </div>
 
-                    {/* Column 3: Other & Remarks */}
                     <div className="space-y-3 p-3 rounded-xl bg-white/80 border border-rose-100">
                       <div>
                         <label className="text-[11px] font-bold text-slate-700 block mb-1">
@@ -4718,7 +4532,6 @@ export default function IncidentReportPanel({
                 </div>
               </div>
 
-              {/* SECTION 4: ATTACHMENTS / EVIDENCE */}
               <div className="space-y-4 pt-1">
                 <div className="bg-[#153459] text-white px-4 py-2 rounded-xl font-black text-xs uppercase tracking-wider flex items-center gap-2">
                   <Paperclip size={15} />
@@ -4727,7 +4540,6 @@ export default function IncidentReportPanel({
 
                 <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-3">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {/* Column 1 */}
                     <div className="space-y-2.5">
                       {[
                         "Photos (if any)",
@@ -4750,7 +4562,6 @@ export default function IncidentReportPanel({
                       })}
                     </div>
 
-                    {/* Column 2 */}
                     <div>
                       <label className="block text-[11px] font-bold text-slate-700 mb-1">
                         Other (please specify)
@@ -4767,7 +4578,6 @@ export default function IncidentReportPanel({
                 </div>
               </div>
 
-              {/* PREPARER & OPERATIONS MANAGER E-SIGNATURE UPLOAD SECTION */}
               <div className="space-y-4 pt-2">
                 <div className="text-center">
                   <h3 className="text-sm font-extrabold uppercase tracking-wider text-slate-800 flex items-center justify-center gap-2">
@@ -4781,7 +4591,6 @@ export default function IncidentReportPanel({
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* 1. PREPARED BY (Branch HR / Originator) */}
                   <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-3">
                     <div className="flex items-center justify-between">
                       <label className="text-[11px] font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
@@ -4814,7 +4623,6 @@ export default function IncidentReportPanel({
 
                     {irForm.preparerSignature ? (
                       <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex flex-col items-center relative group">
-                        {/* Live Scaled Signature Preview */}
                         <div className="h-20 w-full flex items-center justify-center overflow-hidden bg-white/70 rounded-lg border border-dashed border-slate-200 p-1">
                           <img
                             src={irForm.preparerSignature}
@@ -4827,7 +4635,6 @@ export default function IncidentReportPanel({
                           />
                         </div>
 
-                        {/* Interactive E-Sig Size Controls */}
                         <div className="w-full flex items-center justify-between gap-1 mt-2.5 pt-2 border-t border-slate-200">
                           <div className="flex items-center gap-1.5">
                             <span className="text-[10px] font-extrabold uppercase text-slate-500">Size:</span>
@@ -4858,7 +4665,6 @@ export default function IncidentReportPanel({
                             </button>
                           </div>
 
-                          {/* Quick Scale Presets */}
                           <div className="flex items-center gap-1">
                             {[1.0, 1.3, 1.6].map(scale => (
                               <button
@@ -4899,7 +4705,6 @@ export default function IncidentReportPanel({
                     )}
                   </div>
 
-                  {/* 2. OPERATIONS MANAGER / MANAGER */}
                   <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-3">
                     <div className="flex items-center justify-between">
                       <label className="text-[11px] font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
@@ -4932,7 +4737,6 @@ export default function IncidentReportPanel({
 
                     {irForm.operationsManagerSignature ? (
                       <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex flex-col items-center relative group">
-                        {/* Live Scaled Signature Preview */}
                         <div className="h-20 w-full flex items-center justify-center overflow-hidden bg-white/70 rounded-lg border border-dashed border-slate-200 p-1">
                           <img
                             src={irForm.operationsManagerSignature}
@@ -4945,7 +4749,6 @@ export default function IncidentReportPanel({
                           />
                         </div>
 
-                        {/* Interactive E-Sig Size Controls */}
                         <div className="w-full flex items-center justify-between gap-1 mt-2.5 pt-2 border-t border-slate-200">
                           <div className="flex items-center gap-1.5">
                             <span className="text-[10px] font-extrabold uppercase text-slate-500">Size:</span>
@@ -4976,7 +4779,6 @@ export default function IncidentReportPanel({
                             </button>
                           </div>
 
-                          {/* Quick Scale Presets */}
                           <div className="flex items-center gap-1">
                             {[1.0, 1.3, 1.6].map(scale => (
                               <button
@@ -5018,7 +4820,6 @@ export default function IncidentReportPanel({
                   </div>
                 </div>
 
-                {/* Save Signatories as Default Action Bar */}
                 <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-3.5 bg-emerald-50/90 border border-emerald-200 rounded-xl mt-2">
                   <div className="flex items-center gap-2">
                     <CheckCircle2 size={16} className="text-emerald-600 shrink-0" />
@@ -5042,7 +4843,6 @@ export default function IncidentReportPanel({
                 </div>
               </div>
 
-              {/* SECTION 3: FOR OFFICIAL USE ONLY (Head Office Only) */}
               {effectiveRole.isHeadOffice && (
                 <div className="space-y-4 pt-2">
                   <div className="text-center">
@@ -5053,7 +4853,6 @@ export default function IncidentReportPanel({
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* REPORT RECEIVED BY (SGC Head Office) */}
                     <div className="p-3 rounded-xl bg-[#eef7e5] border border-[#d8eac2]">
                       <label className="block text-[10px] font-extrabold uppercase tracking-wide text-[#55782a] mb-1">
                         REPORT RECEIVED BY (SGC HEAD OFFICE HRMD)
@@ -5069,7 +4868,6 @@ export default function IncidentReportPanel({
                       </div>
                     </div>
 
-                    {/* DATE */}
                     <div className="p-3 rounded-xl bg-[#eef7e5] border border-[#d8eac2]">
                       <label className="block text-[10px] font-extrabold uppercase tracking-wide text-[#55782a] mb-1">
                         DATE RECEIVED
@@ -5097,13 +4895,11 @@ export default function IncidentReportPanel({
                 </div>
               )}
 
-              {/* Bottom Green Banner */}
               <div className="bg-[#96c158] text-white py-2.5 px-4 rounded-xl text-center shadow-xs">
                 <p className="text-xs font-black uppercase tracking-wider">{irForm.company}</p>
                 <p className="text-[10px] text-white/90">Employee Incident Report</p>
               </div>
 
-              {/* Modal Actions */}
               <div className="pt-2 flex items-center justify-end gap-3 shrink-0">
                 <button
                   type="button"
@@ -5125,13 +4921,9 @@ export default function IncidentReportPanel({
         </div>
       )}
 
-      {/* ========================================================================= */}
-      {/* MODAL 2: AUTHENTIC INCIDENT REPORT (IR) DOCUMENT VIEWER & PRINT           */}
-      {/* ========================================================================= */}
       {isIrViewerOpen && selectedReport && (
         <div className="fixed inset-0 z-50 bg-slate-900/75 backdrop-blur-sm flex items-start justify-center p-2 sm:p-4 md:p-6 overflow-y-auto">
           <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-6xl w-full h-[95vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200 my-auto">
-            {/* Modal Controls Bar - COMPLETELY HIDDEN WHEN PRINTING */}
             <div className="px-5 py-2.5 border-b border-slate-200 bg-slate-50 flex flex-wrap items-center justify-between gap-3 shrink-0 no-print shadow-2xs">
               <div className="flex flex-wrap items-center gap-2.5">
                 <span className="font-mono text-xs font-black bg-slate-900 text-white px-2.5 py-1 rounded-md shadow-2xs">
@@ -5141,7 +4933,6 @@ export default function IncidentReportPanel({
                   Official Incident Report Form
                 </span>
 
-                {/* Seamless Format Toggle (Short / Standard A4 / Long / Legal) */}
                 <div className="flex items-center bg-slate-200/90 p-0.5 rounded-lg text-xs font-semibold ml-1">
                   <button
                     type="button"
@@ -5185,7 +4976,6 @@ export default function IncidentReportPanel({
                   </button>
                 </div>
 
-                {/* 1-Page Auto-Fit Active Indicator */}
                 <span className="hidden xl:inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
                   Auto 1-Page Fit ({irPaperFormat === "SHORT" ? "Short: 8.5×11in" : irPaperFormat === "LONG" ? "Long: 8.5×13in" : irPaperFormat === "A4" ? "A4: 210×297mm" : "Legal: 8.5×14in"})
@@ -5193,7 +4983,6 @@ export default function IncidentReportPanel({
               </div>
 
               <div className="flex items-center gap-2">
-                {/* Voice speech */}
                 <button
                   type="button"
                   onClick={() => {
@@ -5207,7 +4996,6 @@ export default function IncidentReportPanel({
                   <span>Listen</span>
                 </button>
 
-                {/* Direct Close & Archive Case button */}
                 <button
                   type="button"
                   onClick={() => {
@@ -5221,7 +5009,6 @@ export default function IncidentReportPanel({
                   <span>Close Case</span>
                 </button>
 
-                {/* Print button */}
                 <button
                   type="button"
                   onClick={() => handlePrintDocument("ir")}
@@ -5241,7 +5028,6 @@ export default function IncidentReportPanel({
               </div>
             </div>
 
-            {/* Authentic Printable Document Container */}
             <div className="flex-1 min-h-0 overflow-auto p-3 sm:p-6 pb-12 bg-slate-200/80 flex justify-center items-start custom-scrollbar">
               <div
                 id="printable-incident-report-sheet"
@@ -5261,7 +5047,6 @@ export default function IncidentReportPanel({
                       : "p-5 sm:p-7"
                   }`}
               >
-                {/* Top Right Corner Geometric Diagonal Stripes */}
                 <div className="absolute top-0 right-0 w-28 h-20 sm:w-32 sm:h-24 pointer-events-none overflow-hidden">
                   <svg className="w-full h-full" viewBox="0 0 144 112" fill="none">
                     <polygon points="60,0 144,0 144,84" fill="#0f2b48" />
@@ -5270,7 +5055,6 @@ export default function IncidentReportPanel({
                   </svg>
                 </div>
 
-                {/* Background Watermark */}
                 <div className="absolute inset-0 flex items-center justify-center opacity-[0.035] pointer-events-none select-none">
                   <img src={getPaperLogo(selectedReport?.senderCompany || selectedReport?.company)} alt="watermark" className="w-[110mm] max-w-[400px] h-auto object-contain" />
                 </div>
@@ -5281,11 +5065,7 @@ export default function IncidentReportPanel({
                     ? "space-y-2 sm:space-y-2.5"
                     : "space-y-2.5 sm:space-y-3"
                   }`}>
-                  {/* ============================================================== */}
-                  {/* HEADER SECTION: LOGO + TITLE + REPORT NO / DATE FILED BOX      */}
-                  {/* ============================================================== */}
                   <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 pb-2 border-b border-slate-200">
-                    {/* Left: Company Logo & Branding */}
                     <div className="flex items-center gap-2.5 sm:gap-3">
                       <img
                         src={getPaperLogo(selectedReport?.senderCompany || selectedReport?.company)}
@@ -5305,7 +5085,6 @@ export default function IncidentReportPanel({
                       </div>
                     </div>
 
-                    {/* Center: Main Title Block */}
                     <div className="border-l-2 border-[#0f2b48] pl-2.5 sm:pl-3.5 my-auto">
                       <h1 className={`${irPaperFormat === "SHORT" ? "text-base sm:text-lg" : "text-lg sm:text-xl"} font-black uppercase tracking-wider text-[#0f2b48] leading-none`}>
                         INCIDENT REPORT
@@ -5318,7 +5097,6 @@ export default function IncidentReportPanel({
                       </p>
                     </div>
 
-                    {/* Right: Report No. & Date Filed Box */}
                     <div className={`bg-[#f0f4f9] border border-[#d2e0ee] rounded-md ${irPaperFormat === "SHORT" ? "p-1.5 min-w-[155px]" : "p-2 min-w-[165px]"} text-[10.5px] font-semibold text-slate-800 space-y-0.5 shrink-0 self-start sm:self-center`}>
                       <div className="flex items-center gap-1.5">
                         <span className="text-[9px] uppercase font-bold text-slate-500 min-w-[62px]">Report No. :</span>
@@ -5335,7 +5113,6 @@ export default function IncidentReportPanel({
                     </div>
                   </div>
 
-                  {/* Official Head Office Transmittal & Contact Routing Strip */}
                   <div className={`bg-[#f0f4f9] border border-[#d2e0ee] rounded-md ${irPaperFormat === "SHORT" ? "px-2.5 py-1 text-[9.5px]" : "px-3 py-1.5 text-[10px]"} flex flex-wrap items-center justify-between gap-1.5`}>
                     <div className="flex items-center gap-1.5 text-slate-700">
                       <span className="font-extrabold text-[#0f2b48] uppercase tracking-wide">Transmitted to Head Office HRMD:</span>
@@ -5353,9 +5130,6 @@ export default function IncidentReportPanel({
                     </span>
                   </div>
 
-                  {/* ============================================================== */}
-                  {/* 1. EMPLOYEE INFORMATION                                        */}
-                  {/* ============================================================== */}
                   <div className="space-y-0">
                     <div className="bg-[#153459] text-white px-2.5 py-0.5 rounded-t-md font-black text-[10.5px] uppercase tracking-wider flex items-center gap-1.5">
                       <User size={12} className="text-white" />
@@ -5364,7 +5138,6 @@ export default function IncidentReportPanel({
 
                     <div className={`bg-[#f4f7fb] border border-t-0 border-[#d0dbe7] rounded-b-md ${irPaperFormat === "SHORT" ? "p-2 text-[10px]" : "p-2.5 sm:p-3 text-[10.5px]"}`}>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-1">
-                        {/* Left Column */}
                         <div className="space-y-1">
                           <div className="flex items-center gap-2">
                             <span className="text-[9.5px] font-semibold text-slate-700 min-w-[75px]">Full Name :</span>
@@ -5386,7 +5159,6 @@ export default function IncidentReportPanel({
                           </div>
                         </div>
 
-                        {/* Right Column */}
                         <div className="space-y-1">
                           <div className="flex items-center gap-2">
                             <span className="text-[9.5px] font-semibold text-slate-700 min-w-[95px]">Department / Unit :</span>
@@ -5405,9 +5177,6 @@ export default function IncidentReportPanel({
                     </div>
                   </div>
 
-                  {/* ============================================================== */}
-                  {/* 2. INCIDENT DETAILS                                            */}
-                  {/* ============================================================== */}
                   <div className="space-y-0">
                     <div className="bg-[#153459] text-white px-2.5 py-0.5 rounded-t-md font-black text-[10.5px] uppercase tracking-wider flex items-center gap-1.5">
                       <FileText size={12} className="text-white" />
@@ -5415,7 +5184,6 @@ export default function IncidentReportPanel({
                     </div>
 
                     <div className={`bg-[#f4f7fb] border border-t-0 border-[#d0dbe7] rounded-b-md ${irPaperFormat === "SHORT" ? "p-2 space-y-1.5 text-[10px]" : "p-2.5 sm:p-3 space-y-2 text-[10.5px]"}`}>
-                      {/* Row 1: Date of Incident & Type of Incident */}
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                         <div className="flex items-center gap-1.5">
                           <Calendar size={12} className="text-[#153459] shrink-0" />
@@ -5434,7 +5202,6 @@ export default function IncidentReportPanel({
                         </div>
                       </div>
 
-                      {/* Row 2: Factual Description of the Incident */}
                       <div className="space-y-0.5">
                         <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-800">
                           <FileText size={11} className="text-[#153459]" />
@@ -5451,7 +5218,6 @@ export default function IncidentReportPanel({
                         </div>
                       </div>
 
-                      {/* Row 3: Witnesses (if any) */}
                       <div className="space-y-0.5">
                         <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-800">
                           <Users size={11} className="text-[#153459]" />
@@ -5470,9 +5236,6 @@ export default function IncidentReportPanel({
                     </div>
                   </div>
 
-                  {/* ============================================================== */}
-                  {/* 3. VIOLATION (Exact Corporate Look)                            */}
-                  {/* ============================================================== */}
                   <div className="space-y-0">
                     <div className="flex items-center">
                       <div
@@ -5490,7 +5253,6 @@ export default function IncidentReportPanel({
                       </p>
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 pt-0.5">
-                        {/* Column 1 */}
                         <div className="space-y-1">
                           {[
                             "Company Policies and Procedures",
@@ -5512,7 +5274,6 @@ export default function IncidentReportPanel({
                           })}
                         </div>
 
-                        {/* Column 2 */}
                         <div className="space-y-1">
                           {[
                             "Cash Handling / Collection",
@@ -5534,7 +5295,6 @@ export default function IncidentReportPanel({
                           })}
                         </div>
 
-                        {/* Column 3: Other & Remarks */}
                         <div className="space-y-1 border-t md:border-t-0 md:border-l border-rose-200 pt-1 md:pt-0 md:pl-2.5">
                           <div className="flex items-center gap-1.5 text-[9.5px]">
                             <div className={`w-3.5 h-3.5 rounded-xs border-2 flex items-center justify-center shrink-0 ${selectedReport.otherViolation ? "bg-[#153459] border-[#153459] text-white" : "bg-white border-slate-400"}`}>
@@ -5563,9 +5323,6 @@ export default function IncidentReportPanel({
                     </div>
                   </div>
 
-                  {/* ============================================================== */}
-                  {/* 4. ATTACHMENTS / EVIDENCE                                      */}
-                  {/* ============================================================== */}
                   <div className="space-y-0">
                     <div className="bg-[#153459] text-white px-2.5 py-0.5 rounded-t-md font-black text-[10.5px] uppercase tracking-wider flex items-center gap-1.5">
                       <Paperclip size={12} className="text-white" />
@@ -5574,7 +5331,6 @@ export default function IncidentReportPanel({
 
                     <div className={`bg-[#f4f7fb] border border-t-0 border-[#d0dbe7] rounded-b-md ${irPaperFormat === "SHORT" ? "p-2 text-[9.5px]" : "p-2.5 sm:p-3 text-[10px]"}`}>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
-                        {/* Column 1 */}
                         <div className="space-y-1">
                           {[
                             "Photos (if any)",
@@ -5595,7 +5351,6 @@ export default function IncidentReportPanel({
                           })}
                         </div>
 
-                        {/* Column 2 */}
                         <div className="space-y-1">
                           <div className="flex items-center gap-1.5 text-[9.5px]">
                             <div className={`w-3.5 h-3.5 rounded-xs border-2 flex items-center justify-center shrink-0 ${selectedReport.otherAttachments ? "bg-[#153459] border-[#153459] text-white" : "bg-white border-slate-400"}`}>
@@ -5617,16 +5372,11 @@ export default function IncidentReportPanel({
                     </div>
                   </div>
 
-                  {/* ============================================================== */}
-                  {/* 5. SIGNATURES / ENDORSEMENTS (Prepared By & Reviewed By)       */}
-                  {/* ============================================================== */}
                   {(() => {
-                    // In Head Office account, "Approved by" is completely removed per user request
                     const showApprovedBy = !effectiveRole.isHeadOffice && Boolean(selectedReport.approvedBySignature);
                     return (
                       <div className={`bg-[#f4f7fb] border border-[#d0dbe7] rounded-md ${irPaperFormat === "SHORT" ? "p-2 text-[10px]" : "p-2.5 sm:p-3 text-[10.5px]"}`}>
                         <div className={`grid grid-cols-1 ${showApprovedBy ? "sm:grid-cols-3" : "sm:grid-cols-2"} gap-3 sm:gap-4`}>
-                          {/* 1. Prepared by */}
                           <div className="space-y-1">
                             <span className="text-[10px] font-bold text-slate-800 block">Prepared by:</span>
                             <div className="h-10 sm:h-12 flex items-center justify-center border-b border-slate-300 pb-0.5 overflow-hidden">
@@ -5658,7 +5408,6 @@ export default function IncidentReportPanel({
                             </div>
                           </div>
 
-                          {/* 2. Reviewed by */}
                           <div className="space-y-1">
                             <span className="text-[10px] font-bold text-slate-800 block">Noted by:</span>
                             <div className="h-10 sm:h-12 flex items-center justify-center border-b border-slate-300 pb-0.5 overflow-hidden">
@@ -5690,7 +5439,6 @@ export default function IncidentReportPanel({
                             </div>
                           </div>
 
-                          {/* 3. Approved by (Strictly omitted in Head Office account view) */}
                           {showApprovedBy && (
                             <div className="space-y-1">
                               <span className="text-[10px] font-bold text-slate-800 block">Approved by:</span>
@@ -5724,7 +5472,6 @@ export default function IncidentReportPanel({
                     );
                   })()}
 
-                  {/* RESPONDENT ACKNOWLEDGMENT (Only shown if signed conformed) */}
                   {Boolean(selectedReport.respondentSignature) && (
                     <div className="p-2 rounded-lg bg-white border border-slate-300 shadow-2xs space-y-1 text-[9.5px]">
                       <div className="flex items-center justify-between">
@@ -5742,9 +5489,6 @@ export default function IncidentReportPanel({
                   )}
                 </div>
 
-                {/* ============================================================== */}
-                {/* FOOTER: CONFIDENTIAL + GEOMETRIC ACCENT STRIPES               */}
-                {/* ============================================================== */}
                 <div className="relative pt-2 pb-0.5 mt-1 border-t border-slate-200">
                   <div className="flex flex-wrap items-center justify-center gap-2 text-[8.5px] sm:text-[9px] font-black uppercase tracking-[0.2em] text-slate-500">
                     <div className="w-8 sm:w-10 h-px bg-slate-400" />
@@ -5754,7 +5498,6 @@ export default function IncidentReportPanel({
                     <div className="w-8 sm:w-10 h-px bg-slate-400" />
                   </div>
 
-                  {/* Bottom Right Corner Geometric Stripes */}
                   <div className="absolute bottom-0 right-0 w-24 h-14 sm:w-28 sm:h-16 pointer-events-none overflow-hidden">
                     <svg className="w-full h-full" viewBox="0 0 144 80" fill="none">
                       <polygon points="144,0 144,80 60,80" fill="#0f2b48" />
@@ -5769,9 +5512,6 @@ export default function IncidentReportPanel({
         </div>
       )}
 
-      {/* ========================================================================= */}
-      {/* MODAL 3: SIMPAL GROUP OF COMPANIES (HEAD OFFICE) ISSUE NTE                 */}
-      {/* ========================================================================= */}
       {isNteDraftModalOpen && selectedReport && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-3 md:p-6 overflow-y-auto">
           <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-5xl w-full max-h-[92vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
@@ -5803,7 +5543,6 @@ export default function IncidentReportPanel({
                 <strong>Simpal Group of Companies (Head Office) Instruction:</strong> Review the incident details submitted by {selectedReport.senderCompany} HR ({selectedReport.senderHrName || selectedReport.reportingHrName}). Once issued, this official NTE will be legally stamped and returned to the originating company HR for formal serving to {selectedReport.employeeName}.
               </div>
 
-              {/* Transmitted Incident Details Reference Box */}
               <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 shadow-inner">
                 <div className="flex items-center justify-between gap-2 mb-1.5">
                   <span className="text-[11px] font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
@@ -5982,13 +5721,9 @@ export default function IncidentReportPanel({
         </div>
       )}
 
-      {/* ========================================================================= */}
-      {/* MODAL 4: AUTHENTIC NOTICE TO EXPLAIN (NTE) DOCUMENT VIEWER & PRINT         */}
-      {/* ========================================================================= */}
       {isNteViewerOpen && selectedReport && (
         <div className="fixed inset-0 z-50 bg-slate-900/75 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
           <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-6xl w-full max-h-[96vh] h-[96vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-            {/* Modal Controls Bar */}
             <div className="px-5 py-2.5 border-b border-slate-200 bg-slate-50 flex flex-wrap items-center justify-between gap-3 shrink-0 no-print shadow-2xs">
               <div className="flex flex-wrap items-center gap-2.5">
                 <span className="font-mono text-xs font-black bg-slate-900 text-white px-2.5 py-1 rounded-md shadow-2xs">
@@ -5998,7 +5733,6 @@ export default function IncidentReportPanel({
                   Official Notice to Explain (Issued by Head Office SGC)
                 </span>
 
-                {/* Bond Paper Format Selector (Short / Long / Standard A4 / Legal) */}
                 <div className="flex items-center bg-slate-200/90 p-0.5 rounded-lg text-xs font-semibold ml-1">
                   <button
                     type="button"
@@ -6042,7 +5776,6 @@ export default function IncidentReportPanel({
                   </button>
                 </div>
 
-                {/* 1-Page Auto-Fit Active Indicator */}
                 <span className="hidden xl:inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
                   Auto 1-Page Fit ({ntePaperFormat === "SHORT" ? "Short: 8.5×11in" : ntePaperFormat === "LONG" ? "Long: 8.5×13in" : ntePaperFormat === "A4" ? "A4: 210×297mm" : "Legal: 8.5×14in"})
@@ -6050,7 +5783,6 @@ export default function IncidentReportPanel({
               </div>
 
               <div className="flex items-center gap-2">
-                {/* Voice speech */}
                 <button
                   type="button"
                   onClick={() => {
@@ -6064,7 +5796,6 @@ export default function IncidentReportPanel({
                   <span>Listen</span>
                 </button>
 
-                {/* Direct Close & Archive Case button */}
                 <button
                   type="button"
                   onClick={() => {
@@ -6078,7 +5809,6 @@ export default function IncidentReportPanel({
                   <span>Close Case</span>
                 </button>
 
-                {/* Print button */}
                 <button
                   type="button"
                   onClick={() => handlePrintDocument("nte")}
@@ -6098,7 +5828,6 @@ export default function IncidentReportPanel({
               </div>
             </div>
 
-            {/* Official Letterhead Printable Document Container - Desk Canvas */}
             <div className="flex-1 min-h-0 overflow-auto p-4 sm:p-6 pb-12 bg-slate-200/80 flex justify-center items-start custom-scrollbar">
               <div
                 id="printable-nte-document-sheet"
@@ -6118,21 +5847,17 @@ export default function IncidentReportPanel({
                       : "p-7 sm:p-10 md:p-12"
                   }`}
               >
-                {/* Background Watermark */}
                 <div className="absolute inset-0 flex items-center justify-center opacity-[0.035] pointer-events-none select-none">
                   <img src={getPaperLogo(selectedReport?.senderCompany || selectedReport?.company)} alt="watermark" className="w-[110mm] max-w-[420px] h-auto object-contain" />
                 </div>
 
                 <div className="relative z-10 flex flex-col flex-1 justify-between">
                   <div>
-                    {/* 1. Official Header */}
                     <div className="flex items-center justify-between pb-3 border-b-2 border-slate-900">
-                      {/* Left Logo */}
                       <div className="flex items-center gap-2">
                         <img src={getPaperLogo(selectedReport?.senderCompany || selectedReport?.company)} alt="Company Logo" className="h-16 w-auto object-contain" />
                       </div>
 
-                      {/* Center Text */}
                       <div className="text-center flex-1 px-4">
                         <h2 className="text-base sm:text-lg font-black tracking-wider uppercase text-slate-900 leading-tight">
                           {getPaperCompanyName(selectedReport?.senderCompany || selectedReport?.company)}
@@ -6145,7 +5870,6 @@ export default function IncidentReportPanel({
                         </p>
                       </div>
 
-                      {/* Right Emblem */}
                       <div className="flex items-center gap-2">
                         <img
                           src="/logos/group_emblem.jpg"
@@ -6158,7 +5882,6 @@ export default function IncidentReportPanel({
                       </div>
                     </div>
 
-                    {/* 2. Metadata: Date, To, Subject */}
                     <div className="mt-4 sm:mt-5 space-y-1 text-sm text-slate-900 font-sans">
                       <div className="grid grid-cols-[80px_1fr] gap-2">
                         <span className="font-bold">Date:</span>
@@ -6176,7 +5899,6 @@ export default function IncidentReportPanel({
 
                     <div className="w-full h-[1.5px] bg-slate-900 my-2.5" />
 
-                    {/* 3. Document Body Content (Exact structure from photo) */}
                     <div className={`${ntePaperFormat === "SHORT" ? "space-y-2 text-[11.5px] leading-snug" : "space-y-3.5 text-xs sm:text-[13px] leading-relaxed"} text-slate-800 text-justify`}>
                       <p>
                         {selectedReport.nteBodyParagraph1 ||
@@ -6198,7 +5920,6 @@ export default function IncidentReportPanel({
                           "In line with due process (DOLE Department Order No. 147-15), you are hereby requested to submit your written explanation within five (5) calendar days upon receipt of this memo. Given the above allegations, explain why you should not be disciplined and found liable under the Employees Code of Conduct and the Labor Code."}
                       </p>
 
-                      {/* Dynamic Code of Conduct Citation */}
                       <div className={`pl-4 border-l-4 border-amber-500 bg-amber-50/60 rounded-r-xl space-y-1 ${ntePaperFormat === "SHORT" ? "p-2.5 my-1.5" : "p-3.5 my-3"}`}>
                         <p className="text-[11px] font-black uppercase tracking-wider text-amber-900">
                           EMPLOYEES CODE OF CONDUCT VIOLATION CHARGE:
@@ -6209,7 +5930,6 @@ export default function IncidentReportPanel({
                         </div>
                       </div>
 
-                      {/* Dynamic Philippine Labor Code Grounds */}
                       <div className={`pl-4 border-l-4 border-blue-600 bg-blue-50/60 rounded-r-xl space-y-1 ${ntePaperFormat === "SHORT" ? "p-2.5 my-1.5" : "p-3.5 my-3"}`}>
                         <p className="text-[11px] font-black uppercase tracking-wider text-blue-900">
                           PHILIPPINE LABOR CODE (PD 442 AS AMENDED) STATUTORY GROUNDS:
@@ -6228,7 +5948,6 @@ export default function IncidentReportPanel({
                   </div>
 
                   <div>
-                    {/* 4. Signatory Block (Issued by Simpal Group of Companies Head Office HRMD) */}
                     <div className={`${ntePaperFormat === "SHORT" ? "mt-4 pt-2" : "mt-7 pt-3"}`}>
                       <div className="space-y-0.5">
                         <p className="font-black text-sm uppercase tracking-wide text-slate-900">
@@ -6243,7 +5962,6 @@ export default function IncidentReportPanel({
                       </div>
                     </div>
 
-                    {/* 5. Received By Block */}
                     <div className={`${ntePaperFormat === "SHORT" ? "mt-4 pt-1" : "mt-7 pt-2"}`}>
                       <div className="space-y-1">
                         <p className="text-xs text-slate-600">Received by:</p>
@@ -6254,7 +5972,6 @@ export default function IncidentReportPanel({
                       </div>
                     </div>
 
-                    {/* 6. Document Footer */}
                     <div className={`${ntePaperFormat === "SHORT" ? "mt-4 pt-2" : "mt-8 pt-3"} border-t border-slate-200 text-right text-[10px] text-slate-400`}>
                       {selectedReport.nteFooterNote || "HR 201 File & Records 2026"}
                     </div>
@@ -6266,9 +5983,6 @@ export default function IncidentReportPanel({
         </div>
       )}
 
-      {/* ========================================================================= */}
-      {/* MODAL 5: LOG EMPLOYEE EXPLANATION                                         */}
-      {/* ========================================================================= */}
       {isExplanationModalOpen && selectedReport && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-3 md:p-6 overflow-y-auto">
           <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-2xl w-full overflow-hidden animate-in fade-in zoom-in-95 duration-200">
@@ -6331,9 +6045,6 @@ export default function IncidentReportPanel({
         </div>
       )}
 
-      {/* ========================================================================= */}
-      {/* MODAL 6: EMPLOYEE / RESPONDENT RECEIPT & DIGITAL SIGNATURE MODAL           */}
-      {/* ========================================================================= */}
       {isSignReceiptModalOpen && signReportTarget && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-3 md:p-6 overflow-y-auto">
           <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-3xl w-full overflow-hidden animate-in fade-in zoom-in-95 duration-200">
@@ -6361,7 +6072,6 @@ export default function IncidentReportPanel({
             </div>
 
             <div className="p-6 space-y-4">
-              {/* Employee Case Context Card */}
               <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs text-slate-700 space-y-1">
                 <div className="flex items-center justify-between font-bold text-slate-900">
                   <span>{signReportTarget.employeeName}</span>
@@ -6374,12 +6084,10 @@ export default function IncidentReportPanel({
                 </div>
               </div>
 
-              {/* Conforme Legal Declaration */}
               <div className="p-3.5 rounded-2xl bg-amber-50/70 border border-amber-200 text-xs text-amber-950 leading-relaxed italic">
                 "I hereby acknowledge that I have formally received a complete copy of this Incident Report and take notice of the audit findings, shortage citations, and factual allegations. I understand that I am accorded the right to submit a written explanation under company due process rules."
               </div>
 
-              {/* Signature Mode Selector */}
               <div>
                 <div className="flex items-center justify-between mb-1.5">
                   <label className="text-xs font-bold text-slate-700">
@@ -6460,7 +6168,6 @@ export default function IncidentReportPanel({
                 )}
               </div>
 
-              {/* Respondent Remarks Input */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
                   Respondent Remarks upon Receipt (Optional):
@@ -6474,7 +6181,6 @@ export default function IncidentReportPanel({
                 />
               </div>
 
-              {/* Action Buttons */}
               <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2.5">
                 <button
                   type="button"
@@ -6497,9 +6203,6 @@ export default function IncidentReportPanel({
         </div>
       )}
 
-      {/* ========================================================================= */}
-      {/* LIFECYCLE MODAL 1: SGC HEAD OFFICE — ADD TO FILINGS (201 RECORD ONLY)     */}
-      {/* ========================================================================= */}
       {isAddToFilingsModalOpen && selectedReport && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-3 md:p-6 overflow-y-auto">
           <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-2xl w-full overflow-hidden animate-in fade-in zoom-in-95 duration-200">
@@ -6582,17 +6285,9 @@ export default function IncidentReportPanel({
         </div>
       )}
 
-      {/* ========================================================================= */}
-      {/* ========================================================================= */}
-      {/* LIFECYCLE MODAL 2: BRANCH HR ONLY — UPLOAD SIGNED NTE PROOF OF RECEIPT    */}
-      {/* ========================================================================= */}
-      {/* ========================================================================= */}
-      {/* LIFECYCLE MODAL 2: BRANCH HR ONLY — UPLOAD SIGNED NTE & WRITTEN EXPLANATION */}
-      {/* ========================================================================= */}
       {isUploadNteProofModalOpen && selectedReport && !effectiveRole.isHeadOffice && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-3 md:p-6 overflow-y-auto">
           <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-5xl w-full overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-            {/* Header */}
             <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-emerald-800 via-teal-800 to-slate-900 text-white">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-white/20 text-white flex items-center justify-center font-bold">
@@ -6620,7 +6315,6 @@ export default function IncidentReportPanel({
             </div>
 
             <div className="p-6 space-y-5 max-h-[80vh] overflow-y-auto custom-scrollbar">
-              {/* Due Process Guidance Notice */}
               <div className="p-3.5 bg-gradient-to-r from-emerald-50 to-teal-50 rounded-2xl border border-emerald-200 text-xs text-emerald-950 flex items-start gap-3">
                 <ShieldCheck size={20} className="text-emerald-600 shrink-0 mt-0.5" />
                 <div className="space-y-1">
@@ -6637,11 +6331,7 @@ export default function IncidentReportPanel({
                 </div>
               </div>
 
-              {/* Grid with 2 distinct document cards */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* ======================================================== */}
-                {/* DOCUMENT 1: RECEIVED & SIGNED NTE PROOF                  */}
-                {/* ======================================================== */}
                 <div className={`p-4 rounded-2xl border-2 transition flex flex-col justify-between ${nteProofData.fileData
                   ? "bg-emerald-50/40 border-emerald-300"
                   : "bg-slate-50 border-slate-200"
@@ -6747,9 +6437,6 @@ export default function IncidentReportPanel({
                   </p>
                 </div>
 
-                {/* ======================================================== */}
-                {/* DOCUMENT 2: EMPLOYEE IN-WRITTEN EXPLANATION              */}
-                {/* ======================================================== */}
                 <div className={`p-4 rounded-2xl border-2 transition flex flex-col justify-between ${explanationProofData.fileData || explanationProofData.explanationText
                   ? "bg-purple-50/40 border-purple-300"
                   : "bg-slate-50 border-slate-200"
@@ -6869,7 +6556,6 @@ export default function IncidentReportPanel({
                 </div>
               </div>
 
-              {/* Submitting HR Identity Confirmation */}
               <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs flex flex-wrap items-center justify-between gap-2 text-slate-700">
                 <div className="flex items-center gap-2">
                   <span className="font-bold text-slate-500 uppercase text-[10px]">Transmitting HR:</span>
@@ -6882,7 +6568,6 @@ export default function IncidentReportPanel({
                 </div>
               </div>
 
-              {/* Action Buttons */}
               <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-3">
                 <button
                   type="button"
@@ -6909,13 +6594,9 @@ export default function IncidentReportPanel({
         </div>
       )}
 
-      {/* ========================================================================= */}
-      {/* DEDICATED DUE PROCESS SUBMISSIONS VIEWER (SIGNED NTE & WRITTEN EXPLANATION)*/}
-      {/* ========================================================================= */}
       {isViewSignedNteProofModalOpen && selectedReport && (
         <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 md:p-6 overflow-y-auto">
           <div className="bg-slate-900 border border-slate-700/80 rounded-3xl shadow-2xl max-w-7xl w-full max-h-[97vh] h-[95vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200 text-white">
-            {/* Header with Dual Document Tab Switcher */}
             <div className="px-6 py-3.5 border-b border-slate-800 bg-slate-900/95 flex flex-wrap items-center justify-between gap-3 shrink-0">
               <div className="flex items-center gap-3">
                 <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold ${activeProofViewerTab === "EXPLANATION_DOC"
@@ -6947,7 +6628,6 @@ export default function IncidentReportPanel({
                 </div>
               </div>
 
-              {/* Document Tab Switcher */}
               <div className="flex items-center gap-1.5 bg-slate-950/80 p-1 rounded-xl border border-slate-800 text-xs">
                 <button
                   type="button"
@@ -6979,9 +6659,7 @@ export default function IncidentReportPanel({
                 </button>
               </div>
 
-              {/* Toolbar Controls */}
               <div className="flex items-center gap-2">
-                {/* Zoom controls */}
                 <div className="flex items-center bg-slate-800 rounded-lg p-0.5 border border-slate-700 text-xs">
                   <button
                     type="button"
@@ -7013,7 +6691,6 @@ export default function IncidentReportPanel({
                   )}
                 </div>
 
-                {/* Print button */}
                 <button
                   type="button"
                   onClick={() => {
@@ -7051,7 +6728,6 @@ export default function IncidentReportPanel({
                   <span>Print</span>
                 </button>
 
-                {/* Download button */}
                 {((activeProofViewerTab === "EXPLANATION_DOC" ? activeExplanationRecord?.fileData : activeProofRecord?.fileData)) && (
                   <a
                     href={activeProofViewerTab === "EXPLANATION_DOC" ? activeExplanationRecord?.fileData : activeProofRecord?.fileData}
@@ -7079,7 +6755,6 @@ export default function IncidentReportPanel({
               </div>
             </div>
 
-            {/* Verification Metadata Strip */}
             <div className="px-6 py-2.5 bg-slate-800/60 border-b border-slate-800 text-xs flex flex-wrap items-center justify-between gap-3 text-slate-300">
               <div className="flex items-center gap-4 flex-wrap">
                 <div>
@@ -7121,9 +6796,7 @@ export default function IncidentReportPanel({
               </div>
             </div>
 
-            {/* Document Preview Canvas */}
             <div className="flex-1 min-h-[580px] max-h-[82vh] overflow-auto p-6 bg-slate-950 flex flex-col items-center justify-start custom-scrollbar">
-              {/* If viewing explanation and there are explanation notes/text, show top quote banner */}
               {activeProofViewerTab === "EXPLANATION_DOC" && (activeExplanationRecord?.explanationText || selectedReport.explanationText) && (
                 <div className="w-full max-w-4xl mb-5 p-4 rounded-2xl bg-purple-950/40 border border-purple-500/30 text-white shrink-0">
                   <div className="flex items-center gap-2 font-bold text-xs text-purple-300 mb-1.5">
@@ -7184,7 +6857,6 @@ export default function IncidentReportPanel({
                   </div>
                 )
               ) : (
-                /* Tab 2: Employee Written Explanation */
                 activeExplanationRecord?.fileData ? (
                   <div
                     className="transition-transform duration-150 ease-out flex justify-center my-auto"
@@ -7229,7 +6901,6 @@ export default function IncidentReportPanel({
               )}
             </div>
 
-            {/* Footer with Role Guidance */}
             <div className="px-6 py-3 border-t border-slate-800 bg-slate-900/90 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-400">
               <div className="flex items-center gap-2">
                 <ShieldCheck size={16} className="text-emerald-400 shrink-0" />
@@ -7244,10 +6915,6 @@ export default function IncidentReportPanel({
         </div>
       )}
 
-      {/* ========================================================================= */}
-      {/* ========================================================================= */}
-      {/* LIFECYCLE MODAL 3: SGC HEAD OFFICE — ISSUE NOTICE OF WARNING              */}
-      {/* ========================================================================= */}
       {isWarningModalOpen && selectedReport && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-3 md:p-6 overflow-y-auto">
           <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-4xl w-full overflow-hidden animate-in fade-in zoom-in-95 duration-200 my-auto">
@@ -7275,7 +6942,6 @@ export default function IncidentReportPanel({
             </div>
 
             <div className="p-6 space-y-4 max-h-[82vh] overflow-y-auto custom-scrollbar">
-              {/* Row 1: Header / Memo Settings */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
@@ -7323,7 +6989,6 @@ export default function IncidentReportPanel({
                 </div>
               </div>
 
-              {/* Row 2: Company Header Details */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3.5 bg-slate-50 rounded-2xl border border-slate-200">
                 <div>
                   <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">
@@ -7360,7 +7025,6 @@ export default function IncidentReportPanel({
                 </div>
               </div>
 
-              {/* Row 3: Quick Calculation Helpers for Paragraph 1 */}
               <div className="p-3.5 bg-amber-50/70 rounded-2xl border border-amber-200/80 space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-amber-950 flex items-center gap-1.5">
@@ -7414,7 +7078,6 @@ export default function IncidentReportPanel({
                 </div>
               </div>
 
-              {/* Paragraph 1 */}
               <div>
                 <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
                   Paragraph 1 — Acknowledgment & Incident Details:
@@ -7427,7 +7090,6 @@ export default function IncidentReportPanel({
                 />
               </div>
 
-              {/* Paragraph 2 */}
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
                   <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700">
@@ -7454,7 +7116,6 @@ export default function IncidentReportPanel({
                 />
               </div>
 
-              {/* Paragraph 3 */}
               <div>
                 <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
                   Paragraph 3 — Sanction & Termination Warning:
@@ -7467,7 +7128,6 @@ export default function IncidentReportPanel({
                 />
               </div>
 
-              {/* Paragraph 4 */}
               <div>
                 <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
                   Paragraph 4 — Directive:
@@ -7481,7 +7141,6 @@ export default function IncidentReportPanel({
                 />
               </div>
 
-              {/* Signatory & Footer */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
                 <div>
                   <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
@@ -7540,13 +7199,9 @@ export default function IncidentReportPanel({
         </div>
       )}
 
-      {/* ========================================================================= */}
-      {/* AUTHENTIC DOCUMENT VIEWER: NOTICE OF WARNING (1:1 SAMPLE FORMAT)          */}
-      {/* ========================================================================= */}
       {isWarningViewerOpen && selectedReport && (
         <div className="fixed inset-0 z-50 bg-slate-900/75 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
           <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-5xl w-full max-h-[96vh] h-[96vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-            {/* Modal Controls Bar */}
             <div className="px-5 py-2.5 border-b border-slate-200 bg-slate-50 flex flex-wrap items-center justify-between gap-3 shrink-0 no-print shadow-2xs">
               <div className="flex flex-wrap items-center gap-2.5">
                 <span className="font-mono text-xs font-black bg-slate-900 text-white px-2.5 py-1 rounded-md shadow-2xs">
@@ -7556,7 +7211,6 @@ export default function IncidentReportPanel({
                   Notice of Warning Document
                 </span>
 
-                {/* Bond Paper Format Selector (Short / Long / Standard A4 / Legal) */}
                 <div className="flex items-center bg-slate-200/90 p-0.5 rounded-lg text-xs font-semibold ml-1">
                   <button
                     type="button"
@@ -7600,7 +7254,6 @@ export default function IncidentReportPanel({
                   </button>
                 </div>
 
-                {/* Auto 1-Page Fit Indicator */}
                 <span className="hidden xl:inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
                   <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
                   Auto 1-Page Fit ({warningPaperFormat === "SHORT" ? "Short: 8.5×11in" : warningPaperFormat === "LONG" ? "Long: 8.5×13in" : warningPaperFormat === "A4" ? "A4: 210×297mm" : "Legal: 8.5×14in"})
@@ -7608,7 +7261,6 @@ export default function IncidentReportPanel({
               </div>
 
               <div className="flex items-center gap-2">
-                {/* Voice speech */}
                 <button
                   type="button"
                   onClick={() => {
@@ -7622,7 +7274,6 @@ export default function IncidentReportPanel({
                   <span>Listen</span>
                 </button>
 
-                {/* Edit Memo button */}
                 {effectiveRole.isHeadOffice && (
                   <button
                     type="button"
@@ -7637,7 +7288,6 @@ export default function IncidentReportPanel({
                   </button>
                 )}
 
-                {/* Direct Close & Archive Case button */}
                 <button
                   type="button"
                   onClick={() => {
@@ -7651,7 +7301,6 @@ export default function IncidentReportPanel({
                   <span>Close Case</span>
                 </button>
 
-                {/* Print button */}
                 <button
                   type="button"
                   onClick={() => handlePrintDocument("warning")}
@@ -7671,7 +7320,6 @@ export default function IncidentReportPanel({
               </div>
             </div>
 
-            {/* Official Letterhead Printable Document Container - Desk Canvas */}
             <div className="flex-1 min-h-0 overflow-auto p-4 sm:p-6 pb-12 bg-slate-200/80 flex justify-center items-start custom-scrollbar">
               <div
                 id="printable-warning-document-sheet"
@@ -7691,21 +7339,17 @@ export default function IncidentReportPanel({
                       : "p-8 sm:p-10 md:p-12"
                   }`}
               >
-                {/* Background Watermark */}
                 <div className="absolute inset-0 flex items-center justify-center opacity-[0.045] pointer-events-none select-none">
                   <img src={getPaperLogo(warningForm.companyName || selectedReport?.company)} alt="watermark" className="w-[110mm] max-w-[440px] h-auto object-contain" />
                 </div>
 
                 <div className="relative z-10 flex flex-col flex-1 justify-between">
                   <div>
-                    {/* 1. Official Header (Matching Photo 1:1) */}
                     <div className="flex items-center justify-between pb-3">
-                      {/* Left Logo */}
                       <div className="flex items-center gap-2">
                         <img src={getPaperLogo(warningForm.companyName || selectedReport?.company)} alt="Company Logo" className="h-16 w-auto object-contain" />
                       </div>
 
-                      {/* Center Text: Company, Address, Email */}
                       <div className="text-center flex-1 px-4">
                         <h2 className="text-sm sm:text-base font-black tracking-wide uppercase text-slate-900 leading-tight">
                           {getPaperCompanyName(warningForm.companyName || selectedReport?.company)}
@@ -7718,7 +7362,6 @@ export default function IncidentReportPanel({
                         </p>
                       </div>
 
-                      {/* Right Emblem: Corporate Emblem */}
                       <div className="flex items-center gap-2">
                         <img
                           src="/logos/group_emblem.jpg"
@@ -7731,7 +7374,6 @@ export default function IncidentReportPanel({
                       </div>
                     </div>
 
-                    {/* 2. Metadata: Date, To, Subject */}
                     <div className="mt-4 sm:mt-5 space-y-1 text-sm font-sans text-slate-900">
                       <div className="grid grid-cols-[90px_1fr] items-baseline">
                         <span className="font-bold">Date:</span>
@@ -7749,18 +7391,14 @@ export default function IncidentReportPanel({
                       </div>
                     </div>
 
-                    {/* Black Dividing Line */}
                     <div className="w-full h-[1.5px] bg-slate-900 mt-2 mb-3 sm:mb-4" />
 
-                    {/* 3. Document Body Content (Exact Structure & Typography from Sample Photo) */}
                     <div className={`${warningPaperFormat === "SHORT" ? "space-y-3 text-xs leading-relaxed" : "space-y-4 text-xs sm:text-[13px] leading-relaxed"} text-slate-900 font-sans text-justify`}>
-                      {/* Paragraph 1 */}
                       <p className="pl-6 sm:pl-8">
                         {warningForm.paragraph1 ||
                           `This is to acknowledge receipt of your written explanation dated March 22, 2026, with reference to the incident involving a cash shortage in the amount of One Thousand Four Hundred Forty-Five Pesos (PHP 1,445.00)`}
                       </p>
 
-                      {/* Paragraph 2 with bold Code of Conduct violation */}
                       <p className="pl-6 sm:pl-8">
                         {warningForm.paragraph2 ? (
                           warningForm.paragraph2
@@ -7773,7 +7411,6 @@ export default function IncidentReportPanel({
                         )}
                       </p>
 
-                      {/* Paragraph 3 with bold Final Stern Warning and immediate termination */}
                       <p className="pl-6 sm:pl-8">
                         {warningForm.paragraph3 ? (
                           warningForm.paragraph3
@@ -7786,13 +7423,11 @@ export default function IncidentReportPanel({
                         )}
                       </p>
 
-                      {/* Paragraph 4 */}
                       <p className="pl-6 sm:pl-8">
                         {warningForm.paragraph4 || "Please be guided accordingly."}
                       </p>
                     </div>
 
-                    {/* 4. Signatures (Issued by & Received by) */}
                     <div className={`${warningPaperFormat === "SHORT" ? "mt-5 space-y-4" : "mt-8 space-y-7"} text-sm font-sans text-slate-900`}>
                       <div>
                         <p className="mb-2 text-xs sm:text-sm">Sincerely,</p>
@@ -7817,7 +7452,6 @@ export default function IncidentReportPanel({
                     </div>
                   </div>
 
-                  {/* 5. Document Footer */}
                   <div className={`${warningPaperFormat === "SHORT" ? "mt-5 pt-2" : "mt-8 pt-3"} text-left text-[11px] text-slate-500 font-sans`}>
                     {warningForm.footerText || `HR 201 File & Records ${new Date().getFullYear()}`}
                   </div>
@@ -7828,10 +7462,6 @@ export default function IncidentReportPanel({
         </div>
       )}
 
-      {/* ========================================================================= */}
-      {/* ========================================================================= */}
-      {/* LIFECYCLE MODAL 4: SGC HEAD OFFICE — NOTICE OF INVESTIGATION (NOI) ZOOM   */}
-      {/* ========================================================================= */}
       {isNoiModalOpen && selectedReport && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-3 md:p-6 overflow-y-auto">
           <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-4xl w-full overflow-hidden animate-in fade-in zoom-in-95 duration-200 my-auto">
@@ -7859,7 +7489,6 @@ export default function IncidentReportPanel({
             </div>
 
             <div className="p-6 space-y-4 max-h-[82vh] overflow-y-auto custom-scrollbar">
-              {/* Row 1: Memo Header & Employee Details */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
@@ -7899,7 +7528,6 @@ export default function IncidentReportPanel({
                 </div>
               </div>
 
-              {/* Row 2: Hearing Schedule (Date, Time, Mode) */}
               <div className="p-4 bg-blue-50/70 rounded-2xl border border-blue-200/80 space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-blue-950 flex items-center gap-1.5">
@@ -8006,7 +7634,6 @@ export default function IncidentReportPanel({
                 </div>
               </div>
 
-              {/* Paragraph 1 */}
               <div>
                 <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
                   Paragraph 1 — Legal Requisite & Directive:
@@ -8019,13 +7646,11 @@ export default function IncidentReportPanel({
                 />
               </div>
 
-              {/* Alleged Violations (2 Articles as in sample) */}
               <div className="space-y-3 p-3.5 bg-slate-50 rounded-2xl border border-slate-200">
                 <span className="text-xs font-bold text-slate-900 block">
                   Acts Allegedly Committed in Violation of Code of Conduct:
                 </span>
 
-                {/* Violation 1 */}
                 <div className="space-y-1.5 pl-3 border-l-2 border-blue-500">
                   <input
                     type="text"
@@ -8052,7 +7677,6 @@ export default function IncidentReportPanel({
                   </div>
                 </div>
 
-                {/* Violation 2 */}
                 <div className="space-y-1.5 pl-3 border-l-2 border-indigo-500">
                   <input
                     type="text"
@@ -8080,7 +7704,6 @@ export default function IncidentReportPanel({
                 </div>
               </div>
 
-              {/* Paragraph 2 */}
               <div>
                 <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
                   Paragraph 2 — Legal Representation & Evidence Submission:
@@ -8093,7 +7716,6 @@ export default function IncidentReportPanel({
                 />
               </div>
 
-              {/* Witness Clause */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
@@ -8133,7 +7755,6 @@ export default function IncidentReportPanel({
                 </div>
               </div>
 
-              {/* Signatory Details */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
                 <div>
                   <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
@@ -8192,13 +7813,9 @@ export default function IncidentReportPanel({
         </div>
       )}
 
-      {/* ========================================================================= */}
-      {/* AUTHENTIC DOCUMENT VIEWER: NOTICE OF INVESTIGATION (1:1 SAMPLE FORMAT)   */}
-      {/* ========================================================================= */}
       {isNoiViewerOpen && selectedReport && (
         <div className="fixed inset-0 z-50 bg-slate-900/75 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
           <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-5xl w-full max-h-[96vh] h-[96vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-            {/* Modal Controls Bar */}
             <div className="px-5 py-2.5 border-b border-slate-200 bg-slate-50 flex flex-wrap items-center justify-between gap-3 shrink-0 no-print shadow-2xs">
               <div className="flex flex-wrap items-center gap-2.5">
                 <span className="font-mono text-xs font-black bg-slate-900 text-white px-2.5 py-1 rounded-md shadow-2xs">
@@ -8208,7 +7825,6 @@ export default function IncidentReportPanel({
                   Notice of Investigation Document
                 </span>
 
-                {/* Bond Paper Format Selector (Short / Long / Standard A4 / Legal) */}
                 <div className="flex items-center bg-slate-200/90 p-0.5 rounded-lg text-xs font-semibold ml-1">
                   <button
                     type="button"
@@ -8252,7 +7868,6 @@ export default function IncidentReportPanel({
                   </button>
                 </div>
 
-                {/* Auto 1-Page Fit Indicator */}
                 <span className="hidden xl:inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-blue-50 text-blue-800 border border-blue-200">
                   <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></span>
                   Auto 1-Page Fit ({noiPaperFormat === "SHORT" ? "Short: 8.5×11in" : noiPaperFormat === "LONG" ? "Long: 8.5×13in" : noiPaperFormat === "A4" ? "A4: 210×297mm" : "Legal: 8.5×14in"})
@@ -8260,7 +7875,6 @@ export default function IncidentReportPanel({
               </div>
 
               <div className="flex items-center gap-2">
-                {/* Voice speech */}
                 <button
                   type="button"
                   onClick={() => {
@@ -8274,7 +7888,6 @@ export default function IncidentReportPanel({
                   <span>Listen</span>
                 </button>
 
-                {/* Zoom Link Quick Button */}
                 <button
                   type="button"
                   onClick={() => setIsZoomViewerOpen(true)}
@@ -8284,7 +7897,6 @@ export default function IncidentReportPanel({
                   <span>Zoom Link</span>
                 </button>
 
-                {/* Edit Memo button */}
                 {effectiveRole.isHeadOffice && (
                   <button
                     type="button"
@@ -8299,7 +7911,6 @@ export default function IncidentReportPanel({
                   </button>
                 )}
 
-                {/* Direct Close & Archive Case button */}
                 <button
                   type="button"
                   onClick={() => {
@@ -8313,7 +7924,6 @@ export default function IncidentReportPanel({
                   <span>Close Case</span>
                 </button>
 
-                {/* Print button */}
                 <button
                   type="button"
                   onClick={() => handlePrintDocument("noi")}
@@ -8333,7 +7943,6 @@ export default function IncidentReportPanel({
               </div>
             </div>
 
-            {/* Official Letterhead Printable Document Container - Desk Canvas */}
             <div className="flex-1 min-h-0 overflow-auto p-4 sm:p-6 pb-12 bg-slate-200/80 flex justify-center items-start custom-scrollbar">
               <div
                 id="printable-noi-document-sheet"
@@ -8353,16 +7962,13 @@ export default function IncidentReportPanel({
                       : "p-8 sm:p-10 md:p-12"
                   }`}
               >
-                {/* Background Watermark */}
                 <div className="absolute inset-0 flex items-center justify-center opacity-[0.045] pointer-events-none select-none">
                   <img src={getPaperLogo(noiForm.signatoryCompany || selectedReport?.company)} alt="watermark" className="w-[110mm] max-w-[440px] h-auto object-contain" />
                 </div>
 
                 <div className="relative z-10 flex flex-col flex-1 justify-between">
                   <div>
-                    {/* 1. Official Header (Matching Photo 1:1) */}
                     <div className="flex items-center justify-between pb-3">
-                      {/* Left Logo: PCSO Swirl Logo */}
                       <div className="flex items-center gap-2">
                         <img
                           src="/id-assets/pcso_logo.png"
@@ -8371,12 +7977,10 @@ export default function IncidentReportPanel({
                         />
                       </div>
 
-                      {/* Center Logo */}
                       <div className="flex items-center justify-center flex-1 px-4">
                         <img src={getPaperLogo(noiForm.signatoryCompany || selectedReport?.company)} alt="Company Logo" className="h-16 w-auto object-contain" />
                       </div>
 
-                      {/* Right Logo: Corporate Emblem */}
                       <div className="flex items-center gap-2">
                         <img
                           src="/logos/group_emblem.jpg"
@@ -8389,7 +7993,6 @@ export default function IncidentReportPanel({
                       </div>
                     </div>
 
-                    {/* 2. Metadata: Date, To, Subject */}
                     <div className="mt-6 space-y-1.5 text-sm font-sans text-slate-900">
                       <div className="grid grid-cols-[90px_1fr] items-baseline">
                         <span className="font-bold">Date:</span>
@@ -8407,24 +8010,19 @@ export default function IncidentReportPanel({
                       </div>
                     </div>
 
-                    {/* Black Dividing Line */}
                     <div className="w-full h-[2px] bg-slate-900 mt-2.5 mb-6" />
 
-                    {/* 3. Salutation & Document Body Content (Exact Structure & Typography from Sample Photo) */}
                     <div className="space-y-4 text-xs sm:text-[13px] leading-relaxed text-slate-900 font-sans text-justify">
                       <p className="pl-6 sm:pl-8 font-medium">
                         Greetings:
                       </p>
 
-                      {/* Paragraph 1 */}
                       <p className="pl-6 sm:pl-8">
                         A notice of investigation is one of the requisites by the law to hear and explain your side, you are hereby directed to attend, submit your supporting documents, and bring a counsel of your own choice on{" "}
                         <strong>{noiForm.hearingDate || "October 14, 2026"}, {noiForm.hearingTime || "2:30 PM"} {noiForm.hearingMode || "via Zoom Meeting"}</strong>, for the acts allegedly committed in violation of:
                       </p>
 
-                      {/* Indented Violation List */}
                       <div className="pl-10 sm:pl-14 space-y-2 text-slate-900">
-                        {/* Violation 1 */}
                         <div>
                           <p className="font-black">
                             {noiForm.violation1Article || "Article IV – Section 18. Offenses Related to Job Performance and Productivity."}
@@ -8438,7 +8036,6 @@ export default function IncidentReportPanel({
                           </p>
                         </div>
 
-                        {/* Violation 2 */}
                         <div className="pt-1">
                           <p className="font-black">
                             {noiForm.violation2Article || "Section 16. Offenses Against Good Personal Behavior and Conduct"}
@@ -8452,21 +8049,17 @@ export default function IncidentReportPanel({
                         </div>
                       </div>
 
-                      {/* Paragraph 2 */}
                       <p className="pl-6 sm:pl-8 pt-1">
                         {noiForm.paragraph2 ||
                           "You are entitled to counsel of your choice during this investigation. You may also bring your witness(es) if any. Please be guided that failure on your part to comply with this Notice of Investigation shall be considered submitted for a resolution based on the evidence on record."}
                       </p>
 
-                      {/* Witness Clause */}
                       <p className="pl-6 sm:pl-8 pt-2">
                         WITNESS MY HAND this {noiForm.witnessDay || "12th"} day of {noiForm.witnessMonthYear || "October 2026"}, at {noiForm.witnessPlace || "Tacurong City, Sultan Kudarat, Philippines"}.
                       </p>
                     </div>
 
-                    {/* 4. Signatory Block */}
                     <div className="mt-8 text-sm font-sans text-slate-900">
-                      {/* Stylized Digital Signature Graphic */}
                       <div className="relative -mb-4 pl-2 h-14 w-44 pointer-events-none select-none">
                         <img
                           src="/id-assets/signature_charmie_transparent.png"
@@ -8488,9 +8081,7 @@ export default function IncidentReportPanel({
                       </p>
                     </div>
 
-                    {/* 5. Bottom Dual-Column Acknowledgment */}
                     <div className="mt-10 grid grid-cols-2 gap-8 text-sm font-sans text-slate-900 pt-2">
-                      {/* Left Column: Received by */}
                       <div>
                         <p className="text-xs text-slate-700 mb-6">Received by:</p>
                         <p className="font-black text-sm uppercase tracking-wide text-slate-900">
@@ -8499,7 +8090,6 @@ export default function IncidentReportPanel({
                         <p className="text-xs text-slate-700">Date & Signature</p>
                       </div>
 
-                      {/* Right Column: Informed but refused received */}
                       <div>
                         <p className="text-xs text-slate-700 mb-6">Informed but refused received:</p>
                         <div className="flex items-baseline gap-2">
@@ -8510,7 +8100,6 @@ export default function IncidentReportPanel({
                     </div>
                   </div>
 
-                  {/* 6. Document Footer */}
                   <div className="mt-10 pt-3 text-left text-[11px] text-slate-500 font-sans">
                     {noiForm.footerText || `HR 201 File & Records ${new Date().getFullYear()}`}
                   </div>
@@ -8521,9 +8110,6 @@ export default function IncidentReportPanel({
         </div>
       )}
 
-      {/* ========================================================================= */}
-      {/* LIFECYCLE MODAL 5: ZOOM HEARING VIEWER (FOR SGC, BRANCH HR & EMPLOYEE)    */}
-      {/* ========================================================================= */}
       {isZoomViewerOpen && selectedReport && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-3 md:p-6 overflow-y-auto">
           <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-2xl w-full overflow-hidden animate-in fade-in zoom-in-95 duration-200">
@@ -8615,10 +8201,6 @@ export default function IncidentReportPanel({
         </div>
       )}
 
-      {/* ========================================================================= */}
-      {/* ========================================================================= */}
-      {/* LIFECYCLE MODAL 6: SGC HEAD OFFICE — DECISION ON ADMINISTRATIVE CASE       */}
-      {/* ========================================================================= */}
       {isAdminDecisionModalOpen && selectedReport && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-3 md:p-6 overflow-y-auto">
           <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-4xl w-full overflow-hidden animate-in fade-in zoom-in-95 duration-200 my-auto">
@@ -8646,7 +8228,6 @@ export default function IncidentReportPanel({
             </div>
 
             <div className="p-6 space-y-4 max-h-[82vh] overflow-y-auto custom-scrollbar">
-              {/* Row 1: Memo Header & Employee Details */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
@@ -8686,7 +8267,6 @@ export default function IncidentReportPanel({
                 </div>
               </div>
 
-              {/* Sanction / Penalty Selection */}
               <div className="p-4 bg-rose-50/70 rounded-2xl border border-rose-200/80 space-y-2">
                 <label className="block text-[11px] font-bold uppercase tracking-wider text-rose-950">
                   Decision Sanction / Penalty Level:
@@ -8722,7 +8302,6 @@ export default function IncidentReportPanel({
                 </div>
               </div>
 
-              {/* Intro Line */}
               <div>
                 <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
                   Introductory Statement:
@@ -8736,13 +8315,11 @@ export default function IncidentReportPanel({
                 />
               </div>
 
-              {/* Violations Bullet Points (Connected to notices & case) */}
               <div className="space-y-3 p-3.5 bg-slate-50 rounded-2xl border border-slate-200">
                 <span className="text-xs font-bold text-slate-900 block">
                   Violations Established & Decided:
                 </span>
 
-                {/* Bullet 1 */}
                 <div className="space-y-1.5 pl-3 border-l-2 border-rose-500">
                   <input
                     type="text"
@@ -8760,7 +8337,6 @@ export default function IncidentReportPanel({
                   />
                 </div>
 
-                {/* Bullet 2 */}
                 <div className="space-y-1.5 pl-3 border-l-2 border-amber-500">
                   <input
                     type="text"
@@ -8779,7 +8355,6 @@ export default function IncidentReportPanel({
                 </div>
               </div>
 
-              {/* Paragraph 1: Management Review & Repeated Occurrence Findings */}
               <div>
                 <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
                   Paragraph 1 — Management Review & Findings:
@@ -8792,7 +8367,6 @@ export default function IncidentReportPanel({
                 />
               </div>
 
-              {/* Paragraph 2: Sanction & Termination Warning */}
               <div>
                 <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
                   Paragraph 2 — Decision Sanction & Warning:
@@ -8805,7 +8379,6 @@ export default function IncidentReportPanel({
                 />
               </div>
 
-              {/* Paragraph 3 */}
               <div>
                 <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
                   Paragraph 3 — Closing Directive:
@@ -8818,7 +8391,6 @@ export default function IncidentReportPanel({
                 />
               </div>
 
-              {/* Signatory Details */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
                 <div>
                   <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
@@ -8877,13 +8449,9 @@ export default function IncidentReportPanel({
         </div>
       )}
 
-      {/* ========================================================================= */}
-      {/* AUTHENTIC DOCUMENT VIEWER: DECISION OF ADMINISTRATIVE CASE (1:1 FORMAT)    */}
-      {/* ========================================================================= */}
       {isAdminDecisionViewerOpen && selectedReport && (
         <div className="fixed inset-0 z-50 bg-slate-900/75 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
           <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-5xl w-full max-h-[96vh] h-[96vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-            {/* Modal Controls Bar */}
             <div className="px-5 py-2.5 border-b border-slate-200 bg-slate-50 flex flex-wrap items-center justify-between gap-3 shrink-0 no-print shadow-2xs">
               <div className="flex flex-wrap items-center gap-2.5">
                 <span className="font-mono text-xs font-black bg-slate-900 text-white px-2.5 py-1 rounded-md shadow-2xs">
@@ -8893,7 +8461,6 @@ export default function IncidentReportPanel({
                   Decision of Administrative Case Document
                 </span>
 
-                {/* Bond Paper Format Selector (Short / Long / Standard A4 / Legal) */}
                 <div className="flex items-center bg-slate-200/90 p-0.5 rounded-lg text-xs font-semibold ml-1">
                   <button
                     type="button"
@@ -8937,7 +8504,6 @@ export default function IncidentReportPanel({
                   </button>
                 </div>
 
-                {/* Auto 1-Page Fit Indicator */}
                 <span className="hidden xl:inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-50 text-rose-800 border border-rose-200">
                   <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></span>
                   Auto 1-Page Fit ({adminDecisionPaperFormat === "SHORT" ? "Short: 8.5×11in" : adminDecisionPaperFormat === "LONG" ? "Long: 8.5×13in" : adminDecisionPaperFormat === "A4" ? "A4: 210×297mm" : "Legal: 8.5×14in"})
@@ -8945,7 +8511,6 @@ export default function IncidentReportPanel({
               </div>
 
               <div className="flex items-center gap-2">
-                {/* Voice speech */}
                 <button
                   type="button"
                   onClick={() => {
@@ -8959,7 +8524,6 @@ export default function IncidentReportPanel({
                   <span>Listen</span>
                 </button>
 
-                {/* Edit Memo button */}
                 {effectiveRole.isHeadOffice && (
                   <button
                     type="button"
@@ -8974,7 +8538,6 @@ export default function IncidentReportPanel({
                   </button>
                 )}
 
-                {/* Direct Close & Archive Case button */}
                 <button
                   type="button"
                   onClick={() => {
@@ -8988,7 +8551,6 @@ export default function IncidentReportPanel({
                   <span>Close Case</span>
                 </button>
 
-                {/* Print button */}
                 <button
                   type="button"
                   onClick={() => handlePrintDocument("adminDecision")}
@@ -9008,7 +8570,6 @@ export default function IncidentReportPanel({
               </div>
             </div>
 
-            {/* Official Letterhead Printable Document Container - Desk Canvas */}
             <div className="flex-1 min-h-0 overflow-auto p-4 sm:p-6 pb-12 bg-slate-200/80 flex justify-center items-start custom-scrollbar">
               <div
                 id="printable-admin-decision-document-sheet"
@@ -9028,7 +8589,6 @@ export default function IncidentReportPanel({
                       : "p-8 sm:p-10 md:p-12"
                   }`}
               >
-                {/* Background Watermark: Dynamic Company Logo */}
                 <div className="absolute inset-0 flex items-center justify-center opacity-[0.045] pointer-events-none select-none">
                   <img
                     src={getPaperLogo(adminDecisionForm.signatoryCompany || selectedReport?.company)}
@@ -9039,9 +8599,7 @@ export default function IncidentReportPanel({
 
                 <div className="relative z-10 flex flex-col flex-1 justify-between">
                   <div>
-                    {/* 1. Official Header (Matching Photo 1:1) */}
                     <div className="flex items-center justify-between pb-3">
-                      {/* Left Logo: PCSO Swirl Logo */}
                       <div className="flex items-center gap-2">
                         <img
                           src="/id-assets/pcso_logo.png"
@@ -9050,7 +8608,6 @@ export default function IncidentReportPanel({
                         />
                       </div>
 
-                      {/* Center Logo: Dynamic Company Logo */}
                       <div className="flex items-center justify-center flex-1 px-4">
                         <img
                           src={getPaperLogo(adminDecisionForm.signatoryCompany || selectedReport?.company)}
@@ -9059,7 +8616,6 @@ export default function IncidentReportPanel({
                         />
                       </div>
 
-                      {/* Right Logo: Corporate Emblem */}
                       <div className="flex items-center gap-2">
                         <img
                           src="/logos/group_emblem.jpg"
@@ -9072,7 +8628,6 @@ export default function IncidentReportPanel({
                       </div>
                     </div>
 
-                    {/* 2. Metadata: Date, To, Subject */}
                     <div className="mt-4 sm:mt-5 space-y-1 text-sm font-sans text-slate-900">
                       <div className="grid grid-cols-[90px_1fr] items-baseline">
                         <span className="font-bold">Date:</span>
@@ -9090,19 +8645,14 @@ export default function IncidentReportPanel({
                       </div>
                     </div>
 
-                    {/* Black Dividing Line */}
                     <div className="w-full h-[1.5px] bg-slate-900 mt-2 mb-3 sm:mb-4" />
 
-                    {/* 3. Document Body Content (Exact Structure & Typography from Sample Photo) */}
                     <div className={`${adminDecisionPaperFormat === "SHORT" ? "space-y-2.5 text-xs leading-relaxed" : "space-y-4 text-xs sm:text-[13px] leading-relaxed"} text-slate-900 font-sans text-justify`}>
-                      {/* Intro Line */}
                       <p className="pl-6 sm:pl-8">
                         {adminDecisionForm.introLine || "This is concerning your administrative case on;"}
                       </p>
 
-                      {/* Bulleted Violation List */}
                       <div className="pl-10 sm:pl-14 space-y-2 text-slate-900">
-                        {/* Bullet 1 */}
                         <div>
                           <p className="font-black flex items-start gap-2">
                             <span>•</span>
@@ -9114,7 +8664,6 @@ export default function IncidentReportPanel({
                           </p>
                         </div>
 
-                        {/* Bullet 2 */}
                         <div className="pt-0.5">
                           <p className="font-black flex items-start gap-2">
                             <span>•</span>
@@ -9127,13 +8676,11 @@ export default function IncidentReportPanel({
                         </div>
                       </div>
 
-                      {/* Paragraph 1: Management Review & Repeated Occurrence */}
                       <p className="pl-6 sm:pl-8 pt-0.5">
                         {adminDecisionForm.paragraph1 ||
                           "After reviewing the facts and circumstances surrounding the case, Management has determined that there is substantial basis to establish your accountability for the aforementioned violations. Management further notes that this is a repeated occurrence of the same or similar violation, notwithstanding prior reminders, and corrective measures previously undertaken."}
                       </p>
 
-                      {/* Paragraph 2: Decision / Sanction Level & Termination Warning */}
                       <p className="pl-6 sm:pl-8">
                         {adminDecisionForm.paragraph2 ? (
                           adminDecisionForm.paragraph2
@@ -9146,16 +8693,13 @@ export default function IncidentReportPanel({
                         )}
                       </p>
 
-                      {/* Paragraph 3 */}
                       <p className="pl-6 sm:pl-8">
                         {adminDecisionForm.paragraph3 || "Please be guided accordingly."}
                       </p>
                     </div>
 
-                    {/* 4. Signatory Block */}
                     <div className={`${adminDecisionPaperFormat === "SHORT" ? "mt-4 text-xs" : "mt-8 text-sm"} font-sans text-slate-900`}>
                       <p className="mb-1 text-xs sm:text-sm">Sincerely,</p>
-                      {/* Stylized Digital Signature Graphic */}
                       <div className="relative -mb-4 pl-2 h-14 w-44 pointer-events-none select-none">
                         <img
                           src="/id-assets/signature_charmie_transparent.png"
@@ -9177,7 +8721,6 @@ export default function IncidentReportPanel({
                       </p>
                     </div>
 
-                    {/* 5. Received by Block */}
                     <div className={`${adminDecisionPaperFormat === "SHORT" ? "mt-4 pt-1" : "mt-8 pt-2"} text-sm font-sans text-slate-900`}>
                       <p className="text-xs text-slate-700 mb-2">Received by:</p>
                       <p className="font-black text-sm uppercase tracking-wide text-slate-900">
@@ -9187,7 +8730,6 @@ export default function IncidentReportPanel({
                     </div>
                   </div>
 
-                  {/* 6. Document Footer */}
                   <div className={`${adminDecisionPaperFormat === "SHORT" ? "mt-5 pt-2" : "mt-10 pt-3"} text-left text-[11px] text-slate-500 font-sans`}>
                     {adminDecisionForm.footerText || `HR 201 File & Records ${new Date().getFullYear()}`}
                   </div>
@@ -9198,9 +8740,6 @@ export default function IncidentReportPanel({
         </div>
       )}
 
-      {/* ========================================================================= */}
-      {/* HIGH-FIDELITY CONFIRMATION MODAL: DUE PROCESS & REGISTRY SAFEGUARD        */}
-      {/* ========================================================================= */}
       {confirmDialog.isOpen && (
         <div className="fixed inset-0 z-[95] bg-slate-950/75 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-200">
           <div
@@ -9208,7 +8747,6 @@ export default function IncidentReportPanel({
             role="dialog"
             aria-modal="true"
           >
-            {/* Top Accent Gradient Bar */}
             <div
               className={`h-2 w-full bg-gradient-to-r ${
                 confirmDialog.confirmVariant === "danger"
@@ -9219,9 +8757,7 @@ export default function IncidentReportPanel({
               }`}
             />
 
-            {/* Modal Header */}
             <div className="bg-slate-950 text-white px-6 py-5 relative overflow-hidden border-b border-slate-800">
-              {/* Background ambient glow */}
               <div
                 className={`absolute -right-8 -top-8 w-44 h-44 rounded-full blur-3xl pointer-events-none opacity-40 ${
                   confirmDialog.confirmVariant === "danger"
@@ -9234,7 +8770,6 @@ export default function IncidentReportPanel({
 
               <div className="relative z-10 flex items-start justify-between gap-4">
                 <div className="flex items-start gap-3.5 min-w-0">
-                  {/* Themed Icon Container */}
                   <div
                     className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 border shadow-inner ${
                       confirmDialog.confirmVariant === "danger"
@@ -9254,7 +8789,6 @@ export default function IncidentReportPanel({
                   </div>
 
                   <div className="min-w-0 space-y-1">
-                    {/* Official Category Tag */}
                     <div className="flex items-center gap-2 flex-wrap">
                       <span
                         className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border inline-flex items-center gap-1 ${
@@ -9282,7 +8816,6 @@ export default function IncidentReportPanel({
                   </div>
                 </div>
 
-                {/* Dismiss Button */}
                 <button
                   type="button"
                   onClick={() => setConfirmDialog((prev) => ({ ...prev, isOpen: false }))}
@@ -9295,14 +8828,11 @@ export default function IncidentReportPanel({
               </div>
             </div>
 
-            {/* Modal Body */}
             <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto">
-              {/* Core Message */}
               <p className="text-slate-700 text-sm font-medium leading-relaxed">
                 {confirmDialog.message}
               </p>
 
-              {/* Impact Items Scope (if provided) */}
               {confirmDialog.impactItems && confirmDialog.impactItems.length > 0 && (
                 <div className="bg-slate-50 border border-slate-200/90 rounded-2xl p-4 space-y-2.5">
                   <div className="flex items-center justify-between text-[11px] font-black uppercase tracking-wider text-slate-500">
@@ -9334,7 +8864,6 @@ export default function IncidentReportPanel({
                 </div>
               )}
 
-              {/* Due Process Compliance & Caution Note */}
               {confirmDialog.warningNote && (
                 <div className="bg-amber-50 border border-amber-200/80 rounded-2xl p-3.5 flex items-start gap-3 text-xs text-amber-950 leading-relaxed">
                   <AlertTriangle size={16} className="text-amber-600 shrink-0 mt-0.5" />
@@ -9346,7 +8875,6 @@ export default function IncidentReportPanel({
               )}
             </div>
 
-            {/* Modal Footer / Action Dock */}
             <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex flex-col-reverse sm:flex-row items-center justify-between gap-3">
               <div className="text-[11px] text-slate-400 font-medium hidden sm:flex items-center gap-1.5">
                 <ShieldCheck size={13} className="text-emerald-600" />
@@ -9408,9 +8936,6 @@ export default function IncidentReportPanel({
         </div>
       )}
 
-      {/* ========================================================================= */}
-      {/* GLOBAL LOADING & TRANSMITTING ANIMATION OVERLAY                            */}
-      {/* ========================================================================= */}
       {isTransmitting && (
         <div className="fixed inset-0 z-[100] bg-slate-950/70 backdrop-blur-md flex flex-col items-center justify-center p-4 animate-in fade-in duration-200">
           <div className="bg-white rounded-3xl p-8 shadow-2xl border border-slate-200 flex flex-col items-center text-center max-w-sm w-full space-y-4">

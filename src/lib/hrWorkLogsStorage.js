@@ -1,14 +1,3 @@
-/**
- * hrWorkLogsStorage.js
- * Dedicated Live Database Service for Enterprise HR Daily Work Logs & Shift Timesheets.
- * 
- * Features:
- * - Direct Supabase table queries: `hr_work_logs`
- * - Resilient fallback to `user_settings` if custom table is being set up
- * - Live real-time database listener (`supabase.channel`) + Cross-tab broadcast
- * - Telemetry Auto-Logger (`autoLogHRAction`): captures actual system operations performed by HR
- * - Automated duration calculator (decimal + formatted hours)
- */
 
 import { supabase } from "./supabase.js";
 import { HEAD_OFFICE } from "./companyEntities.js";
@@ -16,14 +5,12 @@ import { HEAD_OFFICE } from "./companyEntities.js";
 export const TABLE_NAME = "hr_work_logs";
 export const FALLBACK_SETTINGS_KEY = "enterprise_hr_actual_worklogs_v1";
 
-// Broadcast Channel for Instant Cross-Tab Real-Time Sync
 let workLogsChannel = null;
 try {
   if (typeof window !== "undefined" && window.BroadcastChannel) {
     workLogsChannel = new BroadcastChannel("hrhub_worklogs_live_sync");
   }
 } catch {
-  // Ignore
 }
 
 export function broadcastWorkLogUpdate(type, payload) {
@@ -32,16 +19,12 @@ export function broadcastWorkLogUpdate(type, payload) {
       workLogsChannel.postMessage({ type, payload, timestamp: Date.now() });
     }
   } catch {
-    // Ignore
   }
   if (typeof window !== "undefined") {
     window.dispatchEvent(new CustomEvent("hrhub_worklogs_updated", { detail: { type, payload } }));
   }
 }
 
-/**
- * Real-time subscription to database changes
- */
 export function subscribeToWorkLogsLive(callback) {
   const handler = (e) => {
     if (e?.detail) callback(e.detail);
@@ -50,7 +33,6 @@ export function subscribeToWorkLogsLive(callback) {
     window.addEventListener("hrhub_worklogs_updated", handler);
   }
 
-  // Cross-tab broadcast listener
   let bcHandler = null;
   if (workLogsChannel) {
     bcHandler = (e) => {
@@ -59,7 +41,6 @@ export function subscribeToWorkLogsLive(callback) {
     workLogsChannel.addEventListener("message", bcHandler);
   }
 
-  // Supabase Realtime channel listener
   let sbChannel = null;
   try {
     sbChannel = supabase
@@ -121,9 +102,6 @@ export function formatTimeAMPM(dateObj = new Date()) {
   return `${hours}:${minutes} ${meridian}`;
 }
 
-/**
- * Calculate duration in hours between two time strings like "8:00 AM" and "10:30 AM"
- */
 export function calculateHoursWorked(startTimeStr, endTimeStr) {
   if (!startTimeStr || !endTimeStr) return { numericHours: 0, formatted: "--" };
 
@@ -146,7 +124,7 @@ export function calculateHoursWorked(startTimeStr, endTimeStr) {
   if (startMins === null || endMins === null) return { numericHours: 0, formatted: "--" };
 
   let diff = endMins - startMins;
-  if (diff < 0) diff += 24 * 60; // Overnight shift
+  if (diff < 0) diff += 24 * 60;
 
   const hours = diff / 60;
   const numericHours = parseFloat(hours.toFixed(2));
@@ -155,13 +133,6 @@ export function calculateHoursWorked(startTimeStr, endTimeStr) {
   return { numericHours, formatted };
 }
 
-/**
- * Normalizes a record from the database to clean frontend camelCase format.
- * Features Smart Heartbeat Inactivity Detection:
- * - If elapsed time since last active heartbeat is > 7 minutes (laptop closed / off),
- *   it dynamically transitions to 'Completed' with the last known active time as end_time.
- * - If elapsed time is between 2 and 7 minutes, it dynamically displays as 'AFK (IDLE)'.
- */
 function normalizeLogRecord(raw) {
   if (!raw) return null;
   const rawStatus = String(raw.status || "");
@@ -174,7 +145,6 @@ function normalizeLogRecord(raw) {
     raw.end_time === "Active" ||
     raw.endTime === "Active";
 
-  // Calculate elapsed minutes since last active heartbeat
   const lastActiveTimestamp = raw.updated_at || raw.created_at;
   let elapsedMinutes = 0;
   if (lastActiveTimestamp) {
@@ -184,10 +154,8 @@ function normalizeLogRecord(raw) {
     }
   }
 
-  // If last heartbeat is > 7 minutes old, laptop is closed / user is offline
   const isStaleExpired = isReportedActive && elapsedMinutes > 7;
 
-  // Active AFK: either explicitly AFK, or inactive for 2-7 minutes
   const isAfk = !isStaleExpired && isReportedActive && (
     rawStatus.toUpperCase() === "AFK" ||
     rawStatus.toLowerCase().includes("afk") ||
@@ -250,19 +218,12 @@ function normalizeLogRecord(raw) {
   };
 }
 
-// In-memory cache
 let memoryWorkLogsList = null;
 
-/**
- * Fetch all work logs directly from database table `hr_work_logs`
- * 100% strictly database-driven. NO mockups, NO synthetic baseline data.
- */
 export async function fetchAllWorkLogs() {
   try {
-    // Background auto-retention cleanup: prune records older than 7 days (weekly rolling retention)
     autoPruneOldLogs(7);
 
-    // 1. Direct query to dedicated `hr_work_logs` database table
     const { data, error } = await supabase
       .from(TABLE_NAME)
       .select("*")
@@ -270,7 +231,6 @@ export async function fetchAllWorkLogs() {
       .order("created_at", { ascending: false });
 
     if (!error && Array.isArray(data)) {
-      // Client-side deduplication safeguard to guarantee single clean rows
       const seen = new Set();
       const activeUserDates = new Set();
       const uniqueData = [];
@@ -279,7 +239,6 @@ export async function fetchAllWorkLogs() {
         const date = row.log_date || "";
         const isRowActive = row.status === "In Progress" || row.status === "AFK" || row.status === "Ongoing" || row.end_time === "Active";
 
-        // Guarantee at most ONE active session per officer per date
         if (isRowActive) {
           const activeUserKey = `${email}__${date}`;
           if (activeUserDates.has(activeUserKey)) {
@@ -298,7 +257,6 @@ export async function fetchAllWorkLogs() {
       const normalized = uniqueData.map(normalizeLogRecord).filter(Boolean);
       memoryWorkLogsList = normalized;
 
-      // Asynchronously heal database: reconcile stale sessions where laptop was closed / off (> 7 mins)
       autoReconcileStaleSessions(data);
       if (typeof window !== "undefined") {
         try {
@@ -308,7 +266,6 @@ export async function fetchAllWorkLogs() {
       return normalized;
     }
 
-    // 2. Fallback to `user_settings` table if dedicated table is pending setup
     const { data: settingsData } = await supabase
       .from("user_settings")
       .select("settings_json")
@@ -328,12 +285,10 @@ export async function fetchAllWorkLogs() {
       const normalized = uniqueData.map(normalizeLogRecord).filter(Boolean);
       memoryWorkLogsList = normalized;
 
-      // Asynchronously heal database: reconcile stale sessions where laptop was closed / off (> 7 mins)
       autoReconcileStaleSessions(data);
       return normalized;
     }
 
-    // 3. Fallback to localStorage cache
     if (typeof window !== "undefined") {
       const local = window.localStorage.getItem(FALLBACK_SETTINGS_KEY);
       if (local) {
@@ -356,9 +311,6 @@ export async function fetchAllWorkLogs() {
   }
 }
 
-/**
- * Add a new real work log directly to database
- */
 export async function addWorkLogEntry(entry) {
   if (!entry || !entry.taskProject) {
     return { success: false, error: "Task or project name is required." };
@@ -393,7 +345,6 @@ export async function addWorkLogEntry(entry) {
   };
 
   try {
-    // 1. Attempt direct insert into `hr_work_logs` table
     const { data, error } = await supabase
       .from(TABLE_NAME)
       .insert([payloadSnake])
@@ -406,7 +357,6 @@ export async function addWorkLogEntry(entry) {
       const updated = [normalized, ...existing.filter((item) => item.id !== normalized.id)];
       memoryWorkLogsList = updated;
 
-      // Update backup mirror
       try {
         await supabase.from("user_settings").upsert(
           {
@@ -422,7 +372,6 @@ export async function addWorkLogEntry(entry) {
       return { success: true, log: normalized };
     }
 
-    // 2. Resilient fallback if table does not exist yet
     const fallbackId = `wlog_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
     const newLogItem = normalizeLogRecord({
       id: fallbackId,
@@ -459,15 +408,10 @@ export async function addWorkLogEntry(entry) {
   }
 }
 
-/**
- * Delete a work log entry directly from database
- */
 export async function deleteWorkLogEntry(logId) {
   try {
-    // Delete directly from dedicated database table
     await supabase.from(TABLE_NAME).delete().eq("id", logId);
 
-    // Update in-memory and fallback cache
     const currentList = await fetchAllWorkLogs();
     const updated = currentList.filter((l) => l.id !== logId);
     memoryWorkLogsList = updated;
@@ -497,21 +441,14 @@ export async function deleteWorkLogEntry(logId) {
   }
 }
 
-// In-memory anti-duplication debounce set
 const recentAutoLogs = new Map();
 
-/**
- * Checks if a user is specifically the Head Office HRMD Master Account.
- * Only the Head Office HRMD Master Account is excluded from being logged, as they oversee all staff logs.
- * All other per-user accounts (branch officers, supervisors, employees) are recorded and visible per user.
- */
 export function isHRMDUser(user) {
   if (!user) return false;
   const email = String(user.email || user.authorEmail || user.author_email || "").toLowerCase().trim();
   const name = String(user.name || user.authorName || user.author_name || "").toLowerCase().trim().replace(/\s+/g, "");
   const role = String(user.role || user.authorRole || user.author_role || "").toLowerCase().trim();
 
-  // ONLY exclude when specifically HRMD or Master Admin
   return (
     name === "hrmd" ||
     name.includes("hrmd") ||
@@ -526,18 +463,8 @@ export function isHRMDUser(user) {
   );
 }
 
-// Alias for backwards compatibility
 export const isHRAdminUser = isHRMDUser;
 
-/**
- * Automatically logs an actual operational action performed by staff/officers in HR Hub.
- * Triggered transparently in the background when operations are performed:
- * - Drafting or issuing an official Memo / NTE
- * - Updating 201 employee files or compliance docs
- * - Resolving or reviewing an Incident Report
- * - Publishing a company announcement
- * - Daily shift portal access
- */
 export async function autoLogHRAction({
   user,
   taskProject,
@@ -554,7 +481,6 @@ export async function autoLogHRAction({
   const userRole = user.role || user.authorRole || "HR Officer";
   const userBranch = user.branch || user.authorBranch || "Head Office (SGC)";
 
-  // Debounce duplicate events within 5 seconds
   const debounceKey = `${userEmail}_${taskProject}_${status}`;
   const lastLogged = recentAutoLogs.get(debounceKey);
   const nowMs = Date.now();
@@ -594,9 +520,6 @@ export async function autoLogHRAction({
   });
 }
 
-/**
- * HR Work Log Operational Categories
- */
 export const HR_WORK_CATEGORIES = [
   { id: "shift_attendance", label: "Shift Attendance & Station Check-in", color: "bg-teal-50 text-teal-800 border-teal-200" },
   { id: "due_process", label: "Employee Relations & Due Process", color: "bg-rose-50 text-rose-700 border-rose-200" },
@@ -608,10 +531,6 @@ export const HR_WORK_CATEGORIES = [
   { id: "coordination_meeting", label: "Operational Coordination Meeting", color: "bg-slate-100 text-slate-700 border-slate-200" }
 ];
 
-/**
- * System-Wide Telemetry Mapping for Live Shift & Accomplishment Logs.
- * Automatically logs professional HR operational records whenever any tab or feature is used.
- */
 export const MODULE_WORKLOG_MAP = {
   home: {
     task: "Executive Dashboard Operations & KPI Review",
@@ -775,7 +694,6 @@ export const MODULE_WORKLOG_MAP = {
   }
 };
 
-// Synchronous in-memory lock to eliminate duplicate database writes & optimize performance
 let activeSessionLock = {
   email: null,
   moduleId: null,
@@ -783,18 +701,12 @@ let activeSessionLock = {
   inFlight: false
 };
 
-/**
- * Real-Time Active Module Session Tracker:
- * Records the currently open feature or tab for an authenticated user account.
- * Updates the user's active session in-place with zero table bloat and sets status to 'In Progress'.
- */
 export async function trackUserActiveModuleSession({ user, moduleId, customDetails = {} }) {
   if (!user || !moduleId) return null;
 
   const userEmail = (user.email || user.authorEmail || user.author_email || "").toLowerCase().trim();
   const nowMs = Date.now();
 
-  // 1. Synchronous Lock: If user is already active in this module, return immediately (0ms, 0 network requests)
   if (
     activeSessionLock.email === userEmail &&
     activeSessionLock.moduleId === moduleId &&
@@ -803,7 +715,6 @@ export async function trackUserActiveModuleSession({ user, moduleId, customDetai
     return null;
   }
 
-  // 2. Prevent overlapping in-flight network queries for the same user
   if (activeSessionLock.inFlight && activeSessionLock.email === userEmail) {
     return null;
   }
@@ -830,7 +741,6 @@ export async function trackUserActiveModuleSession({ user, moduleId, customDetai
   const todayStr = getTodayDateStr();
 
   try {
-    // 3. Fetch current active session for this user today from database
     const { data: activeRows } = await supabase
       .from(TABLE_NAME)
       .select("*")
@@ -839,8 +749,6 @@ export async function trackUserActiveModuleSession({ user, moduleId, customDetai
       .in("status", ["In Progress", "Ongoing", "in_progress", "AFK", "afk"])
       .order("created_at", { ascending: false });
 
-    // If an active session row already exists for this user today, UPDATE IN-PLACE!
-    // This guarantees that tab switching and presence updates NEVER insert endless rows or consume unnecessary database storage.
     if (Array.isArray(activeRows) && activeRows.length > 0) {
       const activeRow = activeRows[0];
       const isAfk = Boolean(customDetails.isAfk);
@@ -861,7 +769,6 @@ export async function trackUserActiveModuleSession({ user, moduleId, customDetai
         })
         .eq("id", activeRow.id);
 
-      // Clean up any extra active rows if multiple existed previously
       if (activeRows.length > 1) {
         const extraIds = activeRows.slice(1).map((r) => r.id);
         await supabase.from(TABLE_NAME).delete().in("id", extraIds);
@@ -884,7 +791,6 @@ export async function trackUserActiveModuleSession({ user, moduleId, customDetai
       return updatedRecord;
     }
 
-    // 4. Otherwise (first module access of the day), insert exactly 1 active session record
     const newSessionPayload = {
       date: todayStr,
       taskProject: task.trim(),
@@ -912,11 +818,6 @@ export async function trackUserActiveModuleSession({ user, moduleId, customDetai
   }
 }
 
-/**
- * Real-Time Presence & AFK State Updater:
- * Seamlessly updates the user's active session in-place when they are AFK or return.
- * Does NOT insert new rows — purely updates the single active row in-place (0 storage consumption).
- */
 export async function updateUserPresenceStatus({ user, isAfk, currentModule = "home" }) {
   if (!user) return false;
 
@@ -951,7 +852,6 @@ export async function updateUserPresenceStatus({ user, isAfk, currentModule = "h
         })
         .eq("id", activeRow.id);
 
-      // Clean up any extra active rows if multiple existed previously
       if (activeRows.length > 1) {
         const extraIds = activeRows.slice(1).map((r) => r.id);
         await supabase.from(TABLE_NAME).delete().in("id", extraIds);
@@ -977,25 +877,20 @@ export async function updateUserPresenceStatus({ user, isAfk, currentModule = "h
   return false;
 }
 
-/**
- * Automated Rolling Data Retention Cleaner:
- * Automatically prunes logs older than retentionDays (Option A: 7 days weekly rolling retention).
- * Prevents database bloat, keeping queries instant and table size razor-thin.
- */
 export async function autoPruneOldLogs(retentionDays = 7) {
   try {
     if (typeof window !== "undefined") {
       const todayStr = getTodayDateStr();
       const lastPruned = window.localStorage.getItem("hrhub_last_prune_date");
       if (lastPruned === todayStr) {
-        return; // Already checked and cleaned today
+        return;
       }
       window.localStorage.setItem("hrhub_last_prune_date", todayStr);
     }
 
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - retentionDays);
-    const cutoffDateStr = cutoffDate.toISOString().slice(0, 10); // YYYY-MM-DD
+    const cutoffDateStr = cutoffDate.toISOString().slice(0, 10);
     const cutoffIso = cutoffDate.toISOString();
 
     await supabase
@@ -1007,21 +902,11 @@ export async function autoPruneOldLogs(retentionDays = 7) {
   }
 }
 
-/**
- * System-Wide Activity Logger:
- * Automatically records actual operations performed by authenticated staff users.
- * Ensures active tab sessions are recorded as 'In Progress'.
- */
 export function logSystemActivity(user, moduleId, customDetails = {}) {
   if (!user) return null;
   return trackUserActiveModuleSession({ user, moduleId, customDetails });
 }
 
-/**
- * Auto-Reconciles Stale Expired Sessions in Database:
- * Detects sessions where the laptop was closed or powered off without checking out (> 7 mins inactive).
- * Auto-closes them in the database with the last active time as end_time.
- */
 export async function autoReconcileStaleSessions(rawRows) {
   if (!Array.isArray(rawRows) || rawRows.length === 0) return;
   const nowMs = Date.now();
@@ -1070,11 +955,6 @@ export async function autoReconcileStaleSessions(rawRows) {
   }
 }
 
-/**
- * Live User Presence Heartbeat:
- * Refreshes updated_at timestamp every 45s while user is active on the dashboard.
- * When laptop is closed, heartbeats stop and session automatically expires after 7 minutes.
- */
 export async function sendUserHeartbeat({ user, isAfk = false, currentModule = "home" }) {
   if (!user) return;
   const userEmail = (user.email || user.authorEmail || user.author_email || "").toLowerCase().trim();
@@ -1095,9 +975,6 @@ export async function sendUserHeartbeat({ user, isAfk = false, currentModule = "
   }
 }
 
-/**
- * Closes the active session on intentional window unload or logout
- */
 export async function closeActiveModuleSession({ user }) {
   if (!user) return;
   const userEmail = (user.email || user.authorEmail || user.author_email || "").toLowerCase().trim();
@@ -1132,5 +1009,4 @@ export async function closeActiveModuleSession({ user }) {
     console.warn("closeActiveModuleSession notice:", err);
   }
 }
-
 

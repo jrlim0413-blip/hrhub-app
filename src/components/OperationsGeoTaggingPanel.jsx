@@ -12,7 +12,6 @@ import {
   Volume2, VolumeX
 } from "lucide-react";
 
-// Centralized Multi-User Cloud Database & Realtime Sync Service for Booths
 import {
   fetchCentralBooths,
   saveCentralBooth,
@@ -21,16 +20,12 @@ import {
   getLocalCachedBooths
 } from "../services/geoBoothsService";
 
-// Official 1,983-point real street route passing through ALL 16 EDGE BARANGAYS of Mandaue City
 import SNAPPED_EDGE_ROUTE_COORDS from "../data/mandaueEdgeBarangaysRoute.json";
 
-// Dedicated individual real-road perimeter circuits & official boundaries for ALL 27 BARANGAYS of Mandaue City
 import BARANGAY_PERIMETER_ROUTES from "../data/barangayPerimeterRoutes.json";
 
-// Public transport terminals & industrial factories data
 import MANDAUE_POIS from "../data/mandauePOIs.json";
 
-// Live Source API Configuration & Pre-Cached Agents Data
 import { API_CONFIG } from "../config/apiConfig";
 import SOURCE_AGENTS_CACHE from "../data/sourceApiAgentsCache.json";
 import { getStlAgents, getStlSupervisors, fetchLiveStlData, matchStlCanonicalName } from "../lib/stlApiLiveService";
@@ -49,7 +44,6 @@ import {
 } from "../data/multiEntityGeoData";
 import { isGlobalAccessUser, getUserAssignedStlEntity } from "../lib/companyEntities";
 
-// Official mapping between Barangay Circuit IDs and Source API brgyId
 export const BARANGAY_API_IDS = {
   casili: ["33"],
   subangdaku: ["47"],
@@ -80,7 +74,6 @@ export const BARANGAY_API_IDS = {
   ibabao: ["54", "38"]
 };
 
-// Helper function to format GPS coordinates cleanly in standard navigation format
 export function formatGPS(coords) {
   if (!coords || coords.length < 2) return "N/A";
   const lat = coords[0];
@@ -90,7 +83,6 @@ export function formatGPS(coords) {
   return `${latStr}, ${lngStr}`;
 }
 
-// Ray-casting algorithm for checking if a coordinate point is strictly inside a closed polygon
 export function pointInPolygon(point, vs) {
   if (!vs || vs.length < 3) return false;
   const x = point[0], y = point[1];
@@ -104,7 +96,6 @@ export function pointInPolygon(point, vs) {
   return inside;
 }
 
-// Distance from point to line segment squared
 function distToSegmentSquared(p, v, w) {
   const l2 = (v[0] - w[0]) ** 2 + (v[1] - w[1]) ** 2;
   if (l2 === 0) return (p[0] - v[0]) ** 2 + (p[1] - v[1]) ** 2;
@@ -113,9 +104,8 @@ function distToSegmentSquared(p, v, w) {
   return (p[0] - (v[0] + t * (w[0] - v[0]))) ** 2 + (p[1] - (v[1] + t * (w[1] - v[1]))) ** 2;
 }
 
-// Great-circle / Haversine distance in meters between two GPS coordinates
 export function calculateDistanceMeters(lat1, lon1, lat2, lon2) {
-  const R = 6371e3; // Earth mean radius in meters
+  const R = 6371e3;
   const p1 = (lat1 * Math.PI) / 180;
   const p2 = (lat2 * Math.PI) / 180;
   const dp = ((lat2 - lat1) * Math.PI) / 180;
@@ -129,7 +119,6 @@ export function calculateDistanceMeters(lat1, lon1, lat2, lon2) {
   return R * c;
 }
 
-// Formats an OSRM route step into a clean Waze / Google Maps style turn-by-turn instruction
 function formatOsrmManeuver(step, destinationLabel = "Kiosk") {
   const m = step?.maneuver || {};
   const type = String(m.type || "").toLowerCase();
@@ -206,7 +195,6 @@ function formatNavArrivalClock(sec) {
   return arrival.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 }
 
-// Known high-traffic urban arterial corridors across STL operating sectors (PH)
 const PH_ARTERIAL_CORRIDORS = [
   "m.c. briones", "mc briones", "a.s. fortuna", "as fortuna", "u.n. avenue", "un avenue", "united nations",
   "ouano", "marcelo fernan", "a.c. cortes", "ac cortes", "d.m. cortes", "gov. m. cuenco", "cuenco",
@@ -214,7 +202,6 @@ const PH_ARTERIAL_CORRIDORS = [
   "tubod", "pala-o", "ibabao", "subangdaku", "banilad", "maguikay", "tipolo"
 ];
 
-// Translates a navigation step instruction to natural Taglish Waze-style speech
 function toTaglishVoiceInstruction(step) {
   if (!step) return "";
   const street = step.street && step.street !== "Local Road" && step.street !== "Starting Point" ? step.street : "";
@@ -243,7 +230,6 @@ function toTaglishVoiceInstruction(step) {
   }
 }
 
-// Expands street abbreviations so navigation voice pronounces Philippine roads naturally
 function normalizeSpokenNavigationText(text) {
   return String(text || "")
     .replace(/\bBrgy\.?\s+/gi, "Barangay ")
@@ -260,7 +246,6 @@ function normalizeSpokenNavigationText(text) {
     .trim();
 }
 
-// Splits long navigation announcements into natural ≤165-char phrases for smooth neural playback
 function splitSpeechChunks(text, maxLen = 165) {
   const sentences = text.split(/(?<=[.!?])\s+/).filter(Boolean);
   const chunks = [];
@@ -297,7 +282,6 @@ const navTtsAudioCache = Object.create(null);
 const navTtsCacheKeys = [];
 let navAudioUnlocked = false;
 
-// Unlocks HTML5 audio playback synchronously inside a user click so async post-GPS voice auto-plays like Google Maps
 function unlockNavAudioPlayback() {
   if (navAudioUnlocked || typeof window === "undefined") return;
   try {
@@ -338,7 +322,6 @@ function speakBrowserNeuralFallback(text, lang = "tl") {
     const utter = new SpeechSynthesisUtterance(text);
     const voices = window.speechSynthesis.getVoices() || [];
 
-    // Strictly prefer Natural / Online Neural voices over robotic legacy SAPI (David/Zira/Mark)
     const isNatural = (v) => /natural|online|google|samantha|karen|ava|blessica|angelo|rosa/i.test(v.name || "");
     const preferred =
       lang === "tl"
@@ -360,7 +343,6 @@ function speakBrowserNeuralFallback(text, lang = "tl") {
   }
 }
 
-// Natural Human Neural Voice Engine (/api/tts MP3 with in-memory cache + Neural Browser Fallback; 0 DB egress, ₱0 cost)
 async function speakWazeVoice(text, lang = "tl") {
   if (typeof window === "undefined" || !text) return;
   const normalized = normalizeSpokenNavigationText(text);
@@ -418,11 +400,217 @@ async function speakWazeVoice(text, lang = "tl") {
   }
 }
 
-// Analyzes route traffic using optional Free-Tier TomTom Live Traffic API OR zero-cost PH Peak-Hour + Road Speed intelligence
+function calculateBearingDeg(fromCoords, toCoords) {
+  if (!fromCoords || !toCoords) return 0;
+  const lat1 = (fromCoords[0] * Math.PI) / 180;
+  const lat2 = (toCoords[0] * Math.PI) / 180;
+  const dLon = ((toCoords[1] - fromCoords[1]) * Math.PI) / 180;
+  const y = Math.sin(dLon) * Math.cos(lat2);
+  const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
+  return ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360;
+}
+
+function buildNavVehicleMarkerHtml(vehicleType = "motor", headingDeg = 0, labelText = "You (Live GPS)") {
+  const safeDeg = Number.isFinite(headingDeg) ? Math.round(headingDeg) : 0;
+
+  let vehicleSvg = "";
+  if (vehicleType === "motor") {
+    vehicleSvg = `
+      <svg viewBox="0 0 64 64" width="46" height="46" style="filter: drop-shadow(0 4px 10px rgba(0,0,0,0.65));">
+        <defs>
+          <radialGradient id="motoBeam" cx="50%" cy="15%" r="50%">
+            <stop offset="0%" stop-color="#fef08a" stop-opacity="0.85"/>
+            <stop offset="100%" stop-color="#fef08a" stop-opacity="0"/>
+          </radialGradient>
+        </defs>
+        <path d="M22 14 L32 0 L42 14 Z" fill="url(#motoBeam)"/>
+        <rect x="29" y="10" width="6" height="12" rx="3" fill="#0f172a" stroke="#e2e8f0" stroke-width="1.2"/>
+        <path d="M18 22 L46 22" stroke="#cbd5e1" stroke-width="3.6" stroke-linecap="round"/>
+        <circle cx="18" cy="22" r="2.2" fill="#0f172a"/>
+        <circle cx="46" cy="22" r="2.2" fill="#0f172a"/>
+        <rect x="25" y="17" width="14" height="26" rx="7" fill="#ef4444" stroke="#ffffff" stroke-width="2"/>
+        <rect x="28.5" y="42" width="7" height="13" rx="3.5" fill="#0f172a" stroke="#cbd5e1" stroke-width="1.2"/>
+        <circle cx="32" cy="31" r="7.5" fill="#0f172a" stroke="#38bdf8" stroke-width="2.2"/>
+        <path d="M26.5 28 Q32 23.5 37.5 28" fill="none" stroke="#38bdf8" stroke-width="2.2" stroke-linecap="round"/>
+      </svg>
+    `;
+  } else if (vehicleType === "car") {
+    vehicleSvg = `
+      <svg viewBox="0 0 64 64" width="46" height="46" style="filter: drop-shadow(0 4px 10px rgba(0,0,0,0.65));">
+        <defs>
+          <radialGradient id="carBeam" cx="50%" cy="12%" r="55%">
+            <stop offset="0%" stop-color="#bae6fd" stop-opacity="0.85"/>
+            <stop offset="100%" stop-color="#bae6fd" stop-opacity="0"/>
+          </radialGradient>
+        </defs>
+        <path d="M16 14 L24 0 L40 0 L48 14 Z" fill="url(#carBeam)"/>
+        <rect x="19" y="11" width="26" height="44" rx="9" fill="#2563eb" stroke="#ffffff" stroke-width="2.2"/>
+        <rect x="22" y="18" width="20" height="10" rx="3" fill="#0f172a" opacity="0.9"/>
+        <rect x="23" y="29" width="18" height="12" rx="2.5" fill="#60a5fa" opacity="0.9"/>
+        <rect x="23" y="42" width="18" height="6" rx="2" fill="#0f172a" opacity="0.85"/>
+        <circle cx="23" cy="13" r="2.2" fill="#fef08a"/>
+        <circle cx="41" cy="13" r="2.2" fill="#fef08a"/>
+        <rect x="21" y="52" width="6" height="2.2" rx="1" fill="#f87171"/>
+        <rect x="37" y="52" width="6" height="2.2" rx="1" fill="#f87171"/>
+      </svg>
+    `;
+  } else {
+    vehicleSvg = `
+      <svg viewBox="0 0 64 64" width="42" height="42" style="filter: drop-shadow(0 4px 10px rgba(0,0,0,0.6));">
+        <circle cx="32" cy="32" r="22" fill="#ffffff" stroke="#2563eb" stroke-width="3"/>
+        <path d="M32 13 L45 45 L32 38 L19 45 Z" fill="#2563eb"/>
+      </svg>
+    `;
+  }
+
+  return `
+    <div style="display:flex;flex-direction:column;align-items:center;transform:translate(-50%,-50%);pointer-events:none;">
+      <div style="
+        background: rgba(15, 23, 42, 0.92);
+        color: #38bdf8;
+        border: 1.5px solid #38bdf8;
+        border-radius: 9999px;
+        padding: 1.5px 8px;
+        font-family: Inter, system-ui, sans-serif;
+        font-size: 9.5px;
+        font-weight: 800;
+        white-space: nowrap;
+        box-shadow: 0 3px 10px rgba(0,0,0,0.55);
+        margin-bottom: 3px;
+      ">${labelText}</div>
+      <div style="position:relative;width:48px;height:48px;display:flex;align-items:center;justify-content:center;">
+        <div style="
+          position:absolute;inset:-6px;border-radius:50%;
+          background:rgba(56,189,248,0.22);
+          border:2px solid rgba(56,189,248,0.6);
+          animation: ping 1.8s cubic-bezier(0,0,0.2,1) infinite;
+        "></div>
+        <div style="transform: rotate(${safeDeg}deg); transition: transform 0.35s ease; display:flex; align-items:center; justify-content:center;">
+          ${vehicleSvg}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function computeOfflineProgressAlongRoute(currentCoords, routeCoords = []) {
+  if (!currentCoords || !Array.isArray(routeCoords) || routeCoords.length < 2) {
+    return { nearestIdx: 0, offRouteMeters: 0, remainingMeters: 0, nextWaypoint: null };
+  }
+  let nearestIdx = 0;
+  let minDist = Infinity;
+  for (let i = 0; i < routeCoords.length; i++) {
+    const d = calculateDistanceMeters(currentCoords[0], currentCoords[1], routeCoords[i][0], routeCoords[i][1]);
+    if (d < minDist) {
+      minDist = d;
+      nearestIdx = i;
+    }
+  }
+  let remainingMeters = minDist;
+  for (let i = nearestIdx; i < routeCoords.length - 1; i++) {
+    remainingMeters += calculateDistanceMeters(
+      routeCoords[i][0], routeCoords[i][1],
+      routeCoords[i + 1][0], routeCoords[i + 1][1]
+    );
+  }
+  const nextWaypoint = routeCoords[Math.min(nearestIdx + 2, routeCoords.length - 1)] || routeCoords[routeCoords.length - 1];
+  return {
+    nearestIdx,
+    offRouteMeters: Math.round(minDist),
+    remainingMeters: Math.round(remainingMeters),
+    nextWaypoint
+  };
+}
+
+function latLngToTileXY(lat, lng, zoom) {
+  const n = Math.pow(2, zoom);
+  const x = Math.floor(((lng + 180) / 360) * n);
+  const latRad = (lat * Math.PI) / 180;
+  const y = Math.floor(((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2) * n);
+  return { x, y };
+}
+
+async function precacheRouteForOffline(routePayload, lang = "tl") {
+  if (typeof window === "undefined" || !routePayload) return false;
+  try {
+    try {
+      localStorage.setItem("hrhub_offline_nav_route_v1", JSON.stringify({
+        savedAt: Date.now(),
+        targetBooth: routePayload.targetBooth,
+        agentName: routePayload.agentName,
+        coordinates: routePayload.coordinates,
+        steps: routePayload.steps,
+        distanceMeters: routePayload.distanceMeters,
+        durationSec: routePayload.durationSec,
+        traffic: routePayload.traffic
+      }));
+    } catch { }
+
+    const ttsLang = lang === "en" ? "en" : "tl";
+    const stepsToCache = (routePayload.steps || []).slice(0, 10);
+    for (const st of stepsToCache) {
+      const rawPhrase = ttsLang === "tl" ? toTaglishVoiceInstruction(st) : st.instruction;
+      const norm = normalizeSpokenNavigationText(rawPhrase);
+      const chunks = splitSpeechChunks(norm, 165);
+      for (const chunk of chunks) {
+        const cacheKey = `${ttsLang}:${chunk}`;
+        if (!navTtsAudioCache[cacheKey]) {
+          fetch(`/api/tts?lang=${encodeURIComponent(ttsLang)}&text=${encodeURIComponent(chunk)}`)
+            .then(async (r) => {
+              if (r.ok && (r.headers.get("content-type") || "").includes("audio")) {
+                const blob = await r.blob();
+                navTtsAudioCache[cacheKey] = URL.createObjectURL(blob);
+                navTtsCacheKeys.push(cacheKey);
+              }
+            })
+            .catch(() => {});
+        }
+      }
+    }
+
+    if ("caches" in window && Array.isArray(routePayload.coordinates) && routePayload.coordinates.length > 1) {
+      const tileSet = new Set();
+      const coords = routePayload.coordinates;
+      const sampleStride = Math.max(1, Math.floor(coords.length / 12));
+      for (let i = 0; i < coords.length; i += sampleStride) {
+        const [lat, lng] = coords[i];
+        for (const z of [16, 17]) {
+          const { x, y } = latLngToTileXY(lat, lng, z);
+          tileSet.add(`https://tile.openstreetmap.org/${z}/${x}/${y}.png`);
+        }
+      }
+      if (routePayload.targetBooth?.coords) {
+        const [dLat, dLng] = routePayload.targetBooth.coords;
+        for (const z of [17, 18]) {
+          const { x, y } = latLngToTileXY(dLat, dLng, z);
+          tileSet.add(`https://tile.openstreetmap.org/${z}/${x}/${y}.png`);
+        }
+      }
+
+      const urls = Array.from(tileSet).slice(0, 36);
+      const tileCache = await caches.open("hrhub-offline-map-tiles-v1");
+      for (let i = 0; i < urls.length; i += 6) {
+        const batch = urls.slice(i, i + 6);
+        await Promise.allSettled(
+          batch.map(async (u) => {
+            const exists = await tileCache.match(u);
+            if (!exists) {
+              const r = await fetch(u, { mode: "no-cors" }).catch(() => null);
+              if (r) await tileCache.put(u, r).catch(() => {});
+            }
+          })
+        );
+      }
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function analyzeRouteTraffic(startCoords, endCoords, baseDistanceMeters, baseDurationSec, steps = []) {
   const tomtomKey = (API_CONFIG?.TOMTOM_API_KEY || "").trim();
 
-  // 1. Live Real-Time Traffic via TomTom Free Tier (if VITE_TOMTOM_API_KEY is configured — 0 DB egress)
   if (tomtomKey) {
     try {
       const ttUrl = `https://api.tomtom.com/routing/1/calculateRoute/${startCoords[0]},${startCoords[1]}:${endCoords[0]},${endCoords[1]}/json?traffic=true&travelMode=car&key=${encodeURIComponent(tomtomKey)}`;
@@ -460,10 +648,9 @@ async function analyzeRouteTraffic(startCoords, endCoords, baseDistanceMeters, b
     }
   }
 
-  // 2. Zero-Cost Built-In Traffic Estimator (PH Peak-Hour Window + Road Speed Ratio + Arterial Choke-Point Check)
   const now = new Date();
   const hour = now.getHours() + now.getMinutes() / 60;
-  const day = now.getDay(); // 0=Sun, 6=Sat
+  const day = now.getDay();
   const isWeekdayOrSat = day >= 1 && day <= 6;
 
   const isSeverePeak = isWeekdayOrSat && ((hour >= 7.0 && hour <= 9.25) || (hour >= 16.75 && hour <= 19.75));
@@ -523,14 +710,13 @@ async function analyzeRouteTraffic(startCoords, endCoords, baseDistanceMeters, b
   };
 }
 
-// Computes actual road-based navigable distance, route polyline, and optional turn-by-turn steps between two GPS coordinates
 export async function fetchRoadRouteBetweenPoints(startCoords, endCoords, includeSteps = false, destinationLabel = "Target Kiosk") {
   const straightDist = calculateDistanceMeters(startCoords[0], startCoords[1], endCoords[0], endCoords[1]);
 
   try {
     const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${startCoords[1]},${startCoords[0]};${endCoords[1]},${endCoords[0]}?overview=full&geometries=geojson${includeSteps ? "&steps=true" : ""}`;
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), includeSteps ? 6000 : 3500);
+    const timeout = setTimeout(() => controller.abort(), includeSteps ? 3800 : 3200);
     const res = await fetch(osrmUrl, { signal: controller.signal });
     clearTimeout(timeout);
 
@@ -562,8 +748,6 @@ export async function fetchRoadRouteBetweenPoints(startCoords, endCoords, includ
     console.warn("OSRM road route notice, using urban road grid solver:", err.message);
   }
 
-  // Realistic Urban Road Circuity & Intermediate Street Traversal Fallback
-  // Philippine urban road networks typically exhibit ~1.30x to 1.35x circuity over straight-line distance
   const circuityFactor = 1.32;
   const estimatedRoadDistance = Math.round(straightDist * circuityFactor);
   const estDuration = Math.round(estimatedRoadDistance / (28 * 1000 / 3600));
@@ -573,7 +757,6 @@ export async function fetchRoadRouteBetweenPoints(startCoords, endCoords, includ
   const dLat = lat2 - lat1;
   const dLng = lng2 - lng1;
 
-  // Intermediate street-following waypoints simulating real street turns
   const roadWaypoints = [
     [lat1, lng1],
     [lat1 + dLat * 0.35, lng1 + dLng * 0.08],
@@ -621,7 +804,6 @@ export async function fetchRoadRouteBetweenPoints(startCoords, endCoords, includ
   };
 }
 
-// Helper to get yesterday's ISO date string (YYYY-MM-DD) and formatted display label
 export function getYesterdayDates() {
   const d = new Date();
   d.setDate(d.getDate() - 1);
@@ -635,18 +817,15 @@ export function getYesterdayDates() {
   return { isoDate, displayLabel };
 }
 
-// Helper to determine if an agent record is Active or Inactive
 export function checkAgentIsActive(agent) {
   if (!agent) return false;
   if (agent.deleted_at) return false;
 
-  // Primary API property (0 or 1, or boolean)
   if (agent.isActive !== undefined && agent.isActive !== null) {
     if ([0, "0", false, "false", "inactive", "disabled"].includes(agent.isActive)) return false;
     if ([1, "1", true, "true", "active", "enabled"].includes(agent.isActive)) return true;
   }
 
-  // Secondary property names
   if (agent.is_active !== undefined && agent.is_active !== null) {
     if ([0, "0", false, "false", "inactive", "disabled"].includes(agent.is_active)) return false;
     if ([1, "1", true, "true", "active", "enabled"].includes(agent.is_active)) return true;
@@ -662,8 +841,6 @@ export function checkAgentIsActive(agent) {
   return false;
 }
 
-// ================= OFFICIAL ILLUSTRATED KIOSK BOOTH SVG ICON =================
-// Authentic illustrated kiosk directly matching uploaded design (canopy, service window, teller & counter)
 export function KioskIconSvg({ width = 48, height = 62, className = "" }) {
   return (
     <svg
@@ -674,29 +851,22 @@ export function KioskIconSvg({ width = 48, height = 62, className = "" }) {
       style={{ display: "block" }}
       xmlns="http://www.w3.org/2000/svg"
     >
-      {/* 1. Roof Canopy (Rounded Top) */}
       <rect x="5" y="6" width="90" height="26" rx="13" fill="#f5a623" stroke="#18181b" strokeWidth="5.5" strokeLinejoin="round" />
       <path d="M 16 19 L 84 19" stroke="#18181b" strokeWidth="3.5" strokeLinecap="round" opacity="0.9" />
 
-      {/* 2. Service Window Backing & Pillars */}
       <rect x="14" y="30" width="72" height="40" fill="#f5a623" stroke="#18181b" strokeWidth="5" strokeLinejoin="round" />
 
-      {/* 3. Teller Attendant Person Inside Kiosk */}
       <circle cx="50" cy="45" r="9" fill="#f5a623" stroke="#18181b" strokeWidth="4.5" />
       <path d="M 34 69 C 34 55, 66 55, 66 69 Z" fill="#f5a623" stroke="#18181b" strokeWidth="4.5" strokeLinejoin="round" />
 
-      {/* 4. Front Service Counter Desk */}
       <rect x="3" y="66" width="94" height="16" rx="8" fill="#f5a623" stroke="#18181b" strokeWidth="5.5" strokeLinejoin="round" />
 
-      {/* 5. Lower Kiosk Cabinet Base */}
       <rect x="9" y="80" width="82" height="42" rx="10" fill="#f5a623" stroke="#18181b" strokeWidth="5.5" strokeLinejoin="round" />
-      {/* Cabinet Front Inset Panel */}
       <rect x="19" y="90" width="62" height="22" rx="6" fill="#f5a623" stroke="#18181b" strokeWidth="4.5" strokeLinejoin="round" />
     </svg>
   );
 }
 
-// Generates the raw SVG HTML string for Leaflet divIcon and popups
 export function getKioskSvgHtml(width = 48, height = 62) {
   return `
     <svg viewBox="0 0 100 130" width="${width}" height="${height}" style="display: block; filter: drop-shadow(0 4px 10px rgba(0,0,0,0.5));" xmlns="http://www.w3.org/2000/svg">
@@ -712,7 +882,6 @@ export function getKioskSvgHtml(width = 48, height = 62) {
   `;
 }
 
-// Shortest distance from point to polygon boundary
 function distToPolygon(point, vs) {
   if (!vs || vs.length < 2) return Infinity;
   let minD2 = Infinity;
@@ -723,13 +892,11 @@ function distToPolygon(point, vs) {
   return Math.sqrt(minD2);
 }
 
-// High-precision Barangay detector from GPS Coordinates (Snaps to all STL territory sectors & cadastral polygons)
 export function detectBarangayFromCoords(lat, lng) {
   const numLat = parseFloat(lat);
   const numLng = parseFloat(lng);
   if (isNaN(numLat) || isNaN(numLng)) return null;
 
-  // 0. Check Multi-Entity STL Territories (Maguindanao, Iligan/Lanao, Cotabato City)
   const multiSector = detectSectorInTerritory(numLat, numLng);
   if (multiSector) {
     return multiSector;
@@ -737,7 +904,6 @@ export function detectBarangayFromCoords(lat, lng) {
 
   const pt = [numLat, numLng];
 
-  // 1. Strict containment in official cadastral survey polygons
   const insideMatches = [];
   for (const [id, data] of Object.entries(BARANGAY_PERIMETER_ROUTES)) {
     if (data.boundaryPolygon && data.boundaryPolygon.length > 2) {
@@ -775,7 +941,6 @@ export function detectBarangayFromCoords(lat, lng) {
     };
   }
 
-  // 2. Proximity fallback to nearest cadastral perimeter
   let best = null;
   let minEdgeDist = Infinity;
   for (const [id, data] of Object.entries(BARANGAY_PERIMETER_ROUTES)) {
@@ -802,7 +967,6 @@ export function detectBarangayFromCoords(lat, lng) {
   return null;
 }
 
-// ================= ALL 16 EDGE BARANGAYS (OUTER PERIMETER CIRCUIT) =================
 export const EDGE_BARANGAYS_CIRCUIT = [
   {
     step: 1,
@@ -998,7 +1162,6 @@ export const EDGE_BARANGAYS_CIRCUIT = [
   }
 ];
 
-// ================= ALL 11 INTERIOR BARANGAYS =================
 export const INTERIOR_BARANGAYS = [
   { id: "bakilid", name: "Bakilid", coords: [10.33400, 123.93000], mainRoad: "A.S. Fortuna St" },
   { id: "basak", name: "Basak", coords: [10.35400, 123.94800], mainRoad: "M.C. Briones Highway" },
@@ -1045,8 +1208,7 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
   const boothMarkersRef = useRef({});
   const searchContainerRef = useRef(null);
 
-  // Waze / Google Maps Style Kiosk Navigation States
-  const [focusedBooth, setFocusedBooth] = useState(null); // { booth, agentName }
+  const [focusedBooth, setFocusedBooth] = useState(null);
   const [activeNavRoute, setActiveNavRoute] = useState(null);
   const [isCalculatingNavRoute, setIsCalculatingNavRoute] = useState(false);
   const [isPickingNavOrigin, setIsPickingNavOrigin] = useState(false);
@@ -1057,10 +1219,28 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
   const [isLiveGpsTracking, setIsLiveGpsTracking] = useState(false);
   const [navErrorNotice, setNavErrorNotice] = useState("");
   const [voiceGuidanceEnabled, setVoiceGuidanceEnabled] = useState(true);
-  const [voiceLang, setVoiceLang] = useState("tl"); // "tl" (Taglish Waze style) | "en" (English)
+  const [voiceLang, setVoiceLang] = useState("tl");
   const [activeNavStepIdx, setActiveNavStepIdx] = useState(0);
   const [showLiveTrafficTiles, setShowLiveTrafficTiles] = useState(false);
+  const [navVehicleType, setNavVehicleType] = useState(() => {
+    try {
+      return localStorage.getItem("hrhub_nav_vehicle_type") || "motor";
+    } catch {
+      return "motor";
+    }
+  });
+  const [isAutoFollowCamera, setIsAutoFollowCamera] = useState(true);
+  const [isOfflineRouteReady, setIsOfflineRouteReady] = useState(false);
+  const [isDeviceOnline, setIsDeviceOnline] = useState(() =>
+    typeof navigator !== "undefined" ? navigator.onLine : true
+  );
   const trafficTileLayerRef = useRef(null);
+  const navVehicleMarkerRef = useRef(null);
+  const navHeadingRef = useRef(0);
+  const lastKnownUserCoordsRef = useRef(null);
+  const isAutoFollowCameraRef = useRef(true);
+  const isProgrammaticMapMoveRef = useRef(false);
+  const navVehicleTypeRef = useRef(navVehicleType);
   const spokenStepsRef = useRef(new Set());
   const voiceGuidanceEnabledRef = useRef(true);
   const voiceLangRef = useRef("tl");
@@ -1077,6 +1257,41 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
   }, [voiceLang]);
 
   useEffect(() => {
+    navVehicleTypeRef.current = navVehicleType;
+    try {
+      localStorage.setItem("hrhub_nav_vehicle_type", navVehicleType);
+    } catch { }
+    if (navVehicleMarkerRef.current && window.L) {
+      const labelText = activeNavRouteRef.current?.isLiveGps
+        ? (isDeviceOnline ? "📍 Live GPS" : "📡 Offline GPS")
+        : `📍 ${activeNavRouteRef.current?.startLabel || "Start"}`;
+      navVehicleMarkerRef.current.setIcon(
+        window.L.divIcon({
+          className: "nav-origin-pin",
+          html: buildNavVehicleMarkerHtml(navVehicleType, navHeadingRef.current, labelText),
+          iconSize: [140, 74],
+          iconAnchor: [0, 0]
+        })
+      );
+    }
+  }, [navVehicleType, isDeviceOnline]);
+
+  useEffect(() => {
+    isAutoFollowCameraRef.current = isAutoFollowCamera;
+  }, [isAutoFollowCamera]);
+
+  useEffect(() => {
+    const onOnline = () => setIsDeviceOnline(true);
+    const onOffline = () => setIsDeviceOnline(false);
+    window.addEventListener("online", onOnline);
+    window.addEventListener("offline", onOffline);
+    return () => {
+      window.removeEventListener("online", onOnline);
+      window.removeEventListener("offline", onOffline);
+    };
+  }, []);
+
+  useEffect(() => {
     isPickingNavOriginRef.current = isPickingNavOrigin;
   }, [isPickingNavOrigin]);
 
@@ -1084,28 +1299,23 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
     focusedBoothRef.current = focusedBooth;
   }, [focusedBooth]);
 
+  const isNavModeActiveFlag = Boolean(activeNavRoute);
   useEffect(() => {
     activeNavRouteRef.current = activeNavRoute;
-    // Refresh Leaflet canvas bounds cleanly when switching between full GeoTagging & pure Google Maps Navigation mode
+  }, [activeNavRoute]);
+
+  useEffect(() => {
     const t = setTimeout(() => {
       try {
         leafletMapRef.current?.invalidateSize();
-        if (activeNavRoute?.coordinates?.length > 1 && window.L && leafletMapRef.current) {
-          const bounds = window.L.latLngBounds(activeNavRoute.coordinates);
-          if (activeNavRoute.startCoords) bounds.extend(activeNavRoute.startCoords);
-          if (activeNavRoute.targetBooth?.coords) bounds.extend(activeNavRoute.targetBooth.coords);
-          leafletMapRef.current.fitBounds(bounds, { padding: [90, 90], maxZoom: 17 });
-        }
       } catch { }
-    }, 140);
+    }, 120);
     return () => clearTimeout(t);
-  }, [activeNavRoute]);
+  }, [isNavModeActiveFlag]);
 
-  // Top Agent Search Bar states (replaces the sub-navigation pills)
   const [topAgentSearchQuery, setTopAgentSearchQuery] = useState("");
   const [isTopSearchOpen, setIsTopSearchOpen] = useState(false);
 
-  // Close search dropdown on click outside
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (searchContainerRef.current && !searchContainerRef.current.contains(e.target)) {
@@ -1119,7 +1329,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
   const [leafletLoaded, setLeafletLoaded] = useState(false);
   const [selectedEdgeBarangay, setSelectedEdgeBarangay] = useState(EDGE_BARANGAYS_CIRCUIT[0]);
 
-  // Optional Free-Tier TomTom Real-Time Traffic Flow Tile Overlay (0 DB egress, activates when VITE_TOMTOM_API_KEY is set)
   useEffect(() => {
     if (!leafletLoaded || !leafletMapRef.current || !window.L) return;
     const map = leafletMapRef.current;
@@ -1139,18 +1348,15 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
     }
   }, [showLiveTrafficTiles, leafletLoaded]);
 
-  // Kiosk Distance Measuring & Agent Gross Performance States
   const [measuringSourceKiosk, setMeasuringSourceKiosk] = useState(null);
   const measuringSourceKioskRef = useRef(null);
-  const [measuredPair, setMeasuredPair] = useState(null); // { source, target, distanceMeters }
+  const [measuredPair, setMeasuredPair] = useState(null);
   const [isDistanceModalOpen, setIsDistanceModalOpen] = useState(false);
 
-  // Sync ref for immediate Leaflet marker click handling
   useEffect(() => {
     measuringSourceKioskRef.current = measuringSourceKiosk;
   }, [measuringSourceKiosk]);
 
-  // Gross remittance records cache (specifically for yesterday's draw sales)
   const [grossRecords, setGrossRecords] = useState(() => {
     try {
       const { isoDate } = getYesterdayDates();
@@ -1160,30 +1366,23 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
     return [];
   });
 
-  // Dual-mode routing: 'city' (full 16 edge barangays) vs 'barangay' (dedicated perimeter of a single barangay)
-  const [viewMode, setViewMode] = useState("city"); // 'city' | 'barangay'
+  const [viewMode, setViewMode] = useState("city");
   const [activeBarangayCircuit, setActiveBarangayCircuit] = useState(null);
 
-  // Inspector card sub-tabs for barangay details
-  const [brgyInspectorTab, setBrgyInspectorTab] = useState("route"); // 'route' | 'terminals' | 'factories'
+  const [brgyInspectorTab, setBrgyInspectorTab] = useState("route");
 
-  // Dynamic Custom Clicked Coordinates Pin (User clicks ANY part of map)
-  const [clickedPoint, setClickedPoint] = useState(null); // { lat, lng }
+  const [clickedPoint, setClickedPoint] = useState(null);
 
-  // POI Layer Toggles
   const [showTerminals, setShowTerminals] = useState(false);
   const [showFactories, setShowFactories] = useState(false);
 
-  // Copied coordinate toast state
   const [copiedText, setCopiedText] = useState(null);
 
-  // Multi-Entity Territory Selector (STL Operating Sectors Only)
   const [selectedTerritory, setSelectedTerritory] = useState(() => {
     const scope = getUserAssignedStlEntity(activeUser);
     return scope && !scope.isNonStl ? scope.territoryKey : "all";
   });
 
-  // Enforce territory locking for scoped branch users (e.g. Imperial Gaming sees only Imperial)
   useEffect(() => {
     if (userEntityScope && !userEntityScope.isNonStl && selectedTerritory !== userEntityScope.territoryKey) {
       handleSelectTerritory(userEntityScope.territoryKey);
@@ -1248,16 +1447,14 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
     setIsCityDriving(false);
   };
 
-  // Driving Simulation States
   const [isCityDriving, setIsCityDriving] = useState(false);
   const [cityRouteIndex, setCityRouteIndex] = useState(0);
 
   const [isBrgyDriving, setIsBrgyDriving] = useState(false);
   const [brgyRouteIndex, setBrgyRouteIndex] = useState(0);
 
-  const [drivingSpeed, setDrivingSpeed] = useState(2); // 1x, 2x, 4x
+  const [drivingSpeed, setDrivingSpeed] = useState(2);
 
-  // Copy GPS coordinates helper
   const handleCopyGPS = (coords, label = "Coordinates") => {
     if (!coords) return;
     const text = `${coords[0].toFixed(6)}, ${coords[1].toFixed(6)}`;
@@ -1266,14 +1463,12 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
     setTimeout(() => setCopiedText(null), 2500);
   };
 
-  // Source API Agents & Supervisors State (Real STL APIs)
   const [apiAgents, setApiAgents] = useState(() => getStlAgents());
   const [apiSupervisors, setApiSupervisors] = useState(() => getStlSupervisors());
   const [apiBarangays, setApiBarangays] = useState(() => SOURCE_AGENTS_CACHE?.barangays || []);
   const [isAgentsLoading, setIsAgentsLoading] = useState(false);
   const [brgyAgentSearch, setBrgyAgentSearch] = useState("");
 
-  // Auto-fetch live agents from Source API in background
   useEffect(() => {
     let isMounted = true;
     const fetchLiveAgents = async () => {
@@ -1325,7 +1520,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
     return b?.name || `Barangay #${bId}`;
   };
 
-  // Agents filtered by selected STL territory
   const territoryAgents = useMemo(() => {
     if (selectedTerritory === "five_a") {
       return apiAgents.filter((a) => {
@@ -1419,8 +1613,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
     );
   }, [activeBarangayAgents, brgyAgentSearch]);
 
-  // ================= AIRTIGHT GEOTAGGING VISIBILITY BROADCAST =================
-  // Strictly hide floating AI Buddy whenever GeoTagging panel is active
   useEffect(() => {
     window.__hrhub_geotagging_active = true;
     try { localStorage.setItem("hrhub_geotagging_active", "true"); } catch { }
@@ -1432,8 +1624,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
     };
   }, []);
 
-  // ================= USER-TAGGED AGENT COORDINATES STATE & PERSISTENCE =================
-  // ZERO mock/synthetic booths: ONLY genuine agent coordinates inputted by the user are saved and plotted!
   const [taggedAgentCoords, setTaggedAgentCoords] = useState(() => {
     try {
       localStorage.removeItem("hrhub_custom_booths");
@@ -1448,7 +1638,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
     return {};
   });
 
-  // Sync taggedAgentCoords to localStorage
   useEffect(() => {
     try {
       localStorage.setItem("hrhub_agent_tagged_coordinates", JSON.stringify(taggedAgentCoords));
@@ -1457,11 +1646,9 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
     }
   }, [taggedAgentCoords]);
 
-  // Persistent list of user-tagged booths with coordinates & booth address (Centralized Cloud Database + Local Cache)
   const [userTaggedBooths, setUserTaggedBooths] = useState(() => getLocalCachedBooths());
-  const [syncStatus, setSyncStatus] = useState("synced"); // 'synced' | 'syncing' | 'offline'
+  const [syncStatus, setSyncStatus] = useState("synced");
 
-  // Central Supabase Database Load & Realtime Sync Subscription
   useEffect(() => {
     let isMounted = true;
 
@@ -1481,7 +1668,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
 
     initCloudSync();
 
-    // Subscribe to multi-user real-time events from Supabase Realtime channel
     const unsubscribe = subscribeToCentralBooths((updatedBooths) => {
       if (isMounted && Array.isArray(updatedBooths)) {
         setUserTaggedBooths(updatedBooths);
@@ -1495,7 +1681,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
     };
   }, []);
 
-  // Tag Booth Modal State (Coordinates, Detect Barangay Button & Booth Address)
   const [isBoothModalOpen, setIsBoothModalOpen] = useState(false);
   const [editingBoothId, setEditingBoothId] = useState(null);
   const [detectedBarangayResult, setDetectedBarangayResult] = useState(null);
@@ -1511,16 +1696,13 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
     notes: ""
   });
 
-  // Smart Agent Search & Combobox Dropdown State for Tag Booth Modal
   const [agentSearchQuery, setAgentSearchQuery] = useState("");
   const [isAgentDropdownOpen, setIsAgentDropdownOpen] = useState(false);
-  const [agentStatusFilter, setAgentStatusFilter] = useState("all"); // 'all' | 'active' | 'inactive'
+  const [agentStatusFilter, setAgentStatusFilter] = useState("all");
 
-  // Set of agent IDs that are already assigned to other booths (1:1 booth-to-agent mapping)
   const assignedAgentIds = useMemo(() => {
     const ids = new Set();
     (userTaggedBooths || []).forEach((b) => {
-      // If editing a booth, do NOT consider that booth's own agent as "taken by another booth"
       if (editingBoothId && String(b.id) === String(editingBoothId)) {
         return;
       }
@@ -1531,7 +1713,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
     return ids;
   }, [userTaggedBooths, editingBoothId]);
 
-  // Set of agent full names or usernames already assigned to other booths
   const assignedAgentNames = useMemo(() => {
     const names = new Set();
     (userTaggedBooths || []).forEach((b) => {
@@ -1545,7 +1726,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
     return names;
   }, [userTaggedBooths, editingBoothId]);
 
-  // Available unassigned agents for 1:1 assignment
   const availableAgents = useMemo(() => {
     return (apiAgents || []).filter((ag) => {
       if (assignedAgentIds.has(String(ag.id))) return false;
@@ -1557,7 +1737,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
     });
   }, [apiAgents, assignedAgentIds, assignedAgentNames]);
 
-  // Count active and inactive available agents
   const activeAgentsCount = useMemo(() => {
     return availableAgents.filter((a) => checkAgentIsActive(a)).length;
   }, [availableAgents]);
@@ -1566,11 +1745,9 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
     return availableAgents.length - activeAgentsCount;
   }, [availableAgents, activeAgentsCount]);
 
-  // Smart multi-token filtering on available agents (fuzzy token match by name, username, outlet, supervisor, contact, status)
   const filteredAvailableAgents = useMemo(() => {
     let list = availableAgents;
 
-    // Filter by Active / Inactive status tab
     if (agentStatusFilter === "active") {
       list = list.filter((ag) => checkAgentIsActive(ag));
     } else if (agentStatusFilter === "inactive") {
@@ -1599,16 +1776,13 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
     });
   }, [availableAgents, agentSearchQuery, agentStatusFilter]);
 
-  // Currently selected agent object in the form
   const selectedAgentObj = useMemo(() => {
     if (!boothFormData.selectedAgentId) return null;
     return (apiAgents || []).find((a) => String(a.id) === String(boothFormData.selectedAgentId)) || null;
   }, [apiAgents, boothFormData.selectedAgentId]);
 
-  // Inspector Card tab state for City View ('waypoint' | 'tagged_agents')
   const [cityInspectorTab, setCityInspectorTab] = useState("waypoint");
 
-  // Inline Row-Level Agent Coordinate Tagging State (Directly inside agent's row)
   const [editingAgentId, setEditingAgentId] = useState(null);
   const [inlineCoordForm, setInlineCoordForm] = useState({
     latStr: "",
@@ -1616,7 +1790,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
     notes: ""
   });
 
-  // Real-time automatic detection of belonging barangay as coordinates are entered in the agent row
   const inlineDetectedBarangay = useMemo(() => {
     const lat = parseFloat(inlineCoordForm.latStr);
     const lng = parseFloat(inlineCoordForm.lngStr);
@@ -1626,7 +1799,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
     return detectBarangayFromCoords(lat, lng);
   }, [inlineCoordForm.latStr, inlineCoordForm.lngStr]);
 
-  // List of all user-tagged agents with resolved details
   const allTaggedAgentsList = useMemo(() => {
     return Object.entries(taggedAgentCoords).map(([agentId, data]) => {
       const agent = apiAgents.find((a) => String(a.id) === String(agentId));
@@ -1634,7 +1806,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
     });
   }, [taggedAgentCoords, apiAgents]);
 
-  // Tagged agents belonging to the currently active barangay
   const activeBarangayTaggedAgents = useMemo(() => {
     if (!activeBarangayCircuit) return [];
     const validApiIds = BARANGAY_API_IDS[activeBarangayCircuit.id] || [];
@@ -1646,7 +1817,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
     });
   }, [activeBarangayCircuit, allTaggedAgentsList]);
 
-  // Classify a booth into its operating STL territory (Lucky Betplay, 5A Royal, Glowing Fortune, Imperial Gaming)
   const getBoothTerritoryKey = useCallback((booth) => {
     if (!booth) return "lucky_betplay";
     if (booth.territoryKey && booth.territoryKey !== "all") return booth.territoryKey;
@@ -1676,13 +1846,11 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
     return "lucky_betplay";
   }, []);
 
-  // Filter user-tagged booths strictly by the currently selected entity / territory
   const territoryTaggedBooths = useMemo(() => {
     if (selectedTerritory === "all") return userTaggedBooths;
     return (userTaggedBooths || []).filter((b) => getBoothTerritoryKey(b) === selectedTerritory);
   }, [userTaggedBooths, selectedTerritory, getBoothTerritoryKey]);
 
-  // Tagged booths belonging strictly to the currently active barangay / sector
   const activeBarangayTaggedBooths = useMemo(() => {
     if (!activeBarangayCircuit) return territoryTaggedBooths;
     const bRoute = getSectorPerimeterRoute(activeBarangayCircuit.id, BARANGAY_PERIMETER_ROUTES);
@@ -1701,7 +1869,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
     });
   }, [activeBarangayCircuit, territoryTaggedBooths]);
 
-  // Open Tag Booth Modal with optional pre-filled coordinates
   const handleOpenBoothModal = (prefilledCoords = null, prefilledBarangay = null) => {
     let lat = "";
     let lng = "";
@@ -1742,7 +1909,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
     setIsBoothModalOpen(true);
   };
 
-  // Open Edit Booth Modal for existing booth
   const handleEditUserBooth = (booth) => {
     setEditingBoothId(booth.id);
     setAgentSearchQuery("");
@@ -1767,7 +1933,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
     setIsBoothModalOpen(true);
   };
 
-  // Dedicated Button Function: Detect Barangay from Coordinates
   const handleDetectBarangay = () => {
     const lat = parseFloat(boothFormData.latStr);
     const lng = parseFloat(boothFormData.lngStr);
@@ -1800,7 +1965,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
     }
   };
 
-  // Save Booth from Modal (with Coordinates, Auto-Barangay Detection & Booth Address)
   const handleSaveBoothModal = (e) => {
     e?.preventDefault();
     const lat = parseFloat(boothFormData.latStr);
@@ -1862,7 +2026,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
       return [newBooth, ...filtered];
     });
 
-    // Central Cloud Database Sync (Multi-User Centralized Persistence)
     saveCentralBooth(newBooth)
       .then(() => setSyncStatus("synced"))
       .catch((err) => {
@@ -1870,7 +2033,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
         setSyncStatus("offline");
       });
 
-    // If editing a booth and its assigned agent was changed or cleared, clean up the previous agent's tag
     if (editingBoothId) {
       const prevBooth = userTaggedBooths.find((b) => b.id === editingBoothId);
       if (prevBooth?.agentId && String(prevBooth.agentId) !== String(boothFormData.selectedAgentId)) {
@@ -1933,7 +2095,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
     }
   };
 
-  // Start tagging coordinates for a specific agent (directly in their row)
   const handleStartEditAgentCoords = (agent) => {
     setEditingAgentId(agent.id);
     const existing = taggedAgentCoords[agent.id];
@@ -1960,7 +2121,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
     }
   };
 
-  // Save coordinates directly from the agent's row and immediately plot on map
   const handleSaveAgentCoords = (agent) => {
     const lat = parseFloat(inlineCoordForm.latStr);
     const lng = parseFloat(inlineCoordForm.lngStr);
@@ -1998,7 +2158,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
     const agentTerritoryKey = agent.territoryKey || (selectedTerritory !== "all" ? selectedTerritory : (detected.territoryKey || "lucky_betplay"));
     const agentCompanyName = agent.company || agent.companyName || (selectedTerritory !== "all" ? (TERRITORY_CONFIG[selectedTerritory]?.short || TERRITORY_CONFIG[selectedTerritory]?.name) : (detected.companyName || "Lucky Betplay Corporation"));
 
-    // Mirror to userTaggedBooths
     const newBooth = {
       id: `booth_agent_${agent.id}`,
       name: agent.outlet || `${agent.fullName} Station`,
@@ -2023,7 +2182,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
 
     setUserTaggedBooths((prev) => [newBooth, ...prev.filter((b) => b.id !== newBooth.id && b.agentId !== agent.id)]);
 
-    // Central Cloud Database Sync (Multi-User Centralized Persistence)
     saveCentralBooth(newBooth)
       .then(() => setSyncStatus("synced"))
       .catch((err) => {
@@ -2037,13 +2195,11 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
     setCopiedText(`GPS coordinates saved for ${agent.fullName}! Plotted in Brgy. ${detected.name}.`);
     setTimeout(() => setCopiedText(null), 3500);
 
-    // Pan / Fly smoothly to the newly plotted agent station on the map
     if (leafletMapRef.current) {
       leafletMapRef.current.flyTo([lat, lng], 17, { duration: 0.9 });
     }
   };
 
-  // Remove coordinates for an agent
   const handleRemoveAgentCoords = (agentId) => {
     if (window.confirm("Are you sure you want to remove the GPS coordinates for this agent?")) {
       setTaggedAgentCoords((prev) => {
@@ -2061,7 +2217,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
     }
   };
 
-  // Background fetch of STL Gross Records specifically for yesterday's sales
   useEffect(() => {
     let isMounted = true;
     const fetchGross = async () => {
@@ -2102,14 +2257,12 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
           }
         }
       } catch (err) {
-        // Silently continue if offline or network restricted
       }
     };
     fetchGross();
     return () => { isMounted = false; };
   }, []);
 
-  // Compute assigned agent details and yesterday's gross sales for any booth
   const getBoothAgentGross = (booth) => {
     const { isoDate: yesterdayStr, displayLabel: yesterdayLabel } = getYesterdayDates();
 
@@ -2132,7 +2285,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
     const agentId = String(booth.agentId || "");
     const tellerName = String(booth.tellerName || "").toLowerCase().trim();
 
-    // Match agent from API agents directory
     const matchedAgent = apiAgents.find((a) =>
       (agentId && String(a.id) === agentId) ||
       (tellerName && (a.fullName?.toLowerCase().includes(tellerName) || a.username?.toLowerCase() === tellerName))
@@ -2144,7 +2296,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
     let totalGross = 0;
     let foundRecord = false;
 
-    // Helper to extract ISO date from a record if present
     const getRecDate = (r) => {
       const year = Number(r.drawYear || r.year || 0);
       const month = Number(r.drawMonth || r.month || 0);
@@ -2163,7 +2314,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
     if (grossRecords && grossRecords.length > 0) {
       grossRecords.forEach((r) => {
         const rDate = getRecDate(r);
-        // Only include if date matches yesterday (or if record has no date timestamp because endpoint is already filtered)
         if (rDate && rDate !== yesterdayStr) {
           return;
         }
@@ -2195,7 +2345,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
       });
     }
 
-    // Fallback if booth had a specific yesterdayGross property
     if (!foundRecord && booth.yesterdayGross) {
       totalGross = Number(booth.yesterdayGross) || 0;
       foundRecord = totalGross > 0;
@@ -2223,7 +2372,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
     };
   };
 
-  // Start distance measuring from a chosen kiosk
   const startMeasuringFromKiosk = (booth) => {
     if (!booth) return;
     if (territoryTaggedBooths.length < 2) {
@@ -2239,7 +2387,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
     setTimeout(() => setCopiedText(null), 2500);
   };
 
-  // Complete distance measurement when 2nd kiosk is clicked (Road-based)
   const handleCompleteMeasurement = async (source, target) => {
     if (!source || !target || !source.coords || !target.coords) return;
     if (String(source.id) === String(target.id)) {
@@ -2251,7 +2398,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
     setMeasuringSourceKiosk(null);
     setCopiedText("Calculating road-based distance & route...");
 
-    // 1. Compute actual navigable road distance and road path coordinates
     const roadRoute = await fetchRoadRouteBetweenPoints(source.coords, target.coords);
     const distMeters = roadRoute.distanceMeters;
 
@@ -2269,13 +2415,11 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
     setCopiedText(null);
     setIsDistanceModalOpen(true);
 
-    // 2. Draw road-following route & midpoint distance badge on Leaflet map
     if (leafletMapRef.current && measureLineGroupRef.current && window.L) {
       const map = leafletMapRef.current;
       const measureGroup = measureLineGroupRef.current;
       measureGroup.clearLayers();
 
-      // Outer glowing road aura
       window.L.polyline(roadRoute.coordinates, {
         color: "#0d9488",
         weight: 7,
@@ -2284,7 +2428,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
         lineJoin: "round"
       }).addTo(measureGroup);
 
-      // Core crisp road route line
       window.L.polyline(roadRoute.coordinates, {
         color: "#2dd4bf",
         weight: 4,
@@ -2294,7 +2437,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
         dashArray: "10, 6"
       }).addTo(measureGroup);
 
-      // Midpoint distance badge along actual road path
       const midIdx = Math.floor(roadRoute.coordinates.length / 2);
       const [midLat, midLng] = roadRoute.coordinates[midIdx] || [
         (source.coords[0] + target.coords[0]) / 2,
@@ -2345,7 +2487,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
     }
   };
 
-  // Clear current measurement line and reset
   const handleClearMeasurement = () => {
     setMeasuredPair(null);
     setMeasuringSourceKiosk(null);
@@ -2355,7 +2496,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
     }
   };
 
-  // ================= WAZE / GOOGLE MAPS STYLE LIVE KIOSK NAVIGATION ENGINE =================
   const stopLiveGpsWatch = useCallback(() => {
     if (gpsWatchIdRef.current !== null && typeof navigator !== "undefined" && navigator.geolocation) {
       try {
@@ -2419,21 +2559,62 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
     stopLiveGpsWatch();
     stopWazeVoice();
     spokenStepsRef.current.clear();
+    navVehicleMarkerRef.current = null;
     setActiveNavStepIdx(0);
     setActiveNavRoute(null);
     setIsNavStepsExpanded(false);
     setIsPickingNavOrigin(false);
+    setIsAutoFollowCamera(true);
+    setIsOfflineRouteReady(false);
     setNavErrorNotice("");
     if (navRouteGroupRef.current) {
       navRouteGroupRef.current.clearLayers();
     }
   }, [stopLiveGpsWatch]);
 
-  const drawNavRouteOnMap = useCallback((routePayload, shouldFitBounds = true) => {
+  const recenterOnNavVehicle = useCallback((coordsOverride = null, zoomLevel = 18) => {
+    const map = leafletMapRef.current;
+    const targetCoords =
+      coordsOverride ||
+      (navVehicleMarkerRef.current ? [navVehicleMarkerRef.current.getLatLng().lat, navVehicleMarkerRef.current.getLatLng().lng] : null) ||
+      activeNavRouteRef.current?.startCoords;
+    if (!map || !targetCoords) return;
+
+    setIsAutoFollowCamera(true);
+    isAutoFollowCameraRef.current = true;
+    isProgrammaticMapMoveRef.current = true;
+    try {
+      map.flyTo(targetCoords, zoomLevel, { animate: true, duration: 0.65 });
+    } catch { }
+    setTimeout(() => {
+      isProgrammaticMapMoveRef.current = false;
+    }, 750);
+  }, []);
+
+  const showNavRouteOverview = useCallback(() => {
+    const map = leafletMapRef.current;
+    const route = activeNavRouteRef.current;
+    if (!map || !window.L || !route?.coordinates?.length) return;
+    setIsAutoFollowCamera(false);
+    isAutoFollowCameraRef.current = false;
+    isProgrammaticMapMoveRef.current = true;
+    try {
+      const bounds = window.L.latLngBounds(route.coordinates);
+      if (route.startCoords) bounds.extend(route.startCoords);
+      if (route.targetBooth?.coords) bounds.extend(route.targetBooth.coords);
+      map.fitBounds(bounds, { padding: [90, 90], maxZoom: 16 });
+    } catch { }
+    setTimeout(() => {
+      isProgrammaticMapMoveRef.current = false;
+    }, 600);
+  }, []);
+
+  const drawNavRouteOnMap = useCallback((routePayload, cameraMode = "drive") => {
     if (!leafletMapRef.current || !navRouteGroupRef.current || !window.L || !routePayload) return;
     const map = leafletMapRef.current;
     const navGroup = navRouteGroupRef.current;
     navGroup.clearLayers();
+    navVehicleMarkerRef.current = null;
 
     const { startCoords, startLabel, targetBooth, coordinates, distanceMeters, durationSec, isLiveGps, traffic } = routePayload;
     if (!Array.isArray(coordinates) || coordinates.length < 2) return;
@@ -2445,8 +2626,10 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
     const pillBorder = trafficLevel === "heavy" ? "#ef4444" : trafficLevel === "moderate" ? "#f59e0b" : "#38bdf8";
     const trafficDot = trafficLevel === "heavy" ? "🔴" : trafficLevel === "moderate" ? "🟠" : "🟢";
 
-    // 1. Waze / Google Maps Traffic-Aware Layered Route Polyline
-    // Outer soft aura
+    const nextPt = coordinates[Math.min(2, coordinates.length - 1)] || targetBooth?.coords;
+    const initialHeading = calculateBearingDeg(startCoords, nextPt);
+    navHeadingRef.current = initialHeading;
+
     window.L.polyline(coordinates, {
       color: outerColor,
       weight: 12,
@@ -2455,7 +2638,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
       lineJoin: "round"
     }).addTo(navGroup);
 
-    // Dark border casing
     window.L.polyline(coordinates, {
       color: borderColor,
       weight: 8,
@@ -2464,7 +2646,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
       lineJoin: "round"
     }).addTo(navGroup);
 
-    // Vibrant core route line (Blue=Clear, Amber=Moderate, Coral-Red=Heavy Traffic)
     window.L.polyline(coordinates, {
       color: coreColor,
       weight: 5,
@@ -2473,7 +2654,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
       lineJoin: "round"
     }).addTo(navGroup);
 
-    // Animated directional flow dashes gliding toward the destination kiosk
     window.L.polyline(coordinates, {
       color: "#ffffff",
       weight: 2.5,
@@ -2483,46 +2663,18 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
       className: "nav-route-flow-line"
     }).addTo(navGroup);
 
-    // 2. Pulsing Blue GPS Locator Dot ("You Are Here" / Starting Coordinates)
-    const startPinIcon = window.L.divIcon({
+    const vehicleLabel = isLiveGps
+      ? (typeof navigator !== "undefined" && !navigator.onLine ? "📡 Offline GPS" : "📍 Live GPS")
+      : `📍 ${startLabel || "Start"}`;
+    const vehicleIcon = window.L.divIcon({
       className: "nav-origin-pin",
-      html: `
-        <div style="display:flex;flex-direction:column;align-items:center;transform:translate(-50%,-50%);pointer-events:none;">
-          <div style="
-            background: #0f172a;
-            color: #38bdf8;
-            border: 1.5px solid #38bdf8;
-            border-radius: 9999px;
-            padding: 2px 8px;
-            font-family: Inter, system-ui, sans-serif;
-            font-size: 10px;
-            font-weight: 800;
-            white-space: nowrap;
-            box-shadow: 0 3px 10px rgba(0,0,0,0.6);
-            margin-bottom: 5px;
-          ">${isLiveGps ? "📍 You (Live GPS)" : `📍 ${startLabel || "Start Point"}`}</div>
-          <div style="position:relative;width:24px;height:24px;display:flex;align-items:center;justify-content:center;">
-            <div style="
-              position:absolute;inset:-8px;border-radius:50%;
-              background:rgba(56,189,248,0.28);
-              border:2px solid rgba(56,189,248,0.75);
-              animation: ping 1.6s cubic-bezier(0,0,0.2,1) infinite;
-            "></div>
-            <div style="
-              width:16px;height:16px;border-radius:50%;
-              background:#2563eb;
-              border:3px solid #ffffff;
-              box-shadow:0 0 12px rgba(37,99,235,0.9), 0 2px 6px rgba(0,0,0,0.5);
-            "></div>
-          </div>
-        </div>
-      `,
-      iconSize: [140, 56],
+      html: buildNavVehicleMarkerHtml(navVehicleTypeRef.current || "motor", initialHeading, vehicleLabel),
+      iconSize: [140, 74],
       iconAnchor: [0, 0]
     });
-    window.L.marker(startCoords, { icon: startPinIcon, zIndexOffset: 1000 }).addTo(navGroup);
+    const vMarker = window.L.marker(startCoords, { icon: vehicleIcon, zIndexOffset: 1000 }).addTo(navGroup);
+    navVehicleMarkerRef.current = vMarker;
 
-    // 3. Pulsing Arrival Beacon Ring on Destination Kiosk
     if (targetBooth?.coords) {
       const destRingIcon = window.L.divIcon({
         className: "nav-dest-ring",
@@ -2542,7 +2694,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
       window.L.marker(targetBooth.coords, { icon: destRingIcon, interactive: false }).addTo(navGroup);
     }
 
-    // 4. Mid-Route Google Maps / Waze Style Floating ETA, Distance & Traffic Pill
     const midIdx = Math.floor(coordinates.length / 2);
     const midPt = coordinates[midIdx] || [
       (startCoords[0] + targetBooth.coords[0]) / 2,
@@ -2580,20 +2731,34 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
     const etaMarker = window.L.marker(midPt, { icon: etaBadgeIcon, zIndexOffset: 900 }).addTo(navGroup);
     etaMarker.on("click", () => setIsNavStepsExpanded((prev) => !prev));
 
-    // 5. Fit Map Camera neatly to frame Start & Destination Kiosk
-    if (shouldFitBounds) {
+    if (cameraMode === "drive") {
+      setIsAutoFollowCamera(true);
+      isAutoFollowCameraRef.current = true;
+      isProgrammaticMapMoveRef.current = true;
+      try {
+        map.invalidateSize();
+        map.flyTo(startCoords, 18, { animate: true, duration: 0.75 });
+      } catch { }
+      setTimeout(() => {
+        isProgrammaticMapMoveRef.current = false;
+      }, 850);
+    } else if (cameraMode === "fit") {
+      isProgrammaticMapMoveRef.current = true;
       try {
         const bounds = window.L.latLngBounds(coordinates);
         bounds.extend(startCoords);
         if (targetBooth?.coords) bounds.extend(targetBooth.coords);
-        map.fitBounds(bounds, { padding: [95, 95], maxZoom: 17 });
+        map.fitBounds(bounds, { padding: [90, 90], maxZoom: 17 });
       } catch { }
+      setTimeout(() => {
+        isProgrammaticMapMoveRef.current = false;
+      }, 650);
     }
   }, []);
 
-  const computeAndDisplayNavRoute = useCallback(async (startCoords, targetBooth, agentName = "", startLabel = "Your Location", isLiveGps = false, shouldFitBounds = true, isLiveUpdate = false) => {
+  const computeAndDisplayNavRoute = useCallback(async (startCoords, targetBooth, agentName = "", startLabel = "Your Location", isLiveGps = false, cameraMode = "drive", isLiveReroute = false) => {
     if (!startCoords || !targetBooth?.coords) return;
-    if (!isLiveUpdate) setIsCalculatingNavRoute(true);
+    if (!isLiveReroute) setIsCalculatingNavRoute(true);
     setNavErrorNotice("");
     setIsPickingNavOrigin(false);
 
@@ -2611,19 +2776,23 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
         targetBooth,
         agentName: agentName || targetBooth.tellerName || "",
         startCoords,
+        currentCoords: startCoords,
         startLabel,
         isLiveGps,
         coordinates: roadRoute.coordinates,
         distanceMeters: roadRoute.distanceMeters,
+        initialDistanceMeters: roadRoute.distanceMeters,
         baseDurationSec: roadRoute.durationSec,
         durationSec: traffic?.adjustedDurationSec || roadRoute.durationSec,
+        initialDurationSec: traffic?.adjustedDurationSec || roadRoute.durationSec,
         steps: roadRoute.steps || [],
         traffic,
         method: roadRoute.method
       };
       setActiveNavRoute(payload);
+      activeNavRouteRef.current = payload;
       setFocusedBooth({ booth: targetBooth, agentName: agentName || targetBooth.tellerName || "" });
-      // Enter clean Google Maps Navigation Mode: clear distractions, popups, measurements & patrol sim
+
       setClickedPoint(null);
       setMeasuringSourceKiosk(null);
       setMeasuredPair(null);
@@ -2636,75 +2805,161 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
       if (leafletMapRef.current) {
         try { leafletMapRef.current.closePopup(); } catch { }
       }
-      drawNavRouteOnMap(payload, shouldFitBounds);
 
-      if (!isLiveUpdate) {
+      drawNavRouteOnMap(payload, cameraMode);
+
+      if (!isLiveReroute) {
         spokenStepsRef.current.clear();
         setActiveNavStepIdx(0);
-        // Automatically speak complete Google Maps style route + traffic + first turn briefing (hands-free!)
+        setIsOfflineRouteReady(false);
         speakRouteStartSummary(payload);
-      } else if (voiceGuidanceEnabledRef.current) {
-        // Hands-Free Google Maps Style Proximity Voice Triggers (0 DB egress — runs locally in browser)
-        const distToDest = calculateDistanceMeters(startCoords[0], startCoords[1], targetBooth.coords[0], targetBooth.coords[1]);
-        if (distToDest <= 45 && !spokenStepsRef.current.has("arrived")) {
-          spokenStepsRef.current.add("arrived");
-          speakRouteStep({ dir: "arrive", street: destLabel, distanceMeters: 0 });
-        } else if (payload.steps && payload.steps.length > 1) {
-          const nextStep = payload.steps[1] || payload.steps[0];
-          if (nextStep && nextStep.location) {
-            const dStep = calculateDistanceMeters(startCoords[0], startCoords[1], nextStep.location[0], nextStep.location[1]);
-            const farKey = `far_${nextStep.dir}_${nextStep.street}`;
-            const nearKey = `near_${nextStep.dir}_${nextStep.street}`;
-            if (dStep <= 75 && !spokenStepsRef.current.has(nearKey)) {
-              spokenStepsRef.current.add(nearKey);
-              spokenStepsRef.current.add(farKey);
-              setActiveNavStepIdx(1);
-              speakRouteStep({ ...nextStep, distanceMeters: Math.round(dStep) });
-            } else if (dStep <= 220 && !spokenStepsRef.current.has(farKey)) {
-              spokenStepsRef.current.add(farKey);
-              setActiveNavStepIdx(1);
-              speakRouteStep({ ...nextStep, distanceMeters: Math.round(dStep) });
-            }
-          }
-        }
+        precacheRouteForOffline(payload, voiceLangRef.current).then((ok) => {
+          if (ok && activeNavRouteRef.current) setIsOfflineRouteReady(true);
+        });
       }
     } catch (err) {
       console.warn("Nav route computation notice:", err);
-      if (!isLiveUpdate) {
+      if (!isLiveReroute) {
         setNavErrorNotice("Could not compute road route right now. Try picking a start point on the map.");
       }
     } finally {
-      if (!isLiveUpdate) setIsCalculatingNavRoute(false);
+      if (!isLiveReroute) setIsCalculatingNavRoute(false);
     }
-  }, [drawNavRouteOnMap, speakRouteStartSummary, speakRouteStep]);
+  }, [drawNavRouteOnMap, speakRouteStartSummary]);
 
   const startLiveGpsWatchForBooth = useCallback((targetBooth, targetAgent = "") => {
     if (!targetBooth?.coords || typeof navigator === "undefined" || !navigator.geolocation) return;
     stopLiveGpsWatch();
     setIsLiveGpsTracking(true);
-    let lastRecalcAt = Date.now();
+    let lastRerouteAt = Date.now();
+    let prevPosCoords = null;
+
     gpsWatchIdRef.current = navigator.geolocation.watchPosition(
       (pos) => {
-        const now = Date.now();
-        if (now - lastRecalcAt < 7000) return; // Throttle OSRM route refresh every 7s (zero DB egress)
-        lastRecalcAt = now;
         const liveCoords = [pos.coords.latitude, pos.coords.longitude];
-        computeAndDisplayNavRoute(liveCoords, targetBooth, targetAgent, "Your Live Location", true, false, true);
+        lastKnownUserCoordsRef.current = { coords: liveCoords, timestamp: Date.now() };
+        const route = activeNavRouteRef.current;
+        if (!route || !route.coordinates?.length) return;
+
+        const progress = computeOfflineProgressAlongRoute(liveCoords, route.coordinates);
+        const speedMps = pos.coords.speed && pos.coords.speed > 1.2 ? pos.coords.speed : null;
+
+        let heading = navHeadingRef.current;
+        if (typeof pos.coords.heading === "number" && !Number.isNaN(pos.coords.heading) && speedMps) {
+          heading = pos.coords.heading;
+        } else if (prevPosCoords && calculateDistanceMeters(prevPosCoords[0], prevPosCoords[1], liveCoords[0], liveCoords[1]) >= 4) {
+          heading = calculateBearingDeg(prevPosCoords, liveCoords);
+        } else if (progress.nextWaypoint) {
+          heading = calculateBearingDeg(liveCoords, progress.nextWaypoint);
+        }
+        prevPosCoords = liveCoords;
+        navHeadingRef.current = heading;
+
+        if (navVehicleMarkerRef.current && window.L) {
+          navVehicleMarkerRef.current.setLatLng(liveCoords);
+          const lbl = navigator.onLine ? "📍 Live GPS" : "📡 Offline GPS";
+          navVehicleMarkerRef.current.setIcon(
+            window.L.divIcon({
+              className: "nav-origin-pin",
+              html: buildNavVehicleMarkerHtml(navVehicleTypeRef.current || "motor", heading, lbl),
+              iconSize: [140, 74],
+              iconAnchor: [0, 0]
+            })
+          );
+        }
+
+        if (isAutoFollowCameraRef.current && leafletMapRef.current) {
+          isProgrammaticMapMoveRef.current = true;
+          try {
+            const curZoom = leafletMapRef.current.getZoom();
+            if (curZoom < 17) {
+              leafletMapRef.current.setView(liveCoords, 18, { animate: true, duration: 0.45 });
+            } else {
+              leafletMapRef.current.panTo(liveCoords, { animate: true, duration: 0.45 });
+            }
+          } catch { }
+          setTimeout(() => {
+            isProgrammaticMapMoveRef.current = false;
+          }, 500);
+        }
+
+        const ratio = route.initialDistanceMeters > 0
+          ? Math.min(1, Math.max(0, progress.remainingMeters / route.initialDistanceMeters))
+          : 1;
+        const estRemainingSec = speedMps
+          ? Math.round(progress.remainingMeters / speedMps)
+          : Math.max(30, Math.round((route.initialDurationSec || route.durationSec || 60) * ratio));
+
+        const destLabel = `Booth ${targetBooth.name || "001"}${targetAgent ? ` (${targetAgent})` : ""}`;
+        const distToDest = calculateDistanceMeters(liveCoords[0], liveCoords[1], targetBooth.coords[0], targetBooth.coords[1]);
+
+        if (distToDest <= 45) {
+          setActiveNavStepIdx(Math.max(0, (route.steps?.length || 1) - 1));
+          if (voiceGuidanceEnabledRef.current && !spokenStepsRef.current.has("arrived")) {
+            spokenStepsRef.current.add("arrived");
+            speakRouteStep({ dir: "arrive", street: destLabel, distanceMeters: 0 });
+          }
+        } else if (Array.isArray(route.steps) && route.steps.length > 1) {
+          let closestStepIdx = -1;
+          let closestStepDist = Infinity;
+          for (let i = 1; i < route.steps.length; i++) {
+            const st = route.steps[i];
+            if (!st?.location) continue;
+            const dSt = calculateDistanceMeters(liveCoords[0], liveCoords[1], st.location[0], st.location[1]);
+            if (dSt < closestStepDist) {
+              closestStepDist = dSt;
+              closestStepIdx = i;
+            }
+          }
+          if (closestStepIdx >= 1) {
+            const st = route.steps[closestStepIdx];
+            if (closestStepDist <= 220) {
+              setActiveNavStepIdx(closestStepIdx);
+              if (voiceGuidanceEnabledRef.current) {
+                const farKey = `far_${closestStepIdx}_${st.dir}_${st.street}`;
+                const nearKey = `near_${closestStepIdx}_${st.dir}_${st.street}`;
+                if (closestStepDist <= 75 && !spokenStepsRef.current.has(nearKey)) {
+                  spokenStepsRef.current.add(nearKey);
+                  spokenStepsRef.current.add(farKey);
+                  speakRouteStep({ ...st, distanceMeters: Math.round(closestStepDist) });
+                } else if (!spokenStepsRef.current.has(farKey)) {
+                  spokenStepsRef.current.add(farKey);
+                  speakRouteStep({ ...st, distanceMeters: Math.round(closestStepDist) });
+                }
+              }
+            }
+          }
+        }
+
+        setActiveNavRoute((prev) =>
+          prev
+            ? {
+                ...prev,
+                currentCoords: liveCoords,
+                distanceMeters: progress.remainingMeters,
+                durationSec: estRemainingSec
+              }
+            : prev
+        );
+
+        const now = Date.now();
+        if (progress.offRouteMeters > 85 && navigator.onLine && now - lastRerouteAt > 15000) {
+          lastRerouteAt = now;
+          computeAndDisplayNavRoute(liveCoords, targetBooth, targetAgent, "Your Live Location", true, "none", true);
+        }
       },
       (err) => {
         console.warn("Live GPS watch warning:", err?.message);
-        stopLiveGpsWatch();
       },
-      { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
+      { enableHighAccuracy: true, maximumAge: 3000, timeout: 15000 }
     );
-  }, [computeAndDisplayNavRoute, stopLiveGpsWatch]);
+  }, [computeAndDisplayNavRoute, stopLiveGpsWatch, speakRouteStep]);
 
   const handleRouteFromMyLocation = useCallback((boothOverride = null, agentNameOverride = "") => {
     const targetBooth = boothOverride || focusedBoothRef.current?.booth;
     const targetAgent = agentNameOverride || focusedBoothRef.current?.agentName || targetBooth?.tellerName || "";
     if (!targetBooth?.coords) return;
 
-    // Synchronously unlock browser audio inside click gesture so voice auto-speaks immediately like Google Maps!
     unlockNavAudioPlayback();
     setFocusedBooth({ booth: targetBooth, agentName: targetAgent });
     setNavErrorNotice("");
@@ -2714,25 +2969,42 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
       return;
     }
 
+    const launchWithCoords = (myCoords) => {
+      lastKnownUserCoordsRef.current = { coords: myCoords, timestamp: Date.now() };
+      computeAndDisplayNavRoute(myCoords, targetBooth, targetAgent, "Your Live Location", true, "drive", false);
+      startLiveGpsWatchForBooth(targetBooth, targetAgent);
+    };
+
+    const cached = lastKnownUserCoordsRef.current;
+    if (cached && cached.coords && Date.now() - cached.timestamp < 45000) {
+      launchWithCoords(cached.coords);
+      return;
+    }
+
     setIsCalculatingNavRoute(true);
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        const myCoords = [pos.coords.latitude, pos.coords.longitude];
-        computeAndDisplayNavRoute(myCoords, targetBooth, targetAgent, "Your Live Location", true, true, false);
-        // Automatically enable Live GPS hands-free turn-by-turn tracking like Google Maps
-        startLiveGpsWatchForBooth(targetBooth, targetAgent);
+        launchWithCoords([pos.coords.latitude, pos.coords.longitude]);
       },
-      (err) => {
-        setIsCalculatingNavRoute(false);
-        const reason =
-          err?.code === 1
-            ? "Location permission denied. Allow browser GPS or click 'Pick Start on Map' below."
-            : err?.code === 3
-            ? "GPS request timed out. Try again or click 'Pick Start on Map' below."
-            : "Unable to detect device GPS. Click 'Pick Start on Map' below to set your coordinates.";
-        setNavErrorNotice(reason);
+      () => {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            launchWithCoords([pos.coords.latitude, pos.coords.longitude]);
+          },
+          (err) => {
+            setIsCalculatingNavRoute(false);
+            const reason =
+              err?.code === 1
+                ? "Location permission denied. Allow browser GPS or click 'Pick Start on Map' below."
+                : err?.code === 3
+                ? "GPS signal took too long. Try again or click 'Pick Start on Map' below."
+                : "Unable to detect device GPS. Click 'Pick Start on Map' below to set your coordinates.";
+            setNavErrorNotice(reason);
+          },
+          { enableHighAccuracy: true, timeout: 8000, maximumAge: 30000 }
+        );
       },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 15000 }
+      { enableHighAccuracy: false, timeout: 2800, maximumAge: 60000 }
     );
   }, [computeAndDisplayNavRoute, startLiveGpsWatchForBooth]);
 
@@ -2747,7 +3019,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
     startLiveGpsWatchForBooth(targetBooth, targetAgent);
   }, [isLiveGpsTracking, activeNavRoute, startLiveGpsWatchForBooth, stopLiveGpsWatch]);
 
-  // Clean up GPS watcher & active audio on unmount
   useEffect(() => {
     return () => {
       stopLiveGpsWatch();
@@ -2755,7 +3026,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
     };
   }, [stopLiveGpsWatch]);
 
-  // Global trigger for Leaflet HTML popups
   useEffect(() => {
     window.startMeasuringKiosk = (boothId) => {
       const b = userTaggedBooths.find(booth => String(booth.id) === String(boothId));
@@ -2778,7 +3048,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
     };
   }, [userTaggedBooths, handleRouteFromMyLocation]);
 
-  // Load Leaflet CSS & JS
   useEffect(() => {
     if (!document.getElementById("leaflet-custom-pins-style")) {
       const customStyle = document.createElement("style");
@@ -2820,11 +3089,9 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
     document.head.appendChild(script);
 
     return () => {
-      // Retain Leaflet in document to avoid reload flickers
     };
   }, []);
 
-  // Initialize Map with 100% Free OpenStreetMap Standard Tiles (Zero Watermark / No API Key Required)
   useEffect(() => {
     if (!leafletLoaded || !mapContainerRef.current || leafletMapRef.current) return;
 
@@ -2840,7 +3107,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
       zoomControl: false
     });
 
-    // 100% Free Standard OpenStreetMap Tiles - No API key watermark
     window.L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
       maxZoom: 19
@@ -2857,25 +3123,27 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
 
     leafletMapRef.current = map;
 
-    // Click handler anywhere on the map to drop coordinates pin OR pick navigation starting point
     map.on("click", (e) => {
-      // Do not drop pin if currently in kiosk-to-kiosk measuring mode
       if (measuringSourceKioskRef.current) return;
       const lat = e.latlng.lat;
       const lng = e.latlng.lng;
-      // If user is picking a custom starting point for Waze/Maps Kiosk Route
       if (isPickingNavOriginRef.current && focusedBoothRef.current?.booth) {
         unlockNavAudioPlayback();
         const { booth, agentName } = focusedBoothRef.current;
-        computeAndDisplayNavRoute([lat, lng], booth, agentName, "Picked Map Point", false, true, false);
+        computeAndDisplayNavRoute([lat, lng], booth, agentName, "Picked Map Point", false, "drive", false);
         return;
       }
-      // Do not drop random coordinate pins while in pure Google Maps Navigation Mode
       if (activeNavRouteRef.current) return;
       setClickedPoint({ lat, lng });
     });
 
-    // Invalidate size and auto-fit to active territory bounds on mount
+    map.on("dragstart", () => {
+      if (activeNavRouteRef.current && !isProgrammaticMapMoveRef.current) {
+        setIsAutoFollowCamera(false);
+        isAutoFollowCameraRef.current = false;
+      }
+    });
+
     const timer = setTimeout(() => {
       map.invalidateSize();
       if (activeRouteCoords && activeRouteCoords.length > 0) {
@@ -2905,7 +3173,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
     };
   }, [leafletLoaded]);
 
-  // Handle custom point pin placement and popup with Google Maps button
   useEffect(() => {
     if (!leafletMapRef.current || !window.L) return;
     const map = leafletMapRef.current;
@@ -2999,7 +3266,8 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
     marker.bindPopup(popupContent, { autoClose: false, closeOnClick: false }).openPopup();
   }, [clickedPoint]);
 
-  // Main Map Drawing Effect
+  const activeNavDestBoothId = activeNavRoute?.targetBooth?.id ? String(activeNavRoute.targetBooth.id) : null;
+
   useEffect(() => {
     if (!leafletLoaded || !leafletMapRef.current || !layersGroupRef.current) return;
 
@@ -3007,11 +3275,8 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
     const group = layersGroupRef.current;
     group.clearLayers();
 
-    // ================= PURE GOOGLE MAPS / WAZE NAVIGATION MODE =================
-    // Hide all perimeter boundaries, edge checkpoints, POIs, patrol car & unrelated kiosks;
-    // render ONLY the clean Destination Kiosk pin alongside the active route!
-    if (activeNavRoute?.targetBooth?.coords) {
-      const targetBooth = activeNavRoute.targetBooth;
+    if (activeNavDestBoothId && activeNavRouteRef.current?.targetBooth?.coords) {
+      const targetBooth = activeNavRouteRef.current.targetBooth;
       const displayName = targetBooth.name || "001";
       const destKioskIcon = window.L.divIcon({
         className: "yellow-booth-pin",
@@ -3067,11 +3332,9 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
       return;
     }
 
-    // ================= MODE 1: TERRITORY PERIMETER VIEW =================
     if (viewMode === "city") {
       const routePts = activeRouteCoords;
 
-      // 1. Polyline for Territory Perimeter Circuit
       window.L.polyline(routePts, {
         color: "#064e3b",
         weight: 9,
@@ -3094,7 +3357,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
         permanent: false
       });
 
-      // 2. Pins for Active Territory Checkpoints
       activeCheckpoints.forEach((eb) => {
         const isSelected = selectedEdgeBarangay?.id === eb.id;
 
@@ -3145,7 +3407,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
         });
       });
 
-      // 3. Subtle Dot Pins for Interior Barangays (Mandaue only)
       if (selectedTerritory === "all" || selectedTerritory === "lucky_betplay") {
         INTERIOR_BARANGAYS.forEach((ib) => {
           const intIcon = window.L.divIcon({
@@ -3190,7 +3451,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
         });
       }
 
-      // 4. City Driving Car
       const currentCityPt = activeRouteCoords[cityRouteIndex] || activeRouteCoords[0];
 
       const carIcon = window.L.divIcon({
@@ -3220,16 +3480,14 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
       carMarkerRef.current = carMarker;
     }
 
-    // ================= MODE 2: DEDICATED INDIVIDUAL BARANGAY PERIMETER VIEW (e.g. CASILI) =================
     if (viewMode === "barangay" && activeBarangayCircuit) {
       const bRoute = getSectorPerimeterRoute(activeBarangayCircuit.id, BARANGAY_PERIMETER_ROUTES);
       if (!bRoute) return;
 
-      // 1. EXACT OFFICIAL ADMINISTRATIVE BOUNDARY POLYGON (100% Precise Territory)
       const officialPoly = bRoute.boundaryPolygon || bRoute.points;
       if (officialPoly && officialPoly.length > 0) {
         window.L.polygon(officialPoly, {
-          color: "#10b981", // Crisp Emerald border
+          color: "#10b981",
           weight: 2.8,
           dashArray: "6, 6",
           fillColor: "#10b981",
@@ -3237,10 +3495,9 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
         }).addTo(group);
       }
 
-      // 2. Real Snapped Road Perimeter Polyline (Circumscribing boundary streets)
       if (bRoute.points && bRoute.points.length > 0) {
         window.L.polyline(bRoute.points, {
-          color: "#083344", // Deep casing
+          color: "#083344",
           weight: 9,
           opacity: 0.85,
           lineCap: "round",
@@ -3248,7 +3505,7 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
         }).addTo(group);
 
         const brgyLine = window.L.polyline(bRoute.points, {
-          color: "#06b6d4", // Electric cyan
+          color: "#06b6d4",
           weight: 5.5,
           opacity: 1.0,
           lineCap: "round",
@@ -3261,7 +3518,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
         });
       }
 
-      // 3. Barangay Center / Headquarters Marker with GPS & Google Maps link
       const centerIcon = window.L.divIcon({
         className: "active-barangay-center-pin",
         html: `
@@ -3326,7 +3582,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
         </div>
       `);
 
-      // 4. Driving Car on Barangay Perimeter
       if (bRoute.points && bRoute.points.length > 0) {
         const currentBrgyPt = bRoute.points[brgyRouteIndex] || bRoute.points[0];
 
@@ -3358,7 +3613,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
       }
     }
 
-    // ================= POI LAYER 1: PUBLIC TRANSIT TERMINALS & COMMUTER STATIONS =================
     const currentPOIs = getTerritoryPOIs(selectedTerritory, MANDAUE_POIS);
     const shouldRenderTerminals = viewMode === "barangay" || showTerminals;
     if (shouldRenderTerminals) {
@@ -3456,7 +3710,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
       });
     }
 
-    // ================= POI LAYER 2: INDUSTRIAL PLANTS & FACTORIES =================
     const shouldRenderFactories = viewMode === "barangay" || showFactories;
     if (shouldRenderFactories) {
       const factoriesToRender = viewMode === "barangay" && activeBarangayCircuit
@@ -3552,8 +3805,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
       });
     }
 
-    // ================= LAYER: USER-TAGGED BOOTHS & AGENT OUTLETS ONLY =================
-    // Zero synthetic mock booths: ONLY booths and agents entered by the user are plotted!
     const boothsToRender = viewMode === "barangay" && activeBarangayCircuit
       ? activeBarangayTaggedBooths
       : territoryTaggedBooths;
@@ -3680,12 +3931,11 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
         boothMarkersRef.current[`teller_${booth.tellerName.trim().toLowerCase()}`] = marker;
       }
 
-      // Intercept marker click if in active distance measuring mode; otherwise mark as focused booth
       marker.on("click", (e) => {
         if (measuringSourceKioskRef.current) {
           window.L.DomEvent.stopPropagation(e);
           if (String(measuringSourceKioskRef.current.id) === String(booth.id)) {
-            return; // Clicked the same kiosk as source
+            return;
           }
           handleCompleteMeasurement(measuringSourceKioskRef.current, booth);
           return;
@@ -3804,9 +4054,8 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
       `);
     });
 
-  }, [leafletLoaded, viewMode, selectedTerritory, activeCheckpoints, activeRouteCoords, activeSectorsList, activeBarangayCircuit, selectedEdgeBarangay, cityRouteIndex, brgyRouteIndex, showTerminals, showFactories, brgyInspectorTab, activeBarangayAgents, taggedAgentCoords, territoryTaggedBooths, activeBarangayTaggedBooths, measuringSourceKiosk, activeNavRoute]);
+  }, [leafletLoaded, viewMode, selectedTerritory, activeCheckpoints, activeRouteCoords, activeSectorsList, activeBarangayCircuit, selectedEdgeBarangay, cityRouteIndex, brgyRouteIndex, showTerminals, showFactories, brgyInspectorTab, activeBarangayAgents, taggedAgentCoords, territoryTaggedBooths, activeBarangayTaggedBooths, measuringSourceKiosk, activeNavDestBoothId]);
 
-  // City/Territory-Level Driving Animation
   useEffect(() => {
     if (!isCityDriving || viewMode !== "city") return;
 
@@ -3820,7 +4069,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
         const next = (prev + stepSize) % coordsList.length;
         const currentPt = coordsList[next];
 
-        // Auto-match closest edge sector / checkpoint
         let closestEb = checkpointsList[0];
         let minDist = 9999;
         checkpointsList.forEach((eb) => {
@@ -3835,7 +4083,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
 
         setSelectedEdgeBarangay(closestEb);
 
-        // Smooth camera follow
         if (leafletMapRef.current && (next % 15 === 0 || coordsList.length < 30)) {
           leafletMapRef.current.panTo(currentPt, { animate: true, duration: 0.5 });
         }
@@ -3847,7 +4094,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
     return () => clearInterval(timer);
   }, [isCityDriving, viewMode, drivingSpeed, activeRouteCoords, activeCheckpoints]);
 
-  // Barangay-Level Driving Animation
   useEffect(() => {
     if (!isBrgyDriving || viewMode !== "barangay" || !activeBarangayCircuit) return;
 
@@ -3873,7 +4119,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
     return () => clearInterval(timer);
   }, [isBrgyDriving, viewMode, activeBarangayCircuit, drivingSpeed]);
 
-  // Switch into Dedicated Sector / Barangay Perimeter Mode
   const handleSelectBarangayPerimeter = (barangayId, initialTab = "route") => {
     const found =
       activeSectorsList.find((b) => b.id === barangayId) ||
@@ -3901,7 +4146,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
     }
   };
 
-  // Return to Whole Territory / City View
   const handleReturnToCityView = () => {
     setViewMode("city");
     setActiveBarangayCircuit(null);
@@ -3912,14 +4156,12 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
     }
   };
 
-  // Fly to specific POI with animation
   const handleFocusPOI = (coords) => {
     if (leafletMapRef.current && coords) {
       leafletMapRef.current.flyTo(coords, 17, { duration: 0.8 });
     }
   };
 
-  // Top Agent & Booth Search Results
   const topSearchResults = useMemo(() => {
     const q = topAgentSearchQuery.trim().toLowerCase();
     if (!q) return [];
@@ -3929,14 +4171,12 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
     const sourceAgents = selectedTerritory === "all" ? apiAgents : territoryAgents;
     const sourceBooths = territoryTaggedBooths;
 
-    // 1. Match from sourceAgents
     (sourceAgents || []).forEach((ag) => {
       const name = (ag.fullName || "").toLowerCase();
       const user = (ag.username || "").toLowerCase();
       const idStr = String(ag.id || "");
       if (name.includes(q) || user.includes(q) || idStr === q) {
         seenAgentIds.add(idStr);
-        // Find assigned booth in sourceBooths
         const assignedBooth = (sourceBooths || []).find((b) => {
           if (b.agentId && String(b.agentId) === idStr) return true;
           if (b.tellerName) {
@@ -3953,7 +4193,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
       }
     });
 
-    // 2. Match directly from sourceBooths (tellerName or booth name/address/barangay)
     (sourceBooths || []).forEach((b) => {
       const bTeller = (b.tellerName || "").toLowerCase();
       const bName = (b.name || "").toLowerCase();
@@ -3975,11 +4214,9 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
     return results.slice(0, 10);
   }, [topAgentSearchQuery, apiAgents, territoryAgents, selectedTerritory, territoryTaggedBooths]);
 
-  // Focus and fly to a booth marker on map
   const handleFocusBooth = (booth, agentName = "") => {
     if (!booth || !booth.coords) return;
 
-    // Clear previous navigation route if focusing a different booth
     if (activeNavRoute && String(activeNavRoute.targetBooth?.id) !== String(booth.id)) {
       handleClearNavRoute();
     }
@@ -4069,7 +4306,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
 
   return (
     <div className="space-y-3 antialiased">
-      {/* ================= OPERATING TERRITORY & SUBSIDIARY SELECTOR ================= */}
       {!isNavFocusMode && (
       <div className="bg-white rounded-xl border border-slate-200/80 p-1.5 sm:p-2 shadow-2xs flex items-center gap-1.5 overflow-x-auto custom-scrollbar">
         <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 pl-1 pr-1 shrink-0 flex items-center gap-1">
@@ -4120,10 +4356,8 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
       ) : (
         <>
 
-      {/* ================= TOP SUB-NAVIGATION BAR REPLACING 3 PILLS WITH AGENT SEARCH BAR ================= */}
       {!isNavFocusMode && (
       <div className="flex items-center justify-between border-b border-slate-200 pb-3 flex-wrap gap-2.5">
-        {/* Agent Search Bar */}
         <div ref={searchContainerRef} className="relative flex-1 min-w-[260px] sm:min-w-[340px] max-w-md">
           <div className="relative flex items-center">
             <Search size={15} className="absolute left-3.5 text-slate-400 pointer-events-none" />
@@ -4154,7 +4388,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
             )}
           </div>
 
-          {/* Autocomplete Dropdown */}
           {isTopSearchOpen && topAgentSearchQuery.trim() && (
             <div className="absolute top-full left-0 right-0 mt-1.5 z-50 bg-white rounded-2xl border border-slate-200 shadow-2xl overflow-hidden max-h-80 overflow-y-auto">
               {topSearchResults.length > 0 ? (
@@ -4241,7 +4474,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
           )}
         </div>
 
-        {/* Right side: Franchise Area Badge */}
         <div className="flex items-center gap-2">
           <span className="text-[11px] font-bold text-slate-500 hidden sm:inline">
             Active Franchise Area:
@@ -4253,9 +4485,7 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
       </div>
       )}
 
-      {/* ================= MAP CANVAS CONTAINER ================= */}
       <div className={`${isNavFocusMode ? "h-[calc(100vh-110px)] min-h-[640px]" : "h-[720px] md:h-[780px]"} rounded-3xl overflow-hidden border border-slate-800 shadow-2xl flex flex-col relative bg-slate-950 text-white font-sans select-none transition-all duration-200`}>
-        {/* ================= 100% PURE FULL-SCREEN MAP CANVAS ================= */}
       <div
         ref={mapContainerRef}
         className="absolute inset-0 w-full h-full bg-slate-950 z-0 cursor-crosshair"
@@ -4268,7 +4498,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
         </div>
       )}
 
-      {/* ================= COPIED TOAST NOTIFICATION ================= */}
       {copiedText && (
         <div className="absolute top-20 left-1/2 -translate-x-1/2 z-50 bg-emerald-600 text-white font-mono text-xs font-bold px-3 py-1.5 rounded-xl shadow-xl flex items-center gap-1.5 animate-in fade-in duration-150">
           <Check size={14} />
@@ -4276,7 +4505,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
         </div>
       )}
 
-      {/* ================= WAZE / GOOGLE MAPS PICK-START-ON-MAP BANNER ================= */}
       {isPickingNavOrigin && focusedBooth?.booth && (
         <div className="absolute top-20 left-1/2 -translate-x-1/2 z-50 bg-slate-900/95 backdrop-blur-xl border-2 border-sky-400 rounded-2xl shadow-2xl p-3 px-4 flex items-center gap-3 animate-in fade-in slide-in-from-top-2 duration-200 max-w-[94vw]">
           <div className="w-9 h-9 rounded-xl bg-sky-500/20 text-sky-400 border border-sky-400/40 flex items-center justify-center shrink-0 animate-pulse">
@@ -4300,7 +4528,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
         </div>
       )}
 
-      {/* ================= WAZE / GOOGLE MAPS TOP TURN-BY-TURN NAVIGATION BANNER (WITH VOICE & TRAFFIC) ================= */}
       {activeNavRoute && !isPickingNavOrigin && (
         <div className="absolute top-3.5 left-1/2 -translate-x-1/2 z-40 w-[94%] max-w-xl animate-in fade-in slide-in-from-top-2 duration-200">
           {(() => {
@@ -4359,7 +4586,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
                   </button>
 
                   <div className="flex items-center gap-1 shrink-0">
-                    {/* Voice ON/OFF Mute Toggle */}
                     <button
                       type="button"
                       onClick={() => {
@@ -4379,7 +4605,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
                       {voiceGuidanceEnabled ? <Volume2 size={14} /> : <VolumeX size={14} />}
                     </button>
 
-                    {/* Taglish / English Voice Language Switch */}
                     <button
                       type="button"
                       onClick={() => {
@@ -4395,7 +4620,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
                       {voiceLang === "tl" ? "TL" : "EN"}
                     </button>
 
-                    {/* Expand Turn-by-Turn Steps */}
                     <button
                       type="button"
                       onClick={() => setIsNavStepsExpanded((prev) => !prev)}
@@ -4407,7 +4631,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
                   </div>
                 </div>
 
-                {/* Traffic Advisory Sub-Strip */}
                 {traffic?.advisoryText && (
                   <div className="px-3.5 py-1.5 bg-black/25 border-t border-white/10 flex items-center justify-between gap-2 text-[10.5px] text-emerald-50/95">
                     <span className="truncate">{traffic.advisoryText}</span>
@@ -4427,7 +4650,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
                   </div>
                 )}
 
-                {/* Expandable Full Turn-by-Turn Directions List (Click any step to fly + hear voice!) */}
                 {isNavStepsExpanded && activeNavRoute.steps && activeNavRoute.steps.length > 0 && (
                   <div className="bg-slate-950/95 border-t border-emerald-400/30 max-h-56 overflow-y-auto custom-scrollbar divide-y divide-slate-800/80">
                     {activeNavRoute.steps.map((st, idx) => (
@@ -4482,11 +4704,67 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
         </div>
       )}
 
-      {/* ================= FLOATING FOCUSED KIOSK / ACTIVE WAZE-MAPS NAVIGATION BAR ================= */}
+      {isNavFocusMode && !isAutoFollowCamera && (
+        <button
+          type="button"
+          onClick={() => recenterOnNavVehicle(null, 18)}
+          className="absolute bottom-36 sm:bottom-28 left-4 z-40 px-3.5 py-2 rounded-full bg-white hover:bg-slate-100 text-slate-900 border border-slate-200 shadow-2xl text-xs font-extrabold flex items-center gap-1.5 transition cursor-pointer animate-in fade-in slide-in-from-bottom-2 duration-150"
+          title="Zoom back in to your live vehicle location"
+        >
+          <LocateFixed size={14} className="text-blue-600" />
+          <span>Re-center</span>
+        </button>
+      )}
+
       {(activeNavRoute || focusedBooth?.booth) && !measuredPair && (
-        <div className="absolute bottom-5 left-1/2 -translate-x-1/2 z-40 w-[95%] max-w-2xl bg-slate-950/95 backdrop-blur-xl border border-sky-500/60 rounded-2xl shadow-2xl p-3 px-4 animate-in fade-in slide-in-from-bottom-2 duration-200">
+        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-40 w-[95%] max-w-2xl bg-slate-950/95 backdrop-blur-xl border border-sky-500/60 rounded-2xl shadow-2xl p-3 px-4 animate-in fade-in slide-in-from-bottom-2 duration-200">
           {activeNavRoute ? (
             <div className="space-y-2.5">
+              <div className="flex items-center justify-between gap-2 flex-wrap pb-2 border-b border-slate-800/90">
+                <div className="flex items-center gap-1 bg-slate-900 p-0.5 rounded-xl border border-slate-800">
+                  {[
+                    { id: "motor", label: "🏍️ Motor" },
+                    { id: "car", label: "🚗 Car" },
+                    { id: "arrow", label: "🧭 GPS" }
+                  ].map((v) => (
+                    <button
+                      key={v.id}
+                      type="button"
+                      onClick={() => setNavVehicleType(v.id)}
+                      className={`px-2.5 py-1 rounded-lg text-[10.5px] font-bold transition cursor-pointer ${
+                        navVehicleType === v.id
+                          ? "bg-blue-600 text-white shadow-xs"
+                          : "text-slate-400 hover:text-white"
+                      }`}
+                    >
+                      {v.label}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {!isDeviceOnline ? (
+                    <span className="px-2 py-0.5 rounded-full text-[9.5px] font-bold bg-amber-500/20 text-amber-300 border border-amber-400/40">
+                      📡 Offline GPS Active
+                    </span>
+                  ) : isOfflineRouteReady ? (
+                    <span className="px-2 py-0.5 rounded-full text-[9.5px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                      ✓ Offline Ready
+                    </span>
+                  ) : null}
+
+                  <button
+                    type="button"
+                    onClick={() => (isAutoFollowCamera ? showNavRouteOverview() : recenterOnNavVehicle(null, 18))}
+                    className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-sky-300 text-[10.5px] font-bold border border-slate-700 transition cursor-pointer flex items-center gap-1"
+                    title={isAutoFollowCamera ? "Zoom out to see full route" : "Zoom in (18x) on your vehicle"}
+                  >
+                    <Crosshair size={11} />
+                    <span>{isAutoFollowCamera ? "Overview" : "Re-center"}</span>
+                  </button>
+                </div>
+              </div>
+
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
                 <div className="flex items-center gap-3 min-w-0">
                   <div className={`w-10 h-10 rounded-xl text-white flex items-center justify-center shadow-lg shrink-0 ${
@@ -4699,7 +4977,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
         </div>
       )}
 
-      {/* ================= ACTIVE MEASURING MODE HUD BANNER ================= */}
       {!isNavFocusMode && measuringSourceKiosk && (
         <div className="absolute top-24 left-1/2 -translate-x-1/2 z-50 bg-slate-900/95 backdrop-blur-xl border-2 border-teal-400 rounded-2xl shadow-2xl p-3 px-5 flex items-center gap-4 animate-in fade-in slide-in-from-top-2 duration-200 max-w-[94vw] border-teal-400 shadow-teal-950/60">
           <div className="w-10 h-10 rounded-2xl bg-teal-500/20 text-teal-400 border border-teal-400/40 flex items-center justify-center shrink-0 animate-pulse">
@@ -4732,7 +5009,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
         </div>
       )}
 
-      {/* ================= FLOATING MEASURED DISTANCE BAR (When measurement line is on map) ================= */}
       {!isNavFocusMode && measuredPair && !isDistanceModalOpen && (
         <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-40 bg-slate-900/95 backdrop-blur-xl border border-teal-500/80 rounded-2xl shadow-2xl p-2.5 px-4 flex items-center gap-3 animate-in fade-in slide-in-from-bottom-2 duration-150 max-w-[94vw]">
           <div className="w-8 h-8 rounded-xl bg-teal-600 flex items-center justify-center text-white shadow-md shrink-0">
@@ -4770,7 +5046,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
         </div>
       )}
 
-      {/* ================= FLOATING GOOGLE MAPS DIALOG FOR CLICKED COORDINATES ================= */}
       {!isNavFocusMode && clickedPoint && (
         <div className="absolute top-28 left-4 right-4 sm:left-auto sm:right-4 z-40 bg-slate-900/95 backdrop-blur-xl border border-sky-500/80 rounded-2xl shadow-2xl p-3 flex items-center justify-between gap-3 animate-in fade-in slide-in-from-top-2 duration-150">
           <div className="flex items-center gap-2.5">
@@ -4839,10 +5114,8 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
         </div>
       )}
 
-      {/* ================= TOP DYNAMIC HUD: CITY VIEW vs BARANGAY PERIMETER VIEW ================= */}
       {!isNavFocusMode && (
       <div className="absolute top-3 left-3 right-3 md:left-4 md:right-4 z-20 pointer-events-auto space-y-2">
-        {/* VIEW MODE 1: WHOLE CITY PERIMETER HUD */}
         {viewMode === "city" && (
           <div className="bg-slate-900/95 backdrop-blur-xl border border-slate-700/80 rounded-2xl shadow-2xl p-3 flex flex-col md:flex-row md:items-center justify-between gap-2.5">
             <div className="flex items-center gap-3">
@@ -4869,9 +5142,7 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
               </div>
             </div>
 
-            {/* City Controls & Optional POI Toggles */}
             <div className="flex items-center gap-2 self-end md:self-center shrink-0 flex-wrap">
-              {/* Optional Terminals Toggle */}
               <button
                 type="button"
                 onClick={() => setShowTerminals(v => !v)}
@@ -4886,7 +5157,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
                 <span className={`w-1.5 h-1.5 rounded-full ${showTerminals ? "bg-amber-400 animate-pulse" : "bg-slate-600"}`} />
               </button>
 
-              {/* Optional Factories Toggle */}
               <button
                 type="button"
                 onClick={() => setShowFactories(v => !v)}
@@ -4901,7 +5171,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
                 <span className={`w-1.5 h-1.5 rounded-full ${showFactories ? "bg-orange-400 animate-pulse" : "bg-slate-600"}`} />
               </button>
 
-              {/* Tagged Outlets Indicator */}
               <button
                 type="button"
                 onClick={() => setCityInspectorTab("tagged_agents")}
@@ -4912,7 +5181,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
                 <span>Tagged Booths ({territoryTaggedBooths.length})</span>
               </button>
 
-              {/* Central Supabase Cloud Database Sync Status */}
               <div
                 className={`px-2.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 border ${syncStatus === "syncing"
                     ? "bg-amber-500/15 border-amber-500/30 text-amber-300"
@@ -4936,7 +5204,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
                 />
               </div>
 
-              {/* Tag Booth Button (Replaces Patrol City Button) */}
               <button
                 type="button"
                 onClick={() => handleOpenBoothModal()}
@@ -4960,11 +5227,9 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
           </div>
         )}
 
-        {/* VIEW MODE 2: DEDICATED INDIVIDUAL BARANGAY PERIMETER HUD (e.g. CASILI) */}
         {viewMode === "barangay" && activeBarangayCircuit && (
           <div className="bg-slate-900/95 backdrop-blur-xl border border-cyan-500/60 rounded-2xl shadow-2xl p-3 flex flex-col md:flex-row md:items-center justify-between gap-2.5 animate-in fade-in duration-200">
             <div className="flex items-center gap-3">
-              {/* Back to City Overview Button */}
               <button
                 type="button"
                 onClick={handleReturnToCityView}
@@ -5022,9 +5287,7 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
               </div>
             </div>
 
-            {/* Barangay Driving Controls & Quick Action */}
             <div className="flex items-center gap-2 self-end md:self-center shrink-0 flex-wrap">
-              {/* Tag Booth Button (Barangay View) */}
               <button
                 type="button"
                 onClick={() => handleOpenBoothModal(null, activeBarangayCircuit)}
@@ -5039,7 +5302,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
           </div>
         )}
 
-        {/* Horizontal Sector Selector Strip */}
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
           <span className="px-2.5 py-1 rounded-xl bg-slate-900/95 border border-slate-800 text-[10px] font-black text-cyan-400 backdrop-blur-md shrink-0">
             Select Sector to Inspect:
@@ -5069,7 +5331,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
       </div>
       )}
 
-      {/* ================= FLOATING ZOOM & FOLLOW CONTROLS (RIGHT SIDE) ================= */}
       <div className={`absolute ${isNavFocusMode ? "top-28 right-3.5" : "top-36 right-4"} z-20 flex flex-col gap-2 pointer-events-auto`}>
         <button
           type="button"
@@ -5095,11 +5356,8 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
           type="button"
           onClick={() => {
             if (leafletMapRef.current) {
-              if (isNavFocusMode && activeNavRoute?.coordinates?.length > 1 && window.L) {
-                const bounds = window.L.latLngBounds(activeNavRoute.coordinates);
-                if (activeNavRoute.startCoords) bounds.extend(activeNavRoute.startCoords);
-                if (activeNavRoute.targetBooth?.coords) bounds.extend(activeNavRoute.targetBooth.coords);
-                leafletMapRef.current.fitBounds(bounds, { padding: [90, 90], maxZoom: 17 });
+              if (isNavFocusMode) {
+                recenterOnNavVehicle(null, 18);
               } else if (viewMode === "barangay" && activeBarangayCircuit) {
                 const bRoute = BARANGAY_PERIMETER_ROUTES[activeBarangayCircuit.id];
                 if (bRoute && bRoute.points) {
@@ -5119,7 +5377,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
         </button>
       </div>
 
-      {/* ================= BOTTOM-LEFT LEGEND ================= */}
       {!isNavFocusMode && (
       <div className="absolute bottom-3 left-3 z-20 bg-slate-900/90 backdrop-blur-md p-2.5 rounded-2xl border border-slate-800 shadow-2xl max-w-xs text-xs pointer-events-auto space-y-1">
         <div className="flex items-center justify-between border-b border-slate-800 pb-1">
@@ -5173,12 +5430,10 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
       </div>
       )}
 
-      {/* ================= BOTTOM-RIGHT INSPECTOR CARD ================= */}
       {!isNavFocusMode && (
       <div className="absolute bottom-3 right-3 left-3 sm:left-auto sm:w-[430px] max-h-[390px] z-30 pointer-events-auto bg-slate-900/95 backdrop-blur-xl border border-slate-700/80 rounded-2xl shadow-2xl p-3.5 text-xs animate-in slide-in-from-bottom duration-200 flex flex-col gap-2 overflow-hidden">
         {viewMode === "barangay" && activeBarangayCircuit ? (
           <>
-            {/* Header */}
             <div className="flex items-start justify-between gap-2 border-b border-slate-800 pb-2 shrink-0">
               <div>
                 <span className="px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 inline-block mb-0.5">
@@ -5200,7 +5455,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
               </div>
             </div>
 
-            {/* Sub-Tabs: Boundary | Transit Terminals | Industrial Facilities | Live Agents | Custom Booths */}
             <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800 shrink-0 overflow-x-auto scrollbar-none">
               <button
                 type="button"
@@ -5251,7 +5505,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
               </button>
             </div>
 
-            {/* Tab Content: Boundary & Route */}
             {brgyInspectorTab === "route" && (
               <div className="space-y-1.5 overflow-y-auto max-h-[190px] pr-1">
                 <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 text-xs space-y-1.5">
@@ -5318,7 +5571,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
               </div>
             )}
 
-            {/* Tab Content: Tagged Yellow Booths in this Barangay */}
             {brgyInspectorTab === "booths" && (
               <div className="space-y-1.5 overflow-y-auto max-h-[190px] pr-1">
                 <div className="flex items-center justify-between pb-1 mb-1 border-b border-slate-800">
@@ -5439,7 +5691,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
               </div>
             )}
 
-            {/* Tab Content: Public Transit Terminals */}
             {brgyInspectorTab === "terminals" && (
               <div className="space-y-1.5 overflow-y-auto max-h-[190px] pr-1">
                 {activeBarangayData?.terminals?.length > 0 ? (
@@ -5484,7 +5735,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
                         </div>
                       </div>
 
-                      {/* Prominent GPS Coordinates Badge */}
                       <div className="flex items-center justify-between bg-amber-950/40 border border-amber-800/40 px-2 py-0.5 rounded-md font-mono text-[10px] text-amber-300 font-bold">
                         <span>📍 GPS:</span>
                         <span>{formatGPS(term.coords)}</span>
@@ -5505,7 +5755,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
               </div>
             )}
 
-            {/* Tab Content: Industrial Manufacturing Plants & Factories */}
             {brgyInspectorTab === "factories" && (
               <div className="space-y-1.5 overflow-y-auto max-h-[190px] pr-1">
                 {activeBarangayData?.factories?.length > 0 ? (
@@ -5550,7 +5799,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
                         </div>
                       </div>
 
-                      {/* Prominent GPS Coordinates Badge */}
                       <div className="flex items-center justify-between bg-orange-950/40 border border-orange-800/40 px-2 py-0.5 rounded-md font-mono text-[10px] text-orange-300 font-bold">
                         <span>📍 GPS:</span>
                         <span>{formatGPS(fact.coords)}</span>
@@ -5575,7 +5823,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
           </>
         ) : (
           <>
-            {/* City View Inspector Tabs: Circuit Waypoints vs Tagged Agent Outlets */}
             <div className="flex items-center justify-between border-b border-slate-800 pb-1.5 shrink-0">
               <div className="flex items-center gap-1 bg-slate-950 p-0.5 rounded-xl border border-slate-800">
                 <button
@@ -5807,11 +6054,9 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
       </div>
       )}
 
-      {/* ================= MODAL: TAG YELLOW BOOTH (COORDINATES, DETECT BARANGAY & BOOTH ADDRESS) ================= */}
       {isBoothModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-200">
           <div className="relative w-full max-w-2xl sm:max-w-3xl lg:max-w-3xl max-h-[92vh] flex flex-col bg-slate-900 border border-amber-500/50 rounded-3xl shadow-2xl overflow-hidden ring-1 ring-amber-500/20">
-            {/* Modal Header */}
             <div className="p-4 sm:p-5 border-b border-slate-800 flex items-center justify-between bg-slate-950/70">
               <div className="flex items-center gap-3">
                 <div className="w-11 h-11 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center p-1 shadow-inner shrink-0">
@@ -5838,9 +6083,7 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
               </button>
             </div>
 
-            {/* Modal Form Body */}
             <form onSubmit={handleSaveBoothModal} className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4">
-              {/* Coordinates Section */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-black text-white flex items-center gap-1.5">
@@ -5895,7 +6138,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
                   </div>
                 </div>
 
-                {/* Dedicated Detect Barangay Button */}
                 <div className="pt-1">
                   <button
                     type="button"
@@ -5907,7 +6149,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
                   </button>
                 </div>
 
-                {/* Detected Barangay Feedback Banner */}
                 {detectedBarangayResult && (
                   <div className={`p-3 rounded-xl border transition animate-in fade-in ${detectedBarangayResult.id === "outside"
                     ? "bg-rose-950/30 border-rose-800/60 text-rose-300"
@@ -5938,7 +6179,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
                 )}
               </div>
 
-              {/* Booth Address & Outlet Name */}
               <div className="space-y-3 pt-2 border-t border-slate-800">
                 <div>
                   <label className="text-xs font-black text-white flex items-center gap-1.5 mb-1">
@@ -5979,7 +6219,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
                 </div>
               </div>
 
-              {/* Assigned Teller / Agent Selection with Smart Search & 1-to-1 Mapping */}
               <div className="space-y-2 pt-2 border-t border-slate-800">
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-black text-white flex items-center gap-1.5">
@@ -5991,7 +6230,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
                   </span>
                 </div>
 
-                {/* Active Selection Card if an agent is selected */}
                 {selectedAgentObj ? (
                   <div className="p-3.5 rounded-2xl bg-gradient-to-r from-blue-950/70 via-slate-900 to-slate-950 border border-blue-500/50 flex items-center justify-between gap-3 shadow-inner">
                     <div className="flex items-center gap-3 min-w-0">
@@ -6063,7 +6301,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
                     </div>
                   </div>
                 ) : (
-                  /* When no agent is currently selected */
                   <div className="flex items-center justify-between p-3 rounded-xl bg-slate-950/80 border border-slate-800 text-slate-400 text-xs">
                     <div className="flex items-center gap-2">
                       <span className="w-2 h-2 rounded-full bg-slate-500"></span>
@@ -6080,10 +6317,8 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
                   </div>
                 )}
 
-                {/* Smart Search & Dropdown Picker */}
                 {(!selectedAgentObj || isAgentDropdownOpen) && (
                   <div className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800 space-y-2.5 mt-1">
-                    {/* Search Input Box */}
                     <div className="relative">
                       <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                       <input
@@ -6108,7 +6343,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
                       )}
                     </div>
 
-                    {/* Quick Filter Status Tabs & Count */}
                     <div className="flex flex-wrap items-center justify-between gap-2 pt-0.5">
                       <div className="flex items-center gap-1.5">
                         <button
@@ -6158,9 +6392,7 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
                       </div>
                     </div>
 
-                    {/* Scrollable List of Available Agents */}
                     <div className="max-h-60 overflow-y-auto space-y-1.5 pr-1">
-                      {/* Option to clear / keep generic booth */}
                       <button
                         type="button"
                         onClick={() => {
@@ -6224,7 +6456,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
                                     <span className="truncate">{ag.fullName}</span>
                                     <span className="text-[10px] text-blue-400 font-mono">@{ag.username}</span>
 
-                                    {/* Prominent Active / Inactive Badge */}
                                     {isActive ? (
                                       <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1 shrink-0">
                                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
@@ -6324,7 +6555,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
                 </div>
               </div>
 
-              {/* Submit Buttons */}
               <div className="pt-3 border-t border-slate-800 flex items-center justify-end gap-2">
                 <button
                   type="button"
@@ -6346,11 +6576,9 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
         </div>
       )}
 
-      {/* ================= KIOSK DISTANCE & AGENT GROSS MODAL ================= */}
       {isDistanceModalOpen && measuredPair && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
           <div className="bg-slate-900 border border-teal-500/50 rounded-3xl w-full max-w-3xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
-            {/* Modal Header */}
             <div className="p-4 sm:p-5 border-b border-slate-800 bg-slate-950/60 flex items-center justify-between gap-3 shrink-0">
               <div className="flex items-center gap-3">
                 <div className="w-11 h-11 rounded-2xl bg-teal-500/20 text-teal-400 border border-teal-500/40 flex items-center justify-center shadow-lg shrink-0">
@@ -6383,9 +6611,7 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
               </div>
             </div>
 
-            {/* Modal Body */}
             <div className="p-4 sm:p-6 overflow-y-auto space-y-5">
-              {/* 1. HERO DISTANCE BANNER */}
               <div className="relative overflow-hidden p-5 rounded-2xl bg-gradient-to-br from-teal-950/60 via-slate-900 to-slate-950 border border-teal-500/40 shadow-xl">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div>
@@ -6413,7 +6639,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
                     </p>
                   </div>
 
-                  {/* Estimated Travel Times */}
                   <div className="flex items-center gap-2 self-start sm:self-center shrink-0 flex-wrap">
                     <div className="px-3 py-2 rounded-xl bg-slate-950/80 border border-slate-800 text-center min-w-[70px]">
                       <div className="text-[10px] text-slate-400 font-bold">🚶 Walking</div>
@@ -6436,7 +6661,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
                   </div>
                 </div>
 
-                {/* Spacing Assessment */}
                 <div className="mt-4 pt-3 border-t border-teal-900/40 flex items-center gap-2 text-xs">
                   {measuredPair.distanceMeters < 250 ? (
                     <div className="flex items-center gap-2 text-amber-300">
@@ -6457,9 +6681,7 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
                 </div>
               </div>
 
-              {/* 2. SIDE-BY-SIDE KIOSK & ASSIGNED AGENT GROSS COMPARISON */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* KIOSK 1: SOURCE */}
                 {(() => {
                   const s = measuredPair.source;
                   const g = getBoothAgentGross(s);
@@ -6476,7 +6698,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
                           </span>
                         </div>
 
-                        {/* Booth Identity */}
                         <div className="flex items-start gap-3">
                           <div className="w-10 h-12 shrink-0">
                             <KioskIconSvg width={40} height={48} />
@@ -6497,7 +6718,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
                           </div>
                         </div>
 
-                        {/* Agent Information Card */}
                         <div className="p-3 rounded-xl bg-slate-900 border border-slate-800 space-y-1.5">
                           <div className="text-[10px] font-black uppercase tracking-wider text-slate-400 flex items-center justify-between">
                             <span>Assigned Agent / Teller</span>
@@ -6523,7 +6743,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
                           </div>
                         </div>
 
-                        {/* HIGHLIGHTED YESTERDAY'S GROSS SALES */}
                         <div className="p-4 rounded-xl bg-gradient-to-br from-emerald-950/80 to-slate-900 border border-emerald-500/50 shadow-inner">
                           <div className="flex items-center justify-between gap-2">
                             <span className="text-[10px] font-black uppercase tracking-wider text-emerald-300 flex items-center gap-1">
@@ -6546,7 +6765,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
                   );
                 })()}
 
-                {/* KIOSK 2: TARGET */}
                 {(() => {
                   const t = measuredPair.target;
                   const g = getBoothAgentGross(t);
@@ -6563,7 +6781,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
                           </span>
                         </div>
 
-                        {/* Booth Identity */}
                         <div className="flex items-start gap-3">
                           <div className="w-10 h-12 shrink-0">
                             <KioskIconSvg width={40} height={48} />
@@ -6584,7 +6801,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
                           </div>
                         </div>
 
-                        {/* Agent Information Card */}
                         <div className="p-3 rounded-xl bg-slate-900 border border-slate-800 space-y-1.5">
                           <div className="text-[10px] font-black uppercase tracking-wider text-slate-400 flex items-center justify-between">
                             <span>Assigned Agent / Teller</span>
@@ -6610,7 +6826,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
                           </div>
                         </div>
 
-                        {/* HIGHLIGHTED YESTERDAY'S GROSS SALES */}
                         <div className="p-4 rounded-xl bg-gradient-to-br from-cyan-950/80 to-slate-900 border border-cyan-500/50 shadow-inner">
                           <div className="flex items-center justify-between gap-2">
                             <span className="text-[10px] font-black uppercase tracking-wider text-cyan-300 flex items-center gap-1">
@@ -6634,7 +6849,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
                 })()}
               </div>
 
-              {/* 3. COMBINED TOTALS & FINANCIAL SUMMARY */}
               {(() => {
                 const sGross = getBoothAgentGross(measuredPair.source).gross;
                 const tGross = getBoothAgentGross(measuredPair.target).gross;
@@ -6661,7 +6875,6 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
               })()}
             </div>
 
-            {/* Modal Footer Controls */}
             <div className="p-4 sm:p-5 border-t border-slate-800 bg-slate-950 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 shrink-0">
               <a
                 href={`https://www.google.com/maps/dir/?api=1&origin=${measuredPair.source?.coords?.[0]},${measuredPair.source?.coords?.[1]}&destination=${measuredPair.target?.coords?.[0]},${measuredPair.target?.coords?.[1]}&travelmode=driving`}

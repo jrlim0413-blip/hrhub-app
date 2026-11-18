@@ -370,9 +370,6 @@ function resolveCompanyEntity(companyIdOrName) {
   );
 }
 
-/**
- * Reusable Official Corporate Payslip Slip Card (used in modal preview and isolated batch printing).
- */
 function PayslipDocumentCard({ record, batch, company, preparedByName, compact = false }) {
   const safeComp = company || resolveCompanyEntity(record?.companyId || batch?.companyId);
   const statutoryTotal =
@@ -387,7 +384,6 @@ function PayslipDocumentCard({ record, batch, company, preparedByName, compact =
         compact ? "p-5 text-[11px]" : "p-7 text-xs"
       }`}
     >
-      {/* Corporate Letterhead */}
       <div className="flex items-center justify-between gap-4 pb-3 border-b-2 border-emerald-700">
         <div className="flex items-center gap-3 min-w-0">
           {safeComp.logoUrl && (
@@ -427,7 +423,6 @@ function PayslipDocumentCard({ record, batch, company, preparedByName, compact =
         </div>
       </div>
 
-      {/* Employee & Payroll Cutoff Info */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-50 border border-slate-200 rounded-lg p-3 my-3">
         <div>
           <span className="block text-[9.5px] font-bold uppercase text-slate-400">Employee Name</span>
@@ -476,9 +471,7 @@ function PayslipDocumentCard({ record, batch, company, preparedByName, compact =
         </div>
       </div>
 
-      {/* Earnings vs Deductions Two-Column Statement */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        {/* Earnings Table */}
         <div className="border border-slate-200 rounded-lg overflow-hidden flex flex-col justify-between">
           <div>
             <div className="bg-emerald-50 border-b border-emerald-200 px-3 py-1.5 font-extrabold text-[10.5px] uppercase tracking-wider text-emerald-900">
@@ -513,7 +506,6 @@ function PayslipDocumentCard({ record, batch, company, preparedByName, compact =
           </div>
         </div>
 
-        {/* Deductions Table */}
         <div className="border border-slate-200 rounded-lg overflow-hidden flex flex-col justify-between">
           <div>
             <div className="bg-rose-50 border-b border-rose-200 px-3 py-1.5 font-extrabold text-[10.5px] uppercase tracking-wider text-rose-900">
@@ -565,7 +557,6 @@ function PayslipDocumentCard({ record, batch, company, preparedByName, compact =
         </div>
       </div>
 
-      {/* Net Take-Home Pay Highlight Banner */}
       <div className="mt-3 px-4 py-2.5 rounded-lg bg-emerald-700 text-white flex items-center justify-between">
         <div>
           <span className="block text-[10px] font-bold uppercase tracking-wider text-emerald-100">
@@ -581,7 +572,6 @@ function PayslipDocumentCard({ record, batch, company, preparedByName, compact =
         </div>
       </div>
 
-      {/* Signatories & Employee Receipt */}
       <div className="grid grid-cols-3 gap-6 pt-5 mt-3 border-t border-slate-200 text-center text-[10.5px]">
         <div>
           <div className="border-b border-slate-400 pb-6 font-bold text-slate-800 uppercase">
@@ -607,11 +597,10 @@ function PayslipDocumentCard({ record, batch, company, preparedByName, compact =
 }
 
 export default function SalaryCompensationPanel({ currentUser, profiles = [], onClose }) {
-  const [subView, setSubView] = useState("upload"); // "upload" | "database"
+  const [subView, setSubView] = useState("upload");
   const fileInputRef = useRef(null);
   const printAreaRef = useRef(null);
 
-  // Batch Metadata Form for Upload Staging
   const defaultCompany = useMemo(() => resolveCompanyEntity(currentUser?.company || "sgc"), [currentUser]);
   const [selectedCompanyId, setSelectedCompanyId] = useState(defaultCompany.id);
   const [branchLocation, setBranchLocation] = useState("");
@@ -619,7 +608,6 @@ export default function SalaryCompensationPanel({ currentUser, profiles = [], on
   const [payDate, setPayDate] = useState(() => new Date().toISOString().split("T")[0]);
   const [batchTitle, setBatchTitle] = useState("");
 
-  // Uploaded / Extracted Staging State
   const [isParsing, setIsParsing] = useState(false);
   const [isAiMapping, setIsAiMapping] = useState(false);
   const [parseError, setParseError] = useState("");
@@ -628,7 +616,6 @@ export default function SalaryCompensationPanel({ currentUser, profiles = [], on
   const [showColumnMapper, setShowColumnMapper] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
 
-  // Database Saved State
   const [savedBatches, setSavedBatches] = useState([]);
   const [activeBatchId, setActiveBatchId] = useState("");
   const [activeBatchRecords, setActiveBatchRecords] = useState([]);
@@ -638,11 +625,10 @@ export default function SalaryCompensationPanel({ currentUser, profiles = [], on
   const [dbSyncSource, setDbSyncSource] = useState("loading");
   const [dbErrorNotice, setDbErrorNotice] = useState("");
 
-  // Search / Filter / Edit / Payslip / Verification Modal State
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
-  const [editingRowModal, setEditingRowModal] = useState(null); // { scope: "staging" | "saved", row }
-  const [payslipPreviewTarget, setPayslipPreviewTarget] = useState(null); // { record, batch, mode: "single" | "batch_all", recordsList }
+  const [editingRowModal, setEditingRowModal] = useState(null);
+  const [payslipPreviewTarget, setPayslipPreviewTarget] = useState(null);
   const [manualControlNetPay, setManualControlNetPay] = useState("");
   const [showBreakdownCheck, setShowBreakdownCheck] = useState(false);
   const [showSaveConfirmModal, setShowSaveConfirmModal] = useState(false);
@@ -652,7 +638,6 @@ export default function SalaryCompensationPanel({ currentUser, profiles = [], on
   const caStatementRef = useRef(null);
   const leaveStatementRef = useRef(null);
 
-  // Cash Advancement (CA) Ledger State
   const [caEntries, setCaEntries] = useState([]);
   const [loadingCa, setLoadingCa] = useState(false);
   const [isSavingCa, setIsSavingCa] = useState(false);
@@ -669,7 +654,6 @@ export default function SalaryCompensationPanel({ currentUser, profiles = [], on
   const [caEmployeeFilter, setCaEmployeeFilter] = useState("");
   const [caFormModal, setCaFormModal] = useState(null);
 
-  // Employee Leave Records & Remaining Credits State
   const [leaveEntries, setLeaveEntries] = useState([]);
   const [loadingLeave, setLoadingLeave] = useState(false);
   const [isSavingLeave, setIsSavingLeave] = useState(false);
@@ -718,7 +702,6 @@ export default function SalaryCompensationPanel({ currentUser, profiles = [], on
     return map;
   }, [caSummary]);
 
-  // Area & Sector Cash Advancement Percentage Analytics
   const caAreaStats = useMemo(() => {
     const areaMap = new Map();
     let grandTotalCa = 0;
@@ -950,7 +933,6 @@ export default function SalaryCompensationPanel({ currentUser, profiles = [], on
     setTimeout(() => setToast(null), 4000);
   };
 
-  // Profile lookup map to match uploaded payroll employees against registered directory accounts
   const profileLookup = useMemo(() => {
     const map = new Map();
     (profiles || []).forEach((p) => {
@@ -1028,7 +1010,6 @@ export default function SalaryCompensationPanel({ currentUser, profiles = [], on
     return () => clearTimeout(timer);
   }, [loadDatabaseBatches, loadCashAdvances, loadLeaveRecords]);
 
-  // Realtime listener on payroll, CA, leave tables & backup settings store
   useEffect(() => {
     if (!supabase) return;
     const channel = supabase
@@ -1107,7 +1088,6 @@ export default function SalaryCompensationPanel({ currentUser, profiles = [], on
     }
   };
 
-  // Process uploaded Excel, CSV, Image, or PDF file
   const handleFileSelected = async (file, preferredSheet = "") => {
     if (!file) return;
     setIsParsing(true);
@@ -1146,7 +1126,6 @@ export default function SalaryCompensationPanel({ currentUser, profiles = [], on
     }
   };
 
-  // Re-extract rows when switching worksheets inside an uploaded Excel workbook
   const handleSwitchExcelSheet = (sheetName) => {
     if (!parsedUpload?.sheetMatrices?.[sheetName]) return;
     const matrix = parsedUpload.sheetMatrices[sheetName];
@@ -1177,7 +1156,6 @@ export default function SalaryCompensationPanel({ currentUser, profiles = [], on
     showToast(`Switched to worksheet "${sheetName}" (${records.length} rows detected).`);
   };
 
-  // Apply manual column mapping override or header row index adjustment without re-uploading
   const handleUpdateColumnMapping = (fieldKey, colIdxRaw) => {
     if (!parsedUpload?.matrix) return;
     const nextMap = { ...(parsedUpload.columnMap || {}) };
@@ -1259,7 +1237,6 @@ export default function SalaryCompensationPanel({ currentUser, profiles = [], on
     }
   };
 
-  // Inline update for staged or saved rows
   const handleInlineFieldChange = (scope, rowId, fieldKey, rawValue, componentKind = null) => {
     const setter = scope === "staging" ? setStagedRows : setActiveBatchRecords;
     setter((prev) =>
@@ -1341,7 +1318,6 @@ export default function SalaryCompensationPanel({ currentUser, profiles = [], on
     }
   };
 
-  // Commit Full Row Edit Modal
   const handleSaveEditedRowModal = async (e) => {
     e.preventDefault();
     if (!editingRowModal?.row) return;
@@ -1376,7 +1352,6 @@ export default function SalaryCompensationPanel({ currentUser, profiles = [], on
     }
   };
 
-  // Open Pre-Save Confirmation & Excel Reconciliation Modal before committing
   const handleRequestSaveConfirmation = () => {
     if (activeStagedRows.length === 0) {
       showToast("Add or extract at least one employee row with payroll amounts before saving.", "error");
@@ -1386,7 +1361,6 @@ export default function SalaryCompensationPanel({ currentUser, profiles = [], on
     setShowSaveConfirmModal(true);
   };
 
-  // Save Extracted Data to Database
   const handleCommitStagedToDatabase = async () => {
     const validRows = activeStagedRows;
     if (validRows.length === 0) {
@@ -1737,7 +1711,6 @@ export default function SalaryCompensationPanel({ currentUser, profiles = [], on
     showToast("Payroll batch deleted from database.");
   };
 
-  // Active batch summary & KPI calculations
   const activeSavedBatch = useMemo(
     () => savedBatches.find((b) => b.id === activeBatchId) || null,
     [savedBatches, activeBatchId]
@@ -1761,7 +1734,6 @@ export default function SalaryCompensationPanel({ currentUser, profiles = [], on
     });
   }, [activeBatchRecords, searchQuery, statusFilter]);
 
-  // Isolated Print Engine (matches DocumentStudioPanel crisp popup printing without capturing sidebar/chrome)
   const handlePrintPayslipModal = () => {
     const titleText =
       payslipPreviewTarget?.mode === "batch_all"
@@ -1784,7 +1756,6 @@ export default function SalaryCompensationPanel({ currentUser, profiles = [], on
 
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
-      {/* Toast Feedback */}
       {toast && (
         <div
           className={`fixed bottom-6 right-6 z-50 px-4 py-3 rounded-2xl shadow-2xl border text-xs font-bold flex items-center gap-2.5 animate-in fade-in slide-in-from-bottom-3 ${
@@ -1802,7 +1773,6 @@ export default function SalaryCompensationPanel({ currentUser, profiles = [], on
         </div>
       )}
 
-      {/* Hidden File Input */}
       <input
         ref={fileInputRef}
         type="file"
@@ -1811,7 +1781,6 @@ export default function SalaryCompensationPanel({ currentUser, profiles = [], on
         className="hidden"
       />
 
-      {/* ================= 1. TOP WORKSPACE HEADER ================= */}
       <div className="rounded-2xl bg-gradient-to-br from-slate-900 via-[#0d1b2a] to-emerald-950 text-white p-6 shadow-md border border-slate-800">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div className="space-y-1.5">
@@ -1872,7 +1841,6 @@ export default function SalaryCompensationPanel({ currentUser, profiles = [], on
           </div>
         </div>
 
-        {/* 5 Executive KPI Summary Cards */}
         {subView === "cash_advance" ? (
           <div className="grid grid-cols-2 lg:grid-cols-5 gap-2.5 mt-4">
             <div className="rounded-xl bg-white/5 border border-white/10 p-3">
@@ -1929,7 +1897,6 @@ export default function SalaryCompensationPanel({ currentUser, profiles = [], on
               </div>
             </div>
 
-            {/* Top Area by CA & Percentage Card */}
             <div className="rounded-xl bg-amber-500/15 border border-amber-400/30 p-3 col-span-2 lg:col-span-1">
               <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-amber-200">
                 <span>Top CA Area (%)</span>
@@ -2061,7 +2028,6 @@ export default function SalaryCompensationPanel({ currentUser, profiles = [], on
         )}
       </div>
 
-      {/* ================= 2. SUB-VIEW SWITCHER TABS ================= */}
       <div className="flex flex-wrap items-center justify-between gap-3 bg-white border border-slate-200 rounded-2xl p-2 shadow-2xs">
         <div className="flex flex-wrap items-center gap-2">
           <button
@@ -2153,14 +2119,9 @@ export default function SalaryCompensationPanel({ currentUser, profiles = [], on
         </div>
       </div>
 
-      {/* ===================================================================== */}
-      {/* VIEW 1: UPLOAD EXCEL / OCR READER & STAGING REVIEW                     */}
-      {/* ===================================================================== */}
       {subView === "upload" && (
         <div className="space-y-5">
-          {/* Batch Settings & Dropzone Card */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-            {/* Dropzone */}
             <div
               onDragOver={(e) => {
                 e.preventDefault();
@@ -2215,7 +2176,6 @@ export default function SalaryCompensationPanel({ currentUser, profiles = [], on
               )}
             </div>
 
-            {/* Batch Config Inputs */}
             <div className="lg:col-span-5 bg-white border border-slate-200 rounded-2xl p-5 shadow-2xs space-y-3.5">
               <div className="flex items-center justify-between pb-2 border-b border-slate-100">
                 <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
@@ -2327,7 +2287,6 @@ export default function SalaryCompensationPanel({ currentUser, profiles = [], on
             </div>
           )}
 
-          {/* Extracted Source Info & Column Mapper Controls */}
           {parsedUpload && (
             <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-2xs space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-3">
@@ -2417,7 +2376,6 @@ export default function SalaryCompensationPanel({ currentUser, profiles = [], on
             </div>
           )}
 
-          {/* Total Amount Checking & Excel Coincide Reconciliation */}
           {stagedRows.length > 0 && (
             <div
               className={`rounded-2xl border p-4 shadow-2xs space-y-3 ${
@@ -2562,7 +2520,6 @@ export default function SalaryCompensationPanel({ currentUser, profiles = [], on
             </div>
           )}
 
-          {/* Extracted Data Review Table & Save to Database Action */}
           <div className="bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden">
             <div className="px-5 py-4 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3 bg-slate-50/70">
               <div>
@@ -2822,12 +2779,8 @@ export default function SalaryCompensationPanel({ currentUser, profiles = [], on
         </div>
       )}
 
-      {/* ===================================================================== */}
-      {/* VIEW 2: SAVED PAYROLL DATABASE & PAYSLIP ISSUANCE                     */}
-      {/* ===================================================================== */}
       {subView === "database" && (
         <div className="space-y-5">
-          {/* Saved Batch Selector List */}
           <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-2xs space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
@@ -2953,7 +2906,6 @@ export default function SalaryCompensationPanel({ currentUser, profiles = [], on
             )}
           </div>
 
-          {/* Active Batch Compensation Records & Bulk Payslip Tools */}
           {activeSavedBatch && (
             <div className="bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden">
               <div className="px-5 py-4 border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-3 bg-slate-50/70">
@@ -3137,12 +3089,8 @@ export default function SalaryCompensationPanel({ currentUser, profiles = [], on
         </div>
       )}
 
-      {/* ===================================================================== */}
-      {/* VIEW 3: CASH ADVANCEMENT (CA) LEDGER & PAYROLL UPLOAD REFLECTION      */}
-      {/* ===================================================================== */}
       {subView === "cash_advance" && (
         <div className="space-y-5">
-          {/* Header Action Toolbar & Workflow Guide */}
           <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-2xs space-y-3.5">
             <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
               <div>
@@ -3227,7 +3175,6 @@ export default function SalaryCompensationPanel({ currentUser, profiles = [], on
             />
           )}
 
-          {/* Unsaved Uploaded Payroll Staging CA Impact Preview */}
           {stagedCaImpactRows.length > 0 && (
             <div className="rounded-2xl border border-sky-200 bg-sky-50/75 p-4 space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
@@ -3285,7 +3232,6 @@ export default function SalaryCompensationPanel({ currentUser, profiles = [], on
             </div>
           )}
 
-          {/* Section 0: Area Cash Advancement Percentage Analytics & Regional Ranking */}
           {caAreaStats.areasList.length > 0 && (
             <div className="bg-white border border-slate-200/90 rounded-2xl p-3 sm:p-4 shadow-2xs space-y-3">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2.5 border-b border-slate-100">
@@ -3319,7 +3265,6 @@ export default function SalaryCompensationPanel({ currentUser, profiles = [], on
                 )}
               </div>
 
-              {/* Area Percentage Grid / Ranking List */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
                 {caAreaStats.areasList.map((item, index) => {
                   const isTop = index === 0;
@@ -3377,7 +3322,6 @@ export default function SalaryCompensationPanel({ currentUser, profiles = [], on
                         </div>
                       </div>
 
-                      {/* Percentage Progress Bar */}
                       <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
                         <div
                           className={`h-full rounded-full transition-all duration-500 ${
@@ -3413,7 +3357,6 @@ export default function SalaryCompensationPanel({ currentUser, profiles = [], on
             </div>
           )}
 
-          {/* Section 1: Per-Employee CA Balance & Chronological Transparency Ledger */}
           <div className="bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden">
             <div className="px-5 py-4 border-b border-slate-200 flex flex-col lg:flex-row lg:items-center justify-between gap-3 bg-slate-50/70">
               <div>
@@ -3641,7 +3584,6 @@ export default function SalaryCompensationPanel({ currentUser, profiles = [], on
                             </td>
                           </tr>
 
-                          {/* Expandable Running-Balance Deduction Transparency Drawer */}
                           {isExpanded && (
                             <tr className="bg-slate-50/90">
                               <td colSpan={7} className="px-5 py-4">
@@ -3754,7 +3696,6 @@ export default function SalaryCompensationPanel({ currentUser, profiles = [], on
             )}
           </div>
 
-          {/* Section 2: Detailed CA Transaction Audit Ledger Table */}
           <div className="bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden">
             <div className="px-5 py-3.5 border-b border-slate-200 flex flex-col lg:flex-row lg:items-center justify-between gap-3 bg-slate-50/70">
               <div className="flex flex-wrap items-center gap-2">
@@ -3958,12 +3899,8 @@ export default function SalaryCompensationPanel({ currentUser, profiles = [], on
         </div>
       )}
 
-      {/* ===================================================================== */}
-      {/* VIEW 4: EMPLOYEE LEAVE RECORDS & REMAINING CREDITS TRACKER            */}
-      {/* ===================================================================== */}
       {subView === "leave_records" && (
         <div className="space-y-5">
-          {/* Header Action Toolbar & 3-Step Workflow Guide */}
           <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-2xs space-y-3.5">
             <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
               <div>
@@ -4070,7 +4007,6 @@ export default function SalaryCompensationPanel({ currentUser, profiles = [], on
             />
           )}
 
-          {/* Section 1: Per-Employee Remaining Leave Credits Summary */}
           <div className="bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden">
             <div className="px-5 py-4 border-b border-slate-200 flex flex-col lg:flex-row lg:items-center justify-between gap-3 bg-slate-50/70">
               <div>
@@ -4464,7 +4400,6 @@ export default function SalaryCompensationPanel({ currentUser, profiles = [], on
             )}
           </div>
 
-          {/* Section 2: Complete Leave Transaction Audit Ledger */}
           <div className="bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden">
             <div className="px-5 py-3.5 border-b border-slate-200 flex flex-col lg:flex-row lg:items-center justify-between gap-3 bg-slate-50/70">
               <div className="flex flex-wrap items-center gap-2">
@@ -4651,9 +4586,6 @@ export default function SalaryCompensationPanel({ currentUser, profiles = [], on
         </div>
       )}
 
-      {/* ===================================================================== */}
-      {/* MODAL 1: EDIT FULL SALARY & DEDUCTIONS RECORD                         */}
-      {/* ===================================================================== */}
       {editingRowModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in">
           <form
@@ -4753,7 +4685,6 @@ export default function SalaryCompensationPanel({ currentUser, profiles = [], on
               </div>
             </div>
 
-            {/* Earnings Inputs */}
             <div className="p-3.5 rounded-xl bg-emerald-50/50 border border-emerald-200 space-y-2">
               <span className="block text-[11px] font-black uppercase tracking-wider text-emerald-800">
                 Rates, Days &amp; Earnings Breakdown (PHP)
@@ -4801,7 +4732,6 @@ export default function SalaryCompensationPanel({ currentUser, profiles = [], on
               </div>
             </div>
 
-            {/* Deductions Inputs */}
             <div className="p-3.5 rounded-xl bg-rose-50/50 border border-rose-200 space-y-2">
               <span className="block text-[11px] font-black uppercase tracking-wider text-rose-800">
                 Deductions &amp; Statutory Contributions (PHP)
@@ -4872,9 +4802,6 @@ export default function SalaryCompensationPanel({ currentUser, profiles = [], on
         </div>
       )}
 
-      {/* ===================================================================== */}
-      {/* MODAL 2: OFFICIAL CORPORATE PAYSLIP VIEWER & PRINT STUDIO             */}
-      {/* ===================================================================== */}
       {payslipPreviewTarget && (
         <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in">
           <div className="bg-white rounded-2xl max-w-4xl w-full p-6 shadow-2xl border border-slate-200 max-h-[92vh] flex flex-col">
@@ -4943,9 +4870,6 @@ export default function SalaryCompensationPanel({ currentUser, profiles = [], on
         </div>
       )}
 
-      {/* ===================================================================== */}
-      {/* MODAL 3: PRE-SAVE TOTAL AMOUNT CONFIRMATION & AUDIT GATE              */}
-      {/* ===================================================================== */}
       {showSaveConfirmModal && (
         <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in">
           <div className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl border border-slate-200 max-h-[90vh] overflow-y-auto space-y-4">
@@ -4985,7 +4909,6 @@ export default function SalaryCompensationPanel({ currentUser, profiles = [], on
               </button>
             </div>
 
-            {/* Coincide Check Banner */}
             <div
               className={`rounded-xl p-3.5 border text-xs flex items-start gap-2.5 ${
                 reconciliation.status === "COINCIDES"
@@ -5022,7 +4945,6 @@ export default function SalaryCompensationPanel({ currentUser, profiles = [], on
               </div>
             </div>
 
-            {/* Side-by-Side Total Comparison Table */}
             <div className="border border-slate-200 rounded-xl overflow-hidden">
               <table className="w-full text-xs text-left">
                 <thead className="bg-slate-100 text-slate-700 font-bold uppercase text-[10px]">
@@ -5130,9 +5052,6 @@ export default function SalaryCompensationPanel({ currentUser, profiles = [], on
         </div>
       )}
 
-      {/* ===================================================================== */}
-      {/* MODAL 4: RECORD / EDIT CASH ADVANCEMENT (CA) ENTRY                    */}
-      {/* ===================================================================== */}
       {caFormModal && (() => {
         const empKey = String(caFormModal.employeeName || "").trim().toUpperCase();
         const existingEmpCa = empKey ? caSummaryByEmpKey.get(empKey) || null : null;
@@ -5190,7 +5109,6 @@ export default function SalaryCompensationPanel({ currentUser, profiles = [], on
                 ))}
               </datalist>
 
-              {/* Clear Transaction Type Selector Cards */}
               <div className="grid grid-cols-3 gap-2 text-[11px]">
                 {[
                   {
@@ -5295,7 +5213,6 @@ export default function SalaryCompensationPanel({ currentUser, profiles = [], on
                   />
                 </div>
 
-                {/* Live Employee CA Balance Impact Preview */}
                 {(existingEmpCa || draftAmt > 0) && (
                   <div className="sm:col-span-2 rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-1.5">
                     <div className="flex items-center justify-between text-[10px] font-extrabold uppercase tracking-wider text-slate-500">
@@ -5467,15 +5384,11 @@ export default function SalaryCompensationPanel({ currentUser, profiles = [], on
         );
       })()}
 
-      {/* ===================================================================== */}
-      {/* MODAL 5: EMPLOYEE CASH ADVANCEMENT TRANSPARENCY STATEMENT             */}
-      {/* ===================================================================== */}
       {caStatementEmployee && (() => {
         const stmtCompany = resolveCompanyEntity(caStatementEmployee.companyId || selectedCompanyId);
         return (
           <div className="fixed inset-0 bg-slate-900/65 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in">
             <div className="bg-slate-100 rounded-2xl max-w-3xl w-full max-h-[92vh] flex flex-col shadow-2xl border border-slate-300 overflow-hidden">
-              {/* Top Modal Toolbar */}
               <div className="px-5 py-3.5 bg-white border-b border-slate-200 flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
                   <FileText size={16} className="text-amber-600" />
@@ -5507,13 +5420,11 @@ export default function SalaryCompensationPanel({ currentUser, profiles = [], on
                 </div>
               </div>
 
-              {/* Printable Sheet Content */}
               <div className="p-5 overflow-y-auto">
                 <div
                   ref={caStatementRef}
                   className="ca-statement-sheet bg-white border border-slate-300 rounded-xl p-6 space-y-5 text-slate-900 shadow-xs"
                 >
-                  {/* Corporate Header */}
                   <div className="flex items-center justify-between gap-4 pb-3 border-b-2 border-amber-600">
                     <div className="flex items-center gap-3">
                       {stmtCompany.logoUrl && (
@@ -5550,7 +5461,6 @@ export default function SalaryCompensationPanel({ currentUser, profiles = [], on
                     </div>
                   </div>
 
-                  {/* Employee Identity Row */}
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 rounded-xl bg-slate-50 border border-slate-200 p-3 text-xs">
                     <div>
                       <div className="text-[9.5px] font-bold uppercase text-slate-400">Employee Name</div>
@@ -5576,7 +5486,6 @@ export default function SalaryCompensationPanel({ currentUser, profiles = [], on
                     </div>
                   </div>
 
-                  {/* 4 Transparency Summary Cards */}
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
                     <div className="rounded-xl border border-amber-200 bg-amber-50/70 p-3">
                       <div className="text-[9.5px] font-extrabold uppercase text-amber-700">
@@ -5612,7 +5521,6 @@ export default function SalaryCompensationPanel({ currentUser, profiles = [], on
                     </div>
                   </div>
 
-                  {/* Visual Recovery Progress */}
                   <div className="space-y-1">
                     <div className="flex justify-between text-[10.5px] font-bold text-slate-600">
                       <span>Recovery Progress ({caStatementEmployee.deductionCount} deduction entries)</span>
@@ -5628,7 +5536,6 @@ export default function SalaryCompensationPanel({ currentUser, profiles = [], on
                     </div>
                   </div>
 
-                  {/* Chronological Running Balance Ledger */}
                   <div className="border border-slate-200 rounded-xl overflow-hidden">
                     <table className="w-full text-[11px] text-left">
                       <thead className="bg-slate-100 text-slate-700 font-bold uppercase text-[9.5px]">
@@ -5684,7 +5591,6 @@ export default function SalaryCompensationPanel({ currentUser, profiles = [], on
                     </table>
                   </div>
 
-                  {/* Signatory Footer */}
                   <div className="grid grid-cols-2 gap-8 pt-6 border-t border-slate-200 text-center text-[10.5px]">
                     <div>
                       <div className="border-b border-slate-400 pb-6 font-bold uppercase">
@@ -5710,9 +5616,6 @@ export default function SalaryCompensationPanel({ currentUser, profiles = [], on
         );
       })()}
 
-      {/* ===================================================================== */}
-      {/* MODAL 6: ALLOCATE LEAVE CREDITS / RECORD LEAVE USED                   */}
-      {/* ===================================================================== */}
       {leaveFormModal && (() => {
         const empKey = String(leaveFormModal.employeeName || "").trim().toUpperCase();
         const existingEmpLeave = empKey ? leaveSummaryByEmpKey.get(empKey) || null : null;
@@ -5783,7 +5686,6 @@ export default function SalaryCompensationPanel({ currentUser, profiles = [], on
                 ))}
               </datalist>
 
-              {/* Entry Mode Cards */}
               <div className="grid grid-cols-2 gap-2.5 text-xs">
                 {[
                   {
@@ -5970,7 +5872,6 @@ export default function SalaryCompensationPanel({ currentUser, profiles = [], on
                   </select>
                 </div>
 
-                {/* Quick Day Presets */}
                 <div className="sm:col-span-2 flex flex-wrap items-center gap-1.5">
                   <span className="text-[10.5px] font-bold text-slate-500 mr-1">Quick Presets:</span>
                   {leaveFormModal.entryType === "credit_grant"
@@ -6009,7 +5910,6 @@ export default function SalaryCompensationPanel({ currentUser, profiles = [], on
                       ))}
                 </div>
 
-                {/* Projected Remaining Leave Impact Preview */}
                 {(existingEmpLeave || draftDays > 0) && (
                   <div className="sm:col-span-2 rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-1.5">
                     <div className="flex items-center justify-between text-[10px] font-extrabold uppercase tracking-wider text-slate-500">
@@ -6109,9 +6009,6 @@ export default function SalaryCompensationPanel({ currentUser, profiles = [], on
         );
       })()}
 
-      {/* ===================================================================== */}
-      {/* MODAL 7: EMPLOYEE LEAVE CREDITS & REMAINING BALANCE STATEMENT         */}
-      {/* ===================================================================== */}
       {leaveStatementEmployee && (() => {
         const stmtCompany = resolveCompanyEntity(leaveStatementEmployee.companyId || selectedCompanyId);
         return (

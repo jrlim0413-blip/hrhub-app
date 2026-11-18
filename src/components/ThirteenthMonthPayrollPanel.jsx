@@ -7,7 +7,6 @@ import {
 } from "lucide-react";
 import { COMPANIES } from "./MemoGeneratorPanel";
 
-// Format Philippine Peso Currency
 const currency = new Intl.NumberFormat("en-PH", {
   style: "currency",
   currency: "PHP",
@@ -17,7 +16,6 @@ const currency = new Intl.NumberFormat("en-PH", {
 
 const STORAGE_KEY = "hrhub_13th_month_payroll_v1";
 
-// Default realistic sample roster for branch tellers, supervisors, and administrative personnel
 const DEFAULT_PAYROLL_ROSTER = [
   {
     id: "EMP-2026-001",
@@ -146,10 +144,8 @@ export default function ThirteenthMonthPayrollPanel({
   onClose,
   onNavigate
 }) {
-  // Mode: 'batch' (Master Ledger) | 'calculator' (Single Employee Precision Tool)
   const [activeMode, setActiveMode] = useState("batch");
 
-  // Roster state with persistence
   const [roster, setRoster] = useState(() => {
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
@@ -161,7 +157,6 @@ export default function ThirteenthMonthPayrollPanel({
     return DEFAULT_PAYROLL_ROSTER;
   });
 
-  // Save changes to localStorage
   const saveRoster = (newRoster) => {
     setRoster(newRoster);
     try {
@@ -171,12 +166,10 @@ export default function ThirteenthMonthPayrollPanel({
     }
   };
 
-  // Filter states
   const [searchQuery, setSearchQuery] = useState("");
   const [companyFilter, setCompanyFilter] = useState("ALL");
   const [statusFilter, setStatusFilter] = useState("ALL");
 
-  // Single precision calculator inputs
   const [calcName, setCalcName] = useState("Juan Dela Cruz");
   const [calcRole, setCalcRole] = useState("Booth Teller / Cashier");
   const [calcMonthlyBasic, setCalcMonthlyBasic] = useState(17500);
@@ -185,7 +178,6 @@ export default function ThirteenthMonthPayrollPanel({
   const [calcCompany, setCalcCompany] = useState("Lucky Betplay Central Inc.");
   const [isCopied, setIsCopied] = useState(false);
 
-  // New Employee Modal state
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [newEmployee, setNewEmployee] = useState({
     id: `EMP-2026-${String(roster.length + 1).padStart(3, "0")}`,
@@ -203,14 +195,8 @@ export default function ThirteenthMonthPayrollPanel({
     remarks: "Newly added"
   });
 
-  // Individual Payslip Modal state
   const [selectedPayslipEmp, setSelectedPayslipEmp] = useState(null);
 
-  // -------------------------------------------------------------
-  // COMPUTATION ENGINE: DOLE P.D. 851 & TRAIN LAW
-  // -------------------------------------------------------------
-  // Formula: Net 13th Month = Math.max(0, (Monthly Basic * Months Worked - Deductions) / 12)
-  // Tax Cap: Up to ₱90,000 is tax-exempt. Excess is subject to withholding tax.
   const computeEmployee13th = (emp) => {
     const basic = Number(emp.monthlyBasic) || 0;
     const months = Math.min(Math.max(Number(emp.monthsWorked) || 0, 0), 12);
@@ -219,10 +205,9 @@ export default function ThirteenthMonthPayrollPanel({
     const totalBasicEarned = Math.max(0, basic * months - deductions);
     const gross13th = Math.round((totalBasicEarned / 12) * 100) / 100;
 
-    // TRAIN Law Tax-Exemption check (₱90,000 threshold under Section 32(B)(7)(e) of NIRC)
     const taxExemptAmount = Math.min(gross13th, 90000);
     const taxableExcess = Math.max(0, gross13th - 90000);
-    const estimatedWithholdingTax = Math.round(taxableExcess * 0.20 * 100) / 100; // 20% indicative tax rate
+    const estimatedWithholdingTax = Math.round(taxableExcess * 0.20 * 100) / 100;
     const net13th = Math.round((gross13th - estimatedWithholdingTax) * 100) / 100;
 
     return {
@@ -236,7 +221,6 @@ export default function ThirteenthMonthPayrollPanel({
     };
   };
 
-  // Precision Calculator Results
   const singleCalcResult = useMemo(() => {
     const basic = Number(calcMonthlyBasic) || 0;
     const months = Number(calcMonthsWorked) || 0;
@@ -260,7 +244,6 @@ export default function ThirteenthMonthPayrollPanel({
     };
   }, [calcMonthlyBasic, calcMonthsWorked, calcUnpaidLeaveDeduction]);
 
-  // Filtered Roster
   const filteredRoster = useMemo(() => {
     return roster.filter((emp) => {
       if (companyFilter !== "ALL" && emp.companyId !== companyFilter && emp.company !== companyFilter) {
@@ -282,7 +265,6 @@ export default function ThirteenthMonthPayrollPanel({
     });
   }, [roster, companyFilter, statusFilter, searchQuery]);
 
-  // Overall Aggregate Statistics
   const overallStats = useMemo(() => {
     let totalGross13th = 0;
     let totalNet13th = 0;
@@ -312,7 +294,6 @@ export default function ThirteenthMonthPayrollPanel({
     };
   }, [roster]);
 
-  // Bulk actions
   const handleSetAll12Months = () => {
     if (window.confirm("Set all employees in roster to 12 months (Full Year Service)?")) {
       const updated = roster.map((e) => ({ ...e, monthsWorked: 12, remarks: "Updated to full 12 months" }));
@@ -333,7 +314,6 @@ export default function ThirteenthMonthPayrollPanel({
     }
   };
 
-  // Add Employee Handler
   const handleAddEmployee = (e) => {
     e.preventDefault();
     if (!newEmployee.name.trim()) {
@@ -369,14 +349,12 @@ export default function ThirteenthMonthPayrollPanel({
     });
   };
 
-  // Delete row
   const handleDeleteRow = (empId) => {
     if (window.confirm("Remove this employee from the 13th month payroll ledger?")) {
       saveRoster(roster.filter((r) => r.id !== empId));
     }
   };
 
-  // Update inline row field
   const handleInlineUpdate = (empId, field, value) => {
     const updated = roster.map((r) => {
       if (r.id === empId) {
@@ -387,7 +365,6 @@ export default function ThirteenthMonthPayrollPanel({
     saveRoster(updated);
   };
 
-  // Export CSV
   const handleExportCsv = () => {
     const headers = [
       "Employee ID",
@@ -436,12 +413,10 @@ export default function ThirteenthMonthPayrollPanel({
     document.body.removeChild(link);
   };
 
-  // Print Summary Page
   const handlePrint = () => {
     window.print();
   };
 
-  // Copy Single Calc
   const handleCopySingleCalc = () => {
     const text = `DOLE 13TH MONTH PAY BREAKDOWN (P.D. 851)
 Employee: ${calcName} (${calcRole})
@@ -463,7 +438,6 @@ Legal Basis: Presidential Decree No. 851 | Mandatory Deadline: On or before Dece
 
   return (
     <div className="space-y-6 animate-in fade-in pb-16 font-['Figtree','Inter',sans-serif]">
-      {/* ================= 1. HEADER BANNER ================= */}
       <div className="rounded-2xl border border-amber-200 bg-white p-6 shadow-xs relative overflow-hidden">
         <div className="absolute top-0 right-0 w-96 h-96 bg-gradient-to-br from-amber-100/40 via-emerald-100/20 to-transparent rounded-full blur-3xl pointer-events-none -mr-20 -mt-20" />
 
@@ -481,7 +455,6 @@ Legal Basis: Presidential Decree No. 851 | Mandatory Deadline: On or before Dece
             </p>
           </div>
 
-          {/* Quick Header Actions */}
           <div className="flex flex-wrap items-center gap-2 shrink-0">
             <button
               type="button"
@@ -525,7 +498,6 @@ Legal Basis: Presidential Decree No. 851 | Mandatory Deadline: On or before Dece
           </div>
         </div>
 
-        {/* Legal Advisory Strip */}
         <div className="mt-4 pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-500">
           <div className="flex items-center gap-2">
             <Shield className="text-amber-600" size={14} />
@@ -541,9 +513,7 @@ Legal Basis: Presidential Decree No. 851 | Mandatory Deadline: On or before Dece
         </div>
       </div>
 
-      {/* ================= 2. EXECUTIVE METRIC KPI CARDS ================= */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* KPI 1: Total Payroll Budget */}
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
           <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Total Net 13th Month Pool</p>
           <h3 className="mt-1 text-2xl font-black text-slate-900">
@@ -554,7 +524,6 @@ Legal Basis: Presidential Decree No. 851 | Mandatory Deadline: On or before Dece
           </p>
         </div>
 
-        {/* KPI 2: Total Eligible Employees */}
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
           <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Eligible Employees</p>
           <h3 className="mt-1 text-2xl font-black text-indigo-700">
@@ -565,7 +534,6 @@ Legal Basis: Presidential Decree No. 851 | Mandatory Deadline: On or before Dece
           </p>
         </div>
 
-        {/* KPI 3: Average Payout */}
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
           <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Average Payout per Staff</p>
           <h3 className="mt-1 text-2xl font-black text-emerald-700">
@@ -576,7 +544,6 @@ Legal Basis: Presidential Decree No. 851 | Mandatory Deadline: On or before Dece
           </p>
         </div>
 
-        {/* KPI 4: Audit & Approval Progress */}
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
           <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Approval Readiness</p>
           <h3 className="mt-1 text-2xl font-black text-amber-700">
@@ -591,7 +558,6 @@ Legal Basis: Presidential Decree No. 851 | Mandatory Deadline: On or before Dece
         </div>
       </div>
 
-      {/* ================= 3. NAVIGATION TABS (BATCH LEDGER vs INDIVIDUAL CALCULATOR) ================= */}
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-2">
         <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl">
           <button
@@ -649,10 +615,8 @@ Legal Basis: Presidential Decree No. 851 | Mandatory Deadline: On or before Dece
         )}
       </div>
 
-      {/* ================= 4. VIEW 1: MASTER PAYROLL LEDGER ================= */}
       {activeMode === "batch" && (
         <div className="space-y-4">
-          {/* Search & Filter Controls */}
           <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3">
             <div className="relative flex-1 max-w-md">
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -692,7 +656,6 @@ Legal Basis: Presidential Decree No. 851 | Mandatory Deadline: On or before Dece
             </div>
           </div>
 
-          {/* Master Table */}
           <div className="rounded-2xl border border-slate-200 bg-white shadow-xs overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse text-xs">
@@ -722,7 +685,6 @@ Legal Basis: Presidential Decree No. 851 | Mandatory Deadline: On or before Dece
 
                       return (
                         <tr key={emp.id} className="hover:bg-slate-50/80 transition">
-                          {/* Staff Name & ID */}
                           <td className="py-3 px-4">
                             <div className="font-bold text-slate-900">{emp.name}</div>
                             <div className="text-[10px] text-slate-400">
@@ -730,7 +692,6 @@ Legal Basis: Presidential Decree No. 851 | Mandatory Deadline: On or before Dece
                             </div>
                           </td>
 
-                          {/* Company / Branch */}
                           <td className="py-3 px-4">
                             <div className="font-medium text-slate-700 truncate max-w-[160px]" title={emp.company}>
                               {emp.company}
@@ -738,7 +699,6 @@ Legal Basis: Presidential Decree No. 851 | Mandatory Deadline: On or before Dece
                             <div className="text-[10px] text-slate-500 truncate max-w-[160px]">{emp.branch}</div>
                           </td>
 
-                          {/* Editable Monthly Basic */}
                           <td className="py-3 px-3 text-right">
                             <input
                               type="number"
@@ -750,7 +710,6 @@ Legal Basis: Presidential Decree No. 851 | Mandatory Deadline: On or before Dece
                             />
                           </td>
 
-                          {/* Editable Months Worked */}
                           <td className="py-3 px-3 text-center">
                             <input
                               type="number"
@@ -764,7 +723,6 @@ Legal Basis: Presidential Decree No. 851 | Mandatory Deadline: On or before Dece
                             />
                           </td>
 
-                          {/* Editable LWOP Deductions */}
                           <td className="py-3 px-3 text-right">
                             <input
                               type="number"
@@ -776,17 +734,14 @@ Legal Basis: Presidential Decree No. 851 | Mandatory Deadline: On or before Dece
                             />
                           </td>
 
-                          {/* Gross 13th */}
                           <td className="py-3 px-3 text-right text-slate-600 font-medium">
                             {currency.format(comp.gross13th)}
                           </td>
 
-                          {/* Net 13th Month Pay */}
                           <td className="py-3 px-3 text-right font-black text-emerald-700 text-sm">
                             {currency.format(comp.net13th)}
                           </td>
 
-                          {/* Status Badge */}
                           <td className="py-3 px-3 text-center">
                             <span
                               className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold ${
@@ -801,7 +756,6 @@ Legal Basis: Presidential Decree No. 851 | Mandatory Deadline: On or before Dece
                             </span>
                           </td>
 
-                          {/* Row Actions */}
                           <td className="py-3 px-4 text-right">
                             <div className="flex items-center justify-end gap-1.5">
                               <button
@@ -833,10 +787,8 @@ Legal Basis: Presidential Decree No. 851 | Mandatory Deadline: On or before Dece
         </div>
       )}
 
-      {/* ================= 5. VIEW 2: SINGLE PRECISION CALCULATOR ================= */}
       {activeMode === "calculator" && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Inputs Card */}
           <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xs space-y-4">
             <div>
               <h3 className="text-base font-extrabold text-slate-900">DOLE Single Staff Precision Calculator</h3>
@@ -967,7 +919,6 @@ Legal Basis: Presidential Decree No. 851 | Mandatory Deadline: On or before Dece
             </div>
           </div>
 
-          {/* Breakdown Results Card */}
           <div className="rounded-2xl border border-amber-200 bg-amber-50/40 p-6 shadow-xs flex flex-col justify-between">
             <div>
               <div className="flex items-center justify-between mb-4">
@@ -1002,7 +953,6 @@ Legal Basis: Presidential Decree No. 851 | Mandatory Deadline: On or before Dece
                 </div>
               </div>
 
-              {/* TRAIN Law Banner */}
               <div className="mt-4 p-3 rounded-xl bg-white border border-slate-200 text-xs">
                 <div className="flex items-center justify-between mb-1">
                   <span className="font-bold text-slate-700">BIR TRAIN Law Tax Exemption Cap</span>
@@ -1016,7 +966,6 @@ Legal Basis: Presidential Decree No. 851 | Mandatory Deadline: On or before Dece
               </div>
             </div>
 
-            {/* Total Net Payable Highlight */}
             <div className="mt-6 pt-4 border-t border-amber-200 flex items-center justify-between">
               <div>
                 <span className="text-xs font-bold text-amber-900 uppercase">Net 13th Month Pay</span>
@@ -1030,7 +979,6 @@ Legal Basis: Presidential Decree No. 851 | Mandatory Deadline: On or before Dece
         </div>
       )}
 
-      {/* ================= 6. MODAL: ADD EMPLOYEE ================= */}
       {isAddModalOpen && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in">
           <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl border border-slate-200">
@@ -1153,7 +1101,6 @@ Legal Basis: Presidential Decree No. 851 | Mandatory Deadline: On or before Dece
         </div>
       )}
 
-      {/* ================= 7. MODAL: OFFICIAL INDIVIDUAL PAYSLIP / VOUCHER ================= */}
       {selectedPayslipEmp && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in">
           <div className="bg-white rounded-2xl max-w-2xl w-full p-8 shadow-2xl border border-slate-200 max-h-[90vh] overflow-y-auto">
@@ -1180,9 +1127,7 @@ Legal Basis: Presidential Decree No. 851 | Mandatory Deadline: On or before Dece
               </div>
             </div>
 
-            {/* Official Printable Voucher Content */}
             <div className="space-y-6 text-slate-800">
-              {/* Letterhead Header */}
               <div className="text-center pb-4 border-b border-slate-200">
                 <h2 className="text-lg font-black tracking-wide text-slate-900 uppercase">
                   {selectedPayslipEmp.company || "SIMPAL GROUP OF COMPANIES"}
@@ -1196,7 +1141,6 @@ Legal Basis: Presidential Decree No. 851 | Mandatory Deadline: On or before Dece
                 <p className="text-[10px] text-slate-400">Calendar Year 2026 Statutory Compliance</p>
               </div>
 
-              {/* Employee Particulars Grid */}
               <div className="grid grid-cols-2 gap-4 text-xs bg-slate-50 p-4 rounded-xl border border-slate-200">
                 <div>
                   <span className="text-slate-400 block text-[10px] uppercase font-bold">Employee Name:</span>
@@ -1216,7 +1160,6 @@ Legal Basis: Presidential Decree No. 851 | Mandatory Deadline: On or before Dece
                 </div>
               </div>
 
-              {/* Breakdown Table */}
               {(() => {
                 const comp = computeEmployee13th(selectedPayslipEmp);
                 return (
@@ -1283,12 +1226,10 @@ Legal Basis: Presidential Decree No. 851 | Mandatory Deadline: On or before Dece
                       </tbody>
                     </table>
 
-                    {/* Legal Certification Statement */}
                     <p className="text-[10px] text-slate-500 leading-relaxed italic border-l-2 border-amber-400 pl-3">
                       "I hereby acknowledge the receipt of the full and final 13th Month Pay for calendar year 2026 computed in accordance with Presidential Decree No. 851. I affirm that this statutory benefit has been correctly computed and disbursed."
                     </p>
 
-                    {/* Signatures Grid */}
                     <div className="grid grid-cols-3 gap-6 pt-6 text-center text-xs">
                       <div>
                         <div className="border-b border-slate-300 pb-8 font-semibold text-slate-700">

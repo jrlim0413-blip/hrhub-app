@@ -1,11 +1,3 @@
-/**
- * nteProofBucketStorage.js
- * Dedicated High-Capacity Database Bucket for Signed NTE Document Proofs
- * 
- * Uses browser IndexedDB (object store) and intelligent image optimization (~60-90KB)
- * to store full-resolution photos/scanned PDFs of signed Notices to Explain.
- * Ensures seamless cross-tab and cross-device synchronization between Branch HR and SGC Head Office.
- */
 
 import { supabase } from "./supabase";
 
@@ -13,9 +5,6 @@ const DB_NAME = "hrhub_nte_proofs_bucket_v1";
 const DB_VERSION = 1;
 const STORE_NAME = "nte_proof_attachments";
 
-/**
- * Open or initialize the IndexedDB database bucket
- */
 function openBucketDB() {
   return new Promise((resolve, reject) => {
     if (typeof window === "undefined" || !window.indexedDB) {
@@ -39,10 +28,6 @@ function openBucketDB() {
   });
 }
 
-/**
- * Automatically compress and optimize image to a safe, lightweight WebP/JPEG DataURL (~50-90KB)
- * so it can effortlessly synchronize across databases and live tabs without bloating storage.
- */
 export function optimizeImageForStorage(dataUrlOrFile, maxWidth = 1200, quality = 0.72) {
   return new Promise((resolve) => {
     if (!dataUrlOrFile || typeof window === "undefined") {
@@ -55,7 +40,6 @@ export function optimizeImageForStorage(dataUrlOrFile, maxWidth = 1200, quality 
         resolve("");
         return;
       }
-      // If it's a PDF, we can't resize with canvas, keep as-is
       if (srcUrl.startsWith("data:application/pdf")) {
         resolve(srcUrl);
         return;
@@ -96,9 +80,6 @@ export function optimizeImageForStorage(dataUrlOrFile, maxWidth = 1200, quality 
   });
 }
 
-/**
- * Convert base64 DataURL to Blob for efficient storage
- */
 export function dataUrlToBlob(dataUrl) {
   try {
     const arr = dataUrl.split(",");
@@ -115,9 +96,6 @@ export function dataUrlToBlob(dataUrl) {
   }
 }
 
-/**
- * Save employee-signed NTE proof to the database bucket
- */
 export async function saveNteProofToBucket(reportId, {
   caseNumber = "",
   fileData = "",
@@ -135,7 +113,6 @@ export async function saveNteProofToBucket(reportId, {
   const uploadedAt = new Date().toISOString();
   const bucketKey = `nte-proof-${caseNumber || reportId}`;
 
-  // 1. Persist to local IndexedDB bucket (storing under both reportId and caseNumber for 100% retrieval reliability)
   try {
     const db = await openBucketDB();
     await new Promise((resolve) => {
@@ -156,7 +133,6 @@ export async function saveNteProofToBucket(reportId, {
       };
       store.put(record);
 
-      // If caseNumber is different from reportId, also put with caseNumber as key
       if (caseNumber && String(caseNumber) !== String(reportId)) {
         store.put({
           ...record,
@@ -171,7 +147,6 @@ export async function saveNteProofToBucket(reportId, {
     console.warn("[nteProofBucketStorage] IndexedDB bucket warning:", dbErr);
   }
 
-  // 2. Optional Supabase Storage Bucket synchronization (fallback gracefully)
   let cloudUrl = "";
   if (supabase && typeof fileData === "string" && fileData.startsWith("data:")) {
     try {
@@ -206,9 +181,6 @@ export async function saveNteProofToBucket(reportId, {
   };
 }
 
-/**
- * Retrieve employee-signed NTE proof from the database bucket
- */
 export async function getNteProofFromBucket(idOrCaseNumber) {
   if (!idOrCaseNumber) return null;
 
@@ -218,7 +190,6 @@ export async function getNteProofFromBucket(idOrCaseNumber) {
   try {
     const db = await openBucketDB();
 
-    // 1. Direct multi-key probe (handles id, cleanCase, prefixed keys)
     const probeKeys = Array.from(new Set([
       searchKey,
       cleanKey,
@@ -241,7 +212,6 @@ export async function getNteProofFromBucket(idOrCaseNumber) {
       }
     }
 
-    // 2. Secondary lookup using caseNumber index if present
     const indexResult = await new Promise((resolve) => {
       const tx = db.transaction(STORE_NAME, "readonly");
       const store = tx.objectStore(STORE_NAME);
@@ -259,7 +229,6 @@ export async function getNteProofFromBucket(idOrCaseNumber) {
       return indexResult;
     }
 
-    // 3. Guaranteed Cursor fallback (scans local store records to match caseNumber, reportId, or bucketKey)
     return await new Promise((resolve) => {
       const tx = db.transaction(STORE_NAME, "readonly");
       const store = tx.objectStore(STORE_NAME);
@@ -299,9 +268,6 @@ export async function getNteProofFromBucket(idOrCaseNumber) {
   }
 }
 
-/**
- * Remove an NTE proof from the database bucket
- */
 export async function deleteNteProofFromBucket(idOrCaseNumber) {
   if (!idOrCaseNumber) return;
 
@@ -319,9 +285,6 @@ export async function deleteNteProofFromBucket(idOrCaseNumber) {
   }
 }
 
-/**
- * Save employee written explanation document proof to the database bucket
- */
 export async function saveExplanationProofToBucket(reportId, {
   caseNumber = "",
   fileData = "",
@@ -340,7 +303,6 @@ export async function saveExplanationProofToBucket(reportId, {
   const uploadedAt = new Date().toISOString();
   const bucketKey = `explanation-proof-${caseNumber || reportId}`;
 
-  // 1. Persist to local IndexedDB bucket
   try {
     const db = await openBucketDB();
     await new Promise((resolve) => {
@@ -376,7 +338,6 @@ export async function saveExplanationProofToBucket(reportId, {
     console.warn("[nteProofBucketStorage] Explanation IndexedDB bucket warning:", dbErr);
   }
 
-  // 2. Cloud Supabase Storage sync if fileData is present
   let cloudUrl = "";
   if (supabase && typeof fileData === "string" && fileData.startsWith("data:")) {
     try {
@@ -412,9 +373,6 @@ export async function saveExplanationProofToBucket(reportId, {
   };
 }
 
-/**
- * Retrieve employee written explanation document proof from the database bucket
- */
 export async function getExplanationProofFromBucket(idOrCaseNumber) {
   if (!idOrCaseNumber) return null;
 
@@ -424,7 +382,6 @@ export async function getExplanationProofFromBucket(idOrCaseNumber) {
   try {
     const db = await openBucketDB();
 
-    // 1. Direct multi-key probes
     const probeKeys = Array.from(new Set([
       `explanation-${searchKey}`,
       `explanation-${cleanKey}`,
@@ -447,7 +404,6 @@ export async function getExplanationProofFromBucket(idOrCaseNumber) {
       }
     }
 
-    // 2. Cursor fallback scan
     return await new Promise((resolve) => {
       const tx = db.transaction(STORE_NAME, "readonly");
       const store = tx.objectStore(STORE_NAME);
@@ -487,9 +443,6 @@ export async function getExplanationProofFromBucket(idOrCaseNumber) {
   }
 }
 
-/**
- * Remove an Explanation proof from the database bucket
- */
 export async function deleteExplanationProofFromBucket(idOrCaseNumber) {
   if (!idOrCaseNumber) return;
 

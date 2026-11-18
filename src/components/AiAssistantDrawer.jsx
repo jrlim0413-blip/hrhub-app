@@ -18,14 +18,12 @@ import { isUserTabAllowed, isUserFeatureAllowed } from "../lib/rbacStorage";
 import AiAgentAvatar from "./AiAgentAvatar";
 import { getFemaleVoice } from "./AiAssistantGirlWidget";
 
-// Helper: Formatted Markdown Renderer to replicate clean Google Gemini UI
 function FormattedAiMessage({ content }) {
   if (!content) return null;
 
   const renderInline = (str) => {
     if (!str) return "";
 
-    // Clean up math syntax like $$\text{...}$$ or \frac{...}{...} into readable format
     let cleaned = str
       .replace(/\$\$\\text\{([^}]+)\}\$\$/g, "$1")
       .replace(/\\text\{([^}]+)\}/g, "$1")
@@ -34,7 +32,6 @@ function FormattedAiMessage({ content }) {
       .replace(/\\frac\{([^}]+)\}\{([^}]+)\}/g, "($1 ÷ $2)");
 
     const parts = [];
-    // Match bold **text** or inline `code`
     const regex = /(\*\*([^*]+)\*\*|`([^`]+)`)/g;
     let lastIndex = 0;
     let match;
@@ -45,14 +42,12 @@ function FormattedAiMessage({ content }) {
         parts.push(cleaned.substring(lastIndex, match.index));
       }
       if (match[2]) {
-        // bold
         parts.push(
           <strong key={`b-${keyIdx++}`} className="font-bold text-slate-900">
             {match[2]}
           </strong>
         );
       } else if (match[3]) {
-        // code
         parts.push(
           <code
             key={`c-${keyIdx++}`}
@@ -94,7 +89,6 @@ function FormattedAiMessage({ content }) {
   lines.forEach((line, index) => {
     const trimmed = line.trim();
 
-    // Headers
     if (trimmed.startsWith("### ")) {
       flushList(index);
       renderedElements.push(
@@ -157,7 +151,6 @@ function FormattedAiMessage({ content }) {
   return <div className="space-y-1 text-xs sm:text-sm">{renderedElements}</div>;
 }
 
-// Capability round buttons (matching Monday.com Sidekick circular icons row)
 const CAPABILITIES = [
   {
     id: "memo",
@@ -225,7 +218,6 @@ const CAPABILITIES = [
   }
 ];
 
-// Suggested starters cards
 const SUGGESTED_STARTERS = [
   {
     id: "starter-memo",
@@ -261,7 +253,6 @@ const SUGGESTED_STARTERS = [
   }
 ];
 
-// Dedicated Subsidiary / STL Operations Capabilities
 const SUBSIDIARY_CAPABILITIES = [
   {
     id: "sub-gross",
@@ -329,7 +320,6 @@ const SUBSIDIARY_CAPABILITIES = [
   }
 ];
 
-// Dedicated Subsidiary / STL Operations Suggested Starters
 const SUBSIDIARY_SUGGESTED_STARTERS = [
   {
     id: "sub-starter-gross",
@@ -384,7 +374,6 @@ export default function AiAssistantDrawer({
   const [searchFilter, setSearchFilter] = useState("");
   const [activeChatId, setActiveChatId] = useState(null);
 
-  // Chat sessions list
   const [chats, setChats] = useState(() => {
     try {
       const saved = localStorage.getItem("hrhub_ai_buddy_chats_v2");
@@ -425,7 +414,6 @@ What would you like to work on today?`,
   const messagesEndRef = useRef(null);
   const textareaRef = useRef(null);
 
-  // Female voice audio player for chat replies
   const handleSpeakMessage = (msgId, content) => {
     if (typeof window === "undefined" || !window.speechSynthesis) return;
 
@@ -462,7 +450,6 @@ What would you like to work on today?`,
     window.speechSynthesis.speak(utterance);
   };
 
-  // Stop speech when drawer closes or unmounts
   useEffect(() => {
     return () => {
       if (typeof window !== "undefined" && window.speechSynthesis) {
@@ -471,25 +458,21 @@ What would you like to work on today?`,
     };
   }, []);
 
-  // Persist chats to localStorage
   useEffect(() => {
     try {
       localStorage.setItem("hrhub_ai_buddy_chats_v2", JSON.stringify(chats));
     } catch {}
   }, [chats]);
 
-  // Find active chat object
   const currentChat = chats.find((c) => c.id === activeChatId) || null;
   const activeMessages = currentChat ? currentChat.messages : [];
 
-  // Scroll to bottom when new messages arrive
   useEffect(() => {
     if (activeChatId && messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
     }
   }, [activeMessages, isTyping, activeChatId]);
 
-  // User display name (e.g. "Jay")
   const userFirstName = (() => {
     if (!currentUser?.name) return "Jay";
     const parts = currentUser.name.trim().split(" ");
@@ -523,7 +506,6 @@ What would you like to work on today?`,
 
     let targetChatId = activeChatId;
 
-    // Create a new chat session if currently on hero screen
     if (!targetChatId) {
       const newId = `chat-${Date.now()}`;
       const newTitle = text.length > 36 ? text.substring(0, 36) + "..." : text;
@@ -545,7 +527,6 @@ What would you like to work on today?`,
       timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
     };
 
-    // Update messages in state
     setChats((prev) =>
       prev.map((c) => {
         if (c.id === targetChatId) {
@@ -635,7 +616,6 @@ What would you like to work on today?`,
     });
   };
 
-  // Close on Escape key when opened as modal
   useEffect(() => {
     if (!isOpen || isEmbedded) return;
     const handleEsc = (e) => {
@@ -661,13 +641,11 @@ What would you like to work on today?`,
           : "h-full"
       }`}
     >
-      {/* ================= LEFT SIDEBAR (SIDEKICK STYLE) ================= */}
       <aside
         className={`relative flex flex-col border-r border-slate-200 bg-white transition-all duration-300 z-10 shrink-0 ${
           sidebarCollapsed ? "w-16" : "w-64 sm:w-72"
         }`}
       >
-        {/* Header */}
         <div className="flex h-14 items-center justify-between px-4 border-b border-slate-100">
           {!sidebarCollapsed ? (
             <div className="flex items-center gap-2.5">
@@ -691,7 +669,6 @@ What would you like to work on today?`,
           </button>
         </div>
 
-        {/* New Chat Button */}
         <div className="p-3">
           <button
             onClick={handleStartNewChat}
@@ -707,7 +684,6 @@ What would you like to work on today?`,
           </button>
         </div>
 
-        {/* Navigation Links */}
         {!sidebarCollapsed && (
           <div className="px-3 py-1 space-y-0.5">
             <button
@@ -753,7 +729,6 @@ What would you like to work on today?`,
           </div>
         )}
 
-        {/* All Chats Section */}
         <div className="flex-1 overflow-y-auto px-3 py-2">
           {!sidebarCollapsed && (
             <>
@@ -808,7 +783,6 @@ What would you like to work on today?`,
           )}
         </div>
 
-        {/* Bottom Card: Lead your AI team on the go */}
         {!sidebarCollapsed && showQrCard && (
           <div className="p-3 border-t border-slate-100">
             <div className="relative rounded-2xl border border-slate-200 bg-gradient-to-b from-slate-50 to-white p-3.5 shadow-xs">
@@ -835,7 +809,6 @@ What would you like to work on today?`,
           </div>
         )}
 
-        {/* Feedback footer */}
         {!sidebarCollapsed && (
           <div className="px-4 py-2 border-t border-slate-100 text-xs text-slate-500 flex items-center justify-between">
             <button
@@ -849,10 +822,8 @@ What would you like to work on today?`,
         )}
       </aside>
 
-      {/* ================= MAIN WORKSPACE CANVAS ================= */}
       <main className="flex-1 flex flex-col h-full overflow-hidden bg-white">
         
-        {/* Top Bar */}
         <header className="flex h-14 items-center justify-between px-6 border-b border-slate-100 shrink-0">
           <div className="flex items-center gap-3">
             {activeChatId && (
@@ -893,12 +864,10 @@ What would you like to work on today?`,
           </div>
         </header>
 
-        {/* ================= VIEW 1: HERO CANVAS (WHEN NO ACTIVE CHAT) ================= */}
         {!activeChatId ? (
           <div className="flex-1 overflow-y-auto px-4 py-8 flex flex-col items-center justify-center">
             <div className="w-full max-w-4xl flex flex-col items-center text-center my-auto">
               
-              {/* Greeting Heading */}
               <h1 className="text-4xl sm:text-5xl font-extrabold text-slate-800 tracking-tight">
                 Hi {userFirstName},
               </h1>
@@ -908,7 +877,6 @@ What would you like to work on today?`,
                   : `Your STL Operations & HR AI Buddy for ${currentUser?.company || "your branch"} — study Gross sales, compute panalo, handle AWOL agents, or navigate any HRHub module.`}
               </p>
 
-              {/* RAINBOW GLOWING CENTRAL INPUT BOX */}
               <div className="relative w-full max-w-3xl mb-10 group">
                 <div className="absolute -inset-1 rounded-[26px] bg-gradient-to-r from-blue-500 via-indigo-500 via-purple-500 via-pink-500 via-amber-400 to-emerald-400 opacity-40 blur-md group-hover:opacity-75 group-focus-within:opacity-100 transition duration-300"></div>
 
@@ -927,7 +895,6 @@ What would you like to work on today?`,
                     className="w-full bg-transparent resize-none border-0 text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-0 text-base sm:text-lg"
                   />
 
-                  {/* Bottom toolbar inside input box */}
                   <div className="flex items-center justify-between pt-3 mt-1 border-t border-slate-100">
                     <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
                       {isHeadOfficeHr ? (
@@ -1018,7 +985,6 @@ What would you like to work on today?`,
                 </div>
               </div>
 
-              {/* ROW OF 8 CAPABILITY CIRCULAR ICONS */}
               <div className="w-full flex flex-wrap items-center justify-center gap-3 sm:gap-6 mb-12">
                 {activeCapabilities.map((cap) => {
                   const IconComp = cap.icon;
@@ -1042,7 +1008,6 @@ What would you like to work on today?`,
                 })}
               </div>
 
-              {/* SUGGESTED STARTERS SECTION */}
               <div className="w-full text-left">
                 <h3 className="text-sm font-semibold text-slate-600 mb-4 tracking-normal text-center sm:text-left">
                   {isHeadOfficeHr
@@ -1079,7 +1044,6 @@ What would you like to work on today?`,
           </div>
         ) : (
           
-          /* ================= VIEW 2: ACTIVE CONVERSATION THREAD ================= */
           <div className="flex-1 flex flex-col overflow-hidden">
             <div className="flex-1 overflow-y-auto px-4 sm:px-8 py-6 space-y-6">
               <div className="max-w-3xl mx-auto space-y-6">
@@ -1118,7 +1082,6 @@ What would you like to work on today?`,
                         </div>
                       )}
 
-                      {/* Message Content: Clean White Text for User, Rich Markdown for AI */}
                       {msg.role === "user" ? (
                         <div className="text-sm sm:text-[15px] font-normal text-white leading-relaxed whitespace-pre-wrap selection:bg-white/30 selection:text-white">
                           {msg.content}
@@ -1127,7 +1090,6 @@ What would you like to work on today?`,
                         <FormattedAiMessage content={msg.content} />
                       )}
 
-                      {/* If a memorandum is detected, show 1-click insert action */}
                       {msg.memoData && (
                         <div className="mt-4 pt-3 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 bg-emerald-50/70 p-3 rounded-xl border border-emerald-200">
                           <div>
@@ -1154,7 +1116,6 @@ What would you like to work on today?`,
                         </div>
                       )}
 
-                      {/* Interactive Direct Module Navigation Links (App Router) */}
                       {msg.role === "assistant" && Array.isArray(msg.suggestedRoutes) && msg.suggestedRoutes.length > 0 && (
                         <div className="mt-4 pt-3 border-t border-slate-100 space-y-2">
                           <div className="flex items-center gap-1.5 text-[11px] font-extrabold text-indigo-800 uppercase tracking-wider">
@@ -1218,7 +1179,6 @@ What would you like to work on today?`,
                         </div>
                       )}
 
-                      {/* Actions: Copy & Listen (Female Voice) */}
                       {msg.role === "assistant" && (
                         <div className="mt-3 flex items-center justify-end gap-3 text-xs text-slate-400 pt-2 border-t border-slate-100">
                           <button
@@ -1268,7 +1228,6 @@ What would you like to work on today?`,
                   </div>
                 ))}
 
-                {/* Typing Indicator */}
                 {isTyping && (
                   <div className="flex gap-3.5 justify-start items-center">
                     <AiAgentAvatar size="sm" isThinking={true} showStatus={false} />
@@ -1283,7 +1242,6 @@ What would you like to work on today?`,
               </div>
             </div>
 
-            {/* STICKY BOTTOM INPUT IN CHAT VIEW */}
             <div className="p-4 border-t border-slate-100 bg-white shrink-0">
               <div className="max-w-3xl mx-auto">
                 <div className="relative group">
@@ -1342,7 +1300,6 @@ What would you like to work on today?`,
 
       </main>
 
-      {/* WHAT'S NEW MODAL POPUP */}
       {whatsNewOpen && (
         <div className="fixed inset-0 z-60 flex items-center justify-center bg-slate-950/40 backdrop-blur-xs p-4">
           <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl border border-slate-200 p-6 animate-in zoom-in-95 duration-150">

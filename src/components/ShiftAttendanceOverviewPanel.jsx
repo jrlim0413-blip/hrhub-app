@@ -23,7 +23,6 @@ import {
   isHRMDUser
 } from "../lib/hrWorkLogsStorage.js";
 
-// Helper to get formatted current time e.g. "09:30 AM"
 function getCurrentFormattedTime() {
   const now = new Date();
   let hours = now.getHours();
@@ -56,7 +55,6 @@ export default function ShiftAttendanceOverviewPanel({
   const [notice, setNotice] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // New Work Log Entry Form State
   const [newEntry, setNewEntry] = useState({
     taskProject: "",
     category: "Shift Attendance & Station Check-in",
@@ -71,7 +69,6 @@ export default function ShiftAttendanceOverviewPanel({
     branch: currentProfile?.branch || currentUser?.branch || "Head Office (SGC)"
   });
 
-  // Sync profile when currentProfile changes
   useEffect(() => {
     if (currentProfile || currentUser) {
       setNewEntry((prev) => ({
@@ -116,7 +113,6 @@ export default function ShiftAttendanceOverviewPanel({
     };
   }, [loadData]);
 
-  // Unique HR Officers in logs
   const hrOfficersList = useMemo(() => {
     const map = new Map();
     logs.forEach((l) => {
@@ -132,12 +128,10 @@ export default function ShiftAttendanceOverviewPanel({
     return Array.from(map.values());
   }, [logs]);
 
-  // Date-filtered logs for synchronized subsidiary counters and metrics
   const dateLogs = useMemo(() => {
     return logs.filter((l) => !selectedDate || l.date === selectedDate);
   }, [logs, selectedDate]);
 
-  // Filtered Logs
   const filteredLogs = useMemo(() => {
     return dateLogs.filter((l) => {
       if (selectedSubsidiary !== "all") {
@@ -185,7 +179,6 @@ export default function ShiftAttendanceOverviewPanel({
     });
   }, [dateLogs, selectedSubsidiary, selectedCategory, selectedStatus, selectedHrEmail, searchQuery]);
 
-  // Live Executive KPI Metrics
   const stats = useMemo(() => {
     const totalEntries = dateLogs.length;
 
@@ -217,12 +210,10 @@ export default function ShiftAttendanceOverviewPanel({
     };
   }, [dateLogs]);
 
-  // Calculate live modal hours preview
   const modalDuration = useMemo(() => {
     return calculateHoursWorked(newEntry.startTime, newEntry.endTime);
   }, [newEntry.startTime, newEntry.endTime]);
 
-  // Handle Add Work Log Submit
   const handleAddSubmit = async (e) => {
     e.preventDefault();
     if (!newEntry.taskProject.trim()) return;
@@ -251,19 +242,16 @@ export default function ShiftAttendanceOverviewPanel({
     }
   };
 
-  // Handle Delete Entry
   const handleDelete = async (id) => {
     if (!window.confirm("Are you sure you want to delete this work log record?")) return;
     await deleteWorkLogEntry(id);
     loadData();
   };
 
-  // Print Executive Summary
   const handlePrint = () => {
     window.print();
   };
 
-  // One-click CSV Export for Timesheet Records
   const handleExportCSV = () => {
     if (!filteredLogs || filteredLogs.length === 0) {
       alert("No work logs available to export for the selected date.");
@@ -314,7 +302,6 @@ export default function ShiftAttendanceOverviewPanel({
 
   return (
     <div className="space-y-3 antialiased text-slate-800">
-      {/* 1. EXECUTIVE COMPACT HEADER & CONTROL BAR */}
       <div className="bg-white rounded-2xl border border-slate-200/80 p-3 sm:p-4 shadow-2xs space-y-3">
         <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3 pb-3 border-b border-slate-100">
           <div className="min-w-0">
@@ -344,7 +331,6 @@ export default function ShiftAttendanceOverviewPanel({
           </div>
 
           <div className="flex items-center gap-1.5 flex-wrap w-full xl:w-auto justify-start xl:justify-end">
-            {/* Date Picker */}
             <div className="flex items-center gap-1 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 shadow-2xs shrink-0">
               <Calendar size={13} className="text-slate-400" />
               <input
@@ -393,7 +379,6 @@ export default function ShiftAttendanceOverviewPanel({
           </div>
         </div>
 
-        {/* Notice Toast */}
         {notice && (
           <div className="p-2 bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs font-semibold rounded-xl flex items-center gap-1.5 animate-in fade-in">
             <CheckCircle2 size={14} className="text-emerald-600 shrink-0" />
@@ -401,7 +386,6 @@ export default function ShiftAttendanceOverviewPanel({
           </div>
         )}
 
-        {/* 2. COMPACT STREAMLINED STAT CHIPS */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 pt-0.5">
           <div className="bg-slate-50/70 rounded-xl border border-slate-200/60 px-3 py-2 flex items-center justify-between">
             <div>
@@ -456,7 +440,6 @@ export default function ShiftAttendanceOverviewPanel({
           </div>
         </div>
 
-        {/* 3. SLEEK SUBSIDIARY PILLS SELECTOR (For HRMD) */}
         {isHRMD && (
           <div className="flex items-center justify-between gap-1 overflow-hidden pt-0.5">
             <button
@@ -525,7 +508,6 @@ export default function ShiftAttendanceOverviewPanel({
           </div>
         )}
 
-        {/* 4. CLEAN SINGLE-LINE SEARCH & FILTER BAR */}
         <div className="flex flex-col sm:flex-row items-center gap-2 pt-0.5">
           <div className="relative flex-1 w-full">
             <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -539,7 +521,6 @@ export default function ShiftAttendanceOverviewPanel({
           </div>
 
           <div className="flex items-center gap-1.5 w-full sm:w-auto shrink-0 flex-wrap">
-            {/* Category Filter */}
             <select
               value={selectedCategory}
               onChange={(e) => setSelectedCategory(e.target.value)}
@@ -553,7 +534,6 @@ export default function ShiftAttendanceOverviewPanel({
               ))}
             </select>
 
-            {/* Status Filter */}
             <select
               value={selectedStatus}
               onChange={(e) => setSelectedStatus(e.target.value)}
@@ -567,7 +547,6 @@ export default function ShiftAttendanceOverviewPanel({
               <option value="under review">Under Review</option>
             </select>
 
-            {/* HR Officer Filter (For HRMD) */}
             {isHRMD && (
               <select
                 value={selectedHrEmail}
@@ -586,11 +565,7 @@ export default function ShiftAttendanceOverviewPanel({
         </div>
       </div>
 
-      {/* ============================================================ */}
-      {/* 5. OFFICIAL HR WORK LOG AUDIT TABLE (SHARP & MINIMAL)         */}
-      {/* ============================================================ */}
       <div className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs overflow-hidden">
-        {/* Table Title Bar */}
         <div className="px-4 py-2.5 border-b border-slate-100 flex items-center justify-between flex-wrap gap-2">
           <div className="flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
@@ -621,7 +596,6 @@ export default function ShiftAttendanceOverviewPanel({
           </div>
         </div>
 
-        {/* Tabular Roster Grid */}
         <div className="overflow-x-auto">
           <table className="w-full min-w-[840px] border-collapse text-left">
             <thead>
@@ -679,12 +653,10 @@ export default function ShiftAttendanceOverviewPanel({
                       key={item.id}
                       className="hover:bg-slate-50/70 transition-colors duration-150 group border-b border-slate-100"
                     >
-                      {/* 1. Date */}
                       <td className="py-2.5 px-3 whitespace-nowrap text-slate-600 font-mono text-[11px]">
                         {formattedDate}
                       </td>
 
-                      {/* 2. Task / Project & Officer Info */}
                       <td className="py-2.5 px-3">
                         <div className="space-y-0.5">
                           <div className="flex items-center gap-1.5 flex-wrap">
@@ -705,7 +677,6 @@ export default function ShiftAttendanceOverviewPanel({
                         </div>
                       </td>
 
-                      {/* 3. Category */}
                       <td className="py-2.5 px-3">
                         {(() => {
                           const catName = (item.category === "General HR Admin" || !item.category || (item.taskProject || "").toLowerCase().includes("shift login") || (item.taskProject || "").toLowerCase().includes("check-in") || (item.taskProject || "").toLowerCase().includes("station portal"))
@@ -722,7 +693,6 @@ export default function ShiftAttendanceOverviewPanel({
                         })()}
                       </td>
 
-                      {/* 4. Time & Duration */}
                       <td className="py-2.5 px-3 text-center whitespace-nowrap">
                         <div className="space-y-0.5">
                           <div className="text-slate-600 font-mono text-[10px]">
@@ -746,7 +716,6 @@ export default function ShiftAttendanceOverviewPanel({
                         </div>
                       </td>
 
-                      {/* 5. Status */}
                       <td className="py-2.5 px-3 text-center whitespace-nowrap">
                         {item.isAfk || item.status === "AFK" || (item.status || "").toLowerCase().includes("afk") ? (
                           <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wide bg-rose-50 text-rose-700 border border-rose-300 shadow-2xs animate-pulse">
@@ -766,14 +735,12 @@ export default function ShiftAttendanceOverviewPanel({
                         )}
                       </td>
 
-                      {/* 6. Accomplishments & Progress */}
                       <td className="py-2.5 px-3 text-slate-600 text-[11px] leading-snug">
                         <p className="line-clamp-2" title={item.progressComments}>
                           {item.progressComments || <span className="text-slate-400 italic">No notes recorded</span>}
                         </p>
                       </td>
 
-                      {/* 7. Action */}
                       <td className="py-2.5 px-3 text-right whitespace-nowrap">
                         {(isHRMD || item.authorEmail === currentProfile?.email) && (
                           <button
@@ -794,7 +761,6 @@ export default function ShiftAttendanceOverviewPanel({
           </table>
         </div>
 
-        {/* Footer Summary */}
         <div className="px-4 py-2 bg-slate-50/70 border-t border-slate-100 flex items-center justify-between flex-wrap gap-2 text-[11px] text-slate-500 font-medium">
           <div className="flex items-center gap-1.5">
             <span className="font-semibold text-slate-700">Audit Status:</span>
@@ -810,9 +776,6 @@ export default function ShiftAttendanceOverviewPanel({
         </div>
       </div>
 
-      {/* ============================================================ */}
-      {/* 6. MODAL: RECORD HR WORK ACTIVITY (CLEAN & SHARP)            */}
-      {/* ============================================================ */}
       {isAddModalOpen && (
         <div
           className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-2xs flex items-start justify-center p-3 pt-6 sm:pt-10 overflow-y-auto animate-in fade-in"
@@ -822,7 +785,6 @@ export default function ShiftAttendanceOverviewPanel({
             className="bg-white rounded-2xl max-w-md w-full overflow-hidden shadow-xl border border-slate-200 animate-in zoom-in-95"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Modal Header */}
             <div className="px-4 py-3 bg-slate-900 text-white flex items-center justify-between">
               <div>
                 <h3 className="text-sm font-bold">Record HR Work Activity</h3>
@@ -838,7 +800,6 @@ export default function ShiftAttendanceOverviewPanel({
             </div>
 
             <form onSubmit={handleAddSubmit} className="p-4 space-y-3">
-              {/* Officer Card */}
               <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between text-xs">
                 <div>
                   <span className="text-slate-400 font-bold block text-[9px] uppercase">Logged By</span>
@@ -850,7 +811,6 @@ export default function ShiftAttendanceOverviewPanel({
                 </div>
               </div>
 
-              {/* Task/Project Name */}
               <div>
                 <label className="block text-[11px] font-bold text-slate-700 mb-1">
                   Task / Project Name *
@@ -865,7 +825,6 @@ export default function ShiftAttendanceOverviewPanel({
                 />
               </div>
 
-              {/* Functional Area / Category */}
               <div>
                 <label className="block text-[11px] font-bold text-slate-700 mb-1">
                   Functional Category
@@ -883,7 +842,6 @@ export default function ShiftAttendanceOverviewPanel({
                 </select>
               </div>
 
-              {/* Start & End Time with 'Now' buttons */}
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <div className="flex items-center justify-between mb-1">
@@ -926,7 +884,6 @@ export default function ShiftAttendanceOverviewPanel({
                 </div>
               </div>
 
-              {/* Duration Preview */}
               <div className="flex items-center justify-between text-xs bg-emerald-50 border border-emerald-200 px-2.5 py-1.5 rounded-lg text-emerald-900 font-bold">
                 <span className="flex items-center gap-1 text-[11px]">
                   <Clock size={12} className="text-emerald-700" />
@@ -935,7 +892,6 @@ export default function ShiftAttendanceOverviewPanel({
                 <span className="font-mono text-xs">{modalDuration.formatted}</span>
               </div>
 
-              {/* Status */}
               <div>
                 <label className="block text-[11px] font-bold text-slate-700 mb-1">Status</label>
                 <div className="flex items-center gap-1.5">
@@ -956,7 +912,6 @@ export default function ShiftAttendanceOverviewPanel({
                 </div>
               </div>
 
-              {/* Progress & Comments */}
               <div>
                 <label className="block text-[11px] font-bold text-slate-700 mb-1">
                   Accomplishments / Notes
@@ -970,7 +925,6 @@ export default function ShiftAttendanceOverviewPanel({
                 />
               </div>
 
-              {/* Footer */}
               <div className="pt-2 border-t border-slate-200 flex items-center justify-end gap-2">
                 <button
                   type="button"

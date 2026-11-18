@@ -1,18 +1,3 @@
-/**
- * multiEntityGeoData.js
- * Multi-Entity Geographic & Sector Architecture for all 4 STL Operating Entities:
- * 1. Lucky Betplay Corporation (Mandaue City, Cebu)
- * 2. 5A Royal Gaming OPC (Maguindanao del Norte)
- * 3. Glowing Fortune OPC (Iligan City & Lanao Sector)
- * 4. Imperial Gaming OPC (Cotabato City)
- * 
- * Provides:
- * - Geographically Authentic Cadastral Boundary Polygons for every individual sector
- * - Drivable Snapped Boundary Street Circuit Polylines for Driving Simulation
- * - Sector / Barangay Coordinates & Landmarks
- * - Public Transport Terminals & Commercial POIs
- * - Nearest Sector Detection per Territory
- */
 
 export const MAGUINDANAO_SECTORS = [
   {
@@ -2614,9 +2599,6 @@ export const MULTI_ENTITY_ALL_POIS = {
   ]
 };
 
-/**
- * Accessor for Sector Perimeter Route (supports Mandaue, Maguindanao, Iligan, Cotabato)
- */
 export function getSectorPerimeterRoute(sectorId, fallbackMandaueRoutes = {}) {
   if (!sectorId) return null;
   if (MULTI_ENTITY_PERIMETER_ROUTES[sectorId]) {
@@ -2628,9 +2610,6 @@ export function getSectorPerimeterRoute(sectorId, fallbackMandaueRoutes = {}) {
   return null;
 }
 
-/**
- * Accessor for Territory POIs (Terminals & Factories)
- */
 export function getTerritoryPOIs(territoryKey, fallbackMandauePois = { terminals: [], factories: [] }) {
   const mandaueTerminals = (fallbackMandauePois?.terminals || []).map(t => ({ ...t, territoryKey: "lucky_betplay" }));
   const mandaueFactories = (fallbackMandauePois?.factories || []).map(f => ({ ...f, territoryKey: "lucky_betplay" }));
@@ -2659,9 +2638,6 @@ function isInsidePolygon(point, vs) {
   return inside;
 }
 
-/**
- * High-precision Sector Detector for any of the 4 STL Territories
- */
 export function detectSectorInTerritory(lat, lng, territoryKey = "all") {
   const numLat = parseFloat(lat);
   const numLng = parseFloat(lng);
@@ -2669,7 +2645,6 @@ export function detectSectorInTerritory(lat, lng, territoryKey = "all") {
 
   const pt = [numLat, numLng];
 
-  // 1. Strict containment in official cadastral survey polygons of the sector routes
   for (const [id, route] of Object.entries(MULTI_ENTITY_PERIMETER_ROUTES)) {
     if (territoryKey !== "all" && route.territoryKey !== territoryKey) continue;
     if (route.boundaryPolygon && route.boundaryPolygon.length > 2) {
@@ -2691,7 +2666,6 @@ export function detectSectorInTerritory(lat, lng, territoryKey = "all") {
     }
   }
 
-  // 2. Proximity check within Cotabato City Area
   if (numLat >= 7.15 && numLat <= 7.27 && numLng >= 124.18 && numLng <= 124.28) {
     let closest = COTABATO_SECTORS[0];
     let minDist = Infinity;
@@ -2710,7 +2684,6 @@ export function detectSectorInTerritory(lat, lng, territoryKey = "all") {
     };
   }
 
-  // 3. Proximity check within Maguindanao del Norte Area
   if (numLat >= 6.80 && numLat <= 7.60 && numLng >= 123.90 && numLng <= 124.50) {
     let closest = MAGUINDANAO_SECTORS[0];
     let minDist = Infinity;
@@ -2729,7 +2702,6 @@ export function detectSectorInTerritory(lat, lng, territoryKey = "all") {
     };
   }
 
-  // 4. Proximity check within Iligan City & Lanao del Norte Area
   if (numLat >= 8.05 && numLat <= 8.38 && numLng >= 124.12 && numLng <= 124.35) {
     let closest = ILIGAN_SECTORS[0];
     let minDist = Infinity;

@@ -165,13 +165,11 @@ export default function MondayStyleSidebar({
   isHRMD = false,
   isTabAllowed = () => true
 }) {
-  // Selected active icon category on the primary rail ('home' | 'operations' | 'finance' | 'hr' | 'analytics' | 'tools')
   const [selectedCategory, setSelectedCategory] = useState("home");
   const [searchTerm, setSearchTerm] = useState("");
   const [favorites, setFavorites] = useState(["supervisors_attendance", "payroll_calc"]);
   const [activeItemId, setActiveItemId] = useState(workspaceTab || "home");
 
-  // Sync activeItemId and category with workspaceTab
   useEffect(() => {
     if (workspaceTab) {
       setActiveItemId(workspaceTab);
@@ -182,7 +180,6 @@ export default function MondayStyleSidebar({
     }
   }, [workspaceTab]);
 
-  // Primary left rail categories
   const railCategories = [
     {
       id: "home",
@@ -222,7 +219,6 @@ export default function MondayStyleSidebar({
     }
   ];
 
-  // Specific specialized features per category (Task Board is #1 inside Home — zero redundancy)
   const categoryModules = {
     home: {
       title: "Home & HR Dashboard",
@@ -452,7 +448,6 @@ export default function MondayStyleSidebar({
     }
   };
 
-  // RBAC Access Check for Sidebar Items
   const isSidebarItemAllowed = (item) => {
     if (!item) return false;
     if (item.tabId) {
@@ -470,21 +465,18 @@ export default function MondayStyleSidebar({
     return true;
   };
 
-  // Filter rail categories so only categories with at least 1 authorized module appear
   const allowedRailCategories = railCategories.filter((cat) => {
     const mod = categoryModules[cat.id];
     if (!mod || !Array.isArray(mod.items)) return false;
     return mod.items.some((item) => isSidebarItemAllowed(item));
   });
 
-  // Automatically switch selectedCategory if current category has no authorized items left
   useEffect(() => {
     if (allowedRailCategories.length > 0 && !allowedRailCategories.some((c) => c.id === selectedCategory)) {
       setSelectedCategory(allowedRailCategories[0].id);
     }
   }, [allowedRailCategories.map((c) => c.id).join(","), selectedCategory]);
 
-  // Handle clicking an icon on the primary rail
   const handleCategoryIconClick = (catId) => {
     if (selectedCategory === catId) {
       setIsCollapsed(!isCollapsed);
@@ -501,10 +493,8 @@ export default function MondayStyleSidebar({
     );
   };
 
-  // Active category module ONLY (strictly filtered by RBAC permissions)
   const activeModule = categoryModules[selectedCategory] || categoryModules[allowedRailCategories[0]?.id] || { title: "Modules", items: [] };
 
-  // Filter items inside active category by RBAC access AND search query
   const filteredActiveItems = activeModule.items.filter(
     (item) =>
       isSidebarItemAllowed(item) &&
@@ -529,7 +519,6 @@ export default function MondayStyleSidebar({
 
   return (
     <>
-      {/* Mobile Backdrop Overlay when drawer is expanded on mobile screens */}
       {!isCollapsed && (
         <div
           onClick={() => setIsCollapsed(true)}
@@ -541,10 +530,8 @@ export default function MondayStyleSidebar({
       <aside className={`fixed md:sticky top-[53px] left-0 h-[calc(100vh-53px)] flex shrink-0 z-50 md:z-30 select-none font-['Figtree','Inter',sans-serif] self-start transition-transform duration-300 ${
         isCollapsed ? "max-md:-translate-x-full" : "translate-x-0"
       }`}>
-        {/* ================= 1. PRIMARY LEFT ICON RAIL ================= */}
         <div className="w-[68px] h-full bg-[#f5f6f8] border-r border-slate-200/80 flex flex-col items-center justify-between py-3 text-slate-600 shrink-0 overflow-y-auto custom-scrollbar">
           <div className="flex flex-col items-center gap-1.5 w-full">
-            {/* Top Collapse/Expand Toggle Button */}
             <button
               type="button"
               onClick={() => setIsCollapsed(!isCollapsed)}
@@ -560,7 +547,6 @@ export default function MondayStyleSidebar({
 
             <div className="w-9 h-[1px] bg-slate-200/80 mb-1" />
 
-            {/* Primary Rail Category Icons */}
             <div className="flex flex-col items-center gap-1 w-full px-1">
               {allowedRailCategories.map((cat) => {
                 const Icon = cat.icon;
@@ -590,7 +576,6 @@ export default function MondayStyleSidebar({
 
               <div className="w-9 h-[1px] bg-slate-200/80 my-1" />
 
-              {/* HR AI Buddy Partner Button */}
               <button
                 type="button"
                 onClick={onOpenAiBuddy}
@@ -608,13 +593,11 @@ export default function MondayStyleSidebar({
           </div>
         </div>
 
-        {/* ================= 2. SECONDARY DRAWER PANEL ================= */}
         <div
           className={`h-full bg-white border-r border-slate-200/90 flex flex-col transition-all duration-300 ease-in-out ${
             isCollapsed ? "w-0 opacity-0 overflow-hidden border-none pointer-events-none" : "w-68 opacity-100"
           }`}
         >
-          {/* Drawer Header */}
           <div className="px-4 pt-4 pb-2">
             <div className="flex items-center justify-between gap-2 mb-2.5">
               <h2 className="text-base font-bold text-[#323338] tracking-tight">
@@ -631,7 +614,6 @@ export default function MondayStyleSidebar({
               </button>
             </div>
 
-            {/* Clean Search Input */}
             <div className="relative">
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
@@ -644,7 +626,6 @@ export default function MondayStyleSidebar({
             </div>
           </div>
 
-          {/* FLAT LIST OF CATEGORY ITEMS */}
           <div className="flex-1 overflow-y-auto px-3 py-2 space-y-1 custom-scrollbar">
             <div className="px-1 pb-1">
               <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
@@ -728,7 +709,6 @@ export default function MondayStyleSidebar({
             )}
           </div>
 
-          {/* Panel Footer Action */}
           <div className="p-3 border-t border-slate-100 bg-slate-50/50">
             <button
               type="button"

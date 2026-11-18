@@ -1,4 +1,3 @@
-// Voice & Audio notification announcer matching HRHub AI Buddy girl voice
 import { getFemaleVoice } from "../components/AiAssistantGirlWidget";
 
 const VOICE_MUTED_KEY = "hrhub_voice_announcements_muted";
@@ -18,7 +17,6 @@ export function setVoiceMuted(muted) {
       window.speechSynthesis.cancel();
     }
   } catch {
-    // Ignore localStorage errors
   }
 }
 
@@ -28,7 +26,6 @@ export function toggleVoiceMuted() {
   return next;
 }
 
-// Gentle pleasant chime before announcement
 function playAttentionChime() {
   try {
     if (typeof window === "undefined") return;
@@ -41,7 +38,6 @@ function playAttentionChime() {
     const gain = ctx.createGain();
 
     osc.type = "sine";
-    // Soft high chime (E5 -> A5)
     osc.frequency.setValueAtTime(659.25, now);
     osc.frequency.exponentialRampToValueAtTime(880.0, now + 0.12);
 
@@ -59,11 +55,6 @@ function playAttentionChime() {
   }
 }
 
-/**
- * Announces a message using speech synthesis matching HRHub AI Buddy
- * @param {string} text - Message to speak
- * @param {object} options - Optional pitch, rate, or chime overrides
- */
 export function playAiVoiceAnnouncement(text, options = {}) {
   if (typeof window === "undefined" || !window.speechSynthesis) return;
   if (isVoiceMuted()) return;
@@ -84,7 +75,6 @@ export function playAiVoiceAnnouncement(text, options = {}) {
       playAttentionChime();
     }
 
-    // Clean text: strip markdown characters, urls, bullet symbols
     const cleanText = text
       .replace(/[*_#`~>]/g, "")
       .replace(/https?:\/\/\S+/g, "")
@@ -94,7 +84,6 @@ export function playAiVoiceAnnouncement(text, options = {}) {
 
     if (!cleanText) return;
 
-    // Slight delay so chime sounds first
     setTimeout(() => {
       try {
         const utterance = new SpeechSynthesisUtterance(cleanText);

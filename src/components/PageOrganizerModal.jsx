@@ -23,11 +23,6 @@ import {
 import { formatFileSize } from "../lib/requirementsStorage";
 import { compareFileNamesNaturally } from "../config/registrationRequirementsConfig";
 
-/**
- * Rotates a base64 or loaded image by 90 degrees clockwise using HTML5 Canvas.
- * @param {string} dataUrl - Image data URL or image source
- * @returns {Promise<string>} Rotated JPEG data URL
- */
 async function rotateImageDataUrl(dataUrl) {
   return new Promise((resolve) => {
     const img = new Image();
@@ -56,17 +51,6 @@ async function rotateImageDataUrl(dataUrl) {
   });
 }
 
-/**
- * PageOrganizerModal
- * Large visual organizer modal for multi-page documents (Agency Agreement, Valid ID, etc.).
- * Allows:
- * 1. Viewing all pages in large cards with clear sequence labels (Page 1, Page 2, Front, Back).
- * 2. Visual Drag-and-Drop reordering with clear drop highlights.
- * 3. Quick Move Left / Move Right directional arrows.
- * 4. High-resolution live inspector with zoom controls.
- * 5. 90-degree image rotation to fix sideways camera uploads.
- * 6. Quick upload of additional pages.
- */
 export default function PageOrganizerModal({
   isOpen,
   onClose,
@@ -87,14 +71,12 @@ export default function PageOrganizerModal({
   const [notice, setNotice] = useState(null);
   const fileInputRef = useRef(null);
 
-  // Default selection to first item
   useEffect(() => {
     if (items.length > 0 && (!selectedId || !items.some((it) => it.id === selectedId))) {
       setSelectedId(items[0].id);
     }
   }, [items, selectedId]);
 
-  // Reset zoom when selecting a different page
   useEffect(() => {
     setZoomLevel(1);
   }, [selectedId]);
@@ -106,13 +88,11 @@ export default function PageOrganizerModal({
     selectedItem?.dataUrl?.startsWith("data:image/") ||
     selectedItem?.dataUrl?.startsWith("http");
 
-  // Show temporary feedback toast inside modal
   const showNotice = (msg) => {
     setNotice(msg);
     setTimeout(() => setNotice(null), 3000);
   };
 
-  // Drag handlers
   const handleDragStart = (e, id) => {
     setDraggedId(id);
     setSelectedId(id);
@@ -226,7 +206,6 @@ export default function PageOrganizerModal({
         className="relative flex flex-col h-[92vh] max-h-[950px] w-full max-w-7xl rounded-3xl bg-slate-900 border border-slate-700/80 shadow-2xl overflow-hidden text-slate-100"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Modal Header */}
         <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-4 bg-slate-950/90 border-b border-slate-800">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-500 text-white shadow-md shadow-emerald-950">
@@ -247,9 +226,7 @@ export default function PageOrganizerModal({
             </div>
           </div>
 
-          {/* Header Action Buttons */}
           <div className="flex items-center gap-2.5">
-            {/* Hidden file input for adding more pictures */}
             <input
               ref={fileInputRef}
               type="file"
@@ -261,7 +238,6 @@ export default function PageOrganizerModal({
               }}
             />
 
-            {/* Quick Sort by File Name Number Button */}
             <button
               type="button"
               onClick={handleSortByFileName}
@@ -306,7 +282,6 @@ export default function PageOrganizerModal({
           </div>
         </div>
 
-        {/* Floating Notice Banner */}
         {notice && (
           <div className="absolute top-16 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 rounded-full bg-emerald-500/90 text-slate-950 px-4 py-1.5 text-xs font-extrabold shadow-lg animate-in fade-in slide-in-from-top-2">
             <Check size={14} />
@@ -314,11 +289,8 @@ export default function PageOrganizerModal({
           </div>
         )}
 
-        {/* Modal Main Body (Split View: Reorder Grid + High-Res Inspector) */}
         <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 min-h-0 overflow-hidden">
-          {/* Left Column: Interactive Reorder Grid (7 cols) */}
           <div className="lg:col-span-7 flex flex-col border-b lg:border-b-0 lg:border-r border-slate-800 overflow-hidden bg-slate-900/60">
-            {/* Guide Bar */}
             <div className="flex items-center justify-between px-5 py-2.5 bg-slate-950/40 border-b border-slate-800/80 text-[11px] font-semibold text-slate-400">
               <span className="flex items-center gap-1.5">
                 <Move size={12} className="text-emerald-400" />
@@ -327,7 +299,6 @@ export default function PageOrganizerModal({
               <span className="text-slate-500">Auto-saved to database</span>
             </div>
 
-            {/* Scrollable Cards Grid */}
             <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
               {items.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-20 text-slate-500 text-center gap-3">
@@ -370,9 +341,7 @@ export default function PageOrganizerModal({
                           : "border-slate-800 bg-slate-950/50 hover:bg-slate-800/60 hover:border-slate-700"
                       }`}
                     >
-                      {/* Left: Drag Handle, Sequence Badge & Thumbnail */}
                       <div className="flex items-center gap-3 min-w-0">
-                        {/* Drag Handle */}
                         <div
                           className="cursor-grab active:cursor-grabbing p-1.5 rounded-lg text-slate-500 hover:text-white hover:bg-slate-700 transition shrink-0"
                           title="Drag to reorder"
@@ -380,7 +349,6 @@ export default function PageOrganizerModal({
                           <GripVertical size={16} />
                         </div>
 
-                        {/* Page Sequence Number Badge */}
                         <div className="flex flex-col items-center justify-center h-12 w-14 rounded-xl bg-slate-900 border border-slate-700/80 px-1 text-center shrink-0">
                           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
                             SEQ
@@ -390,7 +358,6 @@ export default function PageOrganizerModal({
                           </span>
                         </div>
 
-                        {/* Thumbnail Preview */}
                         {isImage && item.dataUrl ? (
                           <div className="relative h-16 w-20 rounded-xl overflow-hidden bg-slate-950 border border-slate-700/80 shrink-0 group-hover:border-slate-500 transition">
                             <img
@@ -409,7 +376,6 @@ export default function PageOrganizerModal({
                           </div>
                         )}
 
-                        {/* Details */}
                         <div className="min-w-0">
                           <div className="flex items-center gap-2">
                             <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-extrabold bg-emerald-500/15 border border-emerald-500/30 text-emerald-300">
@@ -430,12 +396,10 @@ export default function PageOrganizerModal({
                         </div>
                       </div>
 
-                      {/* Right: Tools & Actions Toolbar */}
                       <div
                         className="flex items-center justify-end gap-1.5 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-800"
                         onClick={(e) => e.stopPropagation()}
                       >
-                        {/* Move Left / Up */}
                         <button
                           type="button"
                           disabled={idx === 0}
@@ -446,7 +410,6 @@ export default function PageOrganizerModal({
                           <ArrowLeft size={14} />
                         </button>
 
-                        {/* Move Right / Down */}
                         <button
                           type="button"
                           disabled={idx === items.length - 1}
@@ -457,7 +420,6 @@ export default function PageOrganizerModal({
                           <ArrowRight size={14} />
                         </button>
 
-                        {/* Rotate 90 deg */}
                         {isImage && (
                           <button
                             type="button"
@@ -474,7 +436,6 @@ export default function PageOrganizerModal({
                           </button>
                         )}
 
-                        {/* Select to view */}
                         <button
                           type="button"
                           onClick={() => setSelectedId(item.id)}
@@ -488,7 +449,6 @@ export default function PageOrganizerModal({
                           <Maximize2 size={14} />
                         </button>
 
-                        {/* Delete */}
                         <button
                           type="button"
                           onClick={() => {
@@ -510,9 +470,7 @@ export default function PageOrganizerModal({
             </div>
           </div>
 
-          {/* Right Column: Live High-Resolution Inspector (5 cols) */}
           <div className="lg:col-span-5 flex flex-col bg-slate-950/80 overflow-hidden">
-            {/* Inspector Header */}
             <div className="flex items-center justify-between px-5 py-2.5 bg-slate-950 border-b border-slate-800">
               <div className="flex items-center gap-2">
                 <span className="text-xs font-bold text-slate-200">
@@ -525,7 +483,6 @@ export default function PageOrganizerModal({
                 )}
               </div>
 
-              {/* Zoom Controls */}
               {isSelectedImage && (
                 <div className="flex items-center gap-1.5">
                   <button
@@ -559,7 +516,6 @@ export default function PageOrganizerModal({
               )}
             </div>
 
-            {/* Inspector Content */}
             <div className="flex-1 overflow-auto p-4 flex items-center justify-center bg-slate-950/95 relative custom-scrollbar">
               {selectedItem ? (
                 isSelectedImage && selectedItem.dataUrl ? (
@@ -591,7 +547,6 @@ export default function PageOrganizerModal({
               )}
             </div>
 
-            {/* Inspector Footer Details */}
             {selectedItem && (
               <div className="px-5 py-3 bg-slate-950 border-t border-slate-800 text-xs text-slate-400 flex flex-wrap items-center justify-between gap-2">
                 <div className="min-w-0">
@@ -631,7 +586,6 @@ export default function PageOrganizerModal({
           </div>
         </div>
 
-        {/* Modal Footer */}
         <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-3.5 bg-slate-950 border-t border-slate-800 text-xs text-slate-400">
           <div className="flex items-center gap-2 text-[11px]">
             <CheckCircle2 size={15} className="text-emerald-400" />

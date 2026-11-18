@@ -1,7 +1,3 @@
-// payrollFileParser.js
-// Unified Payroll & Compensation File Extraction Engine
-// Supports Excel Workbooks (.xlsx, .xls, .xlsm, .ods, .csv), Embedded Excel Images,
-// and Gemini Multimodal Vision OCR for Scanned Payroll Sheets & PDFs.
 
 import * as XLSX from "xlsx";
 import JSZip from "jszip";
@@ -186,9 +182,6 @@ export function round2(value) {
   return Math.round(num * 100) / 100;
 }
 
-/**
- * Parses currency strings, parenthetical negatives, and formatted cells cleanly.
- */
 export function normalizeMoney(raw, { forceAbsolute = false } = {}) {
   if (raw === null || raw === undefined || raw === "") return 0;
   if (typeof raw === "number") {
@@ -215,12 +208,6 @@ export function normalizeMoney(raw, { forceAbsolute = false } = {}) {
   return round2(forceAbsolute ? Math.abs(signed) : signed);
 }
 
-/**
- * Computes consistent Gross Pay, Total Deductions, and Net Pay for a payroll row.
- * - mode === "initial": preserves explicit sheet/OCR Gross, Total Deductions, and Net Pay when present,
- *   computing only missing totals and recording any math variance.
- * - mode === "recompute": recalculates Gross, Total Deductions, and Net Pay from edited components.
- */
 export function recalculateCompensationRow(rawRow = {}, mode = "recompute") {
   const monthlySalary = normalizeMoney(rawRow.monthlySalary, { forceAbsolute: true });
   const daysWorked = normalizeMoney(rawRow.daysWorked, { forceAbsolute: true });
@@ -330,10 +317,6 @@ const MONTH_MAP = {
   dec: "12", december: "12"
 };
 
-/**
- * Converts common release date formats (e.g. "OCTOBER 30, 2026", "10/30/2026", "2026-10-30")
- * into ISO YYYY-MM-DD format for <input type="date">.
- */
 export function parseNaturalDateToIso(rawText) {
   const clean = String(rawText || "").trim();
   if (!clean) return "";
@@ -380,14 +363,10 @@ function escapeRegExp(str) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-/**
- * Scores a normalized header against all canonical payroll field aliases.
- */
 function scoreHeaderMatch(headerText, fieldDef) {
   const norm = normalizeHeaderText(headerText);
   if (!norm || /^\d+$/.test(norm)) return 0;
 
-  // Mutual-exclusion guards so loan/meal/monthly columns never steal base fields
   if (fieldDef.key === "sss" && norm.includes("loan")) return 0;
   if (fieldDef.key === "pagibig" && norm.includes("loan")) return 0;
   if (fieldDef.key === "allowance" && norm.includes("meal")) return 0;
@@ -409,9 +388,6 @@ function scoreHeaderMatch(headerText, fieldDef) {
   return best;
 }
 
-/**
- * Automatically maps spreadsheet headers to canonical payroll fields without collisions.
- */
 export function autoMapColumns(headers = []) {
   const candidates = [];
   headers.forEach((hdr, colIdx) => {
@@ -438,7 +414,6 @@ export function autoMapColumns(headers = []) {
     usedCols.add(c.colIdx);
   }
 
-  // Fallback for split "Last Name" / "First Name" columns when full employeeName wasn't matched
   if (mapping.employeeName === undefined) {
     const lastIdx = headers.findIndex((h) => normalizeHeaderText(h).includes("last name"));
     const firstIdx = headers.findIndex((h) => normalizeHeaderText(h).includes("first name"));
@@ -461,10 +436,6 @@ function countRowNumericValues(row = []) {
   }).length;
 }
 
-/**
- * Scans the first 25 rows to locate single-row OR two-tier vertically merged payroll headers
- * plus company, branch, pay period, and release date metadata above the table.
- */
 export function detectPayrollHeaderRow(matrix = [], merges = []) {
   if (!Array.isArray(matrix) || matrix.length === 0) {
     return {
@@ -489,7 +460,6 @@ export function detectPayrollHeaderRow(matrix = [], merges = []) {
     const nonEmpty = row.map(formatCellValue).filter(Boolean);
     if (nonEmpty.length < 2) continue;
 
-    // Evaluate single-row header candidate
     const mapping = autoMapColumns(row);
     const mappedKeys = Object.keys(mapping).filter((k) => !k.startsWith("_"));
     let rowScore = mappedKeys.length * 10;
@@ -519,7 +489,6 @@ export function detectPayrollHeaderRow(matrix = [], merges = []) {
       bestHeaders = singleHeaders;
     }
 
-    // Evaluate two-tier merged header candidate (Row r = main + ADDITIONALS/DEDUCTIONS, Row r+1 = sub-columns)
     if (r + 1 < scanLimit && Array.isArray(nextRow)) {
       const nextNumericCount = countRowNumericValues(nextRow);
       const nextMapping = autoMapColumns(nextRow);
@@ -564,7 +533,6 @@ export function detectPayrollHeaderRow(matrix = [], merges = []) {
     }
   }
 
-  // Extract banner metadata (Company, Branch/City, Pay Period / Date Covered, Release Date)
   let detectedCompanyName = "";
   let detectedBranch = "";
   let detectedPayPeriod = "";
@@ -574,7 +542,6 @@ export function detectPayrollHeaderRow(matrix = [], merges = []) {
     const cells = (matrix[r] || []).map(formatCellValue).filter(Boolean);
     if (cells.length === 0) continue;
 
-    // Split any combined cell segments by pipe if present, otherwise inspect cell-by-cell
     const segments = [];
     cells.forEach((cellTxt) => {
       cellTxt.split("|").forEach((part) => {
@@ -686,10 +653,6 @@ const ALL_MONEY_KEYS = [
   "netPay"
 ];
 
-/**
- * Returns true if an extracted/staged compensation row is blank or has zero payroll activity
- * (empty name OR 0 days worked with all earnings, deductions, and net pay equal to 0).
- */
 export function isEmptyCompensationRow(row) {
   if (!row || !String(row.employeeName || "").trim()) return true;
   const days = Number(row.daysWorked || 0);
@@ -697,9 +660,6 @@ export function isEmptyCompensationRow(row) {
   return ALL_MONEY_KEYS.every((k) => Math.abs(Number(row[k] || 0)) < 0.005);
 }
 
-/**
- * Converts raw matrix rows below headerRowIndex into normalized compensation records.
- */
 export function buildCompensationRecordsFromMatrix(matrix = [], headerRowIndex = 0, columnMap = {}, options = {}) {
   const records = [];
   const defaultDepartment = String(options?.defaultDepartment || "").trim();
@@ -709,7 +669,6 @@ export function buildCompensationRecordsFromMatrix(matrix = [], headerRowIndex =
     const joined = row.map(formatCellValue).filter(Boolean).join(" ").trim();
     if (!joined) continue;
 
-    // Determine employee name (handling split last/first name if present)
     let empName = "";
     if (columnMap._splitLastName !== undefined && columnMap._splitFirstName !== undefined) {
       const last = formatCellValue(row[columnMap._splitLastName]);
@@ -729,7 +688,6 @@ export function buildCompensationRecordsFromMatrix(matrix = [], headerRowIndex =
       continue;
     }
 
-    // Extract fields according to columnMap
     const rawObj = {};
     PAYROLL_FIELD_DEFS.forEach((def) => {
       if (def.key === "employeeName" && empName) {
@@ -752,7 +710,6 @@ export function buildCompensationRecordsFromMatrix(matrix = [], headerRowIndex =
       continue;
     }
 
-    // Skip rows with neither an employee name nor any monetary value when includeEmptyRows is true
     const hasMoney =
       normalized.basicPay > 0 ||
       normalized.grossPay > 0 ||
@@ -761,7 +718,6 @@ export function buildCompensationRecordsFromMatrix(matrix = [], headerRowIndex =
 
     if (!normalized.employeeName && !hasMoney) continue;
     if (!normalized.employeeName) {
-      // Avoid importing footer summary rows that only carry a total number without a name
       if (!rawObj.employeeId) continue;
       normalized.employeeName = `Employee ${rawObj.employeeId}`;
     }
@@ -775,10 +731,6 @@ export function buildCompensationRecordsFromMatrix(matrix = [], headerRowIndex =
   return records;
 }
 
-/**
- * Extracts Excel's own summary footer totals ("TOTAL" or "GRAND TOTAL" row) so extracted rows
- * can be reconciled against the source spreadsheet totals before saving.
- */
 export function extractPayrollFooterTotals(matrix = [], headerRowIndex = 0, columnMap = {}) {
   const emptyResult = { found: false, label: "", sourceRowNumber: null, totals: {}, presentKeys: [] };
   if (!Array.isArray(matrix) || matrix.length <= headerRowIndex + 1) return emptyResult;
@@ -831,7 +783,6 @@ export function extractPayrollFooterTotals(matrix = [], headerRowIndex = 0, colu
     presentKeys.push(key);
   });
 
-  // Derive footer Gross / Total Deductions if sheet omits explicit Gross/Ded columns (like Lucky Betplay format)
   const hasAnyEarning = ["basicPay", "allowance", "mealAllowance", "holidayNightPay", "overtimePay"].some((k) =>
     presentKeys.includes(k)
   );
@@ -879,9 +830,6 @@ export function extractPayrollFooterTotals(matrix = [], headerRowIndex = 0, colu
   };
 }
 
-/**
- * Compares extracted staging employee totals against the Excel footer row and/or manual control net total.
- */
 export function reconcilePayrollTotals(records = [], reportedTotals = null, manualControlNetPay = "") {
   const stagedTotals = {};
   ALL_MONEY_KEYS.forEach((k) => {
@@ -972,9 +920,6 @@ export function reconcilePayrollTotals(records = [], reportedTotals = null, manu
   };
 }
 
-/**
- * Extracts raw dataUrl and mimeType cleanly.
- */
 function parseDataUrl(dataUrl) {
   if (!dataUrl || typeof dataUrl !== "string") return null;
   const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
@@ -991,9 +936,6 @@ function fileToDataUrl(fileOrBlob) {
   });
 }
 
-/**
- * Parses an image or PDF payroll register / payslip sheet using Gemini Multimodal Vision OCR.
- */
 export async function parsePayrollWithOcr(fileOrBlob, overrideFileName = "") {
   const apiKey = API_CONFIG.GEMINI_API_KEY;
   if (!apiKey) {
@@ -1209,10 +1151,6 @@ Rules:
   throw lastError || new Error("Unable to extract payroll data from document via OCR.");
 }
 
-/**
- * Checks if an XLSX workbook contains an embedded image (e.g. screenshot pasted into Excel)
- * and extracts the largest image blob URL for OCR fallback.
- */
 async function extractLargestImageFromXlsx(arrayBuffer) {
   try {
     const zip = await JSZip.loadAsync(arrayBuffer);
@@ -1244,10 +1182,6 @@ async function extractLargestImageFromXlsx(arrayBuffer) {
   }
 }
 
-/**
- * Parses an Excel (.xlsx, .xls, .xlsm, .ods, .csv) file with multi-sheet support,
- * smart header detection, and automatic embedded-image OCR fallback.
- */
 export async function parsePayrollSpreadsheet(file, preferredSheetName = "") {
   const fileName = file.name || "payroll.xlsx";
   const lower = fileName.toLowerCase();
@@ -1260,7 +1194,6 @@ export async function parsePayrollSpreadsheet(file, preferredSheetName = "") {
     throw new Error("The uploaded spreadsheet contains no readable worksheets.");
   }
 
-  // Evaluate each sheet to pick the strongest payroll sheet when no preferred sheet is chosen
   const sheetMatrices = {};
   const sheetMerges = {};
   let chosenSheet = preferredSheetName && sheetNames.includes(preferredSheetName) ? preferredSheetName : sheetNames[0];
@@ -1292,7 +1225,6 @@ export async function parsePayrollSpreadsheet(file, preferredSheetName = "") {
   });
   const reportedTotals = extractPayrollFooterTotals(activeMatrix, headerInfo.headerRowIndex, columnMap);
 
-  // If no tabular employee records were found and file contains an embedded screenshot image, auto-OCR it
   if (records.length === 0 && (lower.endsWith(".xlsx") || lower.endsWith(".xlsm"))) {
     const embeddedImageUrl = await extractLargestImageFromXlsx(buffer);
     if (embeddedImageUrl) {
@@ -1326,9 +1258,6 @@ export async function parsePayrollSpreadsheet(file, preferredSheetName = "") {
   };
 }
 
-/**
- * Unified dispatcher for Excel, CSV, PDF, or Image uploads.
- */
 export async function parsePayrollUploadFile(file, preferredSheetName = "") {
   if (!file) throw new Error("Please select a file to upload.");
   const name = (file.name || "").toLowerCase();
@@ -1356,9 +1285,6 @@ export async function parsePayrollUploadFile(file, preferredSheetName = "") {
   throw new Error("Unsupported file format. Please upload an Excel file (.xlsx, .xls, .csv) or scanned Payroll Image/PDF for OCR.");
 }
 
-/**
- * Optional Gemini AI column-mapping helper for custom/unfamiliar Excel column headers.
- */
 export async function aiAssistColumnMapping(headers = [], sampleRows = []) {
   const apiKey = API_CONFIG.GEMINI_API_KEY;
   if (!apiKey || headers.length === 0) {
@@ -1415,16 +1341,12 @@ Return ONLY a valid JSON object mapping fieldKey -> integer colIdx for matched c
         return { ...autoMapColumns(headers), ...cleanMap };
       }
     } catch {
-      // Try next fallback model
     }
   }
 
   return autoMapColumns(headers);
 }
 
-/**
- * Generates and downloads a clean Excel (.xlsx) payroll template matching corporate register columns.
- */
 export function downloadPayrollTemplateExcel(companyName = "Lucky Betplay Corporation") {
   const aoa = [
     [companyName.toUpperCase()],
@@ -1548,9 +1470,6 @@ export function downloadPayrollTemplateExcel(companyName = "Lucky Betplay Corpor
   XLSX.writeFile(wb, "HRHub_Salary_Compensation_Template.xlsx");
 }
 
-/**
- * Exports a saved payroll batch back to an Excel (.xlsx) workbook.
- */
 export function exportPayrollBatchToExcel(batch, records = []) {
   const aoa = [
     [(batch?.companyName || "SIMPAL GROUP OF COMPANIES").toUpperCase()],

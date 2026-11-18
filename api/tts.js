@@ -1,8 +1,3 @@
-/**
- * api/tts.js
- * Lightweight Natural Human Voice TTS endpoint for HRHub Navigation.
- * Streams natural Filipino (tl) & English (en) neural MP3 audio with 0 database egress.
- */
 
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -22,7 +17,6 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "Missing text parameter" });
     }
 
-    // Clamp to safe single-utterance length (client splits longer text into chunks)
     const text = rawText.slice(0, 200);
     const ttsUrl = `https://translate.googleapis.com/translate_tts?ie=UTF-8&client=tw-ob&tl=${encodeURIComponent(lang)}&q=${encodeURIComponent(text)}`;
 

@@ -1,28 +1,8 @@
-/**
- * employeeRequirementsStorage.js
- * Dedicated Supabase Storage Bucket Service for Employee 201 Requirements & Compliance Documents.
- * 
- * Features:
- * - Direct upload to Supabase Storage Bucket ('employee-requirements')
- * - Lightweight metadata schema for PostgreSQL database storage (keeps DB records lightweight & fast)
- * - Animated upload progress & stage tracking for professional user feedback
- * - Graceful fallback if storage bucket is initializing
- */
 
 import { supabase } from "./supabase.js";
 
 export const REQUIREMENTS_BUCKET = "employee-requirements";
 
-/**
- * Upload an Employee 201 Requirement document directly to Supabase Storage Bucket.
- * Reports real-time animated stage and progress percentage.
- * 
- * @param {string} employeeId - Unique identifier of the employee
- * @param {File} file - Raw File object from browser input
- * @param {string} category - Requirement Category (e.g., "NBI / Police Clearance")
- * @param {Function} [onProgress] - Callback: ({ percent: number, stage: string, message: string }) => void
- * @returns {Promise<Object>} Lightweight document metadata record
- */
 export async function uploadEmployeeRequirementToBucket(employeeId, file, category = "General 201 Document", onProgress = null) {
   if (!file) throw new Error("No file provided for upload");
 
@@ -32,7 +12,6 @@ export async function uploadEmployeeRequirementToBucket(employeeId, file, catego
     }
   };
 
-  // Stage 1: Validation & preparation
   notify(15, "preparing", "Analyzing document format and virus scan...");
   await new Promise((r) => setTimeout(r, 180));
 
@@ -43,7 +22,6 @@ export async function uploadEmployeeRequirementToBucket(employeeId, file, catego
   const uniqueDocId = `req-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
   const storagePath = `dossiers/${cleanEmployeeId}/${Date.now()}_${cleanBaseName}.${fileExt}`;
 
-  // Stage 2: Uploading to Cloud Storage Bucket
   notify(45, "uploading", `Uploading "${file.name}" to Cloud Storage Bucket...`);
 
   let publicUrl = null;
@@ -75,7 +53,6 @@ export async function uploadEmployeeRequirementToBucket(employeeId, file, catego
     console.warn("Storage bucket upload exception (will fallback gracefully):", err);
   }
 
-  // Fallback: If bucket upload is not ready on remote Supabase project, generate a compact local dataUrl
   let fallbackDataUrl = null;
   if (!publicUrl) {
     notify(88, "optimizing", "Optimizing document for local secure caching...");
@@ -87,7 +64,6 @@ export async function uploadEmployeeRequirementToBucket(employeeId, file, catego
     });
   }
 
-  // Stage 3: Complete
   notify(100, "completed", "Document successfully registered to 201 Dossier!");
   await new Promise((r) => setTimeout(r, 120));
 
@@ -106,9 +82,6 @@ export async function uploadEmployeeRequirementToBucket(employeeId, file, catego
   };
 }
 
-/**
- * Remove an Employee Requirement document from Supabase Storage Bucket.
- */
 export async function deleteEmployeeRequirementFromBucket(storagePath) {
   if (!storagePath) return false;
 
@@ -128,9 +101,6 @@ export async function deleteEmployeeRequirementFromBucket(storagePath) {
   }
 }
 
-/**
- * SQL Schema script to provision the Supabase Storage Bucket for Employee 201 Requirements
- */
 export const SUPABASE_BUCKET_SQL_SCHEMA = `
 -- ============================================================================
 -- SUPABASE STORAGE BUCKET SCHEMA: employee-requirements

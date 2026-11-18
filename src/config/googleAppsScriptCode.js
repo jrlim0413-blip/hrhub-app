@@ -1,24 +1,3 @@
-/**
- * =========================================================================
- * HRHUB ENTERPRISE MEMO & PDF EMAIL DISPATCHER
- * Google Apps Script Webhook (Deploy as Web App)
- * Target Sender: imsoroglohr@gmail.com (or your HR Google Account)
- * =========================================================================
- * 
- * INSTRUCTIONS TO DEPLOY:
- * 1. Open Google Sheets / Google Drive or go to https://script.google.com
- * 2. Click "New Project" and name it "HRHub Memo Dispatcher".
- * 3. Replace all code in Code.gs with this exact script.
- * 4. Click "Deploy" -> "New deployment" -> Select type: "Web app".
- * 5. Set:
- *    - Description: "HRHub Official Memo & PDF Dispatcher"
- *    - Execute as: "Me" (your email: imsoroglohr@gmail.com)
- *    - Who has access: "Anyone" (allows HRHub app to trigger dispatch)
- * 6. Click "Deploy", Authorize access with your Google account.
- * 7. Copy the "Web app URL" (starts with https://script.google.com/macros/s/...)
- * 8. Paste the Web app URL in HRHub Memo Generator -> Webhook URL.
- * =========================================================================
- */
 
 function doPost(e) {
   try {
@@ -32,7 +11,6 @@ function doPost(e) {
     var payload = JSON.parse(e.postData.contents);
     var results = [];
 
-    // Supports company-segregated multi-dispatch array
     var dispatches = payload.dispatches || [payload];
 
     for (var i = 0; i < dispatches.length; i++) {
@@ -42,7 +20,6 @@ function doPost(e) {
         recipients = [recipients];
       }
 
-      // Filter valid email addresses
       var validRecipients = recipients.filter(function (email) {
         return email && typeof email === "string" && email.indexOf("@") > 0;
       });
@@ -64,7 +41,6 @@ function doPost(e) {
       var plainBody = item.body || "Please find attached your official memorandum from Human Resources.";
       var senderEmail = item.senderEmail || "imsoroglohr@gmail.com";
 
-      // 1. Generate High-Quality PDF Attachment for this specific company
       var attachments = [];
       var pdfHtml = item.pdfHtml || item.htmlBody;
 
@@ -116,7 +92,6 @@ function doPost(e) {
         }
       }
 
-      // 2. Dispatch to each company employee with company-specific PDF
       var sentEmails = [];
       for (var r = 0; r < validRecipients.length; r++) {
         var recipientEmail = validRecipients[r].trim();

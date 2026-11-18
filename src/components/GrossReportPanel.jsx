@@ -227,7 +227,6 @@ const renderDiffTagJsx = (curVal, prevVal, isSubtotal = false) => {
   );
 };
 
-// Persistent memory & sessionStorage cache so data appears instantly (0ms) without blank screen
 let CACHED_TELLERS = null;
 let CACHED_SUPERVISORS = null;
 let CACHED_GROSS = null;
@@ -241,7 +240,6 @@ try {
   const savedSupervisors = sessionStorage.getItem("hrhub_supervisors_cache");
   if (savedSupervisors) CACHED_SUPERVISORS = JSON.parse(savedSupervisors);
   
-  // Stored live bets are strictly tagged by date. If cache date is from a previous day, discard it!
   const todayDateStr = formatDate(new Date());
   const savedBetsDate = sessionStorage.getItem("hrhub_live_bets_date");
   if (savedBetsDate === todayDateStr) {
@@ -257,7 +255,6 @@ try {
   if (savedGross) {
     try {
       const parsed = JSON.parse(savedGross);
-      // Invalidate truncated cache that stopped at day 24 or has too few records
       const day25Count = Array.isArray(parsed) ? parsed.filter((r) => Number(r.drawDay || r.day) === 25).length : 0;
       const day26Count = Array.isArray(parsed) ? parsed.filter((r) => Number(r.drawDay || r.day) === 26).length : 0;
       if (day25Count > 100 && day26Count > 100) {
@@ -329,7 +326,6 @@ function SupervisorPicker({ value, onChange, summaries, metrics, showFigures = t
         <div className={`absolute left-0 top-full z-50 mt-1.5 max-h-80 overflow-y-auto rounded-2xl border border-slate-200 bg-white p-1.5 shadow-2xl shadow-slate-900/10 backdrop-blur animate-in fade-in zoom-in-95 duration-100 ${
           showFigures ? "w-84" : "w-64"
         }`}>
-          {/* Header */}
           {showFigures ? (
             <div className="flex items-center justify-between px-2.5 py-1.5 text-[9px] font-black uppercase tracking-wider text-slate-400 border-b border-slate-100 mb-1">
               <span>Supervisor</span>
@@ -348,7 +344,6 @@ function SupervisorPicker({ value, onChange, summaries, metrics, showFigures = t
             </div>
           )}
 
-          {/* Option: All Supervisors */}
           <button
             type="button"
             onClick={() => {
@@ -379,7 +374,6 @@ function SupervisorPicker({ value, onChange, summaries, metrics, showFigures = t
             )}
           </button>
 
-          {/* Supervisor rows */}
           <div className="divide-y divide-slate-50 mt-0.5">
             {summaries.map((s) => {
               const isSelected = value === s.name;
@@ -456,10 +450,8 @@ export default function GrossReportPanel({ initialTab = "realtime", currentUser 
     }
   }, [initialTab]);
 
-  // Multi-Area & Entity API Configuration Integration
   const [areaConfigs, setAreaConfigs] = useState(() => getAreaConfigs());
 
-  // Filter area configs based on user's assigned entity
   const filteredAreaConfigs = useMemo(() => {
     if (isGlobalUser) return areaConfigs;
     if (userEntityScope?.isNonStl) return [];
@@ -484,7 +476,6 @@ export default function GrossReportPanel({ initialTab = "realtime", currentUser 
 
   const [selectedAreaId, setSelectedAreaIdState] = useState(() => getSelectedAreaId());
 
-  // Ensure selectedAreaId is valid within user's filteredAreaConfigs
   useEffect(() => {
     if (!isGlobalUser && filteredAreaConfigs.length > 0) {
       const exists = filteredAreaConfigs.some((a) => a.id === selectedAreaId);
@@ -530,7 +521,6 @@ export default function GrossReportPanel({ initialTab = "realtime", currentUser 
     setSelectedAreaIdState(newAreaId);
     setSelectedAreaId(newAreaId);
 
-    // Reset caches for fresh fetch on the new area
     CACHED_TELLERS = null;
     CACHED_SUPERVISORS = null;
     CACHED_GROSS = null;
@@ -544,11 +534,9 @@ export default function GrossReportPanel({ initialTab = "realtime", currentUser 
     setLoaded(false);
   };
 
-  // Realtime agent entry states
   const [activeTellers, setActiveTellers] = useState(() => CACHED_TELLERS || []);
   const [supervisorsList, setSupervisorsList] = useState(() => CACHED_SUPERVISORS || []);
 
-  // Dynamically compute normalized records whenever rawGrossList, supervisorsList, or range changes
   const records = useMemo(() => {
     const list = rawGrossList.length > 0 ? rawGrossList : (CACHED_GROSS || []);
     if (list.length === 0) return recordsState.length > 0 ? recordsState : (CACHED_RECORDS || []);
@@ -559,15 +547,14 @@ export default function GrossReportPanel({ initialTab = "realtime", currentUser 
   }, [rawGrossList, supervisorsList, range.from, range.to, recordsState]);
 
   const [lastRefreshed, setLastRefreshed] = useState(() => CACHED_LAST_SYNC || null);
-  const [autoRefresh, setAutoRefresh] = useState(true); // ON by default!
+  const [autoRefresh, setAutoRefresh] = useState(true);
   const [realtimeDate, setRealtimeDate] = useState(() => formatDate(new Date()));
   const [realtimeSearch, setRealtimeSearch] = useState("");
-  const [realtimeFilter, setRealtimeFilter] = useState("all"); // "all" | "with_gross" | "without_gross"
+  const [realtimeFilter, setRealtimeFilter] = useState("all");
   const [realtimeSupervisor, setRealtimeSupervisor] = useState("all");
   const [selectedDrawTime, setSelectedDrawTime] = useState("all");
   const [todayDrawsStatus, setTodayDrawsStatus] = useState(() => []);
 
-  // Fetch official draw results & status (status 2 = finished/posted result)
   const fetchDrawStatuses = async (targetDate) => {
     try {
       const activeArea = currentAreaRef.current;
@@ -594,7 +581,6 @@ export default function GrossReportPanel({ initialTab = "realtime", currentUser 
     return [];
   };
 
-  // Live Bets API states (bets per agent)
   const [liveBetsMap, setLiveBetsMap] = useState(() => CACHED_LIVE_BETS || {});
   const [syncProgress, setSyncProgress] = useState({ current: 0, total: 0, loading: false });
   const [selectedAgentDetails, setSelectedAgentDetails] = useState(null);
@@ -602,7 +588,6 @@ export default function GrossReportPanel({ initialTab = "realtime", currentUser 
   const [modalDrawFilter, setModalDrawFilter] = useState("all");
   const [modalSearch, setModalSearch] = useState("");
 
-  // Realtime view modes: "entries" (Live Entries Stream per Game & Draw Schedule) or "collector" (On-Duty Accounts Summary)
   const [realtimeViewMode, setRealtimeViewMode] = useState("entries");
   const [selectedGameFilter, setSelectedGameFilter] = useState("all");
   const [entriesSearch, setEntriesSearch] = useState("");
@@ -616,12 +601,10 @@ export default function GrossReportPanel({ initialTab = "realtime", currentUser 
   liveBetsMapRef.current = liveBetsMap;
   const prevRealtimeDateRef = useRef(realtimeDate);
 
-  // --- REALTIME AGENT GROSS & ON-DUTY TRACKING ---
   const [currentDay, setCurrentDay] = useState(() => formatDate(new Date()));
   const todayStr = currentDay;
   const yesterdayStr = useMemo(() => shiftDate(currentDay, -1), [currentDay]);
 
-  // Keep draw statuses synced whenever realtimeDate changes
   useEffect(() => {
     fetchDrawStatuses(realtimeDate);
   }, [realtimeDate]);
@@ -649,19 +632,17 @@ export default function GrossReportPanel({ initialTab = "realtime", currentUser 
     if (postedDrawsMap.size > 0) {
       return postedDrawsMap.has(clean) || (clean.includes(":") ? postedDrawsMap.has(clean.split(":")[0]) : postedDrawsMap.has(`${clean}:00`));
     }
-    // Fallback: Default finished morning/afternoon draws
     const now = new Date();
     const currentMins = now.getHours() * 60 + now.getMinutes();
-    if (clean === "10:30" || clean === "10") return currentMins >= 660; // 11:00 AM
-    if (clean === "14" || clean === "14:00" || clean === "2") return currentMins >= 870; // 2:30 PM
-    if (clean === "15" || clean === "15:00" || clean === "3") return currentMins >= 930; // 3:30 PM
-    if (clean === "17" || clean === "17:00" || clean === "5") return currentMins >= 1050; // 5:30 PM
-    if (clean === "19" || clean === "19:00" || clean === "7") return currentMins >= 1170; // 7:30 PM
-    if (clean === "21" || clean === "21:00" || clean === "9") return currentMins >= 1290; // 9:30 PM
+    if (clean === "10:30" || clean === "10") return currentMins >= 660;
+    if (clean === "14" || clean === "14:00" || clean === "2") return currentMins >= 870;
+    if (clean === "15" || clean === "15:00" || clean === "3") return currentMins >= 930;
+    if (clean === "17" || clean === "17:00" || clean === "5") return currentMins >= 1050;
+    if (clean === "19" || clean === "19:00" || clean === "7") return currentMins >= 1170;
+    if (clean === "21" || clean === "21:00" || clean === "9") return currentMins >= 1290;
     return false;
   };
 
-  // Midnight / New Day transition detector: automatically resets live stream gross when a new day arrives
   useEffect(() => {
     const timer = setInterval(() => {
       const nowStr = formatDate(new Date());
@@ -680,13 +661,11 @@ export default function GrossReportPanel({ initialTab = "realtime", currentUser 
     return () => clearInterval(timer);
   }, [currentDay]);
 
-  // Live Cooldown & Sync Timing States
   const [cooldownSeconds, setCooldownSeconds] = useState(0);
   const [cooldownReason, setCooldownReason] = useState("");
   const [nextPollCountdown, setNextPollCountdown] = useState(25);
   const [historicalLoading, setHistoricalLoading] = useState(false);
 
-  // Live second-by-second cooldown countdown heartbeat
   useEffect(() => {
     const timer = setInterval(() => {
       const nowMs = Date.now();
@@ -746,7 +725,6 @@ export default function GrossReportPanel({ initialTab = "realtime", currentUser 
     if (isFetchingLiveRef.current) return;
 
     const nowMs = Date.now();
-    // Auto-restore quota once cooldown has elapsed
     if (nowMs >= RATE_LIMIT_RESET_AT && RATE_LIMIT_REMAINING <= 25) {
       RATE_LIMIT_REMAINING = 300;
       RATE_LIMIT_RESET_AT = 0;
@@ -776,14 +754,12 @@ export default function GrossReportPanel({ initialTab = "realtime", currentUser 
       setSyncProgress({ current: 0, total: tellersToFetch.length, loading: true });
     }
 
-    // Sort tellers: prioritize those with known bets so entries appear immediately
     const sortedTellers = [...tellersToFetch].sort((a, b) => {
       const aHas = (liveBetsMap[a.id]?.count || 0) > 0 ? 1 : 0;
       const bHas = (liveBetsMap[b.id]?.count || 0) > 0 ? 1 : 0;
       return bHas - aHas;
     });
 
-    // Sequential single-request fetching with 650ms delay to stay well within remote API limits (max 60 req/min)
     let rateLimitHit = false;
 
     for (let i = 0; i < sortedTellers.length; i++) {
@@ -853,10 +829,8 @@ export default function GrossReportPanel({ initialTab = "realtime", currentUser 
           };
         }
       } catch {
-        // Keep previous data on network glitch
       }
 
-      // Merge into state after every teller so entries stream in continuously
       if (Object.keys(batchResults).length > 0) {
         setLiveBetsMap((prev) => {
           const updated = { ...prev, ...batchResults };
@@ -873,7 +847,6 @@ export default function GrossReportPanel({ initialTab = "realtime", currentUser 
         setSyncProgress({ current: i + 1, total: sortedTellers.length, loading: i + 1 < sortedTellers.length });
       }
 
-      // Safe pause between teller requests
       if (i + 1 < sortedTellers.length && !rateLimitHit) {
         await sleep(650);
       }
@@ -963,7 +936,6 @@ export default function GrossReportPanel({ initialTab = "realtime", currentUser 
       const activeTellersUrl = String(activeArea?.activeTellersUrl || import.meta.env.VITE_ACTIVE_TELLERS_API_URL || DEFAULT_ACTIVE_TELLERS_URL).trim();
       const backupTellersUrl = String(activeArea?.backupTellersUrl || DEFAULT_BACKUP_TELLERS_URL).trim();
 
-      // 1. FAST PARALLEL BOOT: Fetch active tellers and supervisors first (~200ms)
       const [spvrResult, tellersResult] = await Promise.allSettled([
         proxyFetch(supervisorUrl, { headers: { Accept: "application/json", Authorization: `Bearer ${token}` } }).then((r) => (r.ok ? r.json() : null)),
         proxyFetch(activeTellersUrl, { headers: { Accept: "application/json", Authorization: `Bearer ${token}` } }).then((r) => (r.ok ? r.json() : null))
@@ -993,11 +965,9 @@ export default function GrossReportPanel({ initialTab = "realtime", currentUser 
         try { sessionStorage.setItem("hrhub_supervisors_cache", JSON.stringify(spvrList)); } catch {}
       }
 
-      // Mark loaded so UI renders immediately
       setLoaded(true);
       setLastRefreshed(new Date());
 
-      // Filter on-duty tellers
       const currentTellers = activeList.length > 0 ? activeList : (CACHED_TELLERS || []);
       const onDuty = currentTellers.filter((teller) => {
         if (teller.deleted_at) return false;
@@ -1005,8 +975,6 @@ export default function GrossReportPanel({ initialTab = "realtime", currentUser 
         return ![0, "0", false, "false", "inactive"].includes(active);
       });
 
-      // Trigger initial live bets fetch for top priority on-duty tellers (20 tellers)
-      // to populate entries fast without exceeding rate limits
       if (onDuty.length > 0) {
         const priorityTellers = [...onDuty].sort((a, b) => {
           const aHas = (liveBetsMap[a.id]?.count || 0) > 0 ? 1 : 0;
@@ -1016,8 +984,6 @@ export default function GrossReportPanel({ initialTab = "realtime", currentUser 
         fetchLiveBets(priorityTellers, realtimeDate);
       }
 
-      // 2. CONCURRENT BACKGROUND LOAD: Fetch month-to-date gross with auto-chunking (max 14 days per chunk)
-      // to completely prevent upstream STL backend pagination/buffer limits (~8,000 records) from truncating dates past day 24.
       const configuredUrl = activeArea?.grossReportUrl || import.meta.env.VITE_GROSS_REPORT_API_URL;
       const endpoints = configuredUrl ? [configuredUrl] : [DEFAULT_GROSS_URL];
 
@@ -1025,7 +991,6 @@ export default function GrossReportPanel({ initialTab = "realtime", currentUser 
       const validFrom = (range?.from && String(range.from).includes("-")) ? range.from : todayStr;
       const validTo = (range?.to && String(range.to).includes("-")) ? range.to : todayStr;
 
-      // Only add 7-day lookback if the comparison tab specifically requires it
       const fetchFrom = (reportTab === "comparison") ? shiftDate(validFrom, -7) : validFrom;
       const fetchTo = validTo;
 
@@ -1117,21 +1082,17 @@ export default function GrossReportPanel({ initialTab = "realtime", currentUser 
     return [];
   };
 
-  // Automatically fetch report when Area changes, Date Range changes, or Report Tab switches
   useEffect(() => {
     loadReport();
   }, [selectedAreaId, range.from, range.to, reportTab]);
 
-  // Continuous Real-Time Auto-Stream with live second-by-second countdown
-  // Only polls on the current day (todayStr) to completely protect server quota on historical dates
   useEffect(() => {
     const isToday = realtimeDate === todayStr;
     if (!autoRefresh || onDutyTellers.length === 0 || !isToday) return;
 
     const interval = setInterval(() => {
-      if (document.hidden) return; // Pause if tab is in background
+      if (document.hidden) return;
 
-      // If server cooldown is active, hold the next sync countdown
       if (Date.now() < RATE_LIMIT_RESET_AT || RATE_LIMIT_REMAINING <= 25) {
         return;
       }
@@ -1140,14 +1101,12 @@ export default function GrossReportPanel({ initialTab = "realtime", currentUser 
         if (prev <= 1) {
           const currentMap = liveBetsMapRef.current || {};
 
-          // Tellers who already have bets today (poll top 4 active)
           const tellersWithBets = onDutyTellers.filter((t) => {
             const info = currentMap[t.id];
             return info && (info.count > 0 || info.total > 0);
           });
           const topActive = tellersWithBets.slice(0, 2);
 
-          // Rotating slice of other tellers (poll 2 rotating)
           const otherTellers = onDutyTellers.filter((t) => {
             const info = currentMap[t.id];
             return !info || (info.count === 0 && info.total === 0);
@@ -1160,9 +1119,9 @@ export default function GrossReportPanel({ initialTab = "realtime", currentUser 
 
           const targetPoll = [...topActive, ...rotatingSlice];
           if (targetPoll.length > 0) {
-            fetchLiveBets(targetPoll, realtimeDate, true /* background poll */);
+            fetchLiveBets(targetPoll, realtimeDate, true );
           }
-          return 25; // Reset countdown to 25s
+          return 25;
         }
         return prev - 1;
       });
@@ -1309,8 +1268,6 @@ export default function GrossReportPanel({ initialTab = "realtime", currentUser 
     };
   }, [dateColumns, groupedRecords, previousDateColumns, activeRecords]);
 
-  // --- REALTIME AGENT GROSS & ON-DUTY TRACKING ---
-
   const supervisorMap = useMemo(() => {
     const map = new Map();
     supervisorsList.forEach((s) => {
@@ -1353,11 +1310,8 @@ export default function GrossReportPanel({ initialTab = "realtime", currentUser 
       let betsList = [];
       let betsCount = 0;
 
-      // When viewing Today: live bets stream is primary
-      // When viewing Yesterday/Past Dates: dateGrossRecords from Accountant API is primary (100% reliable & complete in 1 single request)
       if (!isHistorical && liveBetInfo && liveBetInfo.count !== undefined) {
         const allBets = liveBetInfo.bets || [];
-        // Only include bets from finished/posted draws for Today
         const finishedBets = allBets.filter((b) => isDrawFinished(b.drawTime));
         betsList = finishedBets;
         betsCount = finishedBets.length;
@@ -1366,7 +1320,6 @@ export default function GrossReportPanel({ initialTab = "realtime", currentUser 
           grossSum = Number(liveBetInfo.draws?.[selectedDrawTime] || 0);
           draws = grossSum > 0 ? [{ time: selectedDrawTime, gross: grossSum, hits: 0 }] : [];
         } else {
-          // Sum ONLY the finished/posted draws for today!
           let finishedTotal = 0;
           const finishedDraws = [];
           Object.entries(liveBetInfo.draws || {}).forEach(([time, gross]) => {
@@ -1445,12 +1398,9 @@ export default function GrossReportPanel({ initialTab = "realtime", currentUser 
         const isToday = realtimeDate === todayStr;
 
         if (isToday) {
-          // Returning to Today: fetch live bets stream for top priority on-duty tellers
           const priorityTellers = onDutyTellersRef.current.slice(0, 8);
           fetchLiveBets(priorityTellers, realtimeDate);
         } else {
-          // Viewing Yesterday or a past date:
-          // Check if rawGrossList already has records for this date from the month-to-date accountant load
           const hasDataForDate = rawGrossListRef.current.some((record) => dateKey(record) === realtimeDate);
           if (!hasDataForDate) {
             console.log(`[HrHub Accountant Sync] ⚡ Fetching official single-request gross records for ${realtimeDate}...`);
@@ -1607,7 +1557,6 @@ export default function GrossReportPanel({ initialTab = "realtime", currentUser 
           if (betDate && betDate !== realtimeDate) return;
 
           const isFinished = isDrawFinished(bet.drawTime);
-          // If viewing Today with "all" games selected, only include entries for finished/posted draws
           if (realtimeDate === todayStr && selectedGameFilter === "all" && !isFinished) {
             return;
           }
@@ -1630,7 +1579,6 @@ export default function GrossReportPanel({ initialTab = "realtime", currentUser 
       }
     });
 
-    // Sort descending by created_at (latest first)
     return list.sort((a, b) => {
       const timeA = a.created_at ? new Date(a.created_at.replace(" ", "T")).getTime() : 0;
       const timeB = b.created_at ? new Date(b.created_at.replace(" ", "T")).getTime() : 0;
@@ -2914,10 +2862,8 @@ export default function GrossReportPanel({ initialTab = "realtime", currentUser 
 
   return (
     <section className="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-      {/* Executive Command Header */}
       <div className="border-b border-slate-800 bg-[#0d1b2a] px-6 py-3.5 text-white">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          {/* Module Identity */}
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-400 to-emerald-600 text-slate-950 shadow-md shadow-emerald-500/20">
               <Activity size={20} />
@@ -2937,9 +2883,7 @@ export default function GrossReportPanel({ initialTab = "realtime", currentUser 
             </div>
           </div>
 
-          {/* Compact Icon Controls */}
           <div className="flex flex-wrap items-center gap-2">
-            {/* Multi-Area / Entity Selector Dropdown */}
             <div className="inline-flex items-center gap-1.5 rounded-lg border border-white/20 bg-white/10 px-2.5 py-1 text-xs backdrop-blur-xs">
               <span className="text-[10px] font-black uppercase tracking-wider text-emerald-400 flex items-center gap-1 shrink-0">
                 <MapPin size={12} />
@@ -2967,7 +2911,6 @@ export default function GrossReportPanel({ initialTab = "realtime", currentUser 
               )}
             </div>
 
-            {/* Contextual Date Controls */}
             {reportTab === "realtime" ? (
               <div className="inline-flex items-center gap-1.5 rounded-xl border border-white/20 bg-white/10 p-1 backdrop-blur-xs text-xs shadow-xs">
                 <button
@@ -3024,7 +2967,6 @@ export default function GrossReportPanel({ initialTab = "realtime", currentUser 
               </div>
             )}
 
-            {/* Auto-Sync Toggle (Icon Button) */}
             {reportTab === "realtime" && (
               <button
                 type="button"
@@ -3040,7 +2982,6 @@ export default function GrossReportPanel({ initialTab = "realtime", currentUser 
               </button>
             )}
 
-            {/* Manual Sync (Icon Button) */}
             <button
               type="button"
               onClick={() => {
@@ -3071,7 +3012,6 @@ export default function GrossReportPanel({ initialTab = "realtime", currentUser 
               />
             </button>
 
-            {/* Global Export CSV (Icon Button) */}
             <button
               type="button"
               onClick={() => {
@@ -3096,7 +3036,6 @@ export default function GrossReportPanel({ initialTab = "realtime", currentUser 
               <ArrowDownToLine size={14} />
             </button>
 
-            {/* Print & Word for historical reports */}
             {reportTab !== "realtime" && (
               <>
                 <button
@@ -3123,7 +3062,6 @@ export default function GrossReportPanel({ initialTab = "realtime", currentUser 
         </div>
       </div>
 
-      {/* Primary Navigation Tabs */}
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-slate-50/70 px-5 py-2">
         <div className="flex flex-wrap items-center gap-1 rounded-xl border border-slate-200/80 bg-slate-200/60 p-1">
           {[
@@ -3187,7 +3125,6 @@ export default function GrossReportPanel({ initialTab = "realtime", currentUser 
           })}
         </div>
 
-        {/* Live streaming indicator & Cooldown Pill */}
         <div className="flex items-center gap-2 text-xs">
           {realtimeDate !== todayStr && reportTab === "realtime" ? (
             historicalLoading ? (
@@ -3244,7 +3181,6 @@ export default function GrossReportPanel({ initialTab = "realtime", currentUser 
         </div>
       </div>
 
-      {/* Live Server Cooldown Countdown Notification Banner */}
       {reportTab === "realtime" && cooldownSeconds > 0 && (
         <div className="border-b border-amber-300 bg-gradient-to-r from-amber-50 via-orange-50 to-amber-50 px-5 py-3">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -3279,7 +3215,6 @@ export default function GrossReportPanel({ initialTab = "realtime", currentUser 
         </div>
       )}
 
-      {/* Slim progress bar during sync */}
       {syncProgress.loading && (
         <div className="border-b border-emerald-200 bg-emerald-50/90 px-5 py-2">
           <div className="flex items-center justify-between text-[11px] font-bold text-emerald-950 mb-1">
@@ -3299,7 +3234,6 @@ export default function GrossReportPanel({ initialTab = "realtime", currentUser 
           </div>
         </div>
       )}
-
 
       {error && (
         <div className="m-4 flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700">
@@ -3331,13 +3265,10 @@ export default function GrossReportPanel({ initialTab = "realtime", currentUser 
             </div>
           )}
 
-          {/* REALTIME TAB CONTENT */}
           {reportTab === "realtime" && (
             <div className="p-4 space-y-4">
-              {/* VIEW 1: LIVE TRANSACTION STREAM */}
               {realtimeViewMode === "entries" && (
                 <div className="space-y-4">
-                  {/* Entries KPI Metrics */}
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
                     <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                       <div className="flex items-center justify-between">
@@ -3394,9 +3325,7 @@ export default function GrossReportPanel({ initialTab = "realtime", currentUser 
                     </div>
                   </div>
 
-                  {/* Consolidated Filter & Search Bar */}
                   <div className="rounded-2xl border border-slate-200 bg-white p-3.5 shadow-sm space-y-3">
-                    {/* Top Row: Draw Schedule Ribbon & Filtered Gross Summary */}
                     <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
                       <div className="flex flex-wrap items-center gap-1.5">
                         <span className="text-[10px] font-black uppercase tracking-wider text-slate-500 mr-1 flex items-center gap-1">
@@ -3439,7 +3368,6 @@ export default function GrossReportPanel({ initialTab = "realtime", currentUser 
                       </div>
                     </div>
 
-                    {/* Bottom Row: Supervisor Dropdown & Instant Search */}
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                       <div className="flex flex-1 items-center gap-2 max-w-2xl">
                         <SupervisorPicker
@@ -3473,7 +3401,6 @@ export default function GrossReportPanel({ initialTab = "realtime", currentUser 
                     </div>
                   </div>
 
-                  {/* Live Entries Table */}
                   <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
                     <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/70 px-4 py-2.5 text-xs text-slate-500">
                       <span className="font-semibold flex items-center gap-1.5 text-slate-700">
@@ -3648,7 +3575,6 @@ export default function GrossReportPanel({ initialTab = "realtime", currentUser 
                       </table>
                     </div>
 
-                    {/* Pagination Bar */}
                     {totalEntriesPages > 1 && (
                       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-slate-50 px-4 py-2.5 text-xs">
                         <span className="text-slate-500 font-medium">
@@ -3683,12 +3609,9 @@ export default function GrossReportPanel({ initialTab = "realtime", currentUser 
                 </div>
               )}
 
-              {/* VIEW 2: COLLECTOR SUMMARY VIEW */}
               {realtimeViewMode === "collector" && (
                 <>
-                  {/* 4 KPI Metrics: On-Duty, Active Submissions, Pending, Average */}
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                    {/* 1. On Duty Agents */}
                     <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                       <div className="flex items-center justify-between">
                         <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">On-Duty Field Agents</p>
@@ -3700,7 +3623,6 @@ export default function GrossReportPanel({ initialTab = "realtime", currentUser 
                       <p className="mt-1 text-[11px] text-slate-500">Active deployed agent accounts</p>
                     </div>
 
-                    {/* 2. On Duty With Gross */}
                     <div className="rounded-2xl border border-emerald-200 bg-emerald-50/70 p-4 shadow-sm">
                       <div className="flex items-center justify-between">
                         <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-800">Active Submissions</p>
@@ -3719,7 +3641,6 @@ export default function GrossReportPanel({ initialTab = "realtime", currentUser 
                       </p>
                     </div>
 
-                    {/* 3. On Duty Without Gross */}
                     <div className="rounded-2xl border border-rose-200 bg-rose-50/70 p-4 shadow-sm">
                       <div className="flex items-center justify-between">
                         <p className="text-[10px] font-bold uppercase tracking-wider text-rose-800">Pending Submissions</p>
@@ -3738,7 +3659,6 @@ export default function GrossReportPanel({ initialTab = "realtime", currentUser 
                       </p>
                     </div>
 
-                    {/* 4. Total Gross & Average */}
                     <div className="rounded-2xl border border-indigo-100 bg-indigo-50/50 p-4 shadow-sm">
                       <div className="flex items-center justify-between">
                         <p className="text-[10px] font-bold uppercase tracking-wider text-indigo-800">Average Gross Volume</p>
@@ -3753,7 +3673,6 @@ export default function GrossReportPanel({ initialTab = "realtime", currentUser 
                     </div>
                   </div>
 
-                  {/* Informative notice when 0 entries on selected date */}
                   {realtimeMetrics.dateGrossCount === 0 && (
                     <div className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-900">
                       <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
@@ -3789,9 +3708,7 @@ export default function GrossReportPanel({ initialTab = "realtime", currentUser 
                     </div>
                   )}
 
-                  {/* Consolidated Compliance Status & Supervisor Filter Toolbar */}
                   <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-3.5 shadow-sm lg:flex-row lg:items-center lg:justify-between">
-                    {/* Status Filter Segmented Pills with Minimal Figures */}
                     <div className="inline-flex items-center rounded-xl border border-slate-200 bg-slate-100 p-1 shrink-0">
                       <button
                         type="button"
@@ -3843,7 +3760,6 @@ export default function GrossReportPanel({ initialTab = "realtime", currentUser 
                       </button>
                     </div>
 
-                    {/* Supervisor Picker with clean figures only */}
                     <div className="flex flex-1 items-center gap-2 max-w-xl">
                       <SupervisorPicker
                         value={realtimeSupervisor}
@@ -3874,7 +3790,6 @@ export default function GrossReportPanel({ initialTab = "realtime", currentUser 
                     </div>
                   </div>
 
-                  {/* Realtime Agent Table */}
                   <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
                     <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 bg-slate-50/70 px-4 py-2.5 text-xs">
                       <span className="font-extrabold text-slate-800 flex items-center gap-1.5">
@@ -4181,7 +4096,6 @@ export default function GrossReportPanel({ initialTab = "realtime", currentUser 
                 );
               })}
 
-              {/* Final Page: Supervisor Totals & Grand Summary */}
               <div className="space-y-4">
                 <div className="rounded-2xl border-2 border-emerald-500/40 bg-white p-6 shadow-md">
                   <div className="mb-4 flex flex-wrap items-end justify-between gap-4 border-b border-slate-200 pb-4">
@@ -4293,7 +4207,6 @@ export default function GrossReportPanel({ initialTab = "realtime", currentUser 
                 </div>
               </div>
 
-              {/* Page Break Divider */}
               <div className="my-6 flex items-center justify-center gap-3">
                 <div className="h-px flex-1 border-t-2 border-dashed border-slate-300" />
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 border border-emerald-300 px-4 py-1 text-[10px] font-extrabold uppercase tracking-wider text-emerald-800 shadow-sm">
@@ -4302,7 +4215,6 @@ export default function GrossReportPanel({ initialTab = "realtime", currentUser 
                 <div className="h-px flex-1 border-t-2 border-dashed border-slate-300" />
               </div>
 
-              {/* Final Page: Visual Performance Charts & Analytics */}
               <div className="space-y-4">
                 <div className="rounded-2xl border-2 border-emerald-500/40 bg-white p-6 shadow-md">
                   <div className="mb-4 flex flex-wrap items-end justify-between gap-4 border-b border-slate-200 pb-4">
@@ -4339,7 +4251,6 @@ export default function GrossReportPanel({ initialTab = "realtime", currentUser 
                     </div>
                   </div>
 
-                  {/* 5 KPI Cards */}
                   <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-5">
                     <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3.5 shadow-sm">
                       <span className="text-[9px] font-extrabold uppercase tracking-wider text-slate-500">Selected Range Total</span>
@@ -4380,11 +4291,8 @@ export default function GrossReportPanel({ initialTab = "realtime", currentUser 
                     </div>
                   </div>
 
-                  {/* Analytics Grid: 2 Columns */}
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                    {/* Left Column: Daily Trend & Market Share */}
                     <div className="space-y-4">
-                      {/* Selected-range daily trend chart */}
                       <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
                         <div className="mb-3 flex items-center justify-between border-b border-slate-100 pb-2">
                           <div>
@@ -4439,7 +4347,6 @@ export default function GrossReportPanel({ initialTab = "realtime", currentUser 
                         </div>
                       </div>
 
-                      {/* Market Share Contribution */}
                       <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
                         <div className="mb-2 flex items-center justify-between border-b border-slate-100 pb-2">
                           <div>
@@ -4470,7 +4377,6 @@ export default function GrossReportPanel({ initialTab = "realtime", currentUser 
                       </div>
                     </div>
 
-                    {/* Right Column: Supervisor Performance Ranking */}
                     <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm flex flex-col justify-between h-full">
                       <div>
                         <div className="mb-3 flex items-center justify-between border-b border-slate-100 pb-2">
@@ -4541,7 +4447,6 @@ export default function GrossReportPanel({ initialTab = "realtime", currentUser 
         </div>
       </div>}
 
-      {/* MODAL: Live Bet Tickets per Agent */}
       {selectedAgentDetails && (
         <div
           className="fixed inset-0 z-[80] flex items-start justify-center overflow-y-auto bg-slate-950/70 p-3 sm:p-6 pt-4 sm:pt-6 md:pt-8 backdrop-blur-xs"
@@ -4550,7 +4455,6 @@ export default function GrossReportPanel({ initialTab = "realtime", currentUser 
           aria-label="Agent live bets detail"
         >
           <div className="flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl border border-slate-200">
-            {/* Modal Header */}
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-slate-900 px-5 py-4 text-white">
               <div className="flex items-center gap-3">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-500 text-slate-950 font-black text-sm">
@@ -4602,9 +4506,7 @@ export default function GrossReportPanel({ initialTab = "realtime", currentUser 
               </div>
             </div>
 
-            {/* Modal Body */}
             <div className="flex-1 overflow-y-auto p-5 space-y-4">
-              {/* Agent KPI summary cards */}
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                 <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-3">
                   <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-800">Total Gross Wager</p>
@@ -4632,7 +4534,6 @@ export default function GrossReportPanel({ initialTab = "realtime", currentUser 
                 </div>
               </div>
 
-              {/* Filter / Search Bar inside Modal */}
               <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3">
                 <div className="flex flex-wrap items-center gap-1.5">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mr-1">
@@ -4686,7 +4587,6 @@ export default function GrossReportPanel({ initialTab = "realtime", currentUser 
                 </div>
               </div>
 
-              {/* Tickets Table */}
               <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xs">
                 <div className="max-h-[380px] overflow-y-auto">
                   <table className="w-full border-collapse text-left text-xs">
@@ -4771,7 +4671,6 @@ export default function GrossReportPanel({ initialTab = "realtime", currentUser 
               </div>
             </div>
 
-            {/* Modal Footer */}
             <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-slate-50 px-5 py-3">
               <span className="text-[11px] text-slate-500">
                 Data source: <code className="text-slate-700 font-mono">/api/teller/bet?tellerId={selectedAgentDetails.id}</code>
@@ -4792,7 +4691,6 @@ export default function GrossReportPanel({ initialTab = "realtime", currentUser 
         </div>
       )}
 
-      {/* MODAL: Ticket Combinations Inspector */}
       {selectedTicketModal && (
         <div
           className="fixed inset-0 z-[85] flex items-start justify-center overflow-y-auto bg-slate-950/70 p-3 sm:p-6 pt-4 sm:pt-6 md:pt-8 backdrop-blur-xs"
@@ -4801,7 +4699,6 @@ export default function GrossReportPanel({ initialTab = "realtime", currentUser 
           aria-label="Ticket combinations inspector"
         >
           <div className="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl border border-slate-200">
-            {/* Header */}
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-slate-900 px-5 py-4 text-white">
               <div>
                 <div className="flex items-center gap-2">
@@ -4830,7 +4727,6 @@ export default function GrossReportPanel({ initialTab = "realtime", currentUser 
               </button>
             </div>
 
-            {/* Body */}
             <div className="flex-1 overflow-y-auto p-5 space-y-4">
               {ticketDetailsLoading ? (
                 <div className="flex flex-col items-center justify-center py-12 text-center">
@@ -4926,7 +4822,6 @@ export default function GrossReportPanel({ initialTab = "realtime", currentUser 
               )}
             </div>
 
-            {/* Footer */}
             <div className="flex items-center justify-between border-t border-slate-200 bg-slate-50 px-5 py-3">
               <span className="text-[11px] text-slate-500">
                 Ref ID: <code className="text-slate-700 font-mono">{selectedTicketModal.transactionId}</code>

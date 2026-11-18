@@ -14,7 +14,6 @@ const DEFAULT_PCSO_LOGO = "/id-assets/pcso_logo.png";
 const DEFAULT_STL_LOGO = "/id-assets/stl_logo_perfect.png";
 const DEFAULT_MANAGER_SIGNATURE = "/id-assets/signature_charmie_transparent.png";
 
-// Base factory template defaults
 const FACTORY_DEFAULTS = {
   companyName: "LUCKY BETPLAY CORPORATION",
   companySubtitle1: "PCSO STL Authorized Agent Corporation",
@@ -59,32 +58,25 @@ export default function AgentIdCardModal({
   uploadedRequirements = [],
   onClose
 }) {
-  // Load saved global template defaults (applies to all agents)
   const [templateDefaults, setTemplateDefaults] = useState(getSavedTemplateDefaults);
 
-  // Center logo customizer
   const [centerLogo, setCenterLogo] = useState(templateDefaults.centerLogo || DEFAULT_CENTER_LOGO);
 
-  // Right logo customizer
   const [rightLogo, setRightLogo] = useState(templateDefaults.rightLogo || DEFAULT_STL_LOGO);
 
-  // Logo Size Sliders (50% to 180%)
   const [centerLogoSize, setCenterLogoSize] = useState(templateDefaults.centerLogoSize || 100);
   const [rightLogoSize, setRightLogoSize] = useState(templateDefaults.rightLogoSize || 100);
   const [pcsoLogoSize, setPcsoLogoSize] = useState(templateDefaults.pcsoLogoSize || 100);
 
-  // Signatory Signatures (Auto-transparent PNG)
   const [managerSignature, setManagerSignature] = useState(
     templateDefaults.managerSignature !== undefined ? templateDefaults.managerSignature : DEFAULT_MANAGER_SIGNATURE
   );
   const [confirmedSignature, setConfirmedSignature] = useState(
     templateDefaults.confirmedSignature || ""
   );
-  const [isProcessingSig, setIsProcessingSig] = useState(null); // null | "manager" | "confirmed" | "front"
+  const [isProcessingSig, setIsProcessingSig] = useState(null);
 
-  // Front Agent Signature (uploadable)
   const [frontSignature, setFrontSignature] = useState(() => {
-    // Check if agent has a signature file in uploaded requirements
     if (uploadedRequirements && uploadedRequirements.length > 0) {
       const sigReq = uploadedRequirements.find((r) =>
         r.name?.toLowerCase().includes("signature") ||
@@ -96,7 +88,6 @@ export default function AgentIdCardModal({
     return "";
   });
 
-  // Selected agent photo (can be from requirements, custom upload, or blank)
   const [agentPhoto, setAgentPhoto] = useState(() => {
     if (uploadedRequirements && uploadedRequirements.length > 0) {
       const foundPic = uploadedRequirements.find((r) =>
@@ -117,23 +108,19 @@ export default function AgentIdCardModal({
   const [photoTolerance, setPhotoTolerance] = useState(42);
   const [showPhotoSettings, setShowPhotoSettings] = useState(false);
 
-  // Print layout mode: fixed to "top-side-by-side" (A4 Portrait, Side-by-Side at Top Edge)
   const printLayout = "top-side-by-side";
   const [isExporting, setIsExporting] = useState(false);
-  const [controlsTab, setControlsTab] = useState("company"); // "company" | "fields" | "logos" | "photo_sig"
+  const [controlsTab, setControlsTab] = useState("company");
   const [defaultSavedToast, setDefaultSavedToast] = useState("");
 
-  // Clean agent name without arrows (« or »)
   const cleanInitialName = String(initialData?.fullName || agent?.fullName || agent?.full_name || agent?.name || "")
     .replace(/[«»]/g, "")
     .trim();
 
-  // Clean ID number without arrows
   const cleanInitialId = String(initialData?.idNumber ?? agent?.agent_id ?? agent?.agentId ?? "")
     .replace(/[«»]/g, "")
     .trim();
 
-  // Form state for all editable and underlined fields
   const [fields, setFields] = useState({
     agentName: cleanInitialName,
     idNumber: cleanInitialId,
@@ -156,7 +143,6 @@ export default function AgentIdCardModal({
     showConfirmedSignatureGraphic: templateDefaults.showConfirmedSignatureGraphic ?? true
   });
 
-  // Dynamic single-line font sizing for AAC Company Name
   const aacDynamicFontSize = useMemo(() => {
     const rawName = (fields.companyName || "LUCKY BETPLAY CORPORATION").trim();
     const len = rawName.length;
@@ -188,9 +174,6 @@ export default function AgentIdCardModal({
   const managerSigInputRef = useRef(null);
   const confirmedSigInputRef = useRef(null);
 
-  // =========================================================================
-  // SET AS DEFAULT FOR ALL AGENTS (GLOBAL PERSISTENCE)
-  // =========================================================================
   const handleSaveAsDefault = () => {
     const newDefaults = {
       companyName: fields.companyName,
@@ -263,7 +246,6 @@ export default function AgentIdCardModal({
     }
   };
 
-  // Quick action: Clear all underlines to keep them blank for manual writing or blank template
   const handleClearUnderlines = () => {
     setFields((prev) => ({
       ...prev,
@@ -278,7 +260,6 @@ export default function AgentIdCardModal({
     setFrontSignature("");
   };
 
-  // Quick action: Auto-fill fields with current agent data
   const handleFillAgentData = () => {
     const rawName = String(initialData?.fullName || agent?.fullName || agent?.full_name || agent?.name || "").replace(/[«»]/g, "").trim();
     const rawId = String(initialData?.idNumber ?? agent?.agent_id ?? agent?.agentId ?? "").replace(/[«»]/g, "").trim();
@@ -317,7 +298,6 @@ export default function AgentIdCardModal({
     }
   };
 
-  // Center logo upload
   const handleCenterLogoUpload = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -329,7 +309,6 @@ export default function AgentIdCardModal({
     e.target.value = "";
   };
 
-  // Right logo upload
   const handleRightLogoUpload = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -341,7 +320,6 @@ export default function AgentIdCardModal({
     e.target.value = "";
   };
 
-  // Automatic background removal for Operations Manager Signature (Certified by)
   const handleManagerSignatureUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -366,7 +344,6 @@ export default function AgentIdCardModal({
     }
   };
 
-  // Automatic background removal for Branch Manager Signature (Confirmed by)
   const handleConfirmedSignatureUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -391,7 +368,6 @@ export default function AgentIdCardModal({
     }
   };
 
-  // Front agent signature upload with automatic transparent PNG conversion
   const handleFrontSignatureUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -414,7 +390,6 @@ export default function AgentIdCardModal({
     }
   };
 
-  // Pick requirement signature and auto-convert to clean transparent PNG
   const handlePickRequirementSignature = async (url) => {
     setIsProcessingSig("front");
     try {
@@ -430,7 +405,6 @@ export default function AgentIdCardModal({
     }
   };
 
-  // Custom 2x2 photo upload with automatic solid white background (#FFFFFF) conversion
   const handlePhotoUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -459,7 +433,6 @@ export default function AgentIdCardModal({
     }
   };
 
-  // Pick requirement photo with automatic white background conversion
   const handlePickRequirementPhoto = async (url) => {
     setIsProcessingPhoto(true);
     try {
@@ -481,7 +454,6 @@ export default function AgentIdCardModal({
     }
   };
 
-  // Toggle between auto-whitened 2x2 photo and original photo
   const handleTogglePhotoWhiteBg = async () => {
     if (!rawUploadedPhoto && !agentPhoto) return;
     if (photoWhiteBgActive) {
@@ -496,7 +468,6 @@ export default function AgentIdCardModal({
     }
   };
 
-  // Re-apply or fine-tune white background with custom tolerance
   const handleReapplyWhiteBg = async (customTolerance) => {
     const src = rawUploadedPhoto || agentPhoto;
     if (!src) return;
@@ -518,7 +489,6 @@ export default function AgentIdCardModal({
     }
   };
 
-  // Manage print class on body & clean up dynamic @page style
   useEffect(() => {
     const handleAfterPrint = () => {
       document.body.classList.remove("printing-agent-id-card");
@@ -538,9 +508,6 @@ export default function AgentIdCardModal({
     };
   }, []);
 
-  // Trigger high-resolution printing configured strictly for A4 coupon bond (210 × 297 mm)
-  // Cards are positioned side-by-side right at the absolute top edge (0mm)
-  // Preserves ~182mm (over 61%) of clean, blank coupon bond below for future printing
   const handlePrint = async () => {
     try {
       setIsExporting(true);
@@ -552,7 +519,6 @@ export default function AgentIdCardModal({
       const frontImg = frontCanvas.toDataURL("image/png");
       const backImg = backCanvas.toDataURL("image/png");
 
-      // Remove any existing print iframe
       const existingIframe = document.getElementById("agent-id-print-frame");
       if (existingIframe) {
         existingIframe.remove();
@@ -658,22 +624,17 @@ export default function AgentIdCardModal({
     }
   };
 
-  // Update field helper
   const updateField = (name, value) => {
     const cleanVal = typeof value === "string" ? value.replace(/[«»]/g, "") : value;
     setFields((prev) => ({ ...prev, [name]: cleanVal }));
   };
 
-  // =========================================================================
-  // HIGH RESOLUTION CANVAS ENGINE: 1200 × 1500 PIXELS @ 300 DPI
-  // =========================================================================
   const renderCardToCanvas = async (side = "front", targetCanvas = null) => {
     const canvas = targetCanvas || document.createElement("canvas");
     if (canvas.width !== 1200) canvas.width = 1200;
     if (canvas.height !== 1500) canvas.height = 1500;
     const ctx = canvas.getContext("2d");
 
-    // Pure white background
     ctx.fillStyle = "#FFFFFF";
     ctx.fillRect(0, 0, 1200, 1500);
 
@@ -709,12 +670,10 @@ export default function AgentIdCardModal({
         frontSignature ? loadImage(frontSignature) : null
       ]);
 
-      // 1. Top Logos (Scaled by user sliders)
       const pcsoScale = pcsoLogoSize / 100;
       const centerScale = centerLogoSize / 100;
       const rightScale = rightLogoSize / 100;
 
-      // PCSO Logo
       if (pcsoImg) {
         const pcsoW = 140 * pcsoScale;
         const pcsoH = 140 * pcsoScale;
@@ -725,7 +684,6 @@ export default function AgentIdCardModal({
       ctx.textAlign = "center";
       ctx.fillText("PCSO", 140, 215);
 
-      // Center Logo
       if (centerImg) {
         const maxW = 300 * centerScale;
         const maxH = 175 * centerScale;
@@ -735,18 +693,16 @@ export default function AgentIdCardModal({
         ctx.drawImage(centerImg, 600 - w / 2, 45 + (175 - h) / 2, w, h);
       }
 
-      // Right Logo
       if (stlImg) {
         const rightW = 140 * rightScale;
         const rightH = 140 * rightScale;
         ctx.drawImage(stlImg, (1200 - 210) + (140 - rightW) / 2, 45 + (140 - rightH) / 2, rightW, rightH);
       }
 
-      // Company header (Editable AAC Name - Automatic single-line scaling for any length name)
       const companyNameText = (fields.companyName || "LUCKY BETPLAY CORPORATION").trim();
-      const maxCompanyWidth = 1060; // Max allowed width within 1200px canvas (70px margins each side)
-      let companyFontSize = 64; // Default starting large size
-      const minCompanyFontSize = 26; // Minimum size for exceptionally long corporation names
+      const maxCompanyWidth = 1060;
+      let companyFontSize = 64;
+      const minCompanyFontSize = 26;
       
       ctx.font = `bold ${companyFontSize}px 'Segoe UI', Arial, sans-serif`;
       let measuredCompanyWidth = ctx.measureText(companyNameText).width;
@@ -761,7 +717,6 @@ export default function AgentIdCardModal({
       ctx.textAlign = "center";
       ctx.fillText(companyNameText, 600, 275);
 
-      // Subtitle 1 (Automatic single-line scaling)
       const sub1Text = (fields.companySubtitle1 || "PCSO STL Authorized Agent Corporation").trim();
       let sub1FontSize = 38;
       ctx.font = `bold ${sub1FontSize}px 'Segoe UI', Arial, sans-serif`;
@@ -771,7 +726,6 @@ export default function AgentIdCardModal({
       }
       ctx.fillText(sub1Text, 600, 320);
 
-      // Subtitle 2 (Automatic single-line scaling)
       const sub2Text = (fields.companySubtitle2 || "Mandaue City").trim();
       let sub2FontSize = 35;
       ctx.font = `600 ${sub2FontSize}px 'Segoe UI', Arial, sans-serif`;
@@ -781,7 +735,6 @@ export default function AgentIdCardModal({
       }
       ctx.fillText(sub2Text, 600, 362);
 
-      // 2x2 Photo Box: centered 520 x 540 px
       const photoX = 600 - 260;
       const photoY = 390;
       const photoW = 520;
@@ -801,7 +754,6 @@ export default function AgentIdCardModal({
         ctx.fillText("2x2 PHOTO", 600, photoY + 280);
       }
 
-      // Agent Name Section
       const nameY = 1000;
       if (fields.agentName) {
         ctx.fillStyle = "#000000";
@@ -819,7 +771,6 @@ export default function AgentIdCardModal({
       ctx.font = "bold 32px 'Segoe UI', Arial, sans-serif";
       ctx.fillText("NAME", 600, nameY + 54);
 
-      // Signature Section (with uploaded signature if available)
       const sigY = 1175;
       if (frontSigImg) {
         ctx.drawImage(frontSigImg, 600 - 180, sigY - 110, 360, 120);
@@ -834,7 +785,6 @@ export default function AgentIdCardModal({
       ctx.font = "bold 32px 'Segoe UI', Arial, sans-serif";
       ctx.fillText("SIGNATURE", 600, sigY + 54);
 
-      // Bottom Red Banner
       ctx.fillStyle = "#E60000";
       ctx.fillRect(0, 1335, 1200, 165);
 
@@ -843,11 +793,9 @@ export default function AgentIdCardModal({
       ctx.fillText(fields.roleTitle || "SALES REPRESENTATIVE", 600, 1435);
 
     } else {
-      // BACK CARD
       const sigImg = (fields.showSignatureGraphic && managerSignature) ? await loadImage(managerSignature) : null;
       const confirmedSigImg = (fields.showConfirmedSignatureGraphic && confirmedSignature) ? await loadImage(confirmedSignature) : null;
 
-      // ID Number Section (Shortened underline: 1 1/2 inches @ 300 DPI = 450px)
       ctx.fillStyle = "#000000";
       ctx.font = "bold 40px 'Segoe UI', Arial, sans-serif";
       ctx.textAlign = "left";
@@ -855,7 +803,7 @@ export default function AgentIdCardModal({
 
       const idVal = fields.idNumber ? String(fields.idNumber) : "";
       const idLineStart = 220;
-      const idLineWidth = 450; // 1.5 inches * 300 DPI = 450px
+      const idLineWidth = 450;
       const idLineEnd = idLineStart + idLineWidth;
 
       if (idVal) {
@@ -869,7 +817,6 @@ export default function AgentIdCardModal({
       ctx.lineWidth = 4;
       ctx.stroke();
 
-      // NOTICE Block
       ctx.textAlign = "center";
       ctx.font = "bold 42px 'Segoe UI', Arial, sans-serif";
       ctx.fillText("NOTICE", 600, 210);
@@ -883,7 +830,6 @@ export default function AgentIdCardModal({
       ctx.font = "bold 40px 'Segoe UI', Arial, sans-serif";
       ctx.fillText(fields.pcsoBranchName || "PCSO CEBU BRANCH", 600, 365);
 
-      // Address Block (Lifted up and enlarged)
       ctx.textAlign = "left";
       ctx.font = "bold 38px 'Segoe UI', Arial, sans-serif";
       const addressLabelWidth = ctx.measureText("Address:").width;
@@ -907,7 +853,6 @@ export default function AgentIdCardModal({
       ctx.lineWidth = 3;
       ctx.stroke();
 
-      // Area of Operation (Lifted up and enlarged)
       ctx.font = "bold 36px 'Segoe UI', Arial, sans-serif";
       ctx.textAlign = "left";
       ctx.fillText("Area of Operation:", 80, 620);
@@ -922,7 +867,6 @@ export default function AgentIdCardModal({
       ctx.lineWidth = 3;
       ctx.stroke();
 
-      // Emergency Contact (Lifted up and enlarged)
       ctx.font = "normal 34px 'Segoe UI', Arial, sans-serif";
       ctx.textAlign = "left";
       ctx.fillText("In case of emergency, please contact:", 80, 705);
@@ -942,7 +886,6 @@ export default function AgentIdCardModal({
       ctx.lineWidth = 4;
       ctx.stroke();
 
-      // Signatories: Certified by (Lifted up and enlarged)
       ctx.textAlign = "left";
       ctx.font = "bold 32px 'Segoe UI', Arial, sans-serif";
       ctx.fillText("Certified by:", 120, 850);
@@ -964,7 +907,6 @@ export default function AgentIdCardModal({
       ctx.font = "bold 32px 'Segoe UI', Arial, sans-serif";
       ctx.fillText(fields.certifiedByTitle || "OPERATIONS MANAGER", 600, 1015);
 
-      // Confirmed by (Lifted up and enlarged)
       ctx.textAlign = "left";
       ctx.font = "bold 32px 'Segoe UI', Arial, sans-serif";
       ctx.fillText("Confirmed by:", 120, 1100);
@@ -987,7 +929,6 @@ export default function AgentIdCardModal({
       ctx.fillText(fields.confirmedByTitle || "OIC-Branch Manager", 600, 1265);
     }
 
-    // Solid black outer outline for official ID card border (300 DPI)
     ctx.strokeStyle = "#000000";
     ctx.lineWidth = 5;
     ctx.strokeRect(3, 3, 1194, 1494);
@@ -995,7 +936,6 @@ export default function AgentIdCardModal({
     return canvas;
   };
 
-  // Live WYSIWYG Canvas Rendering - 100% exact match with Print ID Card output
   useEffect(() => {
     let isCancelled = false;
     const updateLiveCanvases = async () => {
@@ -1037,7 +977,6 @@ export default function AgentIdCardModal({
     confirmedSignature
   ]);
 
-  // Download high-resolution PNG (1200 x 1500 px @ 300 DPI)
   const handleDownloadImage = async (side) => {
     try {
       setIsExporting(true);
@@ -1054,7 +993,6 @@ export default function AgentIdCardModal({
     }
   };
 
-  // Download high-res PDF with exact 4" x 5" (101.6mm x 127mm) size fitted on A4 coupon bond (210 × 297 mm)
   const handleDownloadPdf = async () => {
     try {
       setIsExporting(true);
@@ -1072,23 +1010,16 @@ export default function AgentIdCardModal({
       const frontImgData = frontCanvas.toDataURL("image/png");
       const backImgData = backCanvas.toDataURL("image/png");
 
-      // A4 Portrait: 210mm width × 297mm height
-      // A4 Portrait: 210mm width × 297mm height
-      // Side-by-Side placement near top edge (startY = 5mm) with 4.5mm side margins
-      // Size: 99.5mm × 140mm - ensures all 4 borders including right-side edge are 100% visible
       const cardW = 99.5;
       const cardH = 140;
       const gap = 2;
-      const totalW = cardW * 2 + gap; // 201mm
-      const startX = (210 - totalW) / 2; // 4.5mm safe margin
-      const startY = 5; // Moved down by 5mm so top border line is clearly visible
+      const totalW = cardW * 2 + gap;
+      const startX = (210 - totalW) / 2;
+      const startY = 5;
 
-      // Draw Front Card (Left)
       pdf.addImage(frontImgData, "PNG", startX, startY, cardW, cardH);
-      // Draw Back Card (Right)
       pdf.addImage(backImgData, "PNG", startX + cardW + gap, startY, cardW, cardH);
 
-      // Solid black outline for ID card border
       pdf.setDrawColor(0, 0, 0);
       pdf.setLineWidth(0.5);
       pdf.rect(startX, startY, cardW, cardH);
@@ -1105,10 +1036,8 @@ export default function AgentIdCardModal({
 
   return (
     <div className="fixed inset-0 z-[10000] flex items-start justify-center overflow-y-auto bg-slate-950/85 p-2 sm:p-4 pt-3 sm:pt-6 md:pt-8 backdrop-blur-md animate-fade-in">
-      {/* Studio Dialog Container */}
       <div className="relative flex flex-col w-full max-w-[1340px] max-h-[96vh] rounded-3xl bg-slate-900 border border-slate-700/80 shadow-2xl overflow-hidden text-slate-100">
         
-        {/* Top Header Bar */}
         <div className="flex items-center justify-between px-6 py-3.5 border-b border-slate-800 bg-slate-950/75 shrink-0">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-400 text-slate-950 font-black shadow-lg shadow-emerald-500/20">
@@ -1128,7 +1057,6 @@ export default function AgentIdCardModal({
           </div>
 
           <div className="flex items-center gap-2.5">
-            {/* Global Default Button */}
             <button
               type="button"
               onClick={handleSaveAsDefault}
@@ -1159,7 +1087,6 @@ export default function AgentIdCardModal({
           </div>
         </div>
 
-        {/* Global Toast Notification */}
         {defaultSavedToast && (
           <div className="bg-gradient-to-r from-emerald-600 to-teal-600 px-6 py-2.5 text-xs font-bold text-slate-950 flex items-center justify-between shadow-md animate-fade-in shrink-0">
             <div className="flex items-center gap-2">
@@ -1176,15 +1103,10 @@ export default function AgentIdCardModal({
           </div>
         )}
 
-        {/* Scrollable Main Body */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
           
-          {/* ========================================================================= */}
-          {/* TOP SECTION: DUAL-SIDED ID PREVIEW (FRONT ON LEFT, BACK ON RIGHT)         */}
-          {/* ========================================================================= */}
           <div className="rounded-3xl border border-slate-800/90 bg-slate-950/60 p-4 sm:p-6 shadow-inner">
             
-            {/* Top Toolbar */}
             <div className="flex flex-wrap items-center justify-between mb-4 pb-3 border-b border-slate-800/80 gap-3 text-xs">
               <div className="flex items-center gap-2">
                 <span className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-emerald-500/10 text-emerald-400 font-bold border border-emerald-500/20">
@@ -1202,16 +1124,12 @@ export default function AgentIdCardModal({
               </div>
             </div>
 
-            {/* LIVE DUAL-SIDED ID DISPLAY (FRONT ON LEFT, BACK ON RIGHT) */}
             <div 
               ref={printAreaRef}
               id="printable-id-card-area"
               className="id-card-print-container print-top-side-by-side flex flex-row flex-nowrap items-start justify-center gap-8 py-2 overflow-x-auto"
             >
               
-              {/* ------------------------------------------------------------- */}
-              {/* [LEFT] FRONT CARD (WYSIWYG Live Exact Print Display)         */}
-              {/* ------------------------------------------------------------- */}
               <div className="flex flex-col items-center shrink-0">
                 <div className="mb-2 flex items-center gap-1.5 text-xs font-black text-slate-300 no-print">
                   <span className="px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[10px]">
@@ -1238,9 +1156,6 @@ export default function AgentIdCardModal({
                 </div>
               </div>
 
-              {/* ------------------------------------------------------------- */}
-              {/* [RIGHT] BACK CARD (WYSIWYG Live Exact Print Display)          */}
-              {/* ------------------------------------------------------------- */}
               <div className="flex flex-col items-center shrink-0">
                 <div className="mb-2 flex items-center gap-1.5 text-xs font-black text-slate-300 no-print">
                   <span className="px-2 py-0.5 rounded-md bg-teal-500/20 text-teal-400 border border-teal-500/30 text-[10px]">
@@ -1268,7 +1183,6 @@ export default function AgentIdCardModal({
               </div>
             </div>
 
-            {/* Direct High-Res Export Action Bar */}
             <div className="mt-5 pt-4 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-2 text-[11px] text-slate-400">
                 <Sparkles size={14} className="text-emerald-400" />
@@ -1313,12 +1227,8 @@ export default function AgentIdCardModal({
 
           </div>
 
-          {/* ========================================================================= */}
-          {/* BOTTOM SECTION: CUSTOMIZER & CONTROLS ORGANIZED IN TABS                   */}
-          {/* ========================================================================= */}
           <div className="rounded-3xl border border-slate-800 bg-slate-950/70 p-5 space-y-5">
             
-            {/* Control Navigation & Quick Actions */}
             <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-800">
               <div className="flex items-center gap-1.5 bg-slate-900 border border-slate-800 rounded-2xl p-1">
                 <button
@@ -1366,7 +1276,6 @@ export default function AgentIdCardModal({
                 </button>
               </div>
 
-              {/* Quick Preset Buttons */}
               <div className="flex items-center gap-2">
                 <button
                   type="button"
@@ -1400,9 +1309,6 @@ export default function AgentIdCardModal({
               </div>
             </div>
 
-            {/* ========================================================================= */}
-            {/* TAB: AAC NAME & BRANDING (EDITABLE & DEFAULT FOR ALL AGENTS)             */}
-            {/* ========================================================================= */}
             {controlsTab === "company" && (
               <div className="space-y-4 pt-1 animate-fade-in">
                 <div className="flex items-center justify-between">
@@ -1428,7 +1334,6 @@ export default function AgentIdCardModal({
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {/* AAC Company Name */}
                   <div className="rounded-2xl border border-emerald-500/40 bg-slate-900/80 p-3.5 space-y-1.5">
                     <label className="block text-[11px] font-black text-emerald-400">
                       AAC Company Name (e.g. LUCKY BETPLAY CORPORATION)
@@ -1443,7 +1348,6 @@ export default function AgentIdCardModal({
                     <span className="text-[10px] text-slate-400 block">Bold uppercase header on Front card</span>
                   </div>
 
-                  {/* Subtitle 1 */}
                   <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-3.5 space-y-1.5">
                     <label className="block text-[11px] font-bold text-slate-300">
                       Company Subtitle Line 1
@@ -1458,7 +1362,6 @@ export default function AgentIdCardModal({
                     <span className="text-[10px] text-slate-400 block">Secondary line under AAC name</span>
                   </div>
 
-                  {/* Subtitle 2 */}
                   <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-3.5 space-y-1.5">
                     <label className="block text-[11px] font-bold text-slate-300">
                       Branch / City Location
@@ -1475,7 +1378,6 @@ export default function AgentIdCardModal({
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* Address lines & Notice Branch */}
                   <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-3.5 space-y-2.5">
                     <label className="block text-[11px] font-bold text-slate-300">
                       Back: Official Office Address (3 Lines)
@@ -1504,7 +1406,6 @@ export default function AgentIdCardModal({
                       />
                     </div>
 
-                    {/* Notice: Surrender PCSO Branch Name */}
                     <div className="pt-2 border-t border-slate-800 space-y-1">
                       <label className="text-[10.5px] font-black text-emerald-400 block">
                         Back: Surrender PCSO Branch (Notice Section)
@@ -1522,7 +1423,6 @@ export default function AgentIdCardModal({
                     </div>
                   </div>
 
-                  {/* Signatories & Default Signatures with Auto-PNG Background Removal */}
                   <div className="rounded-2xl border border-slate-800 bg-slate-900/80 p-4 space-y-3.5">
                     <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800/80 pb-2.5">
                       <div>
@@ -1553,7 +1453,6 @@ export default function AgentIdCardModal({
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {/* 1. OPERATIONS MANAGER (Certified by) */}
                       <div className="rounded-xl border border-slate-700/70 bg-slate-950/70 p-3 space-y-2.5">
                         <div className="flex items-center justify-between">
                           <span className="text-[11px] font-black uppercase tracking-wider text-emerald-400">
@@ -1592,7 +1491,6 @@ export default function AgentIdCardModal({
                           />
                         </div>
 
-                        {/* Signature Preview & Uploader */}
                         <div className="pt-2 border-t border-slate-800">
                           <div className="flex items-center justify-between text-[10px] font-bold mb-1.5">
                             <span className="text-slate-300 flex items-center gap-1">
@@ -1619,7 +1517,6 @@ export default function AgentIdCardModal({
 
                           <div className="flex items-center gap-3">
                             <div className="relative flex h-14 w-28 items-center justify-center rounded-xl bg-slate-900 border border-slate-700/80 p-1 overflow-hidden shrink-0 shadow-inner">
-                              {/* Checkered pattern to prove transparency */}
                               <div className="absolute inset-0 bg-[linear-gradient(45deg,#334155_25%,transparent_25%),linear-gradient(-45deg,#334155_25%,transparent_25%),linear-gradient(45deg,transparent_75%,#334155_75%),linear-gradient(-45deg,transparent_75%,#334155_75%)] bg-[size:8px_8px] bg-[position:0_0,0_4px,4px_-4px,-4px_0px] opacity-30" />
                               {managerSignature ? (
                                 <img
@@ -1666,7 +1563,6 @@ export default function AgentIdCardModal({
                         </div>
                       </div>
 
-                      {/* 2. BRANCH MANAGER (Confirmed by) */}
                       <div className="rounded-xl border border-slate-700/70 bg-slate-950/70 p-3 space-y-2.5">
                         <div className="flex items-center justify-between">
                           <span className="text-[11px] font-black uppercase tracking-wider text-emerald-400">
@@ -1705,7 +1601,6 @@ export default function AgentIdCardModal({
                           />
                         </div>
 
-                        {/* Signature Preview & Uploader */}
                         <div className="pt-2 border-t border-slate-800">
                           <div className="flex items-center justify-between text-[10px] font-bold mb-1.5">
                             <span className="text-slate-300 flex items-center gap-1">
@@ -1783,12 +1678,8 @@ export default function AgentIdCardModal({
               </div>
             )}
 
-            {/* ========================================================================= */}
-            {/* TAB: UNDERLINED AGENT FIELDS                                             */}
-            {/* ========================================================================= */}
             {controlsTab === "fields" && (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pt-1 animate-fade-in">
-                {/* Agent Name */}
                 <div className="rounded-2xl border border-slate-800/80 bg-slate-900/60 p-3.5 space-y-1.5">
                   <label className="block text-[11px] font-bold text-slate-300">
                     Front: Agent Name (Underlined)
@@ -1803,7 +1694,6 @@ export default function AgentIdCardModal({
                   <span className="text-[10px] text-slate-400 block">No arrows · Plain uppercase on card</span>
                 </div>
 
-                {/* Bottom Red Banner */}
                 <div className="rounded-2xl border border-slate-800/80 bg-slate-900/60 p-3.5 space-y-1.5">
                   <label className="block text-[11px] font-bold text-slate-300">
                     Front: Red Banner Position / Role
@@ -1818,7 +1708,6 @@ export default function AgentIdCardModal({
                   <span className="text-[10px] text-slate-400 block">Default: SALES REPRESENTATIVE</span>
                 </div>
 
-                {/* Back: ID Number */}
                 <div className="rounded-2xl border border-slate-800/80 bg-slate-900/60 p-3.5 space-y-1.5">
                   <label className="block text-[11px] font-bold text-slate-300">
                     Back: ID Number (Underline 1 1/2 inch)
@@ -1833,7 +1722,6 @@ export default function AgentIdCardModal({
                   <span className="text-[10px] text-slate-400 block">Shortened underline: exactly 1.5 inches (38.1 mm)</span>
                 </div>
 
-                {/* Emergency Contact */}
                 <div className="rounded-2xl border border-slate-800/80 bg-slate-900/60 p-3.5 space-y-2">
                   <label className="block text-[11px] font-bold text-slate-300">
                     Back: Emergency Contact
@@ -1857,7 +1745,6 @@ export default function AgentIdCardModal({
                   <span className="text-[10px] text-slate-400 block">Appears underlined on back</span>
                 </div>
 
-                {/* Area of Operation */}
                 <div className="rounded-2xl border border-slate-800/80 bg-slate-900/60 p-3.5 space-y-1.5">
                   <label className="block text-[11px] font-bold text-slate-300">
                     Back: Area of Operation
@@ -1872,7 +1759,6 @@ export default function AgentIdCardModal({
                   <span className="text-[10px] text-slate-400 block">Underlined territory line</span>
                 </div>
 
-                {/* Back: PCSO Surrender Branch */}
                 <div className="rounded-2xl border border-slate-800/80 bg-slate-900/60 p-3.5 space-y-1.5">
                   <label className="block text-[11px] font-bold text-slate-300">
                     Back: Surrender PCSO Branch (Notice)
@@ -1889,13 +1775,9 @@ export default function AgentIdCardModal({
               </div>
             )}
 
-            {/* ========================================================================= */}
-            {/* TAB: LOGOS & SIZE ADJUSTER                                               */}
-            {/* ========================================================================= */}
             {controlsTab === "logos" && (
               <div className="grid grid-cols-1 md:grid-cols-3 gap-5 pt-1 animate-fade-in">
                 
-                {/* 1. Left Logo (PCSO) */}
                 <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-black uppercase text-slate-300">
@@ -1927,7 +1809,6 @@ export default function AgentIdCardModal({
                   </p>
                 </div>
 
-                {/* 2. Center Logo (Replaceable + Size Slider) */}
                 <div className="rounded-2xl border border-emerald-500/30 bg-slate-900/60 p-4 space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-black uppercase text-emerald-400 flex items-center gap-1.5">
@@ -1972,7 +1853,6 @@ export default function AgentIdCardModal({
                     </div>
                   </div>
 
-                  {/* Size Slider */}
                   <div className="space-y-1 pt-1 border-t border-slate-800">
                     <div className="flex items-center justify-between text-[10px] font-bold text-slate-400">
                       <span>Adjust Center Logo Size</span>
@@ -1995,7 +1875,6 @@ export default function AgentIdCardModal({
                   </div>
                 </div>
 
-                {/* 3. Right Logo (Clean STL + Size Slider) */}
                 <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-black uppercase text-slate-300">
@@ -2040,7 +1919,6 @@ export default function AgentIdCardModal({
                     </div>
                   </div>
 
-                  {/* Size Slider */}
                   <div className="space-y-1 pt-1 border-t border-slate-800">
                     <div className="flex items-center justify-between text-[10px] font-bold text-slate-400">
                       <span>Adjust Right Logo Size</span>
@@ -2066,13 +1944,9 @@ export default function AgentIdCardModal({
               </div>
             )}
 
-            {/* ========================================================================= */}
-            {/* TAB: 2X2 PHOTO & FRONT SIGNATURE UPLOADER                                 */}
-            {/* ========================================================================= */}
             {controlsTab === "photo_sig" && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-1 animate-fade-in">
                 
-                {/* 1. Photo Section */}
                 <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-black uppercase tracking-wider text-slate-300 flex items-center gap-2">
@@ -2139,7 +2013,6 @@ export default function AgentIdCardModal({
                           )}
                         </button>
 
-                        {/* Toggle between Auto White BG & Original photo */}
                         {agentPhoto && rawUploadedPhoto && (
                           <button
                             type="button"
@@ -2156,7 +2029,6 @@ export default function AgentIdCardModal({
                           </button>
                         )}
 
-                        {/* Fine-tune toggle button */}
                         {agentPhoto && (
                           <button
                             type="button"
@@ -2173,7 +2045,6 @@ export default function AgentIdCardModal({
                         ✨ 100% Pure White Background: Powered by Neural AI portrait segmentation to give a spotless, studio-clean solid white (#FFFFFF) 2x2 photo!
                       </p>
 
-                      {/* Fine-tune panel */}
                       {showPhotoSettings && agentPhoto && (
                         <div className="p-2.5 rounded-xl bg-slate-950/90 border border-slate-800 space-y-2 mt-2">
                           <div className="flex items-center justify-between text-[11px]">
@@ -2225,7 +2096,6 @@ export default function AgentIdCardModal({
                     </div>
                   </div>
 
-                  {/* Requirements picker */}
                   {uploadedRequirements && uploadedRequirements.length > 0 && (
                     <div className="pt-2 border-t border-slate-800">
                       <p className="text-[10px] font-bold text-slate-400 mb-1.5 flex items-center justify-between">
@@ -2252,7 +2122,6 @@ export default function AgentIdCardModal({
                   )}
                 </div>
 
-                {/* 2. Front Signature Section */}
                 <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-black uppercase tracking-wider text-slate-300 flex items-center gap-2">
@@ -2313,7 +2182,6 @@ export default function AgentIdCardModal({
                     </div>
                   </div>
 
-                  {/* Requirements signature picker */}
                   {uploadedRequirements && uploadedRequirements.length > 0 && (
                     <div className="pt-2 border-t border-slate-800">
                       <p className="text-[10px] font-bold text-slate-400 mb-1.5">Or choose from uploaded documents (auto-converts to transparent PNG):</p>
@@ -2336,7 +2204,6 @@ export default function AgentIdCardModal({
                   )}
                 </div>
 
-                {/* Quick Banner: Back ID Signatories Status */}
                 <div className="md:col-span-2 rounded-2xl border border-slate-800 bg-slate-900/50 p-3.5 flex flex-wrap items-center justify-between gap-3">
                   <div className="flex items-center gap-2.5">
                     <div className="h-9 w-9 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">

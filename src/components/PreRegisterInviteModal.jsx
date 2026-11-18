@@ -81,7 +81,6 @@ export default function PreRegisterInviteModal({ employee, onClose }) {
           showTempStatus("image_copied");
           return;
         } catch {
-          // If browser refuses image clipboard write, download PNG automatically
         }
       }
       triggerDownloadPng(pngBlob);
@@ -111,7 +110,6 @@ export default function PreRegisterInviteModal({ employee, onClose }) {
     try {
       await copyRichInviteToClipboard(employee, portalUrl);
     } catch {
-      // ignore clipboard error before opening Gmail
     } finally {
       setBusyAction("");
     }
@@ -124,7 +122,6 @@ export default function PreRegisterInviteModal({ employee, onClose }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 backdrop-blur-sm p-4">
       <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl w-full max-w-2xl max-h-[92vh] overflow-y-auto animate-in fade-in zoom-in-95">
-        {/* Modal Top Bar */}
         <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/80">
           <div className="flex items-center gap-2.5">
             <div className="w-9 h-9 rounded-xl bg-slate-900 border border-emerald-500/40 flex items-center justify-center overflow-hidden shrink-0">
@@ -150,9 +147,7 @@ export default function PreRegisterInviteModal({ employee, onClose }) {
         </div>
 
         <div className="p-6 space-y-5">
-          {/* Official Branded Card Preview (Matches Generated PNG & Rich HTML Email) */}
           <div className="rounded-2xl border border-slate-200 shadow-sm overflow-hidden bg-white">
-            {/* Dark Slate + Emerald HRHub Branded Header */}
             <div className="bg-gradient-to-r from-slate-950 via-slate-900 to-emerald-950 px-5 py-4 border-b-4 border-emerald-500 flex items-center justify-between gap-3">
               <div className="flex items-center gap-3">
                 <div className="w-12 h-12 rounded-xl overflow-hidden shadow-md border border-emerald-400/40 bg-slate-900 shrink-0">
@@ -172,7 +167,6 @@ export default function PreRegisterInviteModal({ employee, onClose }) {
               </span>
             </div>
 
-            {/* Invitation Card Body */}
             <div className="p-5 space-y-4">
               <div>
                 <h4 className="text-sm font-black text-slate-900">
@@ -205,7 +199,6 @@ export default function PreRegisterInviteModal({ employee, onClose }) {
                 </div>
               </div>
 
-              {/* 3 Activation Steps */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px] font-bold">
                 <div className="rounded-xl bg-slate-100 border border-slate-200 px-3 py-2 text-center text-slate-700">
                   1. Open Portal URL
@@ -220,7 +213,6 @@ export default function PreRegisterInviteModal({ employee, onClose }) {
             </div>
           </div>
 
-          {/* Primary Send / Copy Action Controls */}
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
@@ -243,7 +235,6 @@ export default function PreRegisterInviteModal({ employee, onClose }) {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-              {/* 1. Copy Image Card for Messenger / Viber / WhatsApp */}
               <button
                 type="button"
                 disabled={busyAction === "image_copy"}
@@ -254,7 +245,6 @@ export default function PreRegisterInviteModal({ employee, onClose }) {
                 <span>Copy Card Image (w/ HRHub Logo)</span>
               </button>
 
-              {/* 2. Download Image Card PNG */}
               <button
                 type="button"
                 disabled={busyAction === "image_download"}
@@ -265,7 +255,6 @@ export default function PreRegisterInviteModal({ employee, onClose }) {
                 <span>Download Invite Card (.png)</span>
               </button>
 
-              {/* 3. Copy Rich Email HTML w/ HRHub Logo */}
               <button
                 type="button"
                 disabled={busyAction === "rich"}
@@ -276,7 +265,6 @@ export default function PreRegisterInviteModal({ employee, onClose }) {
                 <span>Copy Rich Email Card (w/ Logo)</span>
               </button>
 
-              {/* 4. Open Gmail + Auto-copy Rich Logo Card */}
               <button
                 type="button"
                 disabled={busyAction === "gmail"}
@@ -289,7 +277,6 @@ export default function PreRegisterInviteModal({ employee, onClose }) {
               </button>
             </div>
 
-            {/* Plain-text Copy Strip */}
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 flex items-center justify-between gap-3">
               <p className="text-[11px] text-slate-600 leading-snug line-clamp-2 flex-1">
                 {plainMessage}

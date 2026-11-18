@@ -1,5 +1,3 @@
-// Storage and Cloud Sync Service for Custom Field Monitoring Accounts
-// Direct Supabase Table: public.field_monitoring_accounts
 import { supabase } from "./supabase";
 
 export const FIELD_MONITORING_STORAGE_KEY = "hrhub_field_monitoring_accounts";
@@ -45,14 +43,9 @@ function mapAccountToDb(acc) {
   };
 }
 
-/**
- * Loads all Field Monitoring accounts from Supabase table 'field_monitoring_accounts'.
- * Includes self-healing fallback to user_settings and localStorage.
- */
 export async function loadFieldMonitoringAccounts() {
   let accounts = null;
 
-  // 1. Direct fetch from Supabase table 'field_monitoring_accounts'
   if (supabase) {
     try {
       const { data, error } = await supabase
@@ -64,7 +57,6 @@ export async function loadFieldMonitoringAccounts() {
         if (data.length > 0) {
           accounts = data.map(mapDbToAccount);
         } else {
-          // Table exists but is empty -> auto-seed FM-01 into Supabase
           try {
             const seedPayload = mapAccountToDb(DEFAULT_FIELD_MONITORING_ACCOUNTS[0]);
             await supabase.from("field_monitoring_accounts").insert(seedPayload);
@@ -81,7 +73,6 @@ export async function loadFieldMonitoringAccounts() {
     }
   }
 
-  // 2. Fallback to Supabase user_settings (for smooth transition before SQL script is run)
   if (!accounts && supabase) {
     try {
       const { data: settingsData } = await supabase
@@ -101,7 +92,6 @@ export async function loadFieldMonitoringAccounts() {
     }
   }
 
-  // 3. Fallback to localStorage cache
   if (!accounts) {
     try {
       const raw = localStorage.getItem(FIELD_MONITORING_STORAGE_KEY);
@@ -121,7 +111,6 @@ export async function loadFieldMonitoringAccounts() {
     accounts = [...DEFAULT_FIELD_MONITORING_ACCOUNTS];
   }
 
-  // Synchronize localStorage cache for immediate synchronous retrieval
   try {
     localStorage.setItem(FIELD_MONITORING_STORAGE_KEY, JSON.stringify(accounts));
   } catch { }
@@ -131,9 +120,6 @@ export async function loadFieldMonitoringAccounts() {
 
 export const fetchFieldMonitoringAccounts = loadFieldMonitoringAccounts;
 
-/**
- * Synchronously retrieves accounts from localStorage cache
- */
 export function getCachedFieldMonitoringAccounts() {
   try {
     const raw = localStorage.getItem(FIELD_MONITORING_STORAGE_KEY);
@@ -152,20 +138,15 @@ export function getCachedFieldMonitoringAccounts() {
 
 export const getLocalFieldAccounts = getCachedFieldMonitoringAccounts;
 
-/**
- * Saves Field Monitoring accounts to Supabase table and cache
- */
 export async function saveFieldMonitoringAccounts(accounts) {
   const safeAccounts = Array.isArray(accounts) ? accounts : [];
 
-  // Local cache
   try {
     localStorage.setItem(FIELD_MONITORING_STORAGE_KEY, JSON.stringify(safeAccounts));
   } catch (err) {
     console.warn("[fieldMonitoringStorage] Local save warning:", err);
   }
 
-  // Cloud sync to table
   if (supabase && safeAccounts.length > 0) {
     try {
       const dbRows = safeAccounts.map(mapAccountToDb);
@@ -189,9 +170,6 @@ export async function saveFieldMonitoringAccounts(accounts) {
   return safeAccounts;
 }
 
-/**
- * Adds a new Field Monitoring account directly into Supabase table
- */
 export async function addFieldMonitoringAccount(newAccount) {
   const current = await loadFieldMonitoringAccounts();
 
@@ -217,7 +195,6 @@ export async function addFieldMonitoringAccount(newAccount) {
     updatedAt: new Date().toISOString()
   };
 
-  // 1. Direct Supabase Table Insert
   if (supabase) {
     try {
       const dbPayload = mapAccountToDb(created);
@@ -247,9 +224,6 @@ export async function addFieldMonitoringAccount(newAccount) {
   return { success: true, account: created, accounts: updatedList };
 }
 
-/**
- * Updates an existing Field Monitoring account directly in Supabase table
- */
 export async function updateFieldMonitoringAccount(id, updates) {
   const current = await loadFieldMonitoringAccounts();
   const updatedList = current.map((acc) => {
@@ -267,7 +241,6 @@ export async function updateFieldMonitoringAccount(id, updates) {
     return acc;
   });
 
-  // Direct Supabase table update
   if (supabase) {
     try {
       const dbUpdates = {};
@@ -303,9 +276,6 @@ export async function updateFieldMonitoringAccount(id, updates) {
   return { success: true, accounts: updatedList };
 }
 
-/**
- * Deletes a Field Monitoring account from Supabase table
- */
 export async function deleteFieldMonitoringAccount(id) {
   const current = await loadFieldMonitoringAccounts();
   const updatedList = current.filter((acc) => String(acc.id) !== String(id));
@@ -337,9 +307,6 @@ export async function deleteFieldMonitoringAccount(id) {
   return { success: true, accounts: updatedList };
 }
 
-/**
- * Authenticates credentials against registered Field Monitoring accounts
- */
 export async function verifyFieldMonitoringLogin(username, password) {
   const cleanUser = String(username || "").trim().toLowerCase();
   const cleanPass = String(password || "").trim();
@@ -348,7 +315,6 @@ export async function verifyFieldMonitoringLogin(username, password) {
     return { success: false, error: "Please enter both username and password." };
   }
 
-  // Load latest accounts directly from database
   const accounts = await loadFieldMonitoringAccounts();
   const match = accounts.find((acc) => {
     if (acc.isActive === false) return false;
@@ -375,9 +341,6 @@ export async function verifyFieldMonitoringLogin(username, password) {
   return { success: false, notFound: true };
 }
 
-/**
- * Subscribes to Realtime Postgres changes on 'public.field_monitoring_accounts'
- */
 export function subscribeToFieldAccountsRealtime(onTableChange) {
   if (!supabase) return () => {};
   try {

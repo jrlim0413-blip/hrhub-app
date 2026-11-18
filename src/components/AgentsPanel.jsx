@@ -52,13 +52,11 @@ function isAgentActive(agent) {
   if (!agent) return false;
   if (agent.deleted_at) return false;
 
-  // Primary API property (0 or 1, or boolean)
   if (agent.isActive !== undefined && agent.isActive !== null) {
     if ([0, "0", false, "false", "inactive", "disabled"].includes(agent.isActive)) return false;
     if ([1, "1", true, "true", "active", "enabled"].includes(agent.isActive)) return true;
   }
 
-  // Secondary checks
   if (agent.is_active !== undefined && agent.is_active !== null) {
     if ([0, "0", false, "false", "inactive", "disabled"].includes(agent.is_active)) return false;
     if ([1, "1", true, "true", "active", "enabled"].includes(agent.is_active)) return true;
@@ -104,7 +102,7 @@ export default function AgentsPanel({ onClose, currentUser = null }) {
   const [error, setError] = useState("");
   const [loaded, setLoaded] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all"); // 'all' | 'active' | 'inactive'
+  const [statusFilter, setStatusFilter] = useState("all");
   const [selectedEntity, setSelectedEntity] = useState(() => {
     const scope = getUserAssignedStlEntity(activeUser);
     return scope && !scope.isNonStl ? scope.canonicalName : "all";
@@ -113,7 +111,6 @@ export default function AgentsPanel({ onClose, currentUser = null }) {
   const [supervisors, setSupervisors] = useState(() => getStlSupervisors());
   const [visibleCount, setVisibleCount] = useState(60);
 
-  // Enforce entity locking for scoped branch users (e.g. Imperial Gaming sees only Imperial)
   useEffect(() => {
     if (userEntityScope && !userEntityScope.isNonStl && selectedEntity !== userEntityScope.canonicalName) {
       setSelectedEntity(userEntityScope.canonicalName);
@@ -147,17 +144,14 @@ export default function AgentsPanel({ onClose, currentUser = null }) {
     loadAgents();
   }, []);
 
-  // Reset pagination limit on filter change
   useEffect(() => {
     setVisibleCount(60);
   }, [searchTerm, statusFilter, selectedEntity]);
 
-  // Unified all real STL agents
   const allCombinedAgents = useMemo(() => {
     return baseAgents || [];
   }, [baseAgents]);
 
-  // Combined Supervisors lookup with company-scoped composite key to prevent cross-entity ID collisions
   const allSupervisors = useMemo(() => {
     const map = new Map();
     (supervisors || []).forEach((s) => {
@@ -171,14 +165,12 @@ export default function AgentsPanel({ onClose, currentUser = null }) {
     return map;
   }, [supervisors]);
 
-  // Combined Barangays lookup
   const allBarangays = useMemo(() => {
     const map = new Map();
     (SOURCE_API_CACHE?.barangays || []).forEach((b) => map.set(String(b.id), b));
     return map;
   }, []);
 
-  // STL-Only Entities list for tabs (Excluding non-STL)
   const entityTabList = useMemo(() => {
     const targetSubs = userEntityScope && !userEntityScope.isNonStl
       ? [userEntityScope.canonicalName]
@@ -262,7 +254,6 @@ export default function AgentsPanel({ onClose, currentUser = null }) {
     return barangay?.name || agent?.address || "Operating Sector";
   };
 
-  // Download list of agents (Name, Company, and Status only)
   const handleDownload = () => {
     if (!filteredAgents || filteredAgents.length === 0) return;
 
@@ -291,7 +282,6 @@ export default function AgentsPanel({ onClose, currentUser = null }) {
 
   return (
     <div className="mt-3 rounded-2xl border border-slate-200/80 bg-white p-3 sm:p-4 shadow-2xs antialiased">
-      {/* Header Row */}
       <div className="flex flex-wrap items-center justify-between gap-2.5 border-b border-slate-100 pb-3">
         <div className="flex items-center gap-2.5">
           <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-100 shrink-0">
@@ -336,7 +326,6 @@ export default function AgentsPanel({ onClose, currentUser = null }) {
         </div>
       </div>
 
-      {/* Multi-Entity Carousel / Tabs Bar (STL Subsidiaries Only) */}
       <div className="mt-3 flex items-center gap-1.5 overflow-x-auto custom-scrollbar pb-1">
         {isGlobalUser ? (
           <button
@@ -416,7 +405,6 @@ export default function AgentsPanel({ onClose, currentUser = null }) {
         </div>
       )}
 
-      {/* Filter Row: Search, Active/Inactive Tabs, Download */}
       <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
         <label className="relative flex-1">
           <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -428,7 +416,6 @@ export default function AgentsPanel({ onClose, currentUser = null }) {
           />
         </label>
 
-        {/* All, Active & Inactive Filter Tabs */}
         <div className="inline-flex items-center rounded-lg border border-slate-200 bg-slate-100/90 p-0.5 shrink-0">
           <button
             type="button"
@@ -476,7 +463,6 @@ export default function AgentsPanel({ onClose, currentUser = null }) {
           </button>
         </div>
 
-        {/* Download Button */}
         <button
           type="button"
           onClick={handleDownload}
@@ -489,7 +475,6 @@ export default function AgentsPanel({ onClose, currentUser = null }) {
         </button>
       </div>
 
-      {/* Agents Card Grid */}
       <div className="mt-3 grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
         {filteredAgents.slice(0, visibleCount).map((agent, index) => {
           const entityMeta = ENTITY_METADATA[agent.company] || {};
@@ -516,7 +501,6 @@ export default function AgentsPanel({ onClose, currentUser = null }) {
                   </span>
                 </div>
 
-                {/* Entity Badge */}
                 <div className="mt-2 flex items-center gap-1.5">
                   <span className="inline-flex items-center gap-1 text-[9px] font-bold text-slate-700 bg-slate-50 border border-slate-200 px-1.5 py-0.2 rounded truncate">
                     <Building2 size={9} className="text-emerald-600 shrink-0" />
@@ -554,7 +538,6 @@ export default function AgentsPanel({ onClose, currentUser = null }) {
         })}
       </div>
 
-      {/* Pagination / Load More Bar */}
       {filteredAgents.length > visibleCount && (
         <div className="mt-3 flex flex-col sm:flex-row items-center justify-between gap-2 p-2.5 bg-slate-50 rounded-xl border border-slate-200/80 text-xs">
           <span className="text-slate-500 text-[11px] font-medium">

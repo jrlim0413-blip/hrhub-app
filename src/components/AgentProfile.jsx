@@ -111,12 +111,10 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
 
   const agentKey = getAgentIdentifier(agent, index);
 
-  // Reset requirements accordion to collapsed by default on every profile view or agent switch
   useEffect(() => {
     setRequirementsOpen(false);
   }, [agentKey]);
 
-  // Lock background window scroll when modal is active
   useEffect(() => {
     if (typeof document === "undefined") return;
     const origOverflow = document.body.style.overflow;
@@ -126,7 +124,6 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
     };
   }, []);
 
-  // Close modal on Escape key press
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.key === "Escape" && !showIdCardModal && !previewModalImage && !pdfPreviewState.isOpen && !organizingSlotId) {
@@ -137,7 +134,6 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [onClose, showIdCardModal, previewModalImage, pdfPreviewState.isOpen, organizingSlotId]);
 
-  // Load saved profile overrides and requirements from database whenever agentKey changes
   useEffect(() => {
     let isMounted = true;
     const fetchSavedData = async () => {
@@ -190,7 +186,6 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
     boothLocation: "",
     idNumber: String(rawValueOf(agent, ["agent_id", "agentId", "id"]) || "")
   });
-  // Database fields: Strictly immutable and derived directly from the database record
   const apiFullName = valueOf(agent, ["name", "full_name", "fullName", "username", "email"], "");
   const name = apiFullName || `Agent ${index + 1}`;
   const initials = name.split(" ").map((part) => part[0]).join("").slice(0, 2).toUpperCase();
@@ -204,7 +199,6 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
   const isApiHomeAddress = Boolean(rawApiHomeAddress && String(rawApiHomeAddress).trim() !== "");
   const homeAddress = isApiHomeAddress ? rawApiHomeAddress : (form.homeAddress || savedOverride?.homeAddress || "Not provided");
 
-  // Contact Number strictly adheres to the Source API and cannot be overwritten
   const contactNumber = valueOf(agent, ["contactNumber", "contact_number", "phone", "phone_number", "phoneNumber"]);
   const emergencyName = form.emergencyName || savedOverride?.emergencyName || valueOf(agent, ["emergency_contact_name", "emergencyContactName", "emergency_name", "emergencyName", "contact_person"]);
   const emergencyContactNumber = form.emergencyContactNumber || savedOverride?.emergencyContactNumber || valueOf(agent, ["emergency_contact_number", "emergencyContactNumber", "emergency_phone", "emergencyPhone"]);
@@ -212,7 +206,6 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
   const boothNumber = form.boothNumber || savedOverride?.boothNumber || valueOf(agent, ["booth_number", "boothNumber"]);
   const boothLocation = form.boothLocation || savedOverride?.boothLocation || valueOf(agent, ["booth_location", "boothLocation"]);
 
-  // ID Number is editable and custom-assignable by HR
   const idNumber = form.idNumber || savedOverride?.idNumber || valueOf(agent, ["agent_id", "agentId", "id"], "Not provided");
 
   const fieldCardClass = (value) => value === "Not provided"
@@ -277,7 +270,6 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
       try {
         URL.revokeObjectURL(pdfPreviewState.blobUrl);
       } catch {
-        // ignore
       }
     }
     setPdfPreviewState({
@@ -301,12 +293,10 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
     }
   };
 
-  // --- INDIVIDUAL REQUIREMENT SLOT UPLOAD HANDLER ---
   const handleSlotUpload = async (event, slot) => {
     const rawFiles = Array.from(event.target.files || []);
     if (!rawFiles.length) return;
 
-    // 1. Sort selected files naturally by filename number (1, 2, 3, 4, 5, 6, 7, 8...)
     const files = [...rawFiles].sort((a, b) =>
       compareFileNamesNaturally(a.name, b.name)
     );
@@ -321,7 +311,6 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
       const cleanAgentPrefix = name ? String(name).trim().replace(/[^a-zA-Z0-9_\-]/g, "_") : "Agent";
       const existingSlotItems = findRequirementsForSlot(uploadedRequirements, slot.id);
 
-      // If slot does NOT allow multiple files (single-file slots like Biodata, Barangay Clearance), purge previous records
       if (!slot.allowMultiple && existingSlotItems.length > 0) {
         for (const oldItem of existingSlotItems) {
           await deleteRequirementFile(oldItem.id, agentKey, oldItem.storagePath);
@@ -368,7 +357,6 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
         message: `${files.length} picture${files.length > 1 ? "s" : ""} added to ${slot.title}!`
       });
 
-      // Automatically open the large organizer modal for multi-photo slots so user can clearly inspect and arrange
       if (slot.allowMultiple) {
         setOrganizingSlotId(slot.id);
       }
@@ -385,7 +373,6 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
     }
   };
 
-  // --- RECOVERY HELPER FOR LEGACY UNASSIGNED DATABASE DOCUMENTS ---
   const handleBulkAssignSlot = async (itemsToAssign, targetSlotId) => {
     try {
       const slotDef = REGISTRATION_SLOTS.find((s) => s.id === targetSlotId) || { id: targetSlotId, title: targetSlotId, order: 3 };
@@ -435,7 +422,6 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
     }
   };
 
-  // --- REORDER PHOTOS WITHIN MULTI-PAGE SLOTS (AGENCY AGREEMENT, VALID ID) ---
   const handlePhotoDragStart = (e, photoId) => {
     setDraggedPhotoId(photoId);
     e.dataTransfer.effectAllowed = "move";
@@ -673,7 +659,6 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
 
   const status = getAgentStatus(agent);
 
-  // Determine displayed slots: Required slots always visible; optional slots only if added or has uploaded files
   const activeOptionalSlots = OPTIONAL_SLOTS.filter(
     (slot) =>
       visibleOptionalSlotIds.includes(slot.id) ||
@@ -715,16 +700,12 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
           </button>
         </div>
 
-        {/* Modal Body: Modern Professional Loading Animation vs Ready Profile */}
         {loadingFullProfile ? (
           <div className="relative px-4 pb-12 pt-8 sm:px-8">
-            {/* Top Avatar Skeleton with Holographic Laser Biometric Scan & Floating Bounce */}
             <div className="-mt-14 flex items-end justify-between">
               <div className="relative flex h-28 w-28 items-center justify-center rounded-[30px] border-[5px] border-slate-50 bg-slate-950 shadow-2xl overflow-hidden animate-float-bounce">
                 <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(16,185,129,0.3),transparent_70%)]" />
-                {/* Holographic Laser Scan Line */}
                 <div className="absolute inset-x-0 h-1 bg-gradient-to-r from-transparent via-emerald-400 to-transparent shadow-[0_0_14px_rgba(52,211,153,0.95)] animate-scan-beam z-10 pointer-events-none" />
-                {/* Counter-rotating tech rings */}
                 <div className="absolute inset-2 rounded-[22px] border border-emerald-500/25 animate-spin-slow" />
                 <div className="absolute inset-3.5 rounded-[18px] border border-dashed border-teal-400/40 animate-spin-reverse-slow" />
                 <div className="relative flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-900/90 border border-slate-800 backdrop-blur">
@@ -732,14 +713,12 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
                 </div>
               </div>
 
-              {/* Status Badge with Live Equalizer Data Stream */}
               <div className="mb-2 inline-flex items-center gap-2.5 rounded-full border border-slate-200 bg-white/95 px-3.5 py-1.5 text-[11px] font-bold text-slate-700 shadow-sm">
                 <span className="relative flex h-2 w-2">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
                 </span>
                 <span>Secure Cloud Sync</span>
-                {/* Animated Data Stream Equalizer Bars */}
                 <div className="flex items-end gap-0.5 h-3.5 pl-1.5 border-l border-slate-200">
                   <span className="w-0.5 bg-emerald-500 rounded-full data-bar-1" />
                   <span className="w-0.5 bg-emerald-400 rounded-full data-bar-2" />
@@ -750,12 +729,9 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
               </div>
             </div>
 
-            {/* Central Modern Professional Synchronization Card with Physics-Based Bounce */}
             <div className="relative mt-7 mx-auto max-w-xl overflow-hidden rounded-3xl border border-slate-200/90 bg-gradient-to-b from-white via-slate-50/50 to-white p-6 sm:p-7 shadow-[0_12px_45px_-12px_rgba(16,185,129,0.14)] text-center">
 
-              {/* Physics-Based Spring-Bouncing Security Emblem with Floor Shadow Squash */}
               <div className="mx-auto flex flex-col items-center justify-center mb-3">
-                {/* Bouncing Emblem Tile */}
                 <div className="relative z-10 flex h-20 w-20 items-center justify-center animate-spring-bounce">
                   <div className="absolute inset-0 rounded-3xl bg-gradient-to-br from-emerald-500/15 via-teal-500/10 to-emerald-500/5 border border-emerald-500/25 shadow-lg shadow-emerald-600/15 backdrop-blur-sm" />
                   <div className="absolute inset-1.5 rounded-2xl border border-dashed border-emerald-400/40 animate-spin-reverse-slow" />
@@ -764,24 +740,20 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
                   </div>
                 </div>
 
-                {/* Dynamic Floor Shadow that contracts as emblem rises and expands as it lands */}
                 <div className="h-2 w-16 rounded-full bg-emerald-950/15 blur-[2.5px] -mt-1 animate-shadow-squash" />
               </div>
 
-              {/* Harmonic 3-Sphere Bouncing Wave */}
               <div className="flex items-center justify-center gap-2 mb-3">
                 <span className="h-2.5 w-2.5 rounded-full bg-gradient-to-tr from-emerald-600 to-teal-400 shadow-sm shadow-emerald-500/50 animate-dot-bounce-1" />
                 <span className="h-2.5 w-2.5 rounded-full bg-gradient-to-tr from-teal-500 to-emerald-300 shadow-sm shadow-teal-500/50 animate-dot-bounce-2" />
                 <span className="h-2.5 w-2.5 rounded-full bg-gradient-to-tr from-emerald-500 to-cyan-300 shadow-sm shadow-emerald-500/50 animate-dot-bounce-3" />
               </div>
 
-              {/* Enterprise Status Chip */}
               <div className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200/90 bg-emerald-50/90 px-3.5 py-1 text-[11px] font-extrabold text-emerald-900 shadow-xs">
                 <Lock size={12} className="text-emerald-600" />
                 <span>Encrypted Personnel Sync</span>
               </div>
 
-              {/* Headline & Description in Clean Professional English */}
               <h3 className="mt-3 text-lg font-black tracking-tight text-slate-950">
                 Authenticating & Loading Personnel Profile
               </h3>
@@ -789,9 +761,7 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
                 Securely verifying personnel records, decrypting credentials, and retrieving stored registration documents.
               </p>
 
-              {/* Interactive 3-Stage Animated Data Pipeline with Bouncy Step Capsules */}
               <div className="mt-6 flex items-center justify-center gap-2 sm:gap-3">
-                {/* Stage 1: Identity */}
                 <div className="flex flex-col items-center gap-1.5 animate-step-hop-1">
                   <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-50 border border-emerald-200/90 text-emerald-700 shadow-xs">
                     <Fingerprint size={16} />
@@ -799,12 +769,10 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
                   <span className="text-[10px] font-extrabold text-slate-700">Identity</span>
                 </div>
 
-                {/* Flow Beam 1 */}
                 <div className="relative h-1 w-10 sm:w-16 rounded-full bg-slate-200 overflow-hidden mb-4">
                   <div className="absolute inset-y-0 w-8 bg-gradient-to-r from-transparent via-emerald-500 to-transparent animate-stream-flow" />
                 </div>
 
-                {/* Stage 2: Credentials */}
                 <div className="flex flex-col items-center gap-1.5 animate-step-hop-2">
                   <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-teal-50 border border-teal-200/90 text-teal-700 shadow-xs">
                     <KeyRound size={16} />
@@ -812,12 +780,10 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
                   <span className="text-[10px] font-extrabold text-slate-700">Credentials</span>
                 </div>
 
-                {/* Flow Beam 2 */}
                 <div className="relative h-1 w-10 sm:w-16 rounded-full bg-slate-200 overflow-hidden mb-4">
                   <div className="absolute inset-y-0 w-8 bg-gradient-to-r from-transparent via-emerald-500 to-transparent animate-stream-flow" />
                 </div>
 
-                {/* Stage 3: Documents */}
                 <div className="flex flex-col items-center gap-1.5 animate-step-hop-3">
                   <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-50 border border-emerald-200/90 text-emerald-700 shadow-xs">
                     <FileText size={16} />
@@ -826,15 +792,12 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
                 </div>
               </div>
 
-              {/* Precision Shimmer Progress Bar */}
               <div className="mt-5 relative h-1.5 w-64 mx-auto overflow-hidden rounded-full bg-slate-100">
                 <div className="absolute inset-0 h-full w-full bg-gradient-to-r from-emerald-500 via-teal-400 to-emerald-600 rounded-full animate-pulse" />
               </div>
             </div>
 
-            {/* Shimmering Profile Skeleton Wireframe with Laser Scanning Accents */}
             <div className="mt-6 grid gap-4 sm:grid-cols-2 text-left">
-              {/* Left Column Skeleton */}
               <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 space-y-4 shadow-sm">
                 <div className="h-3.5 w-36 rounded-md shimmer-wave" />
                 <div className="space-y-3 pt-1">
@@ -853,7 +816,6 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
                 </div>
               </div>
 
-              {/* Right Column Skeleton */}
               <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 space-y-4 shadow-sm">
                 <div className="h-3.5 w-40 rounded-md shimmer-wave" />
                 <div className="space-y-3 pt-1">
@@ -873,7 +835,6 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
               </div>
             </div>
 
-            {/* Bottom Accordion Skeletons */}
             <div className="mt-4 space-y-3">
               <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
                 <div className="flex items-center gap-2">
@@ -1167,7 +1128,6 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
               </summary>
 
               <div className="border-t border-slate-200 p-4 space-y-4">
-                {/* Notice */}
                 {requirementNotice && (
                   <div className={`p-2.5 rounded-xl border text-xs font-semibold flex items-center gap-2 ${requirementNotice.type === "success"
                       ? "bg-emerald-50 border-emerald-200 text-emerald-900"
@@ -1178,9 +1138,7 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
                   </div>
                 )}
 
-                {/* Requirements Action Bar */}
                 <div className="space-y-3">
-                  {/* Sequence Guide Banner */}
                   <div className="flex flex-wrap items-center justify-between gap-2 px-3.5 py-2.5 rounded-xl bg-slate-100/90 border border-slate-200/90 text-xs text-slate-700 shadow-2xs">
                     <div className="flex items-center gap-1.5 font-extrabold text-slate-800">
                       <span className="flex h-5 w-5 items-center justify-center rounded-md bg-emerald-600 text-[10px] text-white">#</span>
@@ -1200,7 +1158,6 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
                     <span className="text-[10px] text-slate-500 font-medium">Individual slot uploads · Auto-compiled into PDF in this sequence</span>
                   </div>
 
-                  {/* Prominent Download Bar with Interactive PDF Preview and Batch Downloads */}
                   {uploadedRequirements.length > 0 && (
                     <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-emerald-200/90 bg-gradient-to-r from-emerald-50/90 via-teal-50/40 to-slate-50 p-3.5 shadow-sm">
                       <div className="flex items-center gap-2.5">
@@ -1216,7 +1173,6 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
                       </div>
 
                       <div className="flex flex-wrap items-center gap-2">
-                        {/* Interactive PDF Preview and Download Button */}
                         <button
                           type="button"
                           onClick={handlePreviewAllPdf}
@@ -1237,7 +1193,6 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
                           )}
                         </button>
 
-                        {/* Batch Image Download as ZIP */}
                         <button
                           type="button"
                           onClick={handleBatchDownloadZip}
@@ -1253,7 +1208,6 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
                           <span>Batch Images (ZIP)</span>
                         </button>
 
-                        {/* Batch Image Download Direct */}
                         <button
                           type="button"
                           onClick={handleBatchDownloadDirect}
@@ -1268,14 +1222,12 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
                     </div>
                   )}
 
-                  {/* Header Sub-bar: Category Count + Add Another Category Button */}
                   <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
                     <div className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
                       <span>Document Categories ({displayedSlots.length})</span>
                       <span className="text-[10px] font-normal text-slate-400">· 4 Standard Required + Custom Optional</span>
                     </div>
 
-                    {/* Add Another Category Dropdown */}
                     <div className="relative">
                       <button
                         type="button"
@@ -1321,7 +1273,6 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
                   </div>
                 </div>
 
-                {/* Unassigned Database Documents Recovery Banner */}
                 {unassignedRequirements.length > 0 && (
                   <div className="rounded-2xl border border-amber-300 bg-amber-50/90 p-3.5 flex flex-wrap items-center justify-between gap-3 text-xs shadow-xs animate-in fade-in duration-200">
                     <div className="flex items-center gap-2.5">
@@ -1366,7 +1317,6 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
                   </div>
                 )}
 
-                {/* Individual Requirement Slots Grid */}
                 {loadingRequirements ? (
                   <div className="py-6 flex items-center justify-center gap-2 text-xs text-slate-400">
                     <Loader2 size={16} className="animate-spin text-emerald-600" />
@@ -1389,7 +1339,6 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
                               : "border-slate-200 bg-slate-50/70 hover:bg-white hover:border-slate-300"
                           }`}
                         >
-                          {/* Top Slot Header */}
                           <div className="flex items-start justify-between gap-2 pb-2.5 border-b border-slate-100">
                             <div className="flex items-center gap-2">
                               <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-slate-900 text-emerald-400 text-xs font-black shadow-xs">
@@ -1412,7 +1361,6 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
                               </div>
                             </div>
 
-                            {/* Status Badge & Optional Remove */}
                             <div className="flex items-center gap-1.5 shrink-0">
                               {isUploaded ? (
                                 <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 px-2 py-0.5 text-[10px] font-extrabold shadow-2xs">
@@ -1428,7 +1376,6 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
                                 </span>
                               )}
 
-                              {/* Dismiss button for empty optional slot */}
                               {isOptional && !isUploaded && (
                                 <button
                                   type="button"
@@ -1442,7 +1389,6 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
                             </div>
                           </div>
 
-                          {/* Card Content: Prominent Cover Photo Proof OR Empty Dropzone */}
                           {isUploaded ? (
                             <div className="space-y-3">
                               {(() => {
@@ -1453,9 +1399,7 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
 
                                 return (
                                   <div className="space-y-2.5">
-                                    {/* Prominent Hero Cover Photo Card */}
                                     <div className="relative group rounded-2xl overflow-hidden border border-slate-200/90 bg-gradient-to-b from-slate-900/[0.03] to-slate-900/[0.08] shadow-xs hover:shadow-md transition duration-200">
-                                      {/* Top Left Verified Beacon Badge */}
                                       <div className="absolute top-2.5 left-2.5 z-10 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-950/85 text-emerald-400 text-[10px] font-black backdrop-blur-md border border-emerald-500/30 shadow-xs">
                                         <span className="relative flex h-2 w-2">
                                           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
@@ -1464,7 +1408,6 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
                                         <span>Verified in Database</span>
                                       </div>
 
-                                      {/* Top Right Cover Tag */}
                                       <div className="absolute top-2.5 right-2.5 z-10 flex items-center gap-1 px-2.5 py-1 rounded-full bg-slate-950/85 text-white text-[10px] font-black backdrop-blur-md border border-white/20 shadow-xs">
                                         <Sparkles size={11} className="text-amber-400" />
                                         <span>
@@ -1474,7 +1417,6 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
                                         </span>
                                       </div>
 
-                                      {/* Hero Cover Image Preview */}
                                       {isImage && currentCover.dataUrl ? (
                                         <div
                                           onClick={() => setPreviewModalImage(currentCover)}
@@ -1490,7 +1432,6 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
                                               }
                                             }}
                                           />
-                                          {/* Smooth Hover Curtain with Quick Triggers */}
                                           <div className="absolute inset-0 bg-gradient-to-t from-slate-950/85 via-slate-950/30 to-transparent opacity-0 group-hover:opacity-100 transition duration-200 flex flex-col justify-end p-3">
                                             <div className="flex items-center justify-between text-white">
                                               <div className="min-w-0 pr-2">
@@ -1541,7 +1482,6 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
                                       )}
                                     </div>
 
-                                    {/* File Thumbnails Filmstrip Carousel */}
                                     {slotItems.length > 0 && (
                                       <div className="space-y-1.5">
                                         <div className="flex items-center justify-between text-[10px] font-bold text-slate-500 px-0.5">
@@ -1566,7 +1506,6 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
                                           )}
                                         </div>
 
-                                        {/* Scrollable Filmstrip */}
                                         <div className="flex items-center gap-2 overflow-x-auto pb-1.5 pt-0.5 px-0.5 scrollbar-thin">
                                           {slotItems.map((photo, pIdx) => {
                                             const isCurrentActive = photo.id === currentCover.id;
@@ -1607,12 +1546,10 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
                                                   </div>
                                                 )}
 
-                                                {/* Page Tag */}
                                                 <div className="absolute bottom-0 inset-x-0 bg-slate-950/85 text-center py-0.5 text-[8.5px] font-black text-emerald-400 z-10">
                                                   {pageLabel}
                                                 </div>
 
-                                                {/* Hover Eye indicator */}
                                                 <div className="absolute inset-0 bg-slate-950/45 opacity-0 group-hover:opacity-100 transition-opacity duration-150 flex items-center justify-center text-white pointer-events-none">
                                                   <Eye size={16} className="drop-shadow-md text-emerald-300" />
                                                 </div>
@@ -1620,7 +1557,6 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
                                             );
                                           })}
 
-                                          {/* Add More Tile */}
                                           <label className="shrink-0 h-20 w-16 rounded-xl border-2 border-dashed border-emerald-300 bg-emerald-50/50 hover:bg-emerald-100/70 hover:border-emerald-500 flex flex-col items-center justify-center text-emerald-700 cursor-pointer transition gap-0.5">
                                             <input
                                               type="file"
@@ -1637,7 +1573,6 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
                                       </div>
                                     )}
 
-                                    {/* Action Bar */}
                                     <div className="pt-2 border-t border-slate-100 flex flex-wrap items-center justify-between gap-1.5 text-xs">
                                       <div className="flex flex-wrap items-center gap-1">
                                         <button
@@ -1704,7 +1639,6 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
                                         </a>
                                       </div>
 
-                                      {/* Delete button */}
                                       <button
                                         type="button"
                                         onClick={() => {
@@ -1726,7 +1660,6 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
                               })()}
                             </div>
                           ) : (
-                            /* Empty Slot Upload Dropzone */
                             <label className="relative flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-300 bg-white/70 py-7 px-3 text-center cursor-pointer hover:border-emerald-500 hover:bg-emerald-50/30 transition group min-h-[160px]">
                               <input
                                 type="file"
@@ -1769,7 +1702,6 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
         )}
       </div>
 
-      {/* Interactive Full-Screen PDF Preview Modal */}
       {pdfPreviewState.isOpen && (
         <div
           className="fixed inset-0 z-[9996] flex items-start justify-center overflow-y-auto bg-slate-950/85 p-3 sm:p-5 pt-4 sm:pt-6 md:pt-8 backdrop-blur-md"
@@ -1779,7 +1711,6 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
             className="relative max-h-[95vh] max-w-5xl w-full bg-slate-900 rounded-2xl overflow-hidden shadow-2xl border border-slate-700 flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Modal Top Header */}
             <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3.5 bg-slate-950 border-b border-slate-800 text-white">
               <div className="min-w-0 flex items-center gap-3">
                 <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-600 text-white shadow-sm shadow-emerald-600/30">
@@ -1799,7 +1730,6 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
               </div>
 
               <div className="flex items-center gap-2 shrink-0">
-                {/* Open in new tab button */}
                 {pdfPreviewState.blobUrl && (
                   <a
                     href={pdfPreviewState.blobUrl}
@@ -1813,7 +1743,6 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
                   </a>
                 )}
 
-                {/* Prominent Download Button inside Preview */}
                 <button
                   type="button"
                   onClick={handleDownloadFromPreview}
@@ -1824,7 +1753,6 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
                   <span>Download PDF</span>
                 </button>
 
-                {/* Close Modal Button */}
                 <button
                   type="button"
                   onClick={closePdfPreview}
@@ -1836,7 +1764,6 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
               </div>
             </div>
 
-            {/* Embedded PDF Viewer */}
             <div className="p-3 bg-slate-950/70 flex-1 min-h-[500px] max-h-[calc(90vh-120px)] flex flex-col items-center justify-center">
               {pdfPreviewState.blobUrl ? (
                 <iframe
@@ -1852,7 +1779,6 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
               )}
             </div>
 
-            {/* Modal Footer */}
             <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-2.5 bg-slate-950 border-t border-slate-800 text-xs text-slate-400">
               <div className="flex items-center gap-1.5 text-[11px]">
                 <ShieldCheck size={14} className="text-emerald-400" />
@@ -1872,7 +1798,6 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
         </div>
       )}
 
-      {/* Full-Screen Image Preview Modal */}
       {previewModalImage && (
         <div
           className="fixed inset-0 z-[9995] flex items-start justify-center overflow-y-auto bg-slate-950/80 p-4 pt-4 sm:pt-6 md:pt-8 backdrop-blur-sm"
@@ -1929,7 +1854,6 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
         </div>
       )}
 
-      {/* Large Page Organizer Modal for Multi-Page Categories (Agency Agreement, Valid ID, etc.) */}
       {organizingSlotId && (
         <PageOrganizerModal
           isOpen={Boolean(organizingSlotId)}
@@ -1945,7 +1869,6 @@ export default function AgentProfile({ agent, index, barangayName, supervisorNam
         />
       )}
 
-      {/* Agent ID Card Modal */}
       {showIdCardModal && (
         <AgentIdCardModal
           agent={agent}

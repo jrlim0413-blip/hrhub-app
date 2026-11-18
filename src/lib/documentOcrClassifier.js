@@ -1,11 +1,6 @@
-// documentOcrClassifier.js
-// Intelligent OCR Document Classification & Auto-Naming Engine for HR Registration Requirements
-// Supports Google Gemini Multimodal Vision API with local heuristic fallback.
 
 import { API_CONFIG } from "../config/apiConfig";
 
-// Standard HR Registration Document Types in strict priority sequence:
-// 1. Biodata -> 2. Barangay Clearance -> 3. Agency Agreement -> 4. Valid ID -> etc.
 export const DOCUMENT_CATEGORIES = [
   { id: "biodata", label: "Biodata", cleanName: "Biodata", priority: 1, color: "purple" },
   { id: "barangay_clearance", label: "Barangay Clearance", cleanName: "Barangay_Clearance", priority: 2, color: "emerald" },
@@ -22,9 +17,6 @@ export const DOCUMENT_CATEGORIES = [
 
 export const DOCUMENT_TYPES = DOCUMENT_CATEGORIES;
 
-/**
- * Returns numeric priority rank for document categories (1 = Biodata, 2 = Barangay Clearance, 3 = Agency Agreement, 4 = Valid ID, ...)
- */
 export function getCategoryPriority(categoryOrName = "") {
   if (!categoryOrName) return 99;
   const lower = String(categoryOrName).toLowerCase();
@@ -41,14 +33,8 @@ export function getCategoryPriority(categoryOrName = "") {
   return 99;
 }
 
-/**
- * Automatically sorts requirement documents into standard sequence:
- * 1. Biodata -> 2. Barangay Clearance -> 3. Agency Agreement -> 4. Valid ID -> etc.
- * Custom drag sortOrder is respected if set by user.
- */
 export function sortRequirementsByStandardOrder(items = []) {
   return [...items].sort((a, b) => {
-    // If user has dragged items into a custom sortOrder, respect that
     const aOrder = typeof a.sortOrder === "number" ? a.sortOrder : null;
     const bOrder = typeof b.sortOrder === "number" ? b.sortOrder : null;
     if (aOrder !== null && bOrder !== null && aOrder !== bOrder) {
@@ -61,9 +47,6 @@ export function sortRequirementsByStandardOrder(items = []) {
   });
 }
 
-/**
- * Extracts raw text from an image or filename heuristic
- */
 function localFilenameHeuristic(fileName = "") {
   const clean = String(fileName).toLowerCase().replace(/[-_.]/g, " ");
 
@@ -104,9 +87,6 @@ function localFilenameHeuristic(fileName = "") {
   return null;
 }
 
-/**
- * Extracts base64 raw string and mime type from dataUrl
- */
 function parseDataUrl(dataUrl) {
   if (!dataUrl || typeof dataUrl !== "string") return null;
   const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
@@ -117,13 +97,6 @@ function parseDataUrl(dataUrl) {
   };
 }
 
-/**
- * Classifies an employment requirement document using Gemini Multimodal OCR + Local Heuristic Engine
- *
- * @param {Object|File} fileOrData - File object or options { dataUrl, fileName, agentName }
- * @param {string} [optionalAgentName] - Agent's name if first param is File
- * @returns {Promise<Object>} classification result
- */
 export async function classifyRequirementDocument(fileOrData, optionalAgentName = "") {
   let dataUrl = "";
   let fileName = "document.jpg";
@@ -146,7 +119,6 @@ export async function classifyRequirementDocument(fileOrData, optionalAgentName 
   const fileExt = fileName.split(".").pop() || "jpg";
   const cleanAgentPrefix = agentName ? agentName.trim().replace(/[^a-zA-Z0-9_\-]/g, "_") : "";
 
-  // 1. Try Gemini Vision API if key is available and dataUrl is image
   const apiKey = API_CONFIG.GEMINI_API_KEY;
   const parsed = parseDataUrl(dataUrl);
 
@@ -239,7 +211,6 @@ Return ONLY a valid JSON object without markdown formatting:
     }
   }
 
-  // 2. High-Accuracy Local Heuristic Pattern Engine Fallback
   const heuristic = localFilenameHeuristic(fileName);
   if (heuristic) {
     const suggestedBaseName = cleanAgentPrefix
@@ -258,7 +229,6 @@ Return ONLY a valid JSON object without markdown formatting:
     };
   }
 
-  // 3. Default fallback if unidentifiable
   const cleanDocName = cleanAgentPrefix
     ? `Document_${cleanAgentPrefix}.${fileExt}`
     : `Document.${fileExt}`;

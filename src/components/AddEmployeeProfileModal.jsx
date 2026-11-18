@@ -100,20 +100,18 @@ export default function AddEmployeeProfileModal({
   branches = [],
   defaultBranchMap = {},
   onFileIncidentReport,
-  mode = "add", // 'add' | 'edit'
+  mode = "add",
   initialData = null
 }) {
-  const [activeTab, setActiveTab] = useState("details"); // 'details' | 'requirements' | 'disciplinary'
+  const [activeTab, setActiveTab] = useState("details");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [notice, setNotice] = useState(null);
   const [hasSaved, setHasSaved] = useState(false);
 
-  // Animated upload and saving states
   const [uploadProgress, setUploadProgress] = useState(null);
   const [saveStepOverlay, setSaveStepOverlay] = useState(null);
   const [saveConfirmation, setSaveConfirmation] = useState(null);
 
-  // Form State
   const [formData, setFormData] = useState({
     id: "",
     name: "",
@@ -128,7 +126,6 @@ export default function AddEmployeeProfileModal({
     birthday: "",
     emergencyName: "",
     emergencyPhone: "",
-    // Statutory Numbers
     sssNumber: "",
     philhealthNumber: "",
     pagibigNumber: "",
@@ -136,12 +133,10 @@ export default function AddEmployeeProfileModal({
     is_approved: true
   });
 
-  // Media States
   const [selectedPresetId, setSelectedPresetId] = useState("preset_emerald");
   const [customCoverUrl, setCustomCoverUrl] = useState(null);
   const [avatarUrl, setAvatarUrl] = useState(null);
 
-  // 201 Files State: array of { id, name, size, type, category, dataUrl, uploadedAt }
   const [requirementsFiles, setRequirementsFiles] = useState([]);
   const [selectedReqCategory, setSelectedReqCategory] = useState(REQUIREMENT_CATEGORIES[0]);
 
@@ -149,7 +144,6 @@ export default function AddEmployeeProfileModal({
   const coverInputRef = useRef(null);
   const fileInputRef = useRef(null);
 
-  // Synchronize state whenever modal opens or initialData changes
   useEffect(() => {
     if (!isOpen) return;
 
@@ -189,7 +183,7 @@ export default function AddEmployeeProfileModal({
       setCustomCoverUrl(meta.custom_cover_url || null);
       setRequirementsFiles(Array.isArray(meta.requirements_files) ? meta.requirements_files : []);
       setActiveTab("details");
-      setHasSaved(true); // Existing profile is already saved
+      setHasSaved(true);
       setNotice(null);
     } else {
       const defBranch = normalizeBranchForCompany(userEntityCompany, defaultBranchMap[userEntityCompany]);
@@ -226,10 +220,8 @@ export default function AddEmployeeProfileModal({
 
   if (!isOpen) return null;
 
-  // Selected Cover Gradient or Custom
   const activePreset = COVER_PRESETS.find((p) => p.id === selectedPresetId) || COVER_PRESETS[0];
 
-  // Avatar Upload Handler
   const handleAvatarSelect = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -269,7 +261,6 @@ export default function AddEmployeeProfileModal({
     reader.readAsDataURL(file);
   };
 
-  // Custom Cover Upload Handler
   const handleCoverSelect = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -307,7 +298,6 @@ export default function AddEmployeeProfileModal({
     reader.readAsDataURL(file);
   };
 
-  // Multi-file 201 Uploader Handler via Cloud Storage Bucket
   const handleFileRequirementsSelect = async (e) => {
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
@@ -371,7 +361,6 @@ export default function AddEmployeeProfileModal({
     setRequirementsFiles((prev) => prev.filter((f) => f.id !== fileId));
   };
 
-  // Build Profile Object Helper
   const buildProfileRecord = () => {
     const trimmedName = formData.name.trim();
     let cleanEmail = (formData.email || "").trim().toLowerCase();
@@ -415,7 +404,6 @@ export default function AddEmployeeProfileModal({
     };
   };
 
-  // Submit Handler with Animated Saving Progression & Confirmation
   const handleSubmit = async (e) => {
     e?.preventDefault();
     if (!formData.name.trim()) {
@@ -427,15 +415,12 @@ export default function AddEmployeeProfileModal({
     setIsSubmitting(true);
     setNotice(null);
 
-    // Step 1: Validation
     setSaveStepOverlay({ step: 1, message: "Validating 201 Personnel Compliance Dossier..." });
     await new Promise((r) => setTimeout(r, 260));
 
-    // Step 2: Storage Sync
     setSaveStepOverlay({ step: 2, message: "Synchronizing Cloud Storage Bucket Documents..." });
     await new Promise((r) => setTimeout(r, 280));
 
-    // Step 3: Central Database Registration
     setSaveStepOverlay({ step: 3, message: "Recording Profile in Central Employee Directory..." });
     await new Promise((r) => setTimeout(r, 260));
 
@@ -449,7 +434,6 @@ export default function AddEmployeeProfileModal({
         setNotice({ type: "success", message: `Profile details for ${record.name} updated successfully!` });
         setTimeout(() => onClose(), 1200);
       } else {
-        // Show comprehensive confirmation modal
         setSaveConfirmation({ isOpen: true, employee: record });
       }
     } catch (err) {
@@ -461,7 +445,6 @@ export default function AddEmployeeProfileModal({
     }
   };
 
-  // Launch Incident Report Directly for this Employee
   const handleFileIncidentReportDirectly = async () => {
     if (!formData.name.trim()) {
       setNotice({ type: "warning", message: "Please enter employee name before creating an Incident Report." });
@@ -472,11 +455,9 @@ export default function AddEmployeeProfileModal({
     setIsSubmitting(true);
     try {
       const record = buildProfileRecord();
-      // Ensure latest changes are persisted
       await onSave(record);
       onClose();
 
-      // Trigger IR workflow
       if (typeof onFileIncidentReport === "function") {
         onFileIncidentReport(record);
       } else {
@@ -504,9 +485,6 @@ export default function AddEmployeeProfileModal({
     ? formData.name.split(" ").filter(Boolean).map((n) => n[0]).join("").slice(0, 2).toUpperCase()
     : "HR";
 
-  // Tab definitions:
-  // In 'add' mode before saving: ONLY Details and Requirements are shown (NO IR requirement).
-  // In 'edit' mode or after saving: The Disciplinary / Incident Report (IR) tab is visible and accessible.
   const isEditOrSaved = mode === "edit" || hasSaved;
   const availableTabs = [
     { id: "details", label: "Personal & Job Details", icon: User },
@@ -518,12 +496,8 @@ export default function AddEmployeeProfileModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/75 backdrop-blur-md p-2 sm:p-4 md:p-6 pt-3 sm:pt-6 md:pt-8 animate-in fade-in duration-150">
-      {/* BOND PAPER FORMATTED DOSSIER CONTAINER (max-w-4xl, min-h-[720px], official executive aesthetic) */}
       <div className="bg-white rounded-3xl border border-slate-300 shadow-2xl w-full max-w-4xl min-h-[720px] max-h-[92vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-150 relative ring-1 ring-slate-900/5">
 
-        {/* ============================================================ */}
-        {/* 1. OFFICIAL EXECUTIVE BOND PAPER HEADER                      */}
-        {/* ============================================================ */}
         <div className="px-6 py-3.5 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800 shrink-0">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-400/30">
@@ -553,11 +527,7 @@ export default function AddEmployeeProfileModal({
           </button>
         </div>
 
-        {/* ============================================================ */}
-        {/* 2. EXECUTIVE COVER & AVATAR BANNER                           */}
-        {/* ============================================================ */}
         <div className="relative shrink-0">
-          {/* Cover Banner */}
           <div
             className={`w-full h-36 sm:h-44 relative overflow-hidden transition-all duration-300 ${customCoverUrl ? "bg-slate-950" : `bg-gradient-to-r ${activePreset.gradient}`
               }`}
@@ -566,17 +536,14 @@ export default function AddEmployeeProfileModal({
               <img src={customCoverUrl} alt="Cover" className="w-full h-full object-cover opacity-90" />
             )}
 
-            {/* Subtle mesh overlay */}
             <div className="absolute inset-0 bg-black/15 pointer-events-none" />
 
-            {/* Top Bar inside Cover */}
             <div className="absolute top-3 left-4 right-4 flex items-center justify-between text-white z-20">
               <span className="text-[10px] font-black tracking-wider uppercase bg-black/40 backdrop-blur-xs px-2.5 py-1 rounded-full border border-white/20 flex items-center gap-1.5 shadow-xs">
                 <Sparkles size={11} className="text-amber-300" />
                 <span>Executive Personnel Profiling</span>
               </span>
 
-              {/* Cover Action Tools */}
               <div className="flex items-center gap-1.5">
                 {customCoverUrl ? (
                   <button
@@ -602,7 +569,6 @@ export default function AddEmployeeProfileModal({
               </div>
             </div>
 
-            {/* Cover Presets Selector Pills: integrated smoothly into bottom-right of Cover */}
             {!customCoverUrl && (
               <div className="absolute bottom-3 right-4 hidden sm:flex items-center gap-1 bg-black/40 backdrop-blur-md border border-white/20 rounded-xl p-1 shadow-md z-20">
                 {COVER_PRESETS.map((preset) => (
@@ -630,10 +596,8 @@ export default function AddEmployeeProfileModal({
             />
           </div>
 
-          {/* Profile Identity & Avatar Strip */}
           <div className="px-6 sm:px-8 pb-3 pt-0 bg-white relative flex flex-col sm:flex-row sm:items-end justify-between gap-4 border-b border-slate-100">
             <div className="flex flex-col sm:flex-row sm:items-end gap-4">
-              {/* Overlapping Avatar Profile Photo: ONLY the avatar has negative margin! */}
               <div className="-mt-12 sm:-mt-14 relative group/avatar shrink-0 z-30">
                 <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-2xl ring-4 ring-white bg-slate-900 text-emerald-400 font-black text-2xl flex items-center justify-center shadow-xl overflow-hidden relative">
                   {avatarUrl ? (
@@ -642,7 +606,6 @@ export default function AddEmployeeProfileModal({
                     <span>{initials}</span>
                   )}
 
-                  {/* Hover Camera Overlay */}
                   <div
                     onClick={() => avatarInputRef.current?.click()}
                     className="absolute inset-0 bg-slate-950/60 text-white flex flex-col items-center justify-center opacity-0 group-hover/avatar:opacity-100 transition cursor-pointer"
@@ -672,7 +635,6 @@ export default function AddEmployeeProfileModal({
                 />
               </div>
 
-              {/* Identity summary: completely on white background, ZERO negative margin, ZERO overlap! */}
               <div className="min-w-0 pt-2 sm:pt-0 pb-1">
                 <h3 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight truncate">
                   {formData.name || (mode === "edit" ? "Employee Record" : "New Employee Profile")}
@@ -692,7 +654,6 @@ export default function AddEmployeeProfileModal({
               </div>
             </div>
 
-            {/* Status & mobile preset selector */}
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 self-start sm:self-end pb-1">
               {!customCoverUrl && (
                 <div className="flex sm:hidden items-center gap-1 bg-slate-100 border border-slate-200 rounded-xl p-1 shadow-2xs overflow-x-auto max-w-full">
@@ -721,9 +682,6 @@ export default function AddEmployeeProfileModal({
           </div>
         </div>
 
-        {/* ============================================================ */}
-        {/* 3. BOND PAPER DOSSIER TABS                                   */}
-        {/* ============================================================ */}
         <div className="px-6 border-b border-slate-200 flex items-center justify-between gap-2 bg-slate-50/70 shrink-0">
           <div className="flex items-center gap-2">
             {availableTabs.map((tab) => {
@@ -751,7 +709,6 @@ export default function AddEmployeeProfileModal({
           </span>
         </div>
 
-        {/* Validation Notice Banner */}
         {notice && (
           <div className={`mx-6 mt-3 p-3 rounded-2xl text-xs flex items-center gap-2 border shrink-0 ${notice.type === "success"
               ? "bg-emerald-50 text-emerald-900 border-emerald-200"
@@ -766,16 +723,11 @@ export default function AddEmployeeProfileModal({
           </div>
         )}
 
-        {/* ============================================================ */}
-        {/* 4. BOND PAPER BODY / FORM SECTIONS                           */}
-        {/* ============================================================ */}
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-5 custom-scrollbar bg-white">
 
-          {/* TAB 1: PERSONAL & EMPLOYMENT DETAILS */}
           {activeTab === "details" && (
             <div className="space-y-5 animate-in fade-in duration-150">
 
-              {/* Section A: Primary Employment Assignment */}
               <div className="p-4 rounded-2xl border border-slate-200/90 bg-slate-50/50 space-y-3">
                 <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-slate-700">
                   <Briefcase size={14} className="text-emerald-600" />
@@ -783,7 +735,6 @@ export default function AddEmployeeProfileModal({
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                  {/* Full Name */}
                   <div className="space-y-1">
                     <label className="text-xs font-bold text-slate-700">Full Name *</label>
                     <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-xs focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-100 transition shadow-2xs">
@@ -799,7 +750,6 @@ export default function AddEmployeeProfileModal({
                     </div>
                   </div>
 
-                  {/* Company Entity */}
                   <div className="space-y-1">
                     <div className="flex items-center justify-between">
                       <label className="text-xs font-bold text-slate-700">Company Entity *</label>
@@ -860,7 +810,6 @@ export default function AddEmployeeProfileModal({
                     </select>
                   </div>
 
-                  {/* Branch Location */}
                   <div className="space-y-1">
                     <label className="text-xs font-bold text-slate-700">Branch / Work Location *</label>
                     <select
@@ -874,7 +823,6 @@ export default function AddEmployeeProfileModal({
                     </select>
                   </div>
 
-                  {/* Designation / Role */}
                   <div className="space-y-1">
                     <div className="flex items-center justify-between">
                       <label className="text-xs font-bold text-slate-700">Designation / Role *</label>
@@ -918,7 +866,6 @@ export default function AddEmployeeProfileModal({
                     </div>
                   </div>
 
-                  {/* Department */}
                   <div className="space-y-1">
                     <label className="text-xs font-bold text-slate-700">Department</label>
                     <select
@@ -932,7 +879,6 @@ export default function AddEmployeeProfileModal({
                     </select>
                   </div>
 
-                  {/* Employment Status */}
                   <div className="space-y-1">
                     <label className="text-xs font-bold text-slate-700">Employment Status</label>
                     <select
@@ -946,7 +892,6 @@ export default function AddEmployeeProfileModal({
                     </select>
                   </div>
 
-                  {/* Date Hired */}
                   <div className="space-y-1">
                     <label className="text-xs font-bold text-slate-700">Date Hired</label>
                     <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-xs focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-100 transition shadow-2xs">
@@ -960,7 +905,6 @@ export default function AddEmployeeProfileModal({
                     </div>
                   </div>
 
-                  {/* Birthday / Date of Birth */}
                   <div className="space-y-1">
                     <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
                       <Cake size={13} className="text-rose-500" />
@@ -980,7 +924,6 @@ export default function AddEmployeeProfileModal({
                 </div>
               </div>
 
-              {/* Section B: Contact & Emergency Information */}
               <div className="p-4 rounded-2xl border border-slate-200/90 bg-slate-50/50 space-y-3">
                 <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-slate-700">
                   <Phone size={14} className="text-emerald-600" />
@@ -1049,7 +992,6 @@ export default function AddEmployeeProfileModal({
                 </div>
               </div>
 
-              {/* Section C: Statutory Philippine Government IDs */}
               <div className="p-4 rounded-2xl border border-slate-200/90 bg-slate-50/50 space-y-3">
                 <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-slate-700">
                   <ShieldCheck size={14} className="text-emerald-600" />
@@ -1103,7 +1045,6 @@ export default function AddEmployeeProfileModal({
                 </div>
               </div>
 
-              {/* Section D: Profile Directory Approval */}
               <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-3.5 flex items-start gap-3">
                 <input
                   type="checkbox"
@@ -1118,7 +1059,6 @@ export default function AddEmployeeProfileModal({
                 </label>
               </div>
 
-              {/* Section E: HRHub Portal Login Access (Restricted exclusively to Central HRMD Administrator) */}
               {isHRMD && (
                 <div className={`rounded-2xl border p-3.5 flex items-start justify-between gap-3 transition ${formData.login_enabled ? "bg-emerald-50/70 border-emerald-200" : "bg-slate-50 border-slate-200"}`}>
                   <div className="flex items-start gap-2.5">
@@ -1156,7 +1096,6 @@ export default function AddEmployeeProfileModal({
             </div>
           )}
 
-          {/* TAB 2: 201 FILES & STATUTORY REQUIREMENTS */}
           {activeTab === "requirements" && (
             <div className="space-y-4 animate-in fade-in duration-150">
               <div className="p-4 rounded-2xl bg-emerald-50/60 border border-emerald-200/80 space-y-3">
@@ -1217,7 +1156,6 @@ export default function AddEmployeeProfileModal({
                 </div>
               </div>
 
-              {/* Real-time Animated Upload Progress Bar */}
               {uploadProgress && (
                 <div className="p-4 rounded-2xl bg-slate-900 text-white border border-emerald-500/40 shadow-xl space-y-2.5 animate-in fade-in zoom-in-95 duration-150">
                   <div className="flex items-center justify-between">
@@ -1237,7 +1175,6 @@ export default function AddEmployeeProfileModal({
                     <span className="text-xs font-black text-emerald-400">{uploadProgress.progress}%</span>
                   </div>
 
-                  {/* Progress Track */}
                   <div className="w-full h-2 rounded-full bg-slate-800 overflow-hidden">
                     <div
                       className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 transition-all duration-200"
@@ -1247,7 +1184,6 @@ export default function AddEmployeeProfileModal({
                 </div>
               )}
 
-              {/* Uploaded Documents List */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-black text-slate-800 uppercase tracking-wider">
@@ -1322,8 +1258,6 @@ export default function AddEmployeeProfileModal({
             </div>
           )}
 
-          {/* TAB 3: DISCIPLINARY & DUE PROCESS (INCIDENT REPORT) */}
-          {/* Shown exclusively when in edit mode or after profile has been saved */}
           {activeTab === "disciplinary" && isEditOrSaved && (
             <div className="space-y-4 animate-in fade-in duration-150">
               <div className="p-5 rounded-2xl bg-rose-50/80 border border-rose-200/90 space-y-3">
@@ -1360,9 +1294,6 @@ export default function AddEmployeeProfileModal({
             </div>
           )}
 
-          {/* ============================================================ */}
-          {/* 5. FORM ACTIONS FOOTER                                       */}
-          {/* ============================================================ */}
           <div className="pt-4 border-t border-slate-200 flex items-center justify-between gap-3">
             <button
               type="button"
@@ -1394,7 +1325,6 @@ export default function AddEmployeeProfileModal({
           </div>
         </form>
 
-        {/* Animated Saving Dossier Progression Overlay */}
         {saveStepOverlay && (
           <div className="absolute inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center animate-in fade-in duration-150">
             <div className="w-16 h-16 rounded-2xl bg-emerald-500/20 text-emerald-400 border border-emerald-400/30 flex items-center justify-center mb-4 shadow-xl relative">
@@ -1420,7 +1350,6 @@ export default function AddEmployeeProfileModal({
           </div>
         )}
 
-        {/* Executive Success Dossier Confirmation Modal */}
         {saveConfirmation && (
           <div className="absolute inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-6 animate-in fade-in duration-200">
             <div className="bg-white rounded-3xl border border-slate-200 p-6 sm:p-8 max-w-md w-full shadow-2xl text-center space-y-4 animate-in zoom-in-95 duration-150">
@@ -1440,7 +1369,6 @@ export default function AddEmployeeProfileModal({
                 </p>
               </div>
 
-              {/* Profile Snapshot Summary */}
               <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/90 text-left space-y-2 text-xs">
                 <div className="flex items-center justify-between">
                   <span className="text-slate-400 text-[11px]">Full Name:</span>

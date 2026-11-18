@@ -35,7 +35,6 @@ export default function WorkspaceSwitcher({
 }) {
   const containerRef = useRef(null);
 
-  // Auto-close when clicking outside or pressing Escape
   useEffect(() => {
     if (!isOpen) return;
 
@@ -98,7 +97,6 @@ export default function WorkspaceSwitcher({
             <p className="mt-1 text-xs text-slate-500">Choose where you want to work</p>
           </div>
 
-          {/* DATING DALAWANG BUTTON: COMMUNICATION AT WORKSPACE */}
           <div className="mt-2 space-y-1">
             {VIEW_OPTIONS.map(({ id, label, sublabel, icon: Icon }) => {
               const isSelected = activeView === id;
@@ -150,7 +148,6 @@ export default function WorkspaceSwitcher({
             })}
           </div>
 
-          {/* BACKGROUND THEME COLOR */}
           {themeOptions && themeOptions.length > 0 && (
             <div className="mt-2 border-t border-slate-100 pt-2">
               <div className="flex items-center gap-2 px-3 py-1.5">
@@ -177,7 +174,6 @@ export default function WorkspaceSwitcher({
             </div>
           )}
 
-          {/* USER ACCOUNT ACTIONS */}
           <div className="mt-1 border-t border-slate-100 pt-2">
             <button
               type="button"

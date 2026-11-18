@@ -1,10 +1,3 @@
-/**
- * areaApiConfigStorage.js
- * Multi-Area & Multi-Entity API Configuration and Health Storage Service for HRHub.
- * 
- * Supports dynamic registration of Areas / Entities for Gross Report, Active Tellers,
- * Supervisors, and Live Bets streaming.
- */
 
 import { supabase } from "./supabase";
 import { API_CONFIG } from "../config/apiConfig";
@@ -15,7 +8,6 @@ export const SELECTED_AREA_STORAGE_KEY = "hrhub_selected_gross_area_id";
 export const AREA_CONFIGS_TABLE = "user_settings";
 export const AREA_CONFIGS_USER_ID = "hrhub_area_api_configs";
 
-// Pre-seeded default Areas matching cloud database registered STL areas:
 export const DEFAULT_AREAS = [
   {
     id: "lucky_betplay_mandaue",
@@ -168,9 +160,6 @@ export const DEFAULT_AREAS = [
 
 let memoryAreaConfigs = null;
 
-/**
- * Get all configured Areas synchronously (from cache or localStorage)
- */
 export function getAreaConfigs() {
   if (memoryAreaConfigs && Array.isArray(memoryAreaConfigs) && memoryAreaConfigs.length > 0) {
     return memoryAreaConfigs;
@@ -196,18 +185,12 @@ export function getAreaConfigs() {
   return memoryAreaConfigs;
 }
 
-/**
- * Get active area configuration by ID
- */
 export function getAreaConfigById(id) {
   const configs = getAreaConfigs();
   const found = configs.find((c) => c.id === id);
   return found || configs[0] || DEFAULT_AREAS[0];
 }
 
-/**
- * Get currently selected Area ID for Gross Report
- */
 export function getSelectedAreaId() {
   try {
     const saved = localStorage.getItem(SELECTED_AREA_STORAGE_KEY);
@@ -219,9 +202,6 @@ export function getSelectedAreaId() {
   return getAreaConfigs()[0]?.id || DEFAULT_AREAS[0].id;
 }
 
-/**
- * Set selected Area ID for Gross Report
- */
 export function setSelectedAreaId(id) {
   try {
     localStorage.setItem(SELECTED_AREA_STORAGE_KEY, id);
@@ -229,9 +209,6 @@ export function setSelectedAreaId(id) {
   } catch {}
 }
 
-/**
- * Save area configs to localStorage, dispatch update event, and sync to Supabase
- */
 export async function saveAreaConfigs(configs) {
   if (!Array.isArray(configs)) return;
   memoryAreaConfigs = configs;
@@ -242,12 +219,10 @@ export async function saveAreaConfigs(configs) {
     console.warn("Error saving area configs to localStorage:", err);
   }
 
-  // Notify components immediately
   try {
     window.dispatchEvent(new CustomEvent("hrhub_area_configs_updated", { detail: configs }));
   } catch {}
 
-  // Sync to Supabase user_settings
   if (supabase) {
     try {
       await supabase.from(AREA_CONFIGS_TABLE).upsert({
@@ -261,19 +236,12 @@ export async function saveAreaConfigs(configs) {
   }
 }
 
-/**
- * Load area configs from Supabase cloud database
- */
-/**
- * Sanitize area configuration item (trim all strings, auto-fill tokens, auto-detect accountantId)
- */
 export function sanitizeAreaItem(item) {
   if (!item || typeof item !== "object") return item;
 
   const grossReportUrl = String(item.grossReportUrl || "").trim();
   let accountantId = String(item.accountantId || "").trim();
 
-  // If accountantId is blank or unset, try to extract from grossReportUrl or activeTellersUrl
   if (!accountantId || accountantId === "2") {
     try {
       const u = new URL(grossReportUrl);
@@ -304,14 +272,10 @@ export function sanitizeAreaItem(item) {
   };
 }
 
-/**
- * Load area configs from Supabase cloud database
- */
 export async function loadAreaConfigsFromCloud() {
   if (!supabase) return getAreaConfigs();
 
   try {
-    // Use .limit(1) instead of .single() to avoid PostgREST 406 Not Acceptable status
     const { data, error } = await supabase
       .from(AREA_CONFIGS_TABLE)
       .select("settings_json")
@@ -332,7 +296,6 @@ export async function loadAreaConfigsFromCloud() {
       }
     }
 
-    // If no record exists yet in Supabase, seed it seamlessly
     if (!record && !error) {
       saveAreaConfigs(getAreaConfigs());
     }
@@ -343,9 +306,6 @@ export async function loadAreaConfigsFromCloud() {
   return getAreaConfigs();
 }
 
-/**
- * Add a new Area configuration
- */
 export async function addAreaConfig(newArea) {
   const configs = getAreaConfigs();
   const id = newArea.id || `area_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
@@ -362,9 +322,6 @@ export async function addAreaConfig(newArea) {
   return item;
 }
 
-/**
- * Update an existing Area configuration
- */
 export async function updateAreaConfig(id, updates) {
   const configs = getAreaConfigs();
   const index = configs.findIndex((c) => c.id === id);
@@ -383,9 +340,6 @@ export async function updateAreaConfig(id, updates) {
   return updatedItem;
 }
 
-/**
- * Delete an Area configuration (prevents deletion if it's the only one)
- */
 export async function deleteAreaConfig(id) {
   const configs = getAreaConfigs();
   if (configs.length <= 1) {
@@ -395,7 +349,6 @@ export async function deleteAreaConfig(id) {
   const updated = configs.filter((c) => c.id !== id);
   await saveAreaConfigs(updated);
 
-  // If deleted area was active, reset active to the first available area
   if (getSelectedAreaId() === id) {
     setSelectedAreaId(updated[0].id);
   }
@@ -403,10 +356,6 @@ export async function deleteAreaConfig(id) {
   return updated;
 }
 
-/**
- * Normalizes test URLs so required backend parameters (like 'from', 'to', and 'tellerId')
- * are present, preventing backend server 500 errors (e.g. Laravel 'Undefined array key from').
- */
 export function prepareTestUrl(rawUrl, accountantId = null) {
   if (!rawUrl) return "";
   try {
@@ -417,13 +366,11 @@ export function prepareTestUrl(rawUrl, accountantId = null) {
     }
     const lowerPath = u.pathname.toLowerCase();
     const lowerHref = u.href.toLowerCase();
-    // TellerGrossPerDateRange strictly requires 'from' and 'to'
     if (lowerPath.includes("tellergrossperdaterange") || lowerHref.includes("tellergrossperdaterange")) {
       const today = new Date().toISOString().slice(0, 10);
       if (!u.searchParams.has("from")) u.searchParams.set("from", today);
       if (!u.searchParams.has("to")) u.searchParams.set("to", today);
     }
-    // /api/teller/bet in Laravel backend expects from, to, and tellerId to prevent 500 errors during ping
     if (lowerPath.includes("/teller/bet")) {
       const today = new Date().toISOString().slice(0, 10);
       if (!u.searchParams.has("from")) u.searchParams.set("from", today);
@@ -436,9 +383,6 @@ export function prepareTestUrl(rawUrl, accountantId = null) {
   }
 }
 
-/**
- * Test Endpoint Health / Latency
- */
 export async function testEndpointHealth({ url, token, method = "GET", timeoutMs = 8000, accountantId = null }) {
   const preparedUrl = prepareTestUrl(url, accountantId);
   const start = performance.now();

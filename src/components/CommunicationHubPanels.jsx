@@ -124,12 +124,10 @@ export default function CommunicationHubPanels({
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState("");
 
-  // Shared Search / Filters
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
   const [categoryFilter, setCategoryFilter] = useState("All");
 
-  // Helpdesk Modal & Reply State
   const [isTicketModalOpen, setIsTicketModalOpen] = useState(false);
   const [expandedTicketId, setExpandedTicketId] = useState(null);
   const [replyDraft, setReplyDraft] = useState("");
@@ -140,7 +138,6 @@ export default function CommunicationHubPanels({
     description: ""
   });
 
-  // Knowledge Center Modal & Expanded Article
   const [isArticleModalOpen, setIsArticleModalOpen] = useState(false);
   const [expandedArticleId, setExpandedArticleId] = useState(null);
   const [articleForm, setArticleForm] = useState({
@@ -150,7 +147,6 @@ export default function CommunicationHubPanels({
     content: ""
   });
 
-  // Suggestion Box Modal & HR Reply
   const [isSuggestionModalOpen, setIsSuggestionModalOpen] = useState(false);
   const [suggestionForm, setSuggestionForm] = useState({
     title: "",
@@ -162,7 +158,6 @@ export default function CommunicationHubPanels({
   const [suggestionReviewStatus, setSuggestionReviewStatus] = useState("Under Review");
   const [suggestionHrReply, setSuggestionHrReply] = useState("");
 
-  // Leaderboards Award Modal
   const [isAwardModalOpen, setIsAwardModalOpen] = useState(false);
   const [awardForm, setAwardForm] = useState({
     recipientEmail: "",
@@ -171,7 +166,6 @@ export default function CommunicationHubPanels({
     reason: ""
   });
 
-  // Polls Create Modal
   const [isPollModalOpen, setIsPollModalOpen] = useState(false);
   const [pollForm, setPollForm] = useState({
     question: "",
@@ -186,7 +180,6 @@ export default function CommunicationHubPanels({
     setTimeout(() => setToast(""), 3200);
   };
 
-  // Reset tab-specific filters when switching between the 7 tabs
   useEffect(() => {
     setSearchQuery("");
     setStatusFilter("All");
@@ -230,7 +223,6 @@ export default function CommunicationHubPanels({
     };
   }, [loadAllHubData]);
 
-  // Load employees list for Leaderboard award picker
   useEffect(() => {
     let active = true;
     fetchEmployeesFromDatabase()
@@ -254,9 +246,6 @@ export default function CommunicationHubPanels({
     };
   }, [profiles]);
 
-  // =========================================================================
-  // COMPUTED LEADERBOARD RANKINGS (Real Task Board Done + HR Recognition Awards)
-  // =========================================================================
   const leaderboardRankings = useMemo(() => {
     const scoreMap = new Map();
 
@@ -278,7 +267,6 @@ export default function CommunicationHubPanels({
       return scoreMap.get(key);
     };
 
-    // 1. Add points from HRMD Recognition Awards
     awards.forEach((a) => {
       const entry = ensureEntry(a.recipientEmail, a.recipientName, a.recipientCompany, a.recipientRole);
       if (!entry) return;
@@ -289,7 +277,6 @@ export default function CommunicationHubPanels({
       }
     });
 
-    // 2. Add automatic points from completed Task Board tasks (+25 pts per approved task!)
     tasks.forEach((t) => {
       if (t.assignmentType === "specific_employee" && t.status === "done" && t.assignedToEmail) {
         const entry = ensureEntry(t.assignedToEmail, t.assignedToName, t.assignedToCompany, t.assignedToRole);
@@ -313,16 +300,12 @@ export default function CommunicationHubPanels({
     return Array.from(scoreMap.values()).sort((a, b) => b.points - a.points);
   }, [awards, tasks]);
 
-  // =========================================================================
-  // RENDER 1: SERVICE DESKS (HR Helpdesk | IT Helpdesk | Finance Desk)
-  // =========================================================================
   if (activeTab === "hr_helpdesk" || activeTab === "it_helpdesk" || activeTab === "finance_desk") {
     const desk = DESK_META[activeTab];
     const DeskIcon = desk.icon;
 
     const deskTickets = tickets.filter((t) => {
       if (t.deskType !== activeTab) return false;
-      // Non-admin users see their own tickets; Desk Admins see ALL tickets
       if (!canHandleHelpdesk && t.requesterEmail !== myEmail) return false;
       if (statusFilter !== "All" && t.status !== statusFilter) return false;
       if (searchQuery.trim()) {
@@ -462,7 +445,6 @@ export default function CommunicationHubPanels({
           </div>
         </div>
 
-        {/* Tickets List */}
         <div className="space-y-2.5">
           {deskTickets.length === 0 ? (
             <div className="bg-white rounded-2xl border border-slate-200/90 p-10 text-center space-y-2">
@@ -598,7 +580,6 @@ export default function CommunicationHubPanels({
           )}
         </div>
 
-        {/* New Ticket Modal */}
         {isTicketModalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 backdrop-blur-xs p-4">
             <div className="w-full max-w-lg bg-white rounded-2xl border border-slate-200 shadow-2xl overflow-hidden">
@@ -672,9 +653,6 @@ export default function CommunicationHubPanels({
     );
   }
 
-  // =========================================================================
-  // RENDER 2: KNOWLEDGE CENTER
-  // =========================================================================
   if (activeTab === "knowledge_center") {
     const categories = ["All", "STL Operations", "HR & Due Process", "Payroll & Benefits", "HRHub App Guide", "General Guide"];
     const filteredArticles = articles.filter((a) => {
@@ -835,9 +813,6 @@ export default function CommunicationHubPanels({
     );
   }
 
-  // =========================================================================
-  // RENDER 3: SUGGESTION BOX
-  // =========================================================================
   if (activeTab === "suggestion_box") {
     const handlePostSuggestion = async (e) => {
       e.preventDefault();
@@ -998,7 +973,6 @@ export default function CommunicationHubPanels({
           )}
         </div>
 
-        {/* Submit Suggestion Modal */}
         {isSuggestionModalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 backdrop-blur-xs p-4">
             <div className="w-full max-w-lg bg-white rounded-2xl border border-slate-200 shadow-2xl overflow-hidden">
@@ -1029,7 +1003,6 @@ export default function CommunicationHubPanels({
           </div>
         )}
 
-        {/* HRMD Respond Modal */}
         {reviewingSuggestion && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 backdrop-blur-xs p-4">
             <div className="w-full max-w-md bg-white rounded-2xl border border-slate-200 shadow-2xl overflow-hidden">
@@ -1057,9 +1030,6 @@ export default function CommunicationHubPanels({
     );
   }
 
-  // =========================================================================
-  // RENDER 4: LEADERBOARDS
-  // =========================================================================
   if (activeTab === "leaderboards") {
     const handleGiveAward = async (e) => {
       e.preventDefault();
@@ -1117,7 +1087,6 @@ export default function CommunicationHubPanels({
           )}
         </div>
 
-        {/* Top 3 Podium */}
         {topThree.length > 0 && (
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {topThree.map((person, idx) => {
@@ -1145,7 +1114,6 @@ export default function CommunicationHubPanels({
           </div>
         )}
 
-        {/* Full Rankings Table */}
         <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs overflow-hidden">
           <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/70 font-black text-xs text-slate-800">
             Live Standings ({leaderboardRankings.length} Ranked Personnel)
@@ -1188,7 +1156,6 @@ export default function CommunicationHubPanels({
           )}
         </div>
 
-        {/* Award Modal */}
         {isAwardModalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 backdrop-blur-xs p-4">
             <div className="w-full max-w-md bg-white rounded-2xl border border-slate-200 shadow-2xl overflow-hidden">
@@ -1226,9 +1193,6 @@ export default function CommunicationHubPanels({
     );
   }
 
-  // =========================================================================
-  // RENDER 5: POLLS & SURVEY
-  // =========================================================================
   const handleCreatePoll = async (e) => {
     e.preventDefault();
     const res = await createPoll({ ...pollForm, createdBy: currentUser });
@@ -1378,7 +1342,6 @@ export default function CommunicationHubPanels({
         )}
       </div>
 
-      {/* Create Poll Modal */}
       {isPollModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 backdrop-blur-xs p-4">
           <div className="w-full max-w-lg bg-white rounded-2xl border border-slate-200 shadow-2xl overflow-hidden">

@@ -1,14 +1,8 @@
-// agentProfileStorage.js - Persistent database storage for agent profile overrides
-// Connects to Supabase ('agent_profiles') with local fallback/caching so custom edits
-// (Birthday, Address, Contact No., Emergency contacts, Booth, ID) persist across sessions.
 
 import { supabase } from "./supabase";
 
 const LOCAL_PROFILES_KEY = "hrhub_agent_profile_overrides";
 
-/**
- * Gets all locally cached agent profile overrides
- */
 function getLocalOverrides() {
   try {
     const raw = localStorage.getItem(LOCAL_PROFILES_KEY);
@@ -18,9 +12,6 @@ function getLocalOverrides() {
   }
 }
 
-/**
- * Updates locally cached agent profile overrides
- */
 function setLocalOverride(agentKey, data) {
   try {
     const all = getLocalOverrides();
@@ -35,9 +26,6 @@ function setLocalOverride(agentKey, data) {
   }
 }
 
-/**
- * Clears local cached override for a specific agent
- */
 export function clearLocalOverride(agentKey) {
   if (!agentKey) return;
   const normKey = String(agentKey).toLowerCase().trim();
@@ -50,15 +38,10 @@ export function clearLocalOverride(agentKey) {
   }
 }
 
-/**
- * Loads saved profile override for a specific agent
- * Tries Supabase first, with automatic local cache fallback
- */
 export async function getAgentProfileOverride(agentKey) {
   if (!agentKey) return null;
   const normKey = String(agentKey).toLowerCase().trim();
 
-  // 1. Try fetching from Supabase
   try {
     const { data, error } = await supabase
       .from("agent_profiles")
@@ -68,7 +51,6 @@ export async function getAgentProfileOverride(agentKey) {
 
     if (!error) {
       if (data) {
-        // Map DB snake_case columns to camelCase form fields
         const mapped = {
           fullName: data.full_name || "",
           birthday: data.birthday || "",
@@ -84,7 +66,6 @@ export async function getAgentProfileOverride(agentKey) {
         setLocalOverride(normKey, mapped);
         return mapped;
       } else {
-        // Supabase answered successfully with null - record was deleted in DB!
         clearLocalOverride(normKey);
         return null;
       }
@@ -93,14 +74,10 @@ export async function getAgentProfileOverride(agentKey) {
     console.warn("Supabase profile fetch notice, checking local cache:", err);
   }
 
-  // 2. Check local fallback (only if Supabase was unreachable or error)
   const local = getLocalOverrides();
   return local[normKey] || null;
 }
 
-/**
- * Saves or updates agent profile override in Supabase and local cache
- */
 export async function saveAgentProfileOverride(agentKey, form) {
   if (!agentKey) return false;
   const normKey = String(agentKey).toLowerCase().trim();
@@ -119,10 +96,8 @@ export async function saveAgentProfileOverride(agentKey, form) {
     updated_at: new Date().toISOString()
   };
 
-  // 1. Save to local cache immediately for zero latency
   setLocalOverride(normKey, form);
 
-  // 2. Persist to Supabase
   let syncedToSupabase = false;
   try {
     const { error } = await supabase
@@ -141,9 +116,6 @@ export async function saveAgentProfileOverride(agentKey, form) {
   return { success: true, syncedToSupabase };
 }
 
-/**
- * Synchronously get all local overrides for fast badges and lists
- */
 export function getAllAgentProfileOverridesSync() {
   return getLocalOverrides();
 }

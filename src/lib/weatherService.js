@@ -1,9 +1,3 @@
-/**
- * Weather Service for HRHub Workspace
- * Uses Open-Meteo API (100% Free, no API key required, CORS-ready)
- * Supports auto-detecting Laptop/Device GPS coordinates, distance sorting for nearby areas,
- * and reverse geocoding for Philippine localities.
- */
 
 export const PHILIPPINE_AREAS = [
   { id: "makati", name: "Makati HQ", city: "Makati City", region: "Metro Manila", lat: 14.5547, lon: 121.0244 },
@@ -31,11 +25,8 @@ export const RECENT_CYCLONES_PAGASA = [
   { name: "Tropical Depression 'ENTENG'", signal: 1, category: "Tropical Depression", desc: "Scattered rain showers. Prepare umbrellas and check road flood advisories." }
 ];
 
-/**
- * Compute Haversine distance in kilometers between two GPS coordinates
- */
 export function getDistanceKm(lat1, lon1, lat2, lon2) {
-  const R = 6371; // Earth's mean radius in km
+  const R = 6371;
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
   const dLon = ((lon2 - lon1) * Math.PI) / 180;
   const a =
@@ -47,9 +38,6 @@ export function getDistanceKm(lat1, lon1, lat2, lon2) {
   return Math.round(R * c);
 }
 
-/**
- * Get nearby areas sorted by distance from given coordinates
- */
 export function getNearbyAreasSorted(currentLat, currentLon) {
   return PHILIPPINE_AREAS.map((area) => {
     const distKm = getDistanceKm(currentLat, currentLon, area.lat, area.lon);
@@ -57,9 +45,6 @@ export function getNearbyAreasSorted(currentLat, currentLon) {
   }).sort((a, b) => a.distKm - b.distKm);
 }
 
-/**
- * Reverse geocode GPS coordinates to obtain a readable Philippine locality name
- */
 export async function reverseGeocodeLocation(lat, lon) {
   try {
     const res = await fetch(
@@ -80,7 +65,6 @@ export async function reverseGeocodeLocation(lat, lon) {
     console.warn("Reverse geocode failed, finding nearest known area:", err);
   }
 
-  // Fallback: Find nearest known Philippine area
   const nearest = getNearbyAreasSorted(lat, lon)[0];
   return {
     city: nearest ? nearest.city : "Detected Location",
@@ -89,7 +73,6 @@ export async function reverseGeocodeLocation(lat, lon) {
 }
 
 export function getWeatherConditionInfo(code) {
-  // WMO Weather interpretation codes (WW)
   if (code === 0) {
     return { label: "Clear Sky", icon: "Sun", isRain: false };
   }
@@ -179,9 +162,6 @@ export function evaluateRainAdvisory(rainProb, rainSum = 0) {
   };
 }
 
-/**
- * Identify exact time periods when rain is expected
- */
 function extractRainTimeWindows(hourlyItems) {
   const rainyHours = hourlyItems.filter((h) => h.rainProb >= 40 || h.rainSum >= 0.5);
   if (rainyHours.length === 0) {
@@ -191,7 +171,6 @@ function extractRainTimeWindows(hourlyItems) {
     };
   }
 
-  // Peak hour
   const peak = [...rainyHours].sort((a, b) => b.rainProb - a.rainProb)[0];
   const first = rainyHours[0];
   const last = rainyHours[rainyHours.length - 1];
@@ -212,9 +191,6 @@ export function getCardinalDirection(deg = 0) {
   return directions[Math.round(deg / 45) % 8];
 }
 
-/**
- * Fetch complete weather forecast: current, hourly timeline, multi-day, and rain windows
- */
 export async function fetchWeatherForecast(lat = 14.5547, lon = 121.0244, forceFresh = false) {
   const cacheKey = `hrhub_weather_v4_${lat.toFixed(3)}_${lon.toFixed(3)}`;
 
@@ -223,13 +199,11 @@ export async function fetchWeatherForecast(lat = 14.5547, lon = 121.0244, forceF
       const cached = sessionStorage.getItem(cacheKey);
       if (cached) {
         const { timestamp, data } = JSON.parse(cached);
-        // Cache for 15 minutes
         if (Date.now() - timestamp < 15 * 60 * 1000) {
           return { data, fromCache: true };
         }
       }
     } catch {
-      // Ignore cache error
     }
   }
 
@@ -242,7 +216,6 @@ export async function fetchWeatherForecast(lat = 14.5547, lon = 121.0244, forceF
 
   const raw = await response.json();
 
-  // Process multi-day forecasts
   const dailyForecasts = (raw.daily?.time || []).map((dateStr, index) => {
     const code = raw.daily.weather_code[index];
     const maxTemp = Math.round(raw.daily.temperature_2m_max[index]);
@@ -273,9 +246,8 @@ export async function fetchWeatherForecast(lat = 14.5547, lon = 121.0244, forceF
     };
   });
 
-  // Process hourly timeline (Next 24 hours starting from current local hour)
   const now = new Date();
-  const currentHourISO = now.toISOString().slice(0, 13); // "YYYY-MM-DDTHH"
+  const currentHourISO = now.toISOString().slice(0, 13);
 
   const allHourlyTimes = raw.hourly?.time || [];
   let startIndex = allHourlyTimes.findIndex((t) => t.startsWith(currentHourISO));
@@ -283,7 +255,6 @@ export async function fetchWeatherForecast(lat = 14.5547, lon = 121.0244, forceF
     startIndex = 0;
   }
 
-  // Take next 24 hours
   const next24Hours = allHourlyTimes.slice(startIndex, startIndex + 24).map((timeStr, idx) => {
     const actualIndex = startIndex + idx;
     const hourDate = new Date(timeStr);
@@ -341,7 +312,6 @@ export async function fetchWeatherForecast(lat = 14.5547, lon = 121.0244, forceF
   try {
     sessionStorage.setItem(cacheKey, JSON.stringify({ timestamp: Date.now(), data: processed }));
   } catch {
-    // Ignore cache error
   }
 
   return { data: processed, fromCache: false };

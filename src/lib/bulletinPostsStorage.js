@@ -1,19 +1,11 @@
-/**
- * bulletinPostsStorage.js
- * Dedicated Database Storage Service for Company Bulletin Board.
- * Features Facebook-style posts, image attachments, reactions (likes), and comments.
- * All persisted to the Supabase Cloud Database (user_settings key: 'company_bulletin_feed_master').
- */
 
 import { supabase } from "./supabase.js";
 import { autoLogHRAction } from "./hrWorkLogsStorage.js";
 
 const BULLETIN_FEED_KEY = "company_bulletin_feed_master";
 
-// In-memory session cache for instant UI responsiveness
 let memoryPostsCache = null;
 
-// Initial starter announcement if feed is completely fresh
 const INITIAL_STARTER_POSTS = [
   {
     id: "post_starter_official_welcome",
@@ -91,9 +83,6 @@ const INITIAL_STARTER_POSTS = [
   }
 ];
 
-/**
- * Fetch all bulletin posts from Supabase database.
- */
 export async function getBulletinPostsFromDb() {
   try {
     const { data, error } = await supabase
@@ -114,16 +103,11 @@ export async function getBulletinPostsFromDb() {
     return { posts: memoryPostsCache, source: "memory" };
   }
 
-  // First-time fallback seed
   memoryPostsCache = INITIAL_STARTER_POSTS;
-  // Background seed save to database
   saveFeedToDatabase(memoryPostsCache).catch(() => {});
   return { posts: memoryPostsCache, source: "seed" };
 }
 
-/**
- * Helper to persist full posts array to database
- */
 async function saveFeedToDatabase(postsArray) {
   try {
     await supabase
@@ -138,9 +122,6 @@ async function saveFeedToDatabase(postsArray) {
   }
 }
 
-/**
- * Create a new bulletin post in the database.
- */
 export async function createBulletinPostInDb(postData) {
   const currentFeedRes = await getBulletinPostsFromDb();
   const currentFeed = currentFeedRes.posts || [];
@@ -164,13 +145,11 @@ export async function createBulletinPostInDb(postData) {
     createdAt: new Date().toISOString()
   };
 
-  // Pinned posts stay at the top; newest posts first
   const updatedFeed = [newPost, ...currentFeed];
   memoryPostsCache = updatedFeed;
 
   await saveFeedToDatabase(updatedFeed);
 
-  // Also record in 'memos' table if title & content present
   try {
     await supabase.from("memos").insert({
       title: newPost.title || newPost.category,
@@ -179,10 +158,8 @@ export async function createBulletinPostInDb(postData) {
       author_name: newPost.authorName
     });
   } catch {
-    // Non-blocking schema fallback
   }
 
-  // Telemetry: Auto-record HR operational log into database
   try {
     autoLogHRAction({
       user: {
@@ -204,9 +181,6 @@ export async function createBulletinPostInDb(postData) {
   return { success: true, post: newPost, allPosts: updatedFeed };
 }
 
-/**
- * Toggle Like / Reaction on a post
- */
 export async function toggleLikeBulletinPostInDb(postId, userEmail) {
   if (!postId || !userEmail) return { success: false };
   const normalizedEmail = userEmail.trim().toLowerCase();
@@ -233,9 +207,6 @@ export async function toggleLikeBulletinPostInDb(postId, userEmail) {
   return { success: true, post: targetPost, allPosts: updatedFeed };
 }
 
-/**
- * Add a comment to a bulletin post
- */
 export async function addCommentToBulletinPostInDb(postId, commentData) {
   if (!postId || !commentData.content?.trim()) return { success: false };
 
@@ -267,9 +238,6 @@ export async function addCommentToBulletinPostInDb(postId, commentData) {
   return { success: true, comment: newComment, post: targetPost, allPosts: updatedFeed };
 }
 
-/**
- * Delete a bulletin post (Author or HRMD)
- */
 export async function deleteBulletinPostFromDb(postId) {
   if (!postId) return { success: false };
 
@@ -283,9 +251,6 @@ export async function deleteBulletinPostFromDb(postId) {
   return { success: true, allPosts: updatedFeed };
 }
 
-/**
- * Delete a comment from a bulletin post
- */
 export async function deleteCommentFromBulletinPostInDb(postId, commentId) {
   if (!postId || !commentId) return { success: false };
 
@@ -305,9 +270,6 @@ export async function deleteCommentFromBulletinPostInDb(postId, commentId) {
   return { success: true, allPosts: updatedFeed };
 }
 
-/**
- * Fetch custom quick broadcast from cloud database
- */
 export async function getQuickInfoBroadcastFromDb() {
   try {
     const { data, error } = await supabase
@@ -325,9 +287,6 @@ export async function getQuickInfoBroadcastFromDb() {
   return null;
 }
 
-/**
- * Save custom quick broadcast to cloud database
- */
 export async function saveQuickInfoBroadcastToDb(broadcastData) {
   try {
     const payload = {
@@ -349,5 +308,4 @@ export async function saveQuickInfoBroadcastToDb(broadcastData) {
     return { success: false, error: err.message };
   }
 }
-
 

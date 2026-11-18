@@ -2,19 +2,14 @@ import { supabase } from "./supabase";
 
 const LOCAL_STORAGE_KEY = "hrhub_incident_reports_v1";
 
-// Broadcast channel for instantaneous cross-tab synchronization
 let liveBroadcastChannel = null;
 try {
   if (typeof window !== "undefined" && window.BroadcastChannel) {
     liveBroadcastChannel = new BroadcastChannel("hrhub_incident_reports_live_sync");
   }
 } catch (e) {
-  // Ignore fallback
 }
 
-/**
- * Subscribe to live report broadcasts across browser tabs
- */
 export function subscribeToLiveReports(onUpdate) {
   if (liveBroadcastChannel) {
     const handleMsg = (e) => {
@@ -28,9 +23,6 @@ export function subscribeToLiveReports(onUpdate) {
   return () => {};
 }
 
-/**
- * Normalizes an incident report row from Supabase
- */
 export function normalizeIncidentReport(d) {
   if (!d) return null;
 
@@ -72,7 +64,6 @@ export function normalizeIncidentReport(d) {
   const typeOfIncident = d.typeOfIncident || d.type_of_incident || incidentCategory;
   const incidentTime = d.incidentTime || d.incident_time || "16:30 PM";
   const policeNotified = d.policeNotified || d.police_notified || "NO";
-  // Extract system metadata entry stored inside JSONB activity_log
   const rawLogs = Array.isArray(d.activity_log)
     ? d.activity_log
     : Array.isArray(d.activityLog)
@@ -173,7 +164,6 @@ export function normalizeIncidentReport(d) {
   const employeeExplanation = d.employeeExplanation || d.employee_explanation || "";
   const explanationReceivedAt = d.explanationReceivedAt || d.explanation_received_at || "";
 
-  // Filter out system metadata from user-facing activity logs
   const displayLogs = rawLogs.filter(
     (item) => !item?.isSystemMetadata && item?.type !== "HRHUB_REPORT_METADATA"
   );
@@ -269,7 +259,6 @@ export function normalizeIncidentReport(d) {
     respondentRemarks: d.respondentRemarks || d.respondent_remarks || metaFromLog.respondentRemarks || "",
     employeeEmail: d.employeeEmail || d.employee_email || metaFromLog.employeeEmail || "",
 
-    // 1. Preparer & Operations Manager Signatures
     preparerSignature: d.preparerSignature || d.preparer_signature || metaFromLog.preparerSignature || "",
     preparerSignatureScale: Number(d.preparerSignatureScale || d.preparer_signature_scale || metaFromLog.preparerSignatureScale || 1.25),
     preparerName: d.preparerName || d.preparer_name || metaFromLog.preparerName || senderHrName,
@@ -279,11 +268,9 @@ export function normalizeIncidentReport(d) {
     operationsManagerName: d.operationsManagerName || d.operations_manager_name || metaFromLog.operationsManagerName || "Operations Manager",
     operationsManagerTitle: d.operationsManagerTitle || d.operations_manager_title || metaFromLog.operationsManagerTitle || "Operations Manager",
 
-    // 2. Head Office Discretion 1: Filings Only
     filingRemarks: d.filingRemarks || d.filing_remarks || metaFromLog.filingRemarks || "",
     filedAt: d.filedAt || d.filed_at || metaFromLog.filedAt || "",
 
-    // 3. Branch HR Upload Signed NTE Proof
     nteSignedProof: d.nteSignedProof || d.nte_signed_proof || metaFromLog.nteSignedProof || "",
     nteSignedProofName: d.nteSignedProofName || d.nte_signed_proof_name || metaFromLog.nteSignedProofName || "",
     nteServedAt: d.nteServedAt || d.nte_served_at || metaFromLog.nteServedAt || "",
@@ -291,7 +278,6 @@ export function normalizeIncidentReport(d) {
     nteSignedProofKey: d.nteSignedProofKey || d.nte_signed_proof_key || metaFromLog.nteSignedProofKey || "",
     hasSignedNteProof: Boolean(d.hasSignedNteProof || metaFromLog.hasSignedNteProof || d.nteSignedProof || d.nte_signed_proof || d.nteSignedProofKey),
 
-    // 3B. Branch HR Upload Employee In-Written Explanation Proof & Statement
     explanationProof: d.explanationProof || d.explanation_proof || metaFromLog.explanationProof || "",
     explanationProofName: d.explanationProofName || d.explanation_proof_name || metaFromLog.explanationProofName || "",
     explanationProofKey: d.explanationProofKey || d.explanation_proof_key || metaFromLog.explanationProofKey || "",
@@ -300,13 +286,11 @@ export function normalizeIncidentReport(d) {
     explanationReceivedAt: d.explanationReceivedAt || d.explanation_received_at || metaFromLog.explanationReceivedAt || "",
     explanationSubmittedBy: d.explanationSubmittedBy || d.explanation_submitted_by || metaFromLog.explanationSubmittedBy || "",
 
-    // 4. Head Office Discretion 2A: Warning Notice
     warningNoticeSubject: d.warningNoticeSubject || d.warning_notice_subject || metaFromLog.warningNoticeSubject || "",
     warningNoticePenalty: d.warningNoticePenalty || d.warning_notice_penalty || metaFromLog.warningNoticePenalty || "",
     warningNoticeBody: d.warningNoticeBody || d.warning_notice_body || metaFromLog.warningNoticeBody || "",
     warningIssuedAt: d.warningIssuedAt || d.warning_issued_at || metaFromLog.warningIssuedAt || "",
 
-    // 5. Head Office Discretion 2B: NOI & Zoom Hearing Schedule
     zoomMeetingTopic: d.zoomMeetingTopic || d.zoom_meeting_topic || metaFromLog.zoomMeetingTopic || "",
     zoomMeetingDate: d.zoomMeetingDate || d.zoom_meeting_date || metaFromLog.zoomMeetingDate || "",
     zoomMeetingTime: d.zoomMeetingTime || d.zoom_meeting_time || metaFromLog.zoomMeetingTime || "",
@@ -317,19 +301,16 @@ export function normalizeIncidentReport(d) {
     noiRemarks: d.noiRemarks || d.noi_remarks || metaFromLog.noiRemarks || "",
     noiIssuedAt: d.noiIssuedAt || d.noi_issued_at || metaFromLog.noiIssuedAt || "",
 
-    // 6. Decision on Administrative Case
     adminDecisionSubject: d.adminDecisionSubject || d.admin_decision_subject || metaFromLog.adminDecisionSubject || "",
     adminDecisionFindings: d.adminDecisionFindings || d.admin_decision_findings || metaFromLog.adminDecisionFindings || "",
     adminDecisionPenalty: d.adminDecisionPenalty || d.admin_decision_penalty || metaFromLog.adminDecisionPenalty || "",
     adminDecisionBody: d.adminDecisionBody || d.admin_decision_body || metaFromLog.adminDecisionBody || "",
     adminDecisionIssuedAt: d.adminDecisionIssuedAt || d.admin_decision_issued_at || metaFromLog.adminDecisionIssuedAt || "",
 
-    // 7. Signed Decision Proof & Case Closure
     decisionSignedProof: d.decisionSignedProof || d.decision_signed_proof || metaFromLog.decisionSignedProof || "",
     decisionSignedProofName: d.decisionSignedProofName || d.decision_signed_proof_name || metaFromLog.decisionSignedProofName || "",
     decisionSignedAt: d.decisionSignedAt || d.decision_signed_at || metaFromLog.decisionSignedAt || "",
 
-    // 8. Authentic IR Form Fields (Lucky Betplay / Corporate standard)
     employeeId,
     location,
     witnesses,
@@ -344,9 +325,6 @@ export function normalizeIncidentReport(d) {
   };
 }
 
-/**
- * Looks up the assigned HR personnel for a given company from the Employee Directory profiles
- */
 export function lookupAssignedHrForCompany(companyName, profiles = []) {
   if (!companyName) {
     return {
@@ -359,7 +337,6 @@ export function lookupAssignedHrForCompany(companyName, profiles = []) {
 
   const norm = companyName.toLowerCase();
 
-  // Find user whose company matches and has an HR/Admin role
   const match = profiles.find((p) => {
     const pComp = (p.company || "").toLowerCase();
     const pRole = (p.role || "").toLowerCase();
@@ -381,7 +358,6 @@ export function lookupAssignedHrForCompany(companyName, profiles = []) {
     };
   }
 
-  // Known entity assignments
   if (norm.includes("5a") || norm.includes("royal")) {
     return {
       name: "Ms. Quennie R. Capuyan",
@@ -415,9 +391,6 @@ export function lookupAssignedHrForCompany(companyName, profiles = []) {
   };
 }
 
-/**
- * Looks up the Central HRMD personnel assigned to Simpal Group of Companies (SGC - Receiver)
- */
 export function lookupSgcCentralHr(profiles = []) {
   const sgcHr = profiles.find((p) => {
     const pComp = (p.company || "").toLowerCase();
@@ -439,10 +412,8 @@ export function lookupSgcCentralHr(profiles = []) {
   };
 }
 
-// Clean initial reports: starts empty so user can experience live process
 const DEFAULT_SEED_REPORTS = [];
 
-// Helper: load local reports
 function getLocalReports() {
   try {
     const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
@@ -452,7 +423,6 @@ function getLocalReports() {
     }
     const parsed = JSON.parse(raw);
     if (Array.isArray(parsed)) {
-      // Purge old mock records
       const clean = parsed.filter((r) => r.id !== "IR-2026-09-001" && !r.isSample && !r.isMock);
       if (clean.length !== parsed.length) {
         localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(clean));
@@ -465,7 +435,6 @@ function getLocalReports() {
   }
 }
 
-// Helper: save local reports
 function saveLocalReports(reports) {
   try {
     localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(reports));
@@ -474,13 +443,9 @@ function saveLocalReports(reports) {
   }
 }
 
-/**
- * Fetch all incident reports (Dedicated Supabase table first, followed by Cloud user_settings backup)
- */
 export async function fetchIncidentReports() {
   try {
     if (supabase) {
-      // 1. Check dedicated Supabase table 'incident_reports' with a 4s timeout protection
       const queryPromise = supabase
         .from("incident_reports")
         .select("*")
@@ -495,7 +460,6 @@ export async function fetchIncidentReports() {
         return normalized;
       }
 
-      // If dedicated query failed with error or timed out, gracefully fallback to local cache
     }
   } catch (err) {
     console.debug("[incidentReportStorage] Cloud query notice:", err?.message);
@@ -504,9 +468,6 @@ export async function fetchIncidentReports() {
   return getLocalReports();
 }
 
-/**
- * Save or update an incident report with multi-destination persistence and live broadcast
- */
 export async function saveIncidentReport(report) {
   const current = getLocalReports();
   const nowIso = new Date().toISOString();
@@ -584,7 +545,6 @@ export async function saveIncidentReport(report) {
 
   saveLocalReports(updatedList);
 
-  // Broadcast instantly to all other open tabs on this browser
   if (liveBroadcastChannel) {
     try {
       liveBroadcastChannel.postMessage({
@@ -593,13 +553,10 @@ export async function saveIncidentReport(report) {
         target: updatedReport
       });
     } catch (e) {
-      // Ignore broadcast error
     }
   }
 
-  // Cloud Persistence (both dedicated table & guaranteed user_settings backup)
   if (supabase) {
-    // Pack all extended metadata into a dedicated system log item stored in JSONB activity_log
     const metaEntry = {
       isSystemMetadata: true,
       type: "HRHUB_REPORT_METADATA",
@@ -682,7 +639,6 @@ export async function saveIncidentReport(report) {
     );
     const dbActivityLog = [metaEntry, ...cleanLogs];
 
-    // Destination A: Dedicated 'incident_reports' table with all native columns
     try {
       await supabase.from("incident_reports").upsert({
         id: updatedReport.id,
@@ -718,9 +674,6 @@ export async function saveIncidentReport(report) {
   return updatedReport;
 }
 
-/**
- * Delete an incident report
- */
 export async function deleteIncidentReport(id) {
   const current = getLocalReports();
   const filtered = current.filter((r) => r.id !== id);
@@ -741,9 +694,6 @@ export async function deleteIncidentReport(id) {
   return filtered;
 }
 
-/**
- * Purge / clear all incident reports (reset to pure clean state)
- */
 export async function clearAllIncidentReports() {
   saveLocalReports([]);
 
@@ -762,14 +712,8 @@ export async function clearAllIncidentReports() {
   return [];
 }
 
-/**
- * Key for storing persistent default signatories in localStorage and Supabase user_settings
- */
 export const DEFAULT_SIGNATORIES_KEY = "hrhub_ir_default_signatories_v1";
 
-/**
- * Saves default IR signatories both to LocalStorage and to Supabase user_settings table
- */
 export async function saveDefaultIrSignatories(signatories) {
   if (!signatories) return;
   try {
@@ -795,9 +739,6 @@ export async function saveDefaultIrSignatories(signatories) {
   return signatories;
 }
 
-/**
- * Loads default IR signatories from LocalStorage and synchronizes with Supabase user_settings
- */
 export async function loadDefaultIrSignatories() {
   let localData = null;
   try {
@@ -806,7 +747,6 @@ export async function loadDefaultIrSignatories() {
       localData = JSON.parse(raw);
     }
   } catch (err) {
-    // Ignore JSON parse error
   }
 
   if (supabase) {

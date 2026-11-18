@@ -1,10 +1,3 @@
-/**
- * signatureImageProcessor.js
- * 
- * Client-side automatic signature background removal and PNG transparent converter.
- * Converts camera photos, paper scans, white or colored paper with shadows into
- * a clean, transparent PNG with sharp dark ink strokes.
- */
 
 export async function processSignatureToTransparentPng(fileOrDataUrl, options = {}) {
   const {
@@ -26,7 +19,6 @@ export async function processSignatureToTransparentPng(fileOrDataUrl, options = 
           return reject(new Error("Invalid image dimensions"));
         }
 
-        // Downscale oversized camera photos to avoid memory bottlenecks and keep strokes sharp
         if (width > maxDimension || height > maxDimension) {
           if (width > height) {
             height = Math.round((height * maxDimension) / width);
@@ -49,7 +41,6 @@ export async function processSignatureToTransparentPng(fileOrDataUrl, options = 
         const tolerance = 18;
         const fullInkThreshold = 55;
 
-        // 1. Preserve existing transparency while removing pale pixels and normalizing ink.
         let transparentCount = 0;
         for (let i = 3; i < data.length; i += 4) {
           if (data[i] < 60) transparentCount++;
@@ -80,8 +71,6 @@ export async function processSignatureToTransparentPng(fileOrDataUrl, options = 
           return resolve(canvas.toDataURL("image/png"));
         }
 
-        // 2. Adaptive Background Illumination Grid
-        // Handles uneven lighting (phone camera shadow, paper angle, yellowish or grey tint)
         const gridCols = Math.min(16, Math.max(4, Math.floor(width / 50)));
         const gridRows = Math.min(16, Math.max(4, Math.floor(height / 50)));
         const cellW = width / gridCols;
@@ -107,7 +96,6 @@ export async function processSignatureToTransparentPng(fileOrDataUrl, options = 
 
             if (lums.length > 0) {
               lums.sort((a, b) => a - b);
-              // Take 90th percentile as local paper background luminance
               const p90 = lums[Math.floor(lums.length * 0.9)];
               rowVals.push(p90);
             } else {
@@ -117,7 +105,6 @@ export async function processSignatureToTransparentPng(fileOrDataUrl, options = 
           bgGrid.push(rowVals);
         }
 
-        // Bilinear interpolation for smooth background baseline across any (x, y)
         const getLocalBg = (x, y) => {
           const gx = (x / cellW) - 0.5;
           const gy = (y / cellH) - 0.5;
@@ -134,7 +121,6 @@ export async function processSignatureToTransparentPng(fileOrDataUrl, options = 
           return top * (1 - fy) + bot * fy;
         };
 
-        // 3. Process each pixel: remove background & normalize ink strokes
         for (let y = 0; y < height; y++) {
           for (let x = 0; x < width; x++) {
             const i = (y * width + x) * 4;
@@ -147,23 +133,18 @@ export async function processSignatureToTransparentPng(fileOrDataUrl, options = 
             const delta = localBg - lum;
 
             if (delta <= tolerance) {
-              // Paper background -> 100% transparent
               data[i + 3] = 0;
             } else {
-              // Ink stroke or anti-aliased edge
               const t = Math.min(1, Math.max(0, (delta - tolerance) / (fullInkThreshold - tolerance)));
               const alpha = Math.round(Math.pow(t, 0.75) * 255);
               data[i + 3] = alpha;
 
-              // Check if pen ink has blue hue
               const isBlueTint = b > r + 15 && b > g + 10;
               if (isBlueTint) {
-                // Crisp dark navy pen ink
                 data[i] = Math.round(Math.min(25, r * 0.25));
                 data[i + 1] = Math.round(Math.min(40, g * 0.35));
                 data[i + 2] = Math.round(Math.min(95, b * 0.7));
               } else {
-                // Crisp dark black pen ink
                 const inkVal = Math.round(Math.min(25, 25 * (1 - t)));
                 data[i] = inkVal;
                 data[i + 1] = inkVal;
@@ -175,7 +156,6 @@ export async function processSignatureToTransparentPng(fileOrDataUrl, options = 
 
         ctx.putImageData(imgData, 0, 0);
 
-        // 4. Auto-crop around the signature
         if (autoCrop) {
           const croppedUrl = cropCanvasToInk(canvas, data, width, height);
           return resolve(croppedUrl);

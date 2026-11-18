@@ -68,16 +68,13 @@ export default function TaskBoardPanel({
   const [loading, setLoading] = useState(true);
   const [employees, setEmployees] = useState([]);
 
-  // Filters
   const [searchQuery, setSearchQuery] = useState("");
-  const [assignmentFilter, setAssignmentFilter] = useState("all"); // all | general_hr | specific_employee
+  const [assignmentFilter, setAssignmentFilter] = useState("all");
   const [priorityFilter, setPriorityFilter] = useState("all");
   const [companyFilter, setCompanyFilter] = useState("all");
 
-  // Toast
   const [toast, setToast] = useState("");
 
-  // Post New Task Modal
   const [isPostModalOpen, setIsPostModalOpen] = useState(false);
   const [employeeSearch, setEmployeeSearch] = useState("");
   const [isSubmittingTask, setIsSubmittingTask] = useState(false);
@@ -87,7 +84,7 @@ export default function TaskBoardPanel({
     priority: "High",
     category: "HR Operations",
     dueDate: "",
-    assignmentType: "general_hr", // "general_hr" | "specific_employee"
+    assignmentType: "general_hr",
     assignedToEmail: "",
     assignedToName: "",
     assignedToCompany: "",
@@ -95,13 +92,11 @@ export default function TaskBoardPanel({
     initialStatus: "backlog"
   });
 
-  // Subsidiary Action Submission Modal (For Review)
   const [actionModalTask, setActionModalTask] = useState(null);
   const [actionNotesInput, setActionNotesInput] = useState("");
   const [isSubmittingAction, setIsSubmittingAction] = useState(false);
 
-  // HR Admin Review Modal (Approve -> Done or Return -> In Progress)
-  const [reviewModalTarget, setReviewModalTarget] = useState(null); // { task, submissionEmail, submission }
+  const [reviewModalTarget, setReviewModalTarget] = useState(null);
   const [reviewRemarksInput, setReviewRemarksInput] = useState("");
   const [isSubmittingReview, setIsSubmittingReview] = useState(false);
 
@@ -117,7 +112,6 @@ export default function TaskBoardPanel({
     setLoading(false);
   }, []);
 
-  // Load tasks + real-time sync
   useEffect(() => {
     loadTasks();
     const unsub = subscribeToTaskBoardLive((updatedList) => {
@@ -130,7 +124,6 @@ export default function TaskBoardPanel({
     };
   }, [loadTasks]);
 
-  // Load real database employees for Specific Employee assignment picker
   useEffect(() => {
     let active = true;
     const loadDirectory = async () => {
@@ -166,12 +159,10 @@ export default function TaskBoardPanel({
     };
   }, [profiles]);
 
-  // Tasks visible to current logged-in user
   const visibleTasks = useMemo(() => {
     return getVisibleTasksForUser(tasks, currentUser, isHeadOfficeAdmin);
   }, [tasks, currentUser, isHeadOfficeAdmin]);
 
-  // Apply search & filter pills
   const filteredTasks = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
     return visibleTasks.filter((t) => {
@@ -184,7 +175,6 @@ export default function TaskBoardPanel({
         );
         if (t.assignmentType !== "general_hr" && !matchesAssignedCompany) return false;
         if (t.assignmentType === "general_hr" && companyFilter !== "all" && !matchesSubmissionCompany && !matchesAssignedCompany) {
-          // Keep general tasks visible if filtering by a specific subsidiary since all subsidiaries receive general tasks
         }
       }
       if (q) {
@@ -195,7 +185,6 @@ export default function TaskBoardPanel({
     });
   }, [visibleTasks, assignmentFilter, priorityFilter, companyFilter, searchQuery, isHeadOfficeAdmin]);
 
-  // Group filtered tasks into the 4 Kanban columns
   const tasksByColumn = useMemo(() => {
     const grouped = {
       backlog: [],
@@ -214,7 +203,6 @@ export default function TaskBoardPanel({
     return grouped;
   }, [filteredTasks, myEmail, isHeadOfficeAdmin]);
 
-  // Filtered employee options inside Post Task Modal
   const filteredEmployeesForPicker = useMemo(() => {
     const q = employeeSearch.toLowerCase().trim();
     if (!q) return employees;
@@ -227,7 +215,6 @@ export default function TaskBoardPanel({
     );
   }, [employees, employeeSearch]);
 
-  // Create Task Submit Handler
   const handleCreateTask = async (e) => {
     e.preventDefault();
     if (!newTask.title.trim()) return;
@@ -272,7 +259,6 @@ export default function TaskBoardPanel({
     }
   };
 
-  // Start Task (Move to In Progress)
   const handleStartTask = async (task) => {
     const res = await markTaskInProgress(task.id, currentUser, isHeadOfficeAdmin);
     if (res.success) {
@@ -281,7 +267,6 @@ export default function TaskBoardPanel({
     }
   };
 
-  // Open Subsidiary Action Submission Modal
   const openActionModal = (task) => {
     const existingNotes =
       task.assignmentType === "general_hr"
@@ -291,7 +276,6 @@ export default function TaskBoardPanel({
     setActionNotesInput(existingNotes);
   };
 
-  // Submit Subsidiary Action for Review
   const handleSubmitAction = async (e) => {
     e.preventDefault();
     if (!actionModalTask || !actionNotesInput.trim()) return;
@@ -308,13 +292,11 @@ export default function TaskBoardPanel({
     }
   };
 
-  // Open HR Admin Review Modal
   const openReviewModal = (task, submissionEmail = null, submission = null) => {
     setReviewModalTarget({ task, submissionEmail, submission });
     setReviewRemarksInput(submission?.reviewRemarks || task.reviewRemarks || "");
   };
 
-  // HR Admin Approve (Mark Done) or Return (In Progress)
   const handleConfirmReview = async (decision) => {
     if (!reviewModalTarget) return;
     setIsSubmittingReview(true);
@@ -338,7 +320,6 @@ export default function TaskBoardPanel({
     }
   };
 
-  // Direct Quick Status Change (Head Office HR Admin)
   const handleQuickAdminMove = async (taskId, targetStatus) => {
     const res = await reviewTaskSubmission({
       taskId,
@@ -358,7 +339,6 @@ export default function TaskBoardPanel({
     }
   };
 
-  // Delete Task (Head Office HR Admin)
   const handleDeleteTask = async (task) => {
     if (!window.confirm(`Delete task "${task.title}"?`)) return;
     const res = await deleteTaskEntry(task.id);
@@ -370,7 +350,6 @@ export default function TaskBoardPanel({
 
   return (
     <div className="space-y-4 antialiased text-slate-800 animate-in fade-in">
-      {/* Toast Notification */}
       {toast && (
         <div className="fixed bottom-6 right-6 z-50 bg-slate-900 text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-2xl border border-slate-700 flex items-center gap-2 animate-in fade-in slide-in-from-bottom-3">
           <CheckCircle2 size={14} className="text-emerald-400 shrink-0" />
@@ -378,9 +357,6 @@ export default function TaskBoardPanel({
         </div>
       )}
 
-      {/* ================================================================= */}
-      {/* 1. HEADER & EXECUTIVE STATUS BAR                                   */}
-      {/* ================================================================= */}
       <div className="bg-white rounded-2xl border border-slate-200/90 p-4 shadow-2xs space-y-3">
         <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3 pb-3 border-b border-slate-100">
           <div>
@@ -435,7 +411,6 @@ export default function TaskBoardPanel({
           </div>
         </div>
 
-        {/* 4 Live Status Metric Chips */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
           {TASK_COLUMNS.map((col) => (
             <div
@@ -455,7 +430,6 @@ export default function TaskBoardPanel({
           ))}
         </div>
 
-        {/* Filter & Search Bar */}
         <div className="flex flex-col sm:flex-row items-center gap-2">
           <div className="relative flex-1 w-full">
             <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -506,9 +480,6 @@ export default function TaskBoardPanel({
         </div>
       </div>
 
-      {/* ================================================================= */}
-      {/* 2. 4-COLUMN KANBAN BOARD: BACKLOGS | IN PROGRESS | FOR REVIEW | DONE */}
-      {/* ================================================================= */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3.5 items-start">
         {TASK_COLUMNS.map((col) => {
           const colTasks = tasksByColumn[col.id] || [];
@@ -517,7 +488,6 @@ export default function TaskBoardPanel({
               key={col.id}
               className="rounded-2xl border border-slate-200/90 bg-slate-50/80 p-3 shadow-2xs flex flex-col gap-3 min-h-[340px]"
             >
-              {/* Column Header */}
               <div className={`rounded-xl border px-3 py-2 flex items-center justify-between ${col.headerBg}`}>
                 <div className="flex items-center gap-2">
                   <span className={`w-2 h-2 rounded-full ${col.dotColor}`} />
@@ -531,7 +501,6 @@ export default function TaskBoardPanel({
                 </span>
               </div>
 
-              {/* Column Cards */}
               {colTasks.length === 0 ? (
                 <div className="flex-1 flex flex-col items-center justify-center text-center py-10 px-3 text-slate-400">
                   <ClipboardCheck size={24} className="text-slate-300 mb-1.5" />
@@ -558,7 +527,6 @@ export default function TaskBoardPanel({
                         key={task.id}
                         className="rounded-xl border border-slate-200/90 bg-white p-3 shadow-2xs hover:shadow-sm transition space-y-2.5"
                       >
-                        {/* Top Badges: Priority + Category + Delete */}
                         <div className="flex items-start justify-between gap-1.5">
                           <div className="flex items-center gap-1 flex-wrap">
                             <span className={`px-1.5 py-0.5 rounded-md border text-[9px] font-black uppercase ${getPriorityStyle(task.priority)}`}>
@@ -580,7 +548,6 @@ export default function TaskBoardPanel({
                           )}
                         </div>
 
-                        {/* Title & Description */}
                         <div>
                           <h3 className="text-xs font-extrabold text-slate-900 leading-snug">
                             {task.title}
@@ -592,7 +559,6 @@ export default function TaskBoardPanel({
                           )}
                         </div>
 
-                        {/* Assignment Pill */}
                         <div className="flex items-center gap-1.5 flex-wrap">
                           {isGeneral ? (
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-indigo-50 text-indigo-800 border border-indigo-200 text-[10px] font-extrabold">
@@ -612,7 +578,6 @@ export default function TaskBoardPanel({
                           )}
                         </div>
 
-                        {/* Due Date & Creator */}
                         <div className="flex items-center justify-between text-[10px] text-slate-400">
                           <span className="truncate">By {task.createdByName}</span>
                           {task.dueDate && (
@@ -623,7 +588,6 @@ export default function TaskBoardPanel({
                           )}
                         </div>
 
-                        {/* Specific Task Submission Action Notes */}
                         {!isGeneral && displayActionNotes && (
                           <div className="rounded-lg bg-amber-50/80 border border-amber-200 p-2 text-[10.5px] space-y-1">
                             <div className="font-extrabold text-amber-900 flex items-center gap-1">
@@ -639,7 +603,6 @@ export default function TaskBoardPanel({
                           </div>
                         )}
 
-                        {/* Subsidiary Own Submission Box on General Task */}
                         {isGeneral && !isHeadOfficeAdmin && displayActionNotes && (
                           <div className="rounded-lg bg-amber-50/80 border border-amber-200 p-2 text-[10.5px] space-y-1">
                             <div className="font-extrabold text-amber-900 flex items-center gap-1">
@@ -650,7 +613,6 @@ export default function TaskBoardPanel({
                           </div>
                         )}
 
-                        {/* HR Admin Review Remarks (if any) */}
                         {displayReviewRemarks && (
                           <div className="rounded-lg bg-emerald-50/80 border border-emerald-200 p-2 text-[10.5px] space-y-0.5">
                             <div className="font-extrabold text-emerald-900 flex items-center gap-1">
@@ -661,7 +623,6 @@ export default function TaskBoardPanel({
                           </div>
                         )}
 
-                        {/* HEAD OFFICE HR ADMIN: General Task Per-Subsidiary Submissions Tracker */}
                         {isGeneral && isHeadOfficeAdmin && submissionsList.length > 0 && (
                           <div className="rounded-lg bg-slate-50 border border-slate-200 p-2 space-y-1.5">
                             <div className="flex items-center justify-between text-[10px] font-extrabold text-slate-700">
@@ -717,9 +678,7 @@ export default function TaskBoardPanel({
                           </div>
                         )}
 
-                        {/* ================= ACTION FOOTER BUTTONS ================= */}
                         <div className="pt-2 border-t border-slate-100 flex items-center gap-1.5 flex-wrap">
-                          {/* SUBSIDIARY / EMPLOYEE ACTIONS */}
                           {!isHeadOfficeAdmin && (
                             <>
                               {col.id === "backlog" && (
@@ -769,7 +728,6 @@ export default function TaskBoardPanel({
                             </>
                           )}
 
-                          {/* HEAD OFFICE HR ADMINISTRATOR ACTIONS */}
                           {isHeadOfficeAdmin && (
                             <>
                               {col.id === "backlog" && (
@@ -862,9 +820,6 @@ export default function TaskBoardPanel({
         })}
       </div>
 
-      {/* ================================================================= */}
-      {/* 3. POST NEW TASK MODAL (GENERAL HR OR SPECIFIC EMPLOYEE)           */}
-      {/* ================================================================= */}
       {isPostModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 backdrop-blur-xs p-3 sm:p-4 overflow-y-auto">
           <div className="w-full max-w-xl bg-white rounded-2xl border border-slate-200 shadow-2xl overflow-hidden my-auto">
@@ -885,7 +840,6 @@ export default function TaskBoardPanel({
             </div>
 
             <form onSubmit={handleCreateTask} className="p-5 space-y-4 max-h-[80vh] overflow-y-auto">
-              {/* Assignment Mode Selector */}
               <div className="space-y-1.5">
                 <label className="text-xs font-extrabold text-slate-700 block">
                   Who should perform this task? *
@@ -938,7 +892,6 @@ export default function TaskBoardPanel({
                 </div>
               </div>
 
-              {/* Specific Employee Searchable Picker */}
               {newTask.assignmentType === "specific_employee" && (
                 <div className="space-y-1.5 bg-emerald-50/50 border border-emerald-200 rounded-xl p-3">
                   <label className="text-xs font-extrabold text-emerald-900 block">
@@ -979,7 +932,6 @@ export default function TaskBoardPanel({
                 </div>
               )}
 
-              {/* Task Title */}
               <div className="space-y-1">
                 <label className="text-xs font-extrabold text-slate-700 block">Task Title *</label>
                 <input
@@ -992,7 +944,6 @@ export default function TaskBoardPanel({
                 />
               </div>
 
-              {/* Description / Instructions */}
               <div className="space-y-1">
                 <label className="text-xs font-extrabold text-slate-700 block">
                   Instructions / Deliverables
@@ -1006,7 +957,6 @@ export default function TaskBoardPanel({
                 />
               </div>
 
-              {/* Priority, Category, Due Date */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                 <div className="space-y-1">
                   <label className="text-[11px] font-bold text-slate-600 block">Priority</label>
@@ -1067,9 +1017,6 @@ export default function TaskBoardPanel({
         </div>
       )}
 
-      {/* ================================================================= */}
-      {/* 4. SUBSIDIARY ACTION SUBMISSION MODAL (SUBMIT FOR REVIEW)          */}
-      {/* ================================================================= */}
       {actionModalTask && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 backdrop-blur-xs p-3 sm:p-4">
           <div className="w-full max-w-lg bg-white rounded-2xl border border-slate-200 shadow-2xl overflow-hidden">
@@ -1133,9 +1080,6 @@ export default function TaskBoardPanel({
         </div>
       )}
 
-      {/* ================================================================= */}
-      {/* 5. HR ADMINISTRATOR REVIEW & MARK AS DONE MODAL                    */}
-      {/* ================================================================= */}
       {reviewModalTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 backdrop-blur-xs p-3 sm:p-4">
           <div className="w-full max-w-lg bg-white rounded-2xl border border-slate-200 shadow-2xl overflow-hidden">
@@ -1158,7 +1102,6 @@ export default function TaskBoardPanel({
             </div>
 
             <div className="p-5 space-y-4">
-              {/* Submitted Action Details */}
               <div className="rounded-xl bg-amber-50 border border-amber-200 p-3.5 space-y-1.5">
                 <div className="flex items-center justify-between text-xs font-extrabold text-amber-900">
                   <span>
@@ -1178,7 +1121,6 @@ export default function TaskBoardPanel({
                 </p>
               </div>
 
-              {/* Optional Review Remarks */}
               <div className="space-y-1.5">
                 <label className="text-xs font-extrabold text-slate-700 block">
                   HR Administrator Review Remarks (Optional)

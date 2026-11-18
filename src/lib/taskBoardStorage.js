@@ -1,14 +1,3 @@
-/**
- * taskBoardStorage.js
- * Enterprise Task Board Persistence & Real-Time Collaboration Service.
- *
- * Supports:
- * - General HR Tasks (assigned to ALL HR / Subsidiary accounts, with per-account progress & review tracking)
- * - Specific Employee Tasks (assigned to an individual database account)
- * - 4-Stage Workflow: Backlogs -> In Progress -> For Review -> Done
- * - Subsidiary Action Submissions (For Review) & Head Office HR Administrator Approval (Mark as Done / Return)
- * - Live synchronization via Cloud Database (`user_settings`), BroadcastChannel, and Realtime events.
- */
 
 import { supabase } from "./supabase.js";
 
@@ -107,9 +96,6 @@ async function persistTasksToCloud(tasks) {
   }
 }
 
-/**
- * Fetch all tasks from cloud database (with instant local fallback)
- */
 export async function fetchAllTasks() {
   try {
     if (supabase) {
@@ -147,9 +133,6 @@ export async function fetchAllTasks() {
   return [];
 }
 
-/**
- * Synchronous read from cache/localStorage for instant initial render
- */
 export function getCachedTasks() {
   if (Array.isArray(memoryTasksCache)) return memoryTasksCache;
   if (typeof window !== "undefined") {
@@ -164,9 +147,6 @@ export function getCachedTasks() {
   return [];
 }
 
-/**
- * Subscribe to real-time Task Board changes across tabs and devices
- */
 export function subscribeToTaskBoardLive(callback) {
   const onWindowEvent = (e) => {
     if (Array.isArray(e?.detail)) callback(e.detail);
@@ -217,16 +197,13 @@ export function subscribeToTaskBoardLive(callback) {
   };
 }
 
-/**
- * Create a new task (General Task for ALL HR, or Specific Employee Task)
- */
 export async function createTaskEntry({
   title,
   description = "",
   priority = "Medium",
   category = "HR Operations",
   dueDate = "",
-  assignmentType = "general_hr", // "general_hr" | "specific_employee"
+  assignmentType = "general_hr",
   assignedToEmail = "",
   assignedToName = "",
   assignedToCompany = "",
@@ -262,7 +239,6 @@ export async function createTaskEntry({
     reviewRemarks: "",
     reviewedByName: "",
     reviewedAt: null,
-    // Per-account submission tracking for General HR Tasks
     submissions: {},
     createdByName: createdBy?.name || "HR Administrator",
     createdByEmail: String(createdBy?.email || "").toLowerCase().trim(),
@@ -276,31 +252,20 @@ export async function createTaskEntry({
   return { success: true, task: newTask, tasks: nextTasks };
 }
 
-/**
- * Resolve the effective Kanban column status for a given user viewing a task
- */
 export function getEffectiveTaskStatusForUser(task, userEmail = "", isHeadOfficeAdmin = false) {
   if (!task) return "backlog";
   const normEmail = String(userEmail || "").toLowerCase().trim();
 
-  // For Specific Employee tasks, status is directly on the task
   if (task.assignmentType !== "general_hr") {
     return task.status || "backlog";
   }
 
-  // For General HR tasks:
-  // - Non-Head-Office / Subsidiary user sees their OWN individual submission progress if they have interacted
   if (!isHeadOfficeAdmin && normEmail) {
     const mySub = task.submissions?.[normEmail];
     if (mySub?.status) return mySub.status;
     return task.status === "done" ? "done" : (task.status === "in_progress" ? "in_progress" : "backlog");
   }
 
-  // - Head Office HR Admin sees overall status:
-  //   If explicitly marked done globally -> "done"
-  //   Else if any subsidiary has a pending "for_review" submission -> surface in "for_review"!
-  //   Else if any subsidiary is "in_progress" -> "in_progress"
-  //   Else task.status
   if (task.status === "done") return "done";
   const subs = Object.values(task.submissions || {});
   if (subs.some((s) => s.status === "for_review")) return "for_review";
@@ -308,9 +273,6 @@ export function getEffectiveTaskStatusForUser(task, userEmail = "", isHeadOffice
   return task.status || "backlog";
 }
 
-/**
- * Filter tasks visible to the currently logged-in user
- */
 export function getVisibleTasksForUser(tasks = [], user = null, isHeadOfficeAdmin = false) {
   if (!Array.isArray(tasks)) return [];
   if (isHeadOfficeAdmin) return tasks;
@@ -322,9 +284,6 @@ export function getVisibleTasksForUser(tasks = [], user = null, isHeadOfficeAdmi
   });
 }
 
-/**
- * Subsidiary / Assigned Employee starts working on a task (moves to In Progress)
- */
 export async function markTaskInProgress(taskId, actor = {}, isHeadOfficeAdmin = false) {
   const currentTasks = await fetchAllTasks();
   const actorEmail = String(actor?.email || "").toLowerCase().trim();
@@ -364,9 +323,6 @@ export async function markTaskInProgress(taskId, actor = {}, isHeadOfficeAdmin =
   return { success: true, tasks: nextTasks };
 }
 
-/**
- * Subsidiary / Assigned Employee submits their Action Taken for Head Office HR Admin Review
- */
 export async function submitTaskActionForReview(taskId, actor = {}, actionNotes = "") {
   const trimmedNotes = String(actionNotes || "").trim();
   if (!trimmedNotes) {
@@ -417,15 +373,10 @@ export async function submitTaskActionForReview(taskId, actor = {}, actionNotes 
   return { success: true, tasks: nextTasks };
 }
 
-/**
- * Head Office HR Administrator reviews a submitted task or general-task branch submission:
- * - decision === "done" -> Marks as Done (Approved)
- * - decision === "in_progress" -> Returns to In Progress with remarks
- */
 export async function reviewTaskSubmission({
   taskId,
   submissionEmail = null,
-  decision = "done", // "done" | "in_progress" | "backlog"
+  decision = "done",
   reviewer = {},
   reviewRemarks = ""
 }) {
@@ -436,7 +387,6 @@ export async function reviewTaskSubmission({
   const nextTasks = currentTasks.map((t) => {
     if (t.id !== taskId) return t;
 
-    // Reviewing a specific subsidiary's submission inside a General HR Task
     if (t.assignmentType === "general_hr" && normSubEmail && t.submissions?.[normSubEmail]) {
       const updatedSubmissions = {
         ...t.submissions,
@@ -455,7 +405,6 @@ export async function reviewTaskSubmission({
       };
     }
 
-    // Reviewing a specific employee task OR globally moving a General Task column
     return {
       ...t,
       status: decision,
@@ -470,9 +419,6 @@ export async function reviewTaskSubmission({
   return { success: true, tasks: nextTasks };
 }
 
-/**
- * Delete a task (Head Office HR Administrator only)
- */
 export async function deleteTaskEntry(taskId) {
   const currentTasks = await fetchAllTasks();
   const nextTasks = currentTasks.filter((t) => t.id !== taskId);
