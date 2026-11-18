@@ -205,6 +205,7 @@ export const HR_PRE_REGISTRATION_ROLES = [
   "HR Admin V",
   "HR Admin VI",
   "HR-Onsite",
+  "Field Monitoring",
   "Site Supervisor",
   "Team Member"
 ];
@@ -233,6 +234,7 @@ export const OPERATIONAL_DESIGNATION_GROUPS = [
     category: "STL Operations",
     badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-200",
     roles: [
+      "FIELD MONITORING",
       "CLUSTER IN CHARGE",
       "DRAW COURT OFFICER",
       "HEAD CASHIER",

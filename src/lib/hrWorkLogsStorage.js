@@ -624,9 +624,9 @@ export const MODULE_WORKLOG_MAP = {
     comments: "Participated in live operational coordination conference with regional station supervisors."
   },
   sops: {
-    task: "SOP Workflow & Task Board Audit",
+    task: "Task Board & Daily Operations Audit",
     category: "Corporate Policy & Administrative",
-    comments: "Inspected standard operating procedures, task milestones, and daily administrative duties."
+    comments: "Reviewed daily task board items, milestones, and administrative duties."
   },
   weather: {
     task: "Field Weather & Natural Hazard Radar Monitoring",
@@ -717,6 +717,41 @@ export const MODULE_WORKLOG_MAP = {
     task: "Corporate Bulletin Board & Announcements Feed Review",
     category: "Corporate Policy & Administrative",
     comments: "Reviewed official announcements, company circulars, and executive leadership memos."
+  },
+  hr_helpdesk: {
+    task: "HR Helpdesk Support & Employee Ticket Resolution",
+    category: "Employee Relations & Due Process",
+    comments: "Handled HR Helpdesk inquiries covering COE requests, benefits, leaves, and employee concerns."
+  },
+  it_helpdesk: {
+    task: "IT Helpdesk Technical Support & Terminal Assistance",
+    category: "Corporate Policy & Administrative",
+    comments: "Coordinated IT Helpdesk tickets for POS/STL terminals, HRHub accounts, biometrics, and connectivity."
+  },
+  finance_desk: {
+    task: "Finance Desk Remittance & Payout Ticket Review",
+    category: "Payroll, SSS & Compensation",
+    comments: "Reviewed Finance Desk tickets regarding STL gross remittances, hits payouts, petty cash, and payslips."
+  },
+  knowledge_center: {
+    task: "Knowledge Center Guides & Operational Playbooks Review",
+    category: "Corporate Policy & Administrative",
+    comments: "Consulted and managed operational playbooks, DOLE protocols, and HRHub guides in the Knowledge Center."
+  },
+  suggestion_box: {
+    task: "Employee Suggestion Box & Feedback Review",
+    category: "Employee Relations & Due Process",
+    comments: "Reviewed staff improvement suggestions, feedback votes, and management responses."
+  },
+  leaderboards: {
+    task: "Performance Leaderboards & Recognition Awards Review",
+    category: "Corporate Policy & Administrative",
+    comments: "Reviewed staff and subsidiary leaderboard rankings and employee recognition awards."
+  },
+  polls_surveys: {
+    task: "Company Polls & Employee Pulse Survey Administration",
+    category: "Employee Relations & Due Process",
+    comments: "Reviewed and participated in live company polls and employee pulse surveys."
   },
   attendance: {
     task: "Daily HR Shift Login & Station Portal Check-in",

@@ -7,7 +7,8 @@ import {
   Database, RefreshCw, CheckCircle2, AlertCircle, Clock,
   Bot, Layers, Home, X, CheckCheck, Menu, UserCheck, ShieldAlert,
   Lock, Wrench, MapPin, CloudSun, Scale, TrendingUp, Flame, Video,
-  Calculator, Receipt, Banknote
+  Calculator, Receipt, Banknote,
+  Headphones, Laptop, Wallet, BookOpen, Lightbulb, Trophy, BarChart2
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import ProfileModal from "../components/ProfileModal";
@@ -39,6 +40,15 @@ import AiAssistantGirlWidget from "../components/AiAssistantGirlWidget";
 import MondayStyleSidebar from "../components/MondayStyleSidebar";
 import HomeWorkspaceView from "../components/HomeWorkspaceView";
 import TeamChatMessengerModal from "../components/TeamChatMessengerModal";
+import TaskBoardPanel from "../components/TaskBoardPanel";
+import CommunicationHubPanels from "../components/CommunicationHubPanels";
+import {
+  fetchAllTasks,
+  subscribeToTaskBoardLive,
+  getVisibleTasksForUser,
+  getEffectiveTaskStatusForUser
+} from "../lib/taskBoardStorage";
+import { isHeadOfficeHrAdminUser } from "../lib/aiAssistantService";
 import {
   isUserTabAllowed,
   isUserFeatureAllowed,
@@ -218,6 +228,7 @@ const FREQUENT_USAGE_STORAGE_KEY = "hrhub_frequent_tabs_usage_v2";
 const TEN_DAYS_MS = 10 * 24 * 60 * 60 * 1000; // 10 days in milliseconds
 
 const DEFAULT_POPULAR_TAB_IDS = [
+  "sops",
   "incident_reports",
   "memo",
   "doc_studio",
@@ -304,7 +315,7 @@ const WORKSPACE_TAB_DEFS = {
   },
   sops: {
     id: "sops",
-    label: "SOP & Task Board",
+    label: "Task Board",
     icon: Layers,
     activeClass: "bg-slate-900 text-white ring-2 ring-emerald-400",
     activeIconClass: "text-emerald-400",
@@ -511,10 +522,12 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
     } catch {}
     return currentUser?.company || "Simpal Group of Companies";
   });
-  const [profilePhone, setProfilePhone] = useState("+63 917 555 0148");
-  const [profileLocation, setProfileLocation] = useState("Makati City, Philippines");
-  const [profileDepartment, setProfileDepartment] = useState("People Operations");
-  const [profileBio, setProfileBio] = useState("Supporting people, culture, and better work across the Simpal Group.");
+  const [profilePhone, setProfilePhone] = useState(currentUser?.phone || "");
+  const [profileLocation, setProfileLocation] = useState(currentUser?.branch || currentUser?.location || "");
+  const [profileDepartment, setProfileDepartment] = useState(currentUser?.department || "");
+  const [profileBio, setProfileBio] = useState(currentUser?.bio || "");
+  const [profileJoinedDate, setProfileJoinedDate] = useState(currentUser?.hire_date || currentUser?.created_at || "");
+  const [profilePhotoUrl, setProfilePhotoUrl] = useState(currentUser?.photo_url || "");
   const [profileSaved, setProfileSaved] = useState(false);
   const [passwordSaved, setPasswordSaved] = useState(false);
 
@@ -533,38 +546,90 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
       }
       if (currentUser.email) setProfileEmail(currentUser.email);
       if (currentUser.company) setProfileCompany(currentUser.company);
+      if (currentUser.branch) setProfileLocation((prev) => prev || currentUser.branch);
     }
   }, [currentUser]);
 
-  // Direct database profile sync: guarantee logged-in user profile, company, and role match the official Employee Directory
+  // Direct database profile sync: guarantee logged-in user profile, company, role, phone, branch, department, bio, and join date match real DB records (zero mockups)
   useEffect(() => {
     if (!currentUser?.email) return;
     const targetEmail = currentUser.email.toLowerCase().trim();
 
     const syncProfileFromDatabase = async () => {
       try {
-        const { data: emp } = await supabase
-          .from("employees")
-          .select("*")
-          .ilike("email", targetEmail)
-          .maybeSingle();
+        const [empRes, profRes, customSettingsRes] = await Promise.all([
+          supabase.from("employees").select("*").ilike("email", targetEmail).maybeSingle(),
+          supabase.from("profiles").select("*").ilike("email", targetEmail).maybeSingle(),
+          supabase.from("user_settings").select("settings_json").eq("user_id", `hrhub_user_profile_${targetEmail}`).maybeSingle()
+        ]);
 
-        const dbUser = emp || (await supabase.from("profiles").select("*").ilike("email", targetEmail).maybeSingle()).data;
+        const emp = empRes?.data || null;
+        const prof = profRes?.data || null;
+        const customMeta = customSettingsRes?.data?.settings_json || null;
+        const dbUser = emp || prof;
 
-        if (dbUser) {
+        if (dbUser || customMeta) {
           const isDefaultHrmd =
             targetEmail === "admin@hrhub.com" ||
-            dbUser.name === "Admin" ||
-            dbUser.name === "Super Administrator" ||
-            dbUser.name?.toLowerCase() === "hrmd";
+            dbUser?.name === "Admin" ||
+            dbUser?.name === "Super Administrator" ||
+            dbUser?.name?.toLowerCase() === "hrmd";
 
-          const effName = isDefaultHrmd ? "H R M D" : (dbUser.name || currentUser.name);
-          const effCompany = isDefaultHrmd ? "Simpal Group of Companies" : (dbUser.company || currentUser.company);
-          const effRole = isDefaultHrmd ? "HR Administrator" : (dbUser.role || currentUser.role);
+          const effName = customMeta?.name || (isDefaultHrmd ? "H R M D" : (dbUser?.name || currentUser.name || ""));
+          const effCompany = isDefaultHrmd ? "Simpal Group of Companies" : (dbUser?.company || prof?.company || currentUser.company || "");
+          const effRole = customMeta?.role || (isDefaultHrmd ? "HR Administrator" : (dbUser?.role || prof?.role || currentUser.role || ""));
+          const effPhone =
+            customMeta?.phone ??
+            emp?.phone ??
+            emp?.contact_number ??
+            emp?.mobile ??
+            emp?.metadata?.phone ??
+            emp?.metadata?.contactNumber ??
+            prof?.phone ??
+            "";
+          const effLocation =
+            customMeta?.location ??
+            emp?.branch ??
+            emp?.address ??
+            emp?.metadata?.address ??
+            prof?.branch ??
+            currentUser.branch ??
+            "";
+          const effDepartment =
+            customMeta?.department ??
+            emp?.department ??
+            emp?.metadata?.department ??
+            prof?.department ??
+            "";
+          const effBio =
+            customMeta?.bio ??
+            emp?.bio ??
+            emp?.metadata?.bio ??
+            prof?.bio ??
+            "";
+          const effJoined =
+            emp?.date_hired ??
+            emp?.hire_date ??
+            emp?.metadata?.dateHired ??
+            emp?.created_at ??
+            prof?.created_at ??
+            "";
+          const effPhoto =
+            emp?.photo_url ??
+            emp?.avatar_url ??
+            emp?.metadata?.photoUrl ??
+            prof?.avatar_url ??
+            "";
 
           if (effName) setProfileName(effName);
           if (effCompany) setProfileCompany(effCompany);
           if (effRole) setProfileRole(effRole);
+          setProfilePhone(String(effPhone || ""));
+          setProfileLocation(String(effLocation || ""));
+          setProfileDepartment(String(effDepartment || ""));
+          setProfileBio(String(effBio || ""));
+          setProfileJoinedDate(String(effJoined || ""));
+          setProfilePhotoUrl(String(effPhoto || ""));
 
           try {
             const raw = localStorage.getItem("hrhub_auth_user");
@@ -575,7 +640,10 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
                 name: effName,
                 company: effCompany,
                 role: effRole,
-                branch: dbUser.branch || current.branch
+                branch: effLocation || current.branch,
+                phone: effPhone,
+                department: effDepartment,
+                bio: effBio
               }));
             }
           } catch {}
@@ -588,21 +656,148 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
     syncProfileFromDatabase();
   }, [currentUser?.email]);
 
+  // Real Database Save Handler for Communication "Update Profile" Modal
+  const handleSaveUserProfile = async (updated) => {
+    const targetEmail = (profileEmail || currentUser?.email || "").toLowerCase().trim();
+    if (!targetEmail) return { success: false, error: "No authenticated email found." };
+
+    try {
+      // 1. Persist custom extended profile fields reliably in user_settings
+      await supabase.from("user_settings").upsert(
+        {
+          user_id: `hrhub_user_profile_${targetEmail}`,
+          settings_json: {
+            name: updated.name,
+            role: updated.role,
+            phone: updated.phone,
+            location: updated.location,
+            department: updated.department,
+            bio: updated.bio,
+            updated_at: new Date().toISOString()
+          },
+          updated_at: new Date().toISOString()
+        },
+        { onConflict: "user_id" }
+      );
+
+      // 2. Sync official record in `employees` table (if record exists)
+      const { data: existingEmp } = await supabase
+        .from("employees")
+        .select("id, metadata")
+        .ilike("email", targetEmail)
+        .maybeSingle();
+
+      if (existingEmp?.id) {
+        const mergedMeta = {
+          ...(existingEmp.metadata && typeof existingEmp.metadata === "object" ? existingEmp.metadata : {}),
+          phone: updated.phone,
+          contactNumber: updated.phone,
+          address: updated.location,
+          department: updated.department,
+          bio: updated.bio
+        };
+        await supabase
+          .from("employees")
+          .update({
+            name: updated.name,
+            role: updated.role,
+            branch: updated.location || undefined,
+            metadata: mergedMeta
+          })
+          .eq("id", existingEmp.id);
+      }
+
+      // 3. Sync `profiles` table (if record exists)
+      await supabase
+        .from("profiles")
+        .update({
+          name: updated.name,
+          role: updated.role,
+          branch: updated.location || undefined
+        })
+        .ilike("email", targetEmail);
+
+      // 4. Update local state & localStorage immediately
+      setProfileName(updated.name);
+      setProfileRole(updated.role);
+      setProfilePhone(updated.phone);
+      setProfileLocation(updated.location);
+      setProfileDepartment(updated.department);
+      setProfileBio(updated.bio);
+
+      setSupabaseProfiles((prev) =>
+        prev.map((p) =>
+          (p.email || "").toLowerCase().trim() === targetEmail
+            ? {
+                ...p,
+                name: updated.name,
+                role: updated.role,
+                branch: updated.location || p.branch,
+                phone: updated.phone,
+                department: updated.department
+              }
+            : p
+        )
+      );
+
+      try {
+        const raw = localStorage.getItem("hrhub_auth_user");
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          localStorage.setItem(
+            "hrhub_auth_user",
+            JSON.stringify({
+              ...parsed,
+              name: updated.name,
+              role: updated.role,
+              branch: updated.location || parsed.branch,
+              phone: updated.phone,
+              department: updated.department,
+              bio: updated.bio
+            })
+          );
+        }
+      } catch {}
+
+      return { success: true };
+    } catch (err) {
+      console.warn("handleSaveUserProfile error:", err);
+      return { success: false, error: err?.message || "Failed to save profile." };
+    }
+  };
+
+  // Real Password Change Handler via Auth API
+  const handleChangeUserPassword = async ({ newPassword }) => {
+    try {
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) {
+        return { success: false, error: error.message };
+      }
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: err?.message || "Unable to update password." };
+    }
+  };
+
   const userInitials = profileName
     ? (profileName.replace(/\s+/g, "").toLowerCase() === "hrmd"
         ? "HR"
         : profileName.split(" ").filter(Boolean).map((n) => n[0]).join("").slice(0, 2).toUpperCase())
     : (profileEmail ? profileEmail.slice(0, 2).toUpperCase() : "HR");
-  const displayRole = currentUser?.role || profileRole || "Team Member";
-  const displayCompany = currentUser?.company || profileCompany || "Simpal Group of Companies";
+  const displayRole = profileRole || currentUser?.role || "Team Member";
+  const displayCompany = profileCompany || currentUser?.company || "Simpal Group of Companies";
 
-  // Dynamic Workspace Tabs State: default empty
+  // Dynamic Workspace Tabs State: opens Task Board ("sops") FIRST by default so assigned tasks are immediately visible
   const [openTabs, setOpenTabs] = useState(() => {
     try {
       const stored = localStorage.getItem("hrhub_workspace_open_tabs");
-      return stored ? JSON.parse(stored) : [];
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+      return ["sops"];
     } catch {
-      return [];
+      return ["sops"];
     }
   });
 
@@ -610,15 +805,27 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
     try {
       const storedTabs = localStorage.getItem("hrhub_workspace_open_tabs");
       const parsed = storedTabs ? JSON.parse(storedTabs) : [];
-      if (parsed.length > 0) {
+      if (Array.isArray(parsed) && parsed.length > 0) {
         const storedTab = localStorage.getItem("hrhub_workspace_tab");
         return parsed.includes(storedTab) ? storedTab : parsed[parsed.length - 1];
       }
-      return null;
+      return "sops";
     } catch {
-      return null;
+      return "sops";
     }
   });
+
+  // Live Task Board counter (for Head Office HR Admin: "For Review" count; for Subsidiaries/Employees: active Backlog/In Progress tasks)
+  const [taskBoardItems, setTaskBoardItems] = useState([]);
+  useEffect(() => {
+    fetchAllTasks().then((list) => setTaskBoardItems(list || []));
+    const unsub = subscribeToTaskBoardLive((list) => {
+      if (Array.isArray(list)) setTaskBoardItems(list);
+    });
+    return () => {
+      if (typeof unsub === "function") unsub();
+    };
+  }, []);
 
   useEffect(() => {
     try {
@@ -971,12 +1178,54 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
     [currentUserObj, matrixData]
   );
 
+  const isHoAdminDefault = isHeadOfficeHrAdminUser(currentUserObj, isHRMD);
+  const myAccountOverrideMap = useMemo(() => {
+    const overrides = matrixData?.accountOverrides;
+    if (!overrides) return null;
+    const email = (currentUserObj?.email || "").toLowerCase().trim();
+    if (!email) return null;
+    if (overrides[email]) return overrides[email];
+    const matchKey = Object.keys(overrides).find((k) => k.toLowerCase().trim() === email);
+    return matchKey ? overrides[matchKey] : null;
+  }, [matrixData, currentUserObj]);
+
+  const resolveAdminFeature = (featureKey, parentTabKey) => {
+    if (!isUserTabAllowed(currentUserObj, parentTabKey, matrixData)) return false;
+    if (myAccountOverrideMap && typeof myAccountOverrideMap[featureKey] === "boolean") {
+      return myAccountOverrideMap[featureKey];
+    }
+    if (isHoAdminDefault) return true;
+    return isUserFeatureAllowed(currentUserObj, featureKey, matrixData);
+  };
+
+  const canUseAiBuddy = isUserTabAllowed(currentUserObj, "ai_buddy_assistant", matrixData);
+  const canManageTaskBoard = resolveAdminFeature("manage_sop_tasks", "sops");
+  const canManageCommHelpdesk = resolveAdminFeature("comm_manage_helpdesk", "communication");
+  const canManageCommEngagement = resolveAdminFeature("comm_manage_engagement", "communication");
+
+  // Live Task Board attention badge (Task Board Admins: "For Review" count; Subsidiaries/Employees: pending Backlog/In Progress tasks)
+  const taskBoardBadgeCount = useMemo(() => {
+    const visible = getVisibleTasksForUser(taskBoardItems, currentUserObj, canManageTaskBoard);
+    const email = (currentUserObj?.email || "").toLowerCase().trim();
+    return visible.filter((t) => {
+      const st = getEffectiveTaskStatusForUser(t, email, canManageTaskBoard);
+      return canManageTaskBoard ? st === "for_review" : (st === "backlog" || st === "in_progress");
+    }).length;
+  }, [taskBoardItems, currentUserObj, canManageTaskBoard]);
+
   const isCommWorkspaceAllowed = isUserTabAllowed(currentUserObj, "communication", matrixData);
   const canViewBulletin = isUserFeatureAllowed(currentUserObj, "comm_bulletin", matrixData);
   const canPostBulletin = isUserFeatureAllowed(currentUserObj, "comm_post_bulletin", matrixData);
   const canViewDirectory = isUserFeatureAllowed(currentUserObj, "comm_directory", matrixData);
   const canViewAttendance = isUserFeatureAllowed(currentUserObj, "comm_attendance", matrixData);
   const canViewPolicies = isUserFeatureAllowed(currentUserObj, "comm_policies", matrixData);
+  const canViewHrHelpdesk = isUserFeatureAllowed(currentUserObj, "comm_hr_helpdesk", matrixData);
+  const canViewItHelpdesk = isUserFeatureAllowed(currentUserObj, "comm_it_helpdesk", matrixData);
+  const canViewFinanceDesk = isUserFeatureAllowed(currentUserObj, "comm_finance_desk", matrixData);
+  const canViewKnowledgeCenter = isUserFeatureAllowed(currentUserObj, "comm_knowledge_center", matrixData);
+  const canViewSuggestionBox = isUserFeatureAllowed(currentUserObj, "comm_suggestion_box", matrixData);
+  const canViewLeaderboards = isUserFeatureAllowed(currentUserObj, "comm_leaderboards", matrixData);
+  const canViewPollsSurveys = isUserFeatureAllowed(currentUserObj, "comm_polls_surveys", matrixData);
 
   // Automatically select the first authorized sub-tab if active sub-tab is restricted
   useEffect(() => {
@@ -985,7 +1234,14 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
         { id: "bulletin", allowed: canViewBulletin },
         { id: "directory", allowed: canViewDirectory },
         { id: "attendance", allowed: canViewAttendance },
-        { id: "policies", allowed: canViewPolicies }
+        { id: "policies", allowed: canViewPolicies },
+        { id: "hr_helpdesk", allowed: canViewHrHelpdesk },
+        { id: "it_helpdesk", allowed: canViewItHelpdesk },
+        { id: "finance_desk", allowed: canViewFinanceDesk },
+        { id: "knowledge_center", allowed: canViewKnowledgeCenter },
+        { id: "suggestion_box", allowed: canViewSuggestionBox },
+        { id: "leaderboards", allowed: canViewLeaderboards },
+        { id: "polls_surveys", allowed: canViewPollsSurveys }
       ];
       const currentAllowed = tabs.find((t) => t.id === communicationTab)?.allowed;
       if (!currentAllowed) {
@@ -995,7 +1251,22 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
         }
       }
     }
-  }, [activeView, isCommWorkspaceAllowed, communicationTab, canViewBulletin, canViewDirectory, canViewAttendance, canViewPolicies]);
+  }, [
+    activeView,
+    isCommWorkspaceAllowed,
+    communicationTab,
+    canViewBulletin,
+    canViewDirectory,
+    canViewAttendance,
+    canViewPolicies,
+    canViewHrHelpdesk,
+    canViewItHelpdesk,
+    canViewFinanceDesk,
+    canViewKnowledgeCenter,
+    canViewSuggestionBox,
+    canViewLeaderboards,
+    canViewPollsSurveys
+  ]);
 
   // Strict Real-Time RBAC Workspace Enforcement:
   // Immediately closes any open workspace tab whose capability is disabled in the matrix
@@ -2176,7 +2447,7 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
                   if (view === "communication" && !isCommWorkspaceAllowed) return;
                   setActiveView(view);
                   if (view === "sop") {
-                    handleOpenWorkspaceTab(tab || "home");
+                    handleOpenWorkspaceTab(tab || (canAccessTab("sops") ? "sops" : "home"));
                     setIsSidebarCollapsed(true);
                   } else if (view === "communication") {
                     if (tab) handleSelectCommunicationTab(tab);
@@ -2212,6 +2483,7 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
           setProfileRole={setProfileRole}
           profileEmail={profileEmail}
           setProfileEmail={setProfileEmail}
+          profileCompany={displayCompany}
           profilePhone={profilePhone}
           setProfilePhone={setProfilePhone}
           profileLocation={profileLocation}
@@ -2220,10 +2492,14 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
           setProfileDepartment={setProfileDepartment}
           profileBio={profileBio}
           setProfileBio={setProfileBio}
+          profileJoinedDate={profileJoinedDate}
+          profilePhotoUrl={profilePhotoUrl}
           profileSaved={profileSaved}
           setProfileSaved={setProfileSaved}
           passwordSaved={passwordSaved}
           setPasswordSaved={setPasswordSaved}
+          onSaveProfile={handleSaveUserProfile}
+          onChangePassword={handleChangeUserPassword}
         />
       )}
 
@@ -2271,44 +2547,77 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
                   </div>
                 </div>
 
-                <nav className="space-y-1 text-xs font-semibold text-slate-600">
+                <nav className="space-y-3 text-[12.5px] font-medium text-slate-700">
                   {[
-                    { id: "bulletin", icon: Megaphone, label: "Company Bulletin", allowed: canViewBulletin },
-                    { id: "directory", icon: Users, label: "Employee Directory", badge: supabaseProfiles.filter(p => !p.is_approved).length, allowed: canViewDirectory },
-                    { id: "attendance", icon: Calendar, label: "Shift & Attendance", allowed: canViewAttendance },
-                    { id: "policies", icon: ShieldCheck, label: "Policies & Handbooks", allowed: canViewPolicies }
-                  ].map(({ id, icon: Icon, label, badge, allowed }) => (
-                    <button
-                      key={id}
-                      type="button"
-                      disabled={!allowed}
-                      onClick={() => {
-                        if (allowed) {
-                          handleSelectCommunicationTab(id);
-                        }
-                      }}
-                      title={!allowed ? "Restricted by Head Office" : label}
-                      className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl transition ${
-                        !allowed
-                          ? "opacity-50 cursor-not-allowed bg-slate-100/50 text-slate-400"
-                          : communicationTab === id
-                          ? "bg-white text-emerald-700 font-bold shadow-sm border border-slate-200 cursor-pointer"
-                          : "hover:bg-slate-50 text-slate-600 cursor-pointer"
-                      }`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <Icon size={16} className={!allowed ? "text-slate-400" : communicationTab === id ? "text-emerald-600" : "text-slate-500"} />
-                        <span>{label}</span>
+                    {
+                      heading: "Portal & Directory",
+                      items: [
+                        { id: "bulletin", icon: Megaphone, label: "Company Bulletin", allowed: canViewBulletin },
+                        { id: "directory", icon: Users, label: "Employee Directory", badge: supabaseProfiles.filter(p => !p.is_approved).length, allowed: canViewDirectory },
+                        { id: "attendance", icon: Calendar, label: "Shift & Attendance", allowed: canViewAttendance },
+                        { id: "policies", icon: ShieldCheck, label: "Policies & Handbooks", allowed: canViewPolicies }
+                      ]
+                    },
+                    {
+                      heading: "Service Desks",
+                      items: [
+                        { id: "hr_helpdesk", icon: Headphones, label: "HR Helpdesk", allowed: canViewHrHelpdesk },
+                        { id: "it_helpdesk", icon: Laptop, label: "IT Helpdesk", allowed: canViewItHelpdesk },
+                        { id: "finance_desk", icon: Wallet, label: "Finance Desk", allowed: canViewFinanceDesk }
+                      ]
+                    },
+                    {
+                      heading: "Engagement & Resources",
+                      items: [
+                        { id: "knowledge_center", icon: BookOpen, label: "Knowledge Center", allowed: canViewKnowledgeCenter },
+                        { id: "suggestion_box", icon: Lightbulb, label: "Suggestion Box", allowed: canViewSuggestionBox },
+                        { id: "leaderboards", icon: Trophy, label: "Leaderboards", allowed: canViewLeaderboards },
+                        { id: "polls_surveys", icon: BarChart2, label: "Polls & Survey", allowed: canViewPollsSurveys }
+                      ]
+                    }
+                  ]
+                    .map((section) => ({
+                      ...section,
+                      items: section.items.filter((item) => item.allowed)
+                    }))
+                    .filter((section) => section.items.length > 0)
+                    .map((section, sectionIdx) => (
+                      <div
+                        key={section.heading}
+                        className={`space-y-0.5 ${sectionIdx > 0 ? "pt-3 border-t border-slate-200/80" : ""}`}
+                      >
+                        <p className="px-2.5 pb-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                          {section.heading}
+                        </p>
+                        {section.items.map(({ id, icon: Icon, label, badge }) => (
+                          <button
+                            key={id}
+                            type="button"
+                            onClick={() => handleSelectCommunicationTab(id)}
+                            title={label}
+                            className={`w-full flex items-center justify-between px-2.5 py-2 rounded-lg tracking-[-0.01em] transition cursor-pointer ${
+                              communicationTab === id
+                                ? "bg-white text-emerald-700 font-semibold shadow-2xs border border-slate-200/90"
+                                : "text-slate-600 hover:bg-white/70 hover:text-slate-900 border border-transparent"
+                            }`}
+                          >
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <Icon
+                                size={15}
+                                strokeWidth={communicationTab === id ? 2.1 : 1.85}
+                                className={communicationTab === id ? "text-emerald-600 shrink-0" : "text-slate-500 shrink-0"}
+                              />
+                              <span className="truncate">{label}</span>
+                            </div>
+                            {badge > 0 ? (
+                              <span className="text-[9.5px] font-semibold bg-amber-100 text-amber-800 border border-amber-200 px-1.5 py-0.5 rounded-full animate-pulse shrink-0">
+                                {badge}
+                              </span>
+                            ) : null}
+                          </button>
+                        ))}
                       </div>
-                      {!allowed ? (
-                        <Lock size={12} className="text-slate-400" />
-                      ) : badge > 0 ? (
-                        <span className="text-[9px] font-black bg-amber-100 text-amber-800 border border-amber-200 px-1.5 py-0.5 rounded-full animate-pulse">
-                          {badge}
-                        </span>
-                      ) : null}
-                    </button>
-                  ))}
+                    ))}
                 </nav>
               </div>
 
@@ -2317,7 +2626,20 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
                 isHRMD={isHRMD}
                 profileName={profileName}
                 onNavigateTab={(targetTab) => {
-                  if (targetTab === "bulletin" || targetTab === "directory" || targetTab === "attendance" || targetTab === "policies") {
+                  const commTabs = [
+                    "bulletin",
+                    "directory",
+                    "attendance",
+                    "policies",
+                    "hr_helpdesk",
+                    "it_helpdesk",
+                    "finance_desk",
+                    "knowledge_center",
+                    "suggestion_box",
+                    "leaderboards",
+                    "polls_surveys"
+                  ];
+                  if (commTabs.includes(targetTab)) {
                     handleSelectCommunicationTab(targetTab);
                   } else {
                     handleOpenWorkspaceTab(targetTab);
@@ -2328,9 +2650,81 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
               {communicationTab === "directory" && canViewDirectory && renderColleaguesDirectoryWidget()}
             </aside>
 
-            <main className={`${communicationTab === "bulletin" ? "md:col-span-6" : "md:col-span-9"} space-y-6`}>
+            <main className={`${communicationTab === "bulletin" && canViewDirectory ? "md:col-span-6" : "md:col-span-9"} space-y-6`}>
+              {/* Mobile Communication Tab Switcher */}
+              <div className="md:hidden -mx-1 px-1 pb-1 overflow-x-auto custom-scrollbar flex items-center gap-1.5">
+                {[
+                  { id: "bulletin", icon: Megaphone, label: "Bulletin", allowed: canViewBulletin },
+                  { id: "directory", icon: Users, label: "Directory", allowed: canViewDirectory },
+                  { id: "attendance", icon: Calendar, label: "Attendance", allowed: canViewAttendance },
+                  { id: "policies", icon: ShieldCheck, label: "Policies", allowed: canViewPolicies },
+                  { id: "hr_helpdesk", icon: Headphones, label: "HR Helpdesk", allowed: canViewHrHelpdesk },
+                  { id: "it_helpdesk", icon: Laptop, label: "IT Helpdesk", allowed: canViewItHelpdesk },
+                  { id: "finance_desk", icon: Wallet, label: "Finance Desk", allowed: canViewFinanceDesk },
+                  { id: "knowledge_center", icon: BookOpen, label: "Knowledge", allowed: canViewKnowledgeCenter },
+                  { id: "suggestion_box", icon: Lightbulb, label: "Suggestions", allowed: canViewSuggestionBox },
+                  { id: "leaderboards", icon: Trophy, label: "Leaderboards", allowed: canViewLeaderboards },
+                  { id: "polls_surveys", icon: BarChart2, label: "Polls & Survey", allowed: canViewPollsSurveys }
+                ]
+                  .filter((item) => item.allowed)
+                  .map(({ id, icon: Icon, label }) => (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => handleSelectCommunicationTab(id)}
+                      className={`shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11.5px] font-semibold tracking-[-0.01em] border transition cursor-pointer ${
+                        communicationTab === id
+                          ? "bg-slate-900 text-emerald-400 border-slate-900 shadow-2xs"
+                          : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+                      }`}
+                    >
+                      <Icon size={12} />
+                      <span>{label}</span>
+                    </button>
+                  ))}
+              </div>
+
               <div key={communicationTab} className="animate-tab-fade-in space-y-6">
-                {communicationTab === "directory" ? (
+                {[
+                  "hr_helpdesk",
+                  "it_helpdesk",
+                  "finance_desk",
+                  "knowledge_center",
+                  "suggestion_box",
+                  "leaderboards",
+                  "polls_surveys"
+                ].includes(communicationTab) ? (
+                  (() => {
+                    const commHubAccessMap = {
+                      hr_helpdesk: { allowed: canViewHrHelpdesk, title: "HR Helpdesk" },
+                      it_helpdesk: { allowed: canViewItHelpdesk, title: "IT Helpdesk" },
+                      finance_desk: { allowed: canViewFinanceDesk, title: "Finance Desk" },
+                      knowledge_center: { allowed: canViewKnowledgeCenter, title: "Knowledge Center" },
+                      suggestion_box: { allowed: canViewSuggestionBox, title: "Suggestion Box" },
+                      leaderboards: { allowed: canViewLeaderboards, title: "Leaderboards" },
+                      polls_surveys: { allowed: canViewPollsSurveys, title: "Polls & Survey" }
+                    };
+                    const meta = commHubAccessMap[communicationTab];
+                    return meta?.allowed ? (
+                      <CommunicationHubPanels
+                        activeTab={communicationTab}
+                        currentUser={currentUserObj}
+                        isHRMD={isHRMD}
+                        profiles={supabaseProfiles}
+                        canManageHelpdesk={canManageCommHelpdesk}
+                        canManageEngagement={canManageCommEngagement}
+                      />
+                    ) : (
+                      <div className="bg-white rounded-3xl border border-slate-200/90 p-8 text-center space-y-3">
+                        <Lock size={28} className="mx-auto text-amber-500" />
+                        <h3 className="text-base font-extrabold text-slate-900">{meta?.title || "Module"} Access Restricted</h3>
+                        <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
+                          Access to {meta?.title || "this communication module"} has been disabled for your account under the Role Access Matrix. Contact Head Office HRMD to request access.
+                        </p>
+                      </div>
+                    );
+                  })()
+                ) : communicationTab === "directory" ? (
                   canViewDirectory ? (
                     <EmployeeDirectoryPanel
                       profiles={supabaseProfiles}
@@ -2435,17 +2829,9 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
               </div>
             </main>
 
-            {communicationTab === "bulletin" && (
+            {communicationTab === "bulletin" && canViewDirectory && (
               <aside className="hidden md:block md:col-span-3 space-y-4 sticky top-20 self-start max-h-[calc(100vh-6rem)] overflow-y-auto custom-scrollbar pr-1">
-                {canViewDirectory ? (
-                  renderColleaguesDirectoryWidget()
-                ) : (
-                  <div className="bg-[#f2f5f7] border border-slate-200/80 rounded-3xl p-5 shadow-xs space-y-2 text-center text-xs">
-                    <Lock size={20} className="mx-auto text-slate-400" />
-                    <p className="font-bold text-slate-700">Directory Preview Restricted</p>
-                    <p className="text-[11px] text-slate-500">Personnel directory access is controlled by Head Office.</p>
-                  </div>
-                )}
+                {renderColleaguesDirectoryWidget()}
               </aside>
             )}
           </div>
@@ -2465,9 +2851,26 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
           <div className="flex-1 min-w-0 p-3 sm:p-4 transition-all duration-300 overflow-x-hidden antialiased">
           {/* WORKSPACE CENTRAL OPERATIONS HUB */}
           <div className="mb-3 rounded-2xl border border-slate-200/80 bg-white p-3 sm:p-3.5 shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-2.5">
-            <div className="shrink-0">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-600">Operations & Executive Hub</p>
-              <h2 className="text-base font-bold text-slate-900 tracking-tight leading-tight mt-0.5">Workspace</h2>
+            <div className="flex items-center gap-3 shrink-0">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-600">Operations & Executive Hub</p>
+                <h2 className="text-base font-bold text-slate-900 tracking-tight leading-tight mt-0.5">Workspace</h2>
+              </div>
+              {canAccessTab("sops") && !openTabs.includes("sops") && (
+                <button
+                  type="button"
+                  onClick={() => handleOpenWorkspaceTab("sops")}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 px-2.5 py-1.5 text-[11px] font-extrabold text-emerald-800 transition cursor-pointer shadow-2xs"
+                >
+                  <Layers size={12} className="text-emerald-600" />
+                  <span>Task Board</span>
+                  {taskBoardBadgeCount > 0 && (
+                    <span className="px-1.5 py-0.2 rounded-full bg-amber-500 text-white text-[9px] font-black">
+                      {taskBoardBadgeCount}
+                    </span>
+                  )}
+                </button>
+              )}
             </div>
 
             {/* WORKSPACE INTEGRATED TABS (Right-aligned, new tabs enter on the right side and shift older tabs to the left) */}
@@ -2503,6 +2906,11 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
                         className={isActive ? tabDef.activeIconClass : tabDef.inactiveIconClass}
                       />
                       <span>{tabDef.label}</span>
+                      {tabId === "sops" && taskBoardBadgeCount > 0 && (
+                        <span className="px-1.5 py-0.2 rounded-full bg-amber-500 text-white text-[9px] font-black animate-pulse">
+                          {taskBoardBadgeCount}
+                        </span>
+                      )}
                       <button
                         type="button"
                         onClick={(e) => handleCloseWorkspaceTab(e, tabId)}
@@ -2693,42 +3101,14 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
             </div>
           )}
 
-          {/* TAB 4: SOP & TASK BOARD */}
+          {/* TAB: FUNCTIONAL ENTERPRISE TASK BOARD */}
           {workspaceTab === "sops" && (
-            <div className="space-y-4 animate-in fade-in">
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                {SOP_COLUMNS.map((column) => (
-                  <div key={column.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-3 shadow-sm">
-                    <div className={`mb-3 flex items-center justify-between rounded-xl border px-2.5 py-2 text-[11px] font-bold ${column.accent}`}>
-                      <span>{column.title}</span>
-                      <span className="rounded-full bg-white/60 px-1.5 py-0.5">{column.count}</span>
-                    </div>
-
-                    <div className="space-y-3">
-                      {column.tasks.map((task, index) => (
-                        <div key={`${column.id}-${index}`} className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
-                          <div className="flex items-start justify-between gap-2">
-                            <h3 className="text-sm font-bold text-slate-800">{task.title}</h3>
-                            <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ${
-                              task.priority === "High"
-                                ? "bg-rose-100 text-rose-700"
-                                : task.priority === "Medium"
-                                  ? "bg-amber-100 text-amber-700"
-                                  : task.priority === "Low"
-                                    ? "bg-slate-200 text-slate-700"
-                                    : "bg-emerald-100 text-emerald-700"
-                            }`}>
-                              {task.priority}
-                            </span>
-                          </div>
-                          <p className="mt-2 text-[10px] text-slate-500">{task.subtitle}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
+            <TaskBoardPanel
+              currentUser={currentUserObj}
+              isHRMD={isHRMD}
+              profiles={supabaseProfiles}
+              canManageTasks={canManageTaskBoard}
+            />
           )}
 
           {/* TAB: FIELD WEATHER RADAR */}
@@ -2870,31 +3250,50 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
     )}
 
       {/* ================= ANIMATED AI ASSISTANT FLOATING ON THE SIDE ================= */}
-      <AiAssistantGirlWidget
-        isChatOpen={aiDrawerOpen}
-        onOpenChat={() => setAiDrawerOpen(true)}
-        hidden={
-          isGeoTaggingMounted ||
-          workspaceTab === "geotagging" ||
-          (!isCommunicationView && workspaceTab === "salary_compensation") ||
-          (workspaceTab === "sops" && operationsSubTab === "geotagging") ||
-          (activeView === "sop" && (workspaceTab === "home" || workspaceTab === "memo"))
-        }
-      />
+      {canUseAiBuddy && (
+        <AiAssistantGirlWidget
+          isChatOpen={aiDrawerOpen}
+          onOpenChat={() => setAiDrawerOpen(true)}
+          currentUser={currentUserObj}
+          isHRMD={isHRMD}
+          hidden={
+            isGeoTaggingMounted ||
+            workspaceTab === "geotagging" ||
+            (!isCommunicationView && workspaceTab === "salary_compensation") ||
+            (workspaceTab === "sops" && operationsSubTab === "geotagging") ||
+            (activeView === "sop" && (workspaceTab === "home" || workspaceTab === "memo"))
+          }
+        />
+      )}
 
       {/* Floating AI Assistant Drawer/Modal */}
-      <AiAssistantDrawer
-        isOpen={aiDrawerOpen}
-        onClose={() => setAiDrawerOpen(false)}
-        currentUser={currentUser}
-        isEmbedded={false}
-        onInsertMemoIntoGenerator={(memoData) => {
-          setActiveView("sop");
-          handleOpenWorkspaceTab("memo");
-          setAiGeneratedMemoDraft(memoData);
-          setAiDrawerOpen(false);
-        }}
-      />
+      {canUseAiBuddy && (
+        <AiAssistantDrawer
+          isOpen={aiDrawerOpen}
+          onClose={() => setAiDrawerOpen(false)}
+          currentUser={currentUserObj}
+          isHRMD={isHRMD}
+          matrixData={matrixData}
+          isEmbedded={false}
+          onInsertMemoIntoGenerator={(memoData) => {
+            setActiveView("workspace");
+            handleOpenWorkspaceTab("memo");
+            setAiGeneratedMemoDraft(memoData);
+            setAiDrawerOpen(false);
+          }}
+          onNavigateToModule={(route) => {
+            if (!route) return;
+            if (route.routeType === "comm") {
+              setActiveView("communication");
+              handleSelectCommunicationTab(route.targetId);
+            } else {
+              setActiveView("workspace");
+              handleOpenWorkspaceTab(route.targetId);
+            }
+            setAiDrawerOpen(false);
+          }}
+        />
+      )}
 
       {/* ================= ADVANCED MESSENGER TEAM CHAT MODAL ================= */}
       {activeDirectChatUser && (

@@ -23,6 +23,14 @@ import {
 } from "../lib/rbacStorage";
 
 const MODULE_CATEGORIES = ["All", "Portal", "Home", "Operations", "HR Admin", "Finance", "Analytics", "Security"];
+const FEATURE_GROUP_FILTERS = [
+  { id: "all", label: "All" },
+  { id: "communication", label: "Communication" },
+  { id: "sops", label: "Task Board" },
+  { id: "incident_reports", label: "Incident Reports" },
+  { id: "gross", label: "Finance" },
+  { id: "agents", label: "Personnel" }
+];
 
 export default function RolePermissionMatrixPanel({ currentUser, onClose }) {
   const [matrixData, setMatrixData] = useState(() => getRbacMatrixData());
@@ -38,6 +46,7 @@ export default function RolePermissionMatrixPanel({ currentUser, onClose }) {
   const [selectedAccountEmail, setSelectedAccountEmail] = useState("");
   const [accountSearchQuery, setAccountSearchQuery] = useState("");
   const [moduleCategoryFilter, setModuleCategoryFilter] = useState("All");
+  const [featureGroupFilter, setFeatureGroupFilter] = useState("all");
   const [featureSearchQuery, setFeatureSearchQuery] = useState("");
   const [matrixSearchQuery, setMatrixSearchQuery] = useState("");
 
@@ -693,6 +702,24 @@ export default function RolePermissionMatrixPanel({ currentUser, onClose }) {
                     </div>
                   </div>
 
+                  {/* Quick Feature Group Filter Pills */}
+                  <div className="flex items-center gap-1 flex-wrap">
+                    {FEATURE_GROUP_FILTERS.map((grp) => (
+                      <button
+                        key={grp.id}
+                        type="button"
+                        onClick={() => setFeatureGroupFilter(grp.id)}
+                        className={`px-2 py-0.5 rounded-lg text-[10px] font-bold transition cursor-pointer ${
+                          featureGroupFilter === grp.id
+                            ? "bg-slate-900 text-white"
+                            : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                        }`}
+                      >
+                        {grp.label}
+                      </button>
+                    ))}
+                  </div>
+
                   {/* Active Feature Tags */}
                   <div className="p-3 rounded-xl bg-amber-50/40 border border-amber-200/80 min-h-[56px]">
                     {selectedBreakdown.enabledFeatures.length === 0 ? (
@@ -702,12 +729,14 @@ export default function RolePermissionMatrixPanel({ currentUser, onClose }) {
                     ) : (
                       <div className="flex flex-wrap gap-1.5">
                         {selectedBreakdown.enabledFeatures
-                          .filter(
-                            (f) =>
+                          .filter((f) => {
+                            const matchesGroup = featureGroupFilter === "all" || f.parentTab === featureGroupFilter;
+                            const matchesQuery =
                               !featureSearchQuery.trim() ||
                               f.label.toLowerCase().includes(featureSearchQuery.toLowerCase()) ||
-                              f.belongsToLabel.toLowerCase().includes(featureSearchQuery.toLowerCase())
-                          )
+                              f.belongsToLabel.toLowerCase().includes(featureSearchQuery.toLowerCase());
+                            return matchesGroup && matchesQuery;
+                          })
                           .map((feat) => (
                             <span
                               key={feat.id}
@@ -745,12 +774,14 @@ export default function RolePermissionMatrixPanel({ currentUser, onClose }) {
 
                     <div className="flex flex-wrap gap-1.5 max-h-[220px] overflow-y-auto custom-scrollbar pr-1">
                       {selectedBreakdown.disabledFeatures
-                        .filter(
-                          (f) =>
+                        .filter((f) => {
+                          const matchesGroup = featureGroupFilter === "all" || f.parentTab === featureGroupFilter;
+                          const matchesQuery =
                             !featureSearchQuery.trim() ||
                             f.label.toLowerCase().includes(featureSearchQuery.toLowerCase()) ||
-                            f.belongsToLabel.toLowerCase().includes(featureSearchQuery.toLowerCase())
-                        )
+                            f.belongsToLabel.toLowerCase().includes(featureSearchQuery.toLowerCase());
+                          return matchesGroup && matchesQuery;
+                        })
                         .map((feat) => (
                           <button
                             key={feat.id}

@@ -6,9 +6,15 @@ import {
   Search, Gift, Mic, Paperclip, AtSign, Calendar, Wand2,
   MoreHorizontal, ChevronLeft, ChevronRight, Scale, Building2,
   DollarSign, BarChart3, Lightbulb, BookOpen, MessageSquare,
-  QrCode, Volume2, VolumeX
+  QrCode, Volume2, VolumeX, TrendingUp, Calculator, ShieldAlert,
+  Compass, Lock, ArrowRight
 } from "lucide-react";
-import { sendAiChatMessage, extractMemoFromText } from "../lib/aiAssistantService";
+import {
+  sendAiChatMessage,
+  extractMemoFromText,
+  isHeadOfficeHrAdminUser
+} from "../lib/aiAssistantService";
+import { isUserTabAllowed, isUserFeatureAllowed } from "../lib/rbacStorage";
 import AiAgentAvatar from "./AiAgentAvatar";
 import { getFemaleVoice } from "./AiAssistantGirlWidget";
 
@@ -255,13 +261,123 @@ const SUGGESTED_STARTERS = [
   }
 ];
 
+// Dedicated Subsidiary / STL Operations Capabilities
+const SUBSIDIARY_CAPABILITIES = [
+  {
+    id: "sub-gross",
+    label: "Study Gross",
+    icon: BarChart3,
+    iconColor: "text-emerald-600",
+    bgColor: "bg-emerald-100 hover:bg-emerald-200 border-emerald-200",
+    prompt: "Tulungan mo akong pag-aralan ang aming daily STL Gross report, draw cutoffs (2PM/5PM/9PM), at remittance reconciliation."
+  },
+  {
+    id: "sub-trends",
+    label: "Gross Up/Down",
+    icon: TrendingUp,
+    iconColor: "text-pink-600",
+    bgColor: "bg-pink-100 hover:bg-pink-200 border-pink-200",
+    prompt: "Ano ang mga dahilan bakit bumababa o tumataas ang STL Gross, at anong practical suggestions para mapataas ang sales ng aming branch?"
+  },
+  {
+    id: "sub-panalo",
+    label: "Compute Panalo",
+    icon: Calculator,
+    iconColor: "text-amber-600",
+    bgColor: "bg-amber-100 hover:bg-amber-200 border-amber-200",
+    prompt: "Paano mag-compute ng panalo (hits/payout) sa STL? Magbigay ng malinaw na formula at example para sa Straight, Rambolito, at 2D/Last Two."
+  },
+  {
+    id: "sub-awol",
+    label: "Agent AWOL",
+    icon: ShieldAlert,
+    iconColor: "text-rose-600",
+    bgColor: "bg-rose-100 hover:bg-rose-200 border-rose-200",
+    prompt: "Nag-AWOL ang isa naming STL agent. Ano ang step-by-step na kailangan naming gawin mula verification hanggang Incident Report at NTE?"
+  },
+  {
+    id: "sub-tour",
+    label: "App Guide",
+    icon: Compass,
+    iconColor: "text-indigo-600",
+    bgColor: "bg-indigo-100 hover:bg-indigo-200 border-indigo-200",
+    prompt: "Paano gamitin ang buong HRHub app? Ipakita ang lahat ng modules at bigyan ako ng direct links papunta sa bawat isa."
+  },
+  {
+    id: "sub-agents",
+    label: "Agents & Map",
+    icon: User,
+    iconColor: "text-sky-600",
+    bgColor: "bg-sky-100 hover:bg-sky-200 border-sky-200",
+    prompt: "Paano i-check ang Agents Directory at Territory GeoTagging Map para ma-monitor ang mga booths? Bigyan mo ako ng link papunta doon."
+  },
+  {
+    id: "sub-memo",
+    label: "Draft Memo",
+    icon: FileText,
+    iconColor: "text-teal-600",
+    bgColor: "bg-teal-100 hover:bg-teal-200 border-teal-200",
+    prompt: "Tulungan mo akong gumawa ng official branch directive memo para sa mga STL agents tungkol sa on-time draw cutoff at remittance."
+  },
+  {
+    id: "sub-dole",
+    label: "DOLE & Pay",
+    icon: Scale,
+    iconColor: "text-purple-600",
+    bgColor: "bg-purple-100 hover:bg-purple-200 border-purple-200",
+    prompt: "Paano mag-compute ng 13th month pay at holiday pay para sa mga empleyado ng aming branch?"
+  }
+];
+
+// Dedicated Subsidiary / STL Operations Suggested Starters
+const SUBSIDIARY_SUGGESTED_STARTERS = [
+  {
+    id: "sub-starter-gross",
+    title: "Pag-aralan ang STL Gross: bakit bumababa o tumataas ang benta at paano ito pataasin",
+    tag: "STL Gross Study",
+    tagColor: "bg-emerald-100 text-emerald-800 border-emerald-200",
+    icon: TrendingUp,
+    prompt: "Magbigay ng detailed analysis kung bakit bumababa o tumataas ang STL Gross at 5 practical strategies para pataasin ang sales ng aming mga agents at booths."
+  },
+  {
+    id: "sub-starter-panalo",
+    title: "Paano mag-compute ng panalo (Straight, Rambolito, 2D/Last Two) at Payout Ratio",
+    tag: "Compute Panalo",
+    tagColor: "bg-amber-100 text-amber-800 border-amber-200",
+    icon: Calculator,
+    prompt: "Turuan mo akong mag-compute ng panalo sa STL (Straight, Rambolito 6, Rambolito 3, at 2D/Last Two) pati Payout Ratio na may peso examples."
+  },
+  {
+    id: "sub-starter-awol",
+    title: "Ano ang dapat gawin kapag nag-AWOL ang isang STL agent (Accountability, IR & NTE)",
+    tag: "AWOL Protocol",
+    tagColor: "bg-rose-100 text-rose-700 border-rose-200",
+    icon: ShieldAlert,
+    prompt: "Nag-AWOL ang isang STL agent namin. Ano ang kumpletong step-by-step na gagawin sa cash/POS verification, Incident Report, at NTE?"
+  },
+  {
+    id: "sub-starter-tour",
+    title: "Paano gamitin ang buong HRHub app at bigyan ako ng direct links sa mga modules",
+    tag: "App Guide & Links",
+    tagColor: "bg-indigo-100 text-indigo-700 border-indigo-200",
+    icon: Compass,
+    prompt: "Paano gamitin ang buong HRHub app? I-explain ang bawat section at bigyan ako ng direct clickable links papunta sa mga modules."
+  }
+];
+
 export default function AiAssistantDrawer({
   isOpen = true,
   onClose,
   currentUser,
+  isHRMD = null,
+  matrixData = null,
   onInsertMemoIntoGenerator,
+  onNavigateToModule,
   isEmbedded = false
 }) {
+  const isHeadOfficeHr = isHeadOfficeHrAdminUser(currentUser, isHRMD);
+  const activeCapabilities = isHeadOfficeHr ? CAPABILITIES : SUBSIDIARY_CAPABILITIES;
+  const activeStarters = isHeadOfficeHr ? SUGGESTED_STARTERS : SUBSIDIARY_SUGGESTED_STARTERS;
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [showQrCard, setShowQrCard] = useState(true);
   const [whatsNewOpen, setWhatsNewOpen] = useState(false);
@@ -450,7 +566,9 @@ What would you like to work on today?`,
       const existingMessages = currentChat ? currentChat.messages : [];
       const response = await sendAiChatMessage({
         messages: [...existingMessages, userMessage],
-        userPrompt: text
+        userPrompt: text,
+        currentUser,
+        isHRMD
       });
 
       const assistantMessage = {
@@ -460,6 +578,7 @@ What would you like to work on today?`,
         source: response.source,
         model: "HRHub Ai Buddy",
         memoData: response.memoData,
+        suggestedRoutes: response.suggestedRoutes || [],
         timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
       };
 
@@ -783,8 +902,10 @@ What would you like to work on today?`,
               <h1 className="text-4xl sm:text-5xl font-extrabold text-slate-800 tracking-tight">
                 Hi {userFirstName},
               </h1>
-              <p className="text-lg sm:text-xl text-slate-500 font-normal mt-2 mb-8">
-                What would you like to work on today?
+              <p className="text-base sm:text-lg text-slate-500 font-normal mt-2 mb-6 max-w-2xl">
+                {isHeadOfficeHr
+                  ? "What would you like to work on today?"
+                  : `Your STL Operations & HR AI Buddy for ${currentUser?.company || "your branch"} — study Gross sales, compute panalo, handle AWOL agents, or navigate any HRHub module.`}
               </p>
 
               {/* RAINBOW GLOWING CENTRAL INPUT BOX */}
@@ -797,27 +918,49 @@ What would you like to work on today?`,
                     value={inputPrompt}
                     onChange={(e) => setInputPrompt(e.target.value)}
                     onKeyDown={handleKeyDown}
-                    placeholder="@ Mention memos, employees, policies..."
+                    placeholder={
+                      isHeadOfficeHr
+                        ? "@ Mention memos, employees, policies, or ask 'Paano gamitin ang app?'..."
+                        : "Ask about STL Gross, compute panalo, AWOL agent, or 'Dalhin mo ako sa Gross Report'..."
+                    }
                     rows={2}
                     className="w-full bg-transparent resize-none border-0 text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-0 text-base sm:text-lg"
                   />
 
                   {/* Bottom toolbar inside input box */}
                   <div className="flex items-center justify-between pt-3 mt-1 border-t border-slate-100">
-                    <div className="flex items-center gap-1.5 sm:gap-2">
+                    <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                      {isHeadOfficeHr ? (
+                        <button
+                          type="button"
+                          onClick={() => setInputPrompt("Draft an official memorandum for: ")}
+                          className="flex items-center gap-1 bg-sky-50 hover:bg-sky-100 text-sky-700 px-2 py-1 rounded-md text-xs font-semibold transition cursor-pointer"
+                          title="Draft an official memorandum in AI Buddy"
+                        >
+                          <FileText size={13} className="text-sky-600" />
+                          <span className="hidden sm:inline">Draft Memo</span>
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleSendMessage("Tulungan mo akong pag-aralan ang STL Gross at bakit ito bumababa o tumataas.")}
+                          className="flex items-center gap-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 px-2 py-1 rounded-md text-xs font-semibold transition cursor-pointer"
+                          title="Study STL Gross & Sales Suggestions"
+                        >
+                          <BarChart3 size={13} className="text-emerald-600" />
+                          <span className="hidden sm:inline">Study STL Gross</span>
+                        </button>
+                      )}
+
                       <button
                         type="button"
-                        onClick={() => setInputPrompt("Draft an official memorandum for: ")}
-                        className="flex items-center gap-1 bg-sky-50 hover:bg-sky-100 text-sky-700 px-2 py-1 rounded-md text-xs font-semibold transition cursor-pointer"
-                        title="Draft an official memorandum in AI Buddy"
+                        onClick={() => handleSendMessage("Paano gamitin ang buong HRHub app? Bigyan mo ako ng direct links sa lahat ng modules.")}
+                        className="flex items-center gap-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-2 py-1 rounded-md text-xs font-semibold transition cursor-pointer"
+                        title="Get an interactive walkthrough and clickable module links"
                       >
-                        <FileText size={13} className="text-sky-600" />
-                        <span className="hidden sm:inline">Draft Memo</span>
+                        <Compass size={13} className="text-indigo-600" />
+                        <span className="hidden sm:inline">App Guide & Links</span>
                       </button>
-                      <div className="flex items-center gap-1 bg-slate-100 text-slate-600 px-2 py-1 rounded-md text-xs font-medium">
-                        <BarChart3 size={13} className="text-pink-600" />
-                        <span className="hidden sm:inline">STL Gross</span>
-                      </div>
 
                       <button
                         type="button"
@@ -877,7 +1020,7 @@ What would you like to work on today?`,
 
               {/* ROW OF 8 CAPABILITY CIRCULAR ICONS */}
               <div className="w-full flex flex-wrap items-center justify-center gap-3 sm:gap-6 mb-12">
-                {CAPABILITIES.map((cap) => {
+                {activeCapabilities.map((cap) => {
                   const IconComp = cap.icon;
                   return (
                     <button
@@ -902,10 +1045,12 @@ What would you like to work on today?`,
               {/* SUGGESTED STARTERS SECTION */}
               <div className="w-full text-left">
                 <h3 className="text-sm font-semibold text-slate-600 mb-4 tracking-normal text-center sm:text-left">
-                  Suggested starters tailored for your work
+                  {isHeadOfficeHr
+                    ? "Suggested starters tailored for your work"
+                    : `STL Operations & Branch Starters for ${currentUser?.company || "your account"}`}
                 </h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                  {SUGGESTED_STARTERS.map((starter) => {
+                  {activeStarters.map((starter) => {
                     const IconComp = starter.icon;
                     return (
                       <div
@@ -1006,6 +1151,70 @@ What would you like to work on today?`,
                             <FileText size={14} />
                             <span>Insert into Memo Generator</span>
                           </button>
+                        </div>
+                      )}
+
+                      {/* Interactive Direct Module Navigation Links (App Router) */}
+                      {msg.role === "assistant" && Array.isArray(msg.suggestedRoutes) && msg.suggestedRoutes.length > 0 && (
+                        <div className="mt-4 pt-3 border-t border-slate-100 space-y-2">
+                          <div className="flex items-center gap-1.5 text-[11px] font-extrabold text-indigo-800 uppercase tracking-wider">
+                            <Compass size={13} className="text-indigo-600" />
+                            <span>Direct Module Links — Click to Open</span>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            {msg.suggestedRoutes.map((route) => {
+                              const tabAllowed = currentUser
+                                ? isUserTabAllowed(currentUser, route.rbacTabKey, matrixData)
+                                : true;
+                              const featAllowed =
+                                tabAllowed && route.rbacFeatureKey && currentUser
+                                  ? isUserFeatureAllowed(currentUser, route.rbacFeatureKey, matrixData)
+                                  : tabAllowed;
+
+                              return (
+                                <button
+                                  key={route.id}
+                                  type="button"
+                                  disabled={!featAllowed}
+                                  onClick={() => {
+                                    if (!featAllowed) return;
+                                    if (onNavigateToModule) {
+                                      onNavigateToModule(route);
+                                    } else {
+                                      window.dispatchEvent(
+                                        new CustomEvent("hrhub_switch_workspace_tab", {
+                                          detail: { tabId: route.targetId, routeType: route.routeType }
+                                        })
+                                      );
+                                    }
+                                    if (onClose) onClose();
+                                  }}
+                                  title={
+                                    featAllowed
+                                      ? `Open ${route.label} (${route.description})`
+                                      : "Restricted by Head Office Role Permission Matrix"
+                                  }
+                                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-bold border transition shadow-2xs ${
+                                    featAllowed
+                                      ? "bg-indigo-50 hover:bg-indigo-600 text-indigo-800 hover:text-white border-indigo-200 hover:border-indigo-600 cursor-pointer active:scale-95"
+                                      : "bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed"
+                                  }`}
+                                >
+                                  {featAllowed ? (
+                                    <ExternalLink size={12} className="shrink-0" />
+                                  ) : (
+                                    <Lock size={11} className="shrink-0" />
+                                  )}
+                                  <span>{route.shortLabel || route.label}</span>
+                                  {featAllowed ? (
+                                    <ArrowRight size={11} className="shrink-0 opacity-75" />
+                                  ) : (
+                                    <span className="text-[9px] font-semibold">(Restricted)</span>
+                                  )}
+                                </button>
+                              );
+                            })}
+                          </div>
                         </div>
                       )}
 

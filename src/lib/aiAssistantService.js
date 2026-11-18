@@ -2,6 +2,497 @@
 // Simpal Group of Companies • HR & Operations Knowledge Engine
 import { API_CONFIG } from "../config/apiConfig";
 
+/**
+ * Determines whether the logged-in account is an HR Administrator assigned to
+ * Simpal Group of Companies / Head Office (keeps Head Office HR dialog/MP3 AS-IS),
+ * vs. a Subsidiary / STL Branch account (uses STL Gross, Winnings, AWOL Agent dialog/MP3).
+ */
+export function isHeadOfficeHrAdminUser(user, isHRMDFlag = null) {
+  if (!user) return true;
+  const email = String(user.email || "").toLowerCase().trim();
+  const role = String(user.role || "").toLowerCase().trim();
+  const name = String(user.name || "").toLowerCase().trim();
+  const company = String(user.company || "").toLowerCase().trim();
+
+  const isExplicitSubsidiary =
+    company.includes("lucky") ||
+    company.includes("betplay") ||
+    company.includes("5a") ||
+    company.includes("royal") ||
+    company.includes("glowing") ||
+    company.includes("fortune") ||
+    company.includes("imperial") ||
+    company.includes("mc power") ||
+    company.includes("simcon") ||
+    company.includes("simpal construction") ||
+    company.includes("mandaue") ||
+    company.includes("iligan") ||
+    company.includes("cotabato") ||
+    company.includes("maguindanao");
+
+  const isHoCompany =
+    !isExplicitSubsidiary &&
+    (company === "" ||
+      company.includes("simpal group") ||
+      company.includes("head office") ||
+      company.includes("sgc"));
+
+  if (
+    email === "admin@hrhub.com" ||
+    email === "jay@simpalgroup.com" ||
+    email === "efilfonimda@gmail.com" ||
+    email.includes("hrmd") ||
+    name.replace(/\s+/g, "") === "hrmd"
+  ) {
+    return isHoCompany;
+  }
+
+  const isHrAdminRole =
+    role.includes("hr administrator") ||
+    role.includes("hr admin") ||
+    role.includes("hrmd") ||
+    role.includes("super administrator") ||
+    role.includes("super admin") ||
+    isHRMDFlag === true;
+
+  return isHoCompany && isHrAdminRole;
+}
+
+/**
+ * Complete Interactive Navigation Directory for HRHub App Modules & Sub-Tabs.
+ * Powers AI Buddy's App Guide & Clickable Direct Routing Buttons.
+ */
+export const HRHUB_MODULE_CATALOG = [
+  // Communication Portal Tabs
+  {
+    id: "comm:bulletin",
+    routeType: "comm",
+    targetId: "bulletin",
+    label: "Company Bulletin & Announcements",
+    shortLabel: "Company Bulletin",
+    category: "Communication Portal",
+    rbacTabKey: "communication",
+    rbacFeatureKey: "comm_bulletin",
+    description: "Official company announcements, memorandums feed, and celebrations.",
+    keywords: ["bulletin", "announcement", "anunsyo", "post", "feed", "communication"]
+  },
+  {
+    id: "comm:directory",
+    routeType: "comm",
+    targetId: "directory",
+    label: "Employee Directory & 201 Profiles",
+    shortLabel: "Employee Directory",
+    category: "Communication Portal",
+    rbacTabKey: "communication",
+    rbacFeatureKey: "comm_directory",
+    description: "Staff profiles, 201 records, pre-registration, birthdays, and branch rosters.",
+    keywords: ["employee directory", "directory", "201", "profile", "empleyado", "pre-register", "staff"]
+  },
+  {
+    id: "comm:attendance",
+    routeType: "comm",
+    targetId: "attendance",
+    label: "Shift & Attendance Timesheets",
+    shortLabel: "Shift & Attendance",
+    category: "Communication Portal",
+    rbacTabKey: "communication",
+    rbacFeatureKey: "comm_attendance",
+    description: "Live daily HR work logs, active/AFK status, DTR print, and CSV export.",
+    keywords: ["shift", "timesheet", "work log", "dtr", "afk", "attendance overview"]
+  },
+  {
+    id: "comm:policies",
+    routeType: "comm",
+    targetId: "policies",
+    label: "Corporate Policies & Handbooks",
+    shortLabel: "Policies & Handbooks",
+    category: "Communication Portal",
+    rbacTabKey: "communication",
+    rbacFeatureKey: "comm_policies",
+    description: "Code of conduct, OSH RA 11058 safety rules, and employee handbook.",
+    keywords: ["policy", "policies", "handbook", "osh", "code of conduct", "patakaran"]
+  },
+  {
+    id: "comm:hr_helpdesk",
+    routeType: "comm",
+    targetId: "hr_helpdesk",
+    label: "HR Helpdesk Support Tickets",
+    shortLabel: "HR Helpdesk",
+    category: "Communication Portal",
+    rbacTabKey: "communication",
+    rbacFeatureKey: "comm_hr_helpdesk",
+    description: "File and track HR requests for COE, SSS/PhilHealth/Pag-IBIG, leaves, and 201 files.",
+    keywords: ["hr helpdesk", "helpdesk", "coe", "certificate of employment", "sss", "philhealth", "pag-ibig", "hr ticket", "hr support"]
+  },
+  {
+    id: "comm:it_helpdesk",
+    routeType: "comm",
+    targetId: "it_helpdesk",
+    label: "IT Helpdesk Technical Support",
+    shortLabel: "IT Helpdesk",
+    category: "Communication Portal",
+    rbacTabKey: "communication",
+    rbacFeatureKey: "comm_it_helpdesk",
+    description: "Report POS/STL terminal issues, login/password resets, printers, biometrics, or network issues.",
+    keywords: ["it helpdesk", "it support", "tech support", "pos", "terminal", "password reset", "printer", "biometric", "internet", "network", "bug"]
+  },
+  {
+    id: "comm:finance_desk",
+    routeType: "comm",
+    targetId: "finance_desk",
+    label: "Finance Desk & Remittance Support",
+    shortLabel: "Finance Desk",
+    category: "Communication Portal",
+    rbacTabKey: "communication",
+    rbacFeatureKey: "comm_finance_desk",
+    description: "Submit inquiries on STL gross remittance, hits payout verification, petty cash, and payslips.",
+    keywords: ["finance desk", "finance support", "remittance query", "payout verification", "payslip concern", "accounting ticket"]
+  },
+  {
+    id: "comm:knowledge_center",
+    routeType: "comm",
+    targetId: "knowledge_center",
+    label: "Knowledge Center & Operational Guides",
+    shortLabel: "Knowledge Center",
+    category: "Communication Portal",
+    rbacTabKey: "communication",
+    rbacFeatureKey: "comm_knowledge_center",
+    description: "Searchable operational guides, STL gross study playbooks, DOLE due process, and HRHub tutorials.",
+    keywords: ["knowledge center", "knowledge base", "guide", "tutorial", "playbook", "faq", "gabay", "manual"]
+  },
+  {
+    id: "comm:suggestion_box",
+    routeType: "comm",
+    targetId: "suggestion_box",
+    label: "Employee Suggestion Box",
+    shortLabel: "Suggestion Box",
+    category: "Communication Portal",
+    rbacTabKey: "communication",
+    rbacFeatureKey: "comm_suggestion_box",
+    description: "Submit named or anonymous improvement ideas, upvote proposals, and read management responses.",
+    keywords: ["suggestion", "suggestion box", "feedback", "idea", "suhestiyon", "anonymous"]
+  },
+  {
+    id: "comm:leaderboards",
+    routeType: "comm",
+    targetId: "leaderboards",
+    label: "Employee & Subsidiary Leaderboards",
+    shortLabel: "Leaderboards",
+    category: "Communication Portal",
+    rbacTabKey: "communication",
+    rbacFeatureKey: "comm_leaderboards",
+    description: "Live performance rankings based on completed Task Board items and HR recognition awards.",
+    keywords: ["leaderboard", "leaderboards", "ranking", "top performer", "award", "recognition", "points"]
+  },
+  {
+    id: "comm:polls_surveys",
+    routeType: "comm",
+    targetId: "polls_surveys",
+    label: "Company Polls & Pulse Surveys",
+    shortLabel: "Polls & Survey",
+    category: "Communication Portal",
+    rbacTabKey: "communication",
+    rbacFeatureKey: "comm_polls_surveys",
+    description: "Vote in active company polls, employee pulse surveys, and view live vote results.",
+    keywords: ["poll", "polls", "survey", "surveys", "vote", "boto", "pulse survey"]
+  },
+  // Operations Workspace Tabs
+  {
+    id: "tab:home",
+    routeType: "workspace",
+    targetId: "home",
+    label: "Workspace Ready / Home Dashboard",
+    shortLabel: "Home Dashboard",
+    category: "Home",
+    rbacTabKey: "home",
+    description: "Main Workspace launcher and Frequently Used Modules hub.",
+    keywords: ["home", "dashboard", "workspace"]
+  },
+  {
+    id: "tab:meetings",
+    routeType: "workspace",
+    targetId: "meetings",
+    label: "Zoom & Google Meet Scheduler",
+    shortLabel: "Zoom & Meet",
+    category: "Home",
+    rbacTabKey: "meetings",
+    description: "Schedule and join executive or branch video meetings.",
+    keywords: ["zoom", "meet", "meeting", "video call", "conference"]
+  },
+  {
+    id: "tab:gross",
+    routeType: "workspace",
+    targetId: "gross",
+    label: "Gross Revenue & STL Remittance Report",
+    shortLabel: "Gross Report",
+    category: "Finance & STL",
+    rbacTabKey: "gross",
+    description: "Live & historical STL Gross sales, hits, teller turnovers, and draw reports.",
+    keywords: ["gross", "remittance", "hits", "panalo", "sales", "benta", "draw", "stl"]
+  },
+  {
+    id: "tab:revenue_trends",
+    routeType: "workspace",
+    targetId: "revenue_trends",
+    label: "Multi-Entity Revenue Trends & Betting Ratio",
+    shortLabel: "Revenue Trends",
+    category: "Finance & STL",
+    rbacTabKey: "revenue_trends",
+    description: "Compare gross up/down trends, betting ratios, and multi-area STL performance.",
+    keywords: ["trend", "ratio", "betting ratio", "pagbaba", "pagtaas", "bumaba", "tumaas", "compare", "analytics"]
+  },
+  {
+    id: "tab:agents",
+    routeType: "workspace",
+    targetId: "agents",
+    label: "Agents Directory & Outlets",
+    shortLabel: "Agents Directory",
+    category: "HR & Field",
+    rbacTabKey: "agents",
+    description: "View active STL retail agents, terminal outlets, and supervisor assignments.",
+    keywords: ["agent", "agents", "teller", "outlet", "kiosk", "awol"]
+  },
+  {
+    id: "tab:incident_reports",
+    routeType: "workspace",
+    targetId: "incident_reports",
+    label: "Incident Reports & Notice to Explain (NTE)",
+    shortLabel: "Incident Reports & NTE",
+    category: "HR & Due Process",
+    rbacTabKey: "incident_reports",
+    description: "File branch Incident Reports (IR), AWOL cases, and process legal NTEs.",
+    keywords: ["incident", "ir", "nte", "noe", "awol", "disciplinary", "due process", "violation", "reklamo"]
+  },
+  {
+    id: "tab:memo",
+    routeType: "workspace",
+    targetId: "memo",
+    label: "Official Memo Generator",
+    shortLabel: "Memo Generator",
+    category: "HR & Documents",
+    rbacTabKey: "memo",
+    description: "Draft, format with company letterhead, print, and email official memos.",
+    keywords: ["memo", "memorandum", "advisory", "directive"]
+  },
+  {
+    id: "tab:doc_studio",
+    routeType: "workspace",
+    targetId: "doc_studio",
+    label: "Document Studio (Coupon Bond Certificates)",
+    shortLabel: "Document Studio",
+    category: "HR & Documents",
+    rbacTabKey: "doc_studio",
+    description: "Create printable certificates, contracts, and formal company letters.",
+    keywords: ["document studio", "certificate", "coupon bond", "contract", "letter"]
+  },
+  {
+    id: "tab:salary_compensation",
+    routeType: "workspace",
+    targetId: "salary_compensation",
+    label: "Salary & Compensation w/ Payslip",
+    shortLabel: "Salary & Payslip",
+    category: "HR & Payroll",
+    rbacTabKey: "salary_compensation",
+    description: "Upload Excel/OCR payroll ledgers and generate printable employee payslips.",
+    keywords: ["salary", "payslip", "compensation", "sahod", "sweldo", "payroll upload"]
+  },
+  {
+    id: "tab:payroll_calc",
+    routeType: "workspace",
+    targetId: "payroll_calc",
+    label: "13th Month Payroll Calculator",
+    shortLabel: "13th Month Calc",
+    category: "Finance & Payroll",
+    rbacTabKey: "payroll_calc",
+    description: "Compute pro-rated 13th month pay following DOLE P.D. 851.",
+    keywords: ["13th month", "calculator", "dole", "bonus", "holiday pay"]
+  },
+  {
+    id: "tab:petty_cash",
+    routeType: "workspace",
+    targetId: "petty_cash",
+    label: "Branch Expenses & Petty Cash Vouchers",
+    shortLabel: "Petty Cash",
+    category: "Finance & STL",
+    rbacTabKey: "petty_cash",
+    description: "Record branch expense vouchers, receipts, and cash liquidations.",
+    keywords: ["petty cash", "voucher", "expense", "gastos", "liquidation"]
+  },
+  {
+    id: "tab:geotagging",
+    routeType: "workspace",
+    targetId: "geotagging",
+    label: "Territory GeoTagging & Road Map",
+    shortLabel: "GeoTagging Map",
+    category: "Field Operations",
+    rbacTabKey: "geotagging",
+    description: "Plot yellow booth kiosks, check territory boundaries, and road distances.",
+    keywords: ["geotag", "map", "booth", "kiosk", "territory", "mapa", "locat"]
+  },
+  {
+    id: "tab:weather",
+    routeType: "workspace",
+    targetId: "weather",
+    label: "Field Weather Radar",
+    shortLabel: "Weather Radar",
+    category: "Field Operations",
+    rbacTabKey: "weather",
+    description: "Live satellite weather & cyclone alerts affecting branch & STL turnout.",
+    keywords: ["weather", "ulan", "bagyo", "radar", "panahon"]
+  },
+  {
+    id: "tab:sops",
+    routeType: "workspace",
+    targetId: "sops",
+    label: "Task Board",
+    shortLabel: "Task Board",
+    category: "Field Operations",
+    rbacTabKey: "sops",
+    description: "Daily task board, milestones, and operational checklists.",
+    keywords: ["task board", "tasks", "checklist", "procedure", "sop"]
+  },
+  {
+    id: "tab:supervisors_attendance",
+    routeType: "workspace",
+    targetId: "supervisors_attendance",
+    label: "Supervisors Attendance & Biometric Audit",
+    shortLabel: "Supervisors Attendance",
+    category: "Field Operations",
+    rbacTabKey: "supervisors_attendance",
+    description: "Verify field supervisor GPS/biometric check-ins and accomplishments.",
+    keywords: ["supervisor", "biometric", "check-in", "attendance"]
+  },
+  {
+    id: "tab:dole_handbook",
+    routeType: "workspace",
+    targetId: "dole_handbook",
+    label: "DOLE Legal Guidelines Suite",
+    shortLabel: "DOLE Guidelines",
+    category: "HR & Legal",
+    rbacTabKey: "dole_handbook",
+    description: "Philippine Labor Code, DOLE Department Orders, and due process references.",
+    keywords: ["dole", "labor code", "legal", "batas", "art. 297", "holiday"]
+  },
+  {
+    id: "tab:hr_analytics",
+    routeType: "workspace",
+    targetId: "hr_analytics",
+    label: "HR Analytics & Workforce KPI",
+    shortLabel: "HR Analytics",
+    category: "Analytics",
+    rbacTabKey: "hr_analytics",
+    description: "Executive headcount, disciplinary trends, attendance & compliance KPIs.",
+    keywords: ["hr analytics", "kpi", "headcount", "demographics", "scorecard"]
+  },
+  {
+    id: "tab:permission_matrix",
+    routeType: "workspace",
+    targetId: "permission_matrix",
+    label: "Role & Capabilities Access Control Matrix",
+    shortLabel: "Permission Matrix",
+    category: "Security (HRMD)",
+    rbacTabKey: "permission_matrix",
+    description: "Manage role permissions and per-user module/feature access tags.",
+    keywords: ["permission", "rbac", "matrix", "access control", "role", "tag"]
+  },
+  {
+    id: "tab:api_health",
+    routeType: "workspace",
+    targetId: "api_health",
+    label: "System Health & API Configuration",
+    shortLabel: "API Health",
+    category: "Security (HRMD)",
+    rbacTabKey: "api_health",
+    description: "Monitor live accountant/teller API latency and endpoints.",
+    keywords: ["api", "health", "endpoint", "server", "config"]
+  }
+];
+
+/**
+ * Strip raw [[NAV:...]] syntax markers from visible AI text
+ */
+export function stripNavMarkers(text) {
+  if (!text) return "";
+  return text.replace(/\[\[NAV:[^\]]+\]\]/g, "").replace(/\n{3,}/g, "\n\n").trim();
+}
+
+/**
+ * Extract clickable module navigation routes from explicit [[NAV:...]] markers
+ * and contextual keyword intent in both user prompt and AI reply.
+ */
+export function extractSuggestedRoutes(aiText = "", userPrompt = "") {
+  const routes = [];
+  const addedIds = new Set();
+
+  const pushModule = (mod) => {
+    if (!mod || addedIds.has(mod.id)) return;
+    addedIds.add(mod.id);
+    routes.push(mod);
+  };
+
+  // 1. Parse explicit [[NAV:targetId|Optional Label]] markers emitted by AI
+  const navRegex = /\[\[NAV:([a-zA-Z0-9_:-]+)(?:\|([^\]]+))?\]\]/g;
+  let match;
+  while ((match = navRegex.exec(aiText || "")) !== null) {
+    const rawKey = match[1].trim().toLowerCase();
+    const found = HRHUB_MODULE_CATALOG.find(
+      (m) => m.id.toLowerCase() === rawKey || m.targetId.toLowerCase() === rawKey
+    );
+    if (found) pushModule(found);
+  }
+
+  // 2. Contextual intent detection so navigation buttons ALWAYS appear when relevant
+  const combined = `${userPrompt || ""} ${aiText || ""}`.toLowerCase();
+  const isAskingAppTour =
+    combined.includes("paano gamitin") ||
+    combined.includes("how to use") ||
+    combined.includes("buong project") ||
+    combined.includes("all modules") ||
+    combined.includes("lahat ng module") ||
+    combined.includes("app tour") ||
+    combined.includes("gabay sa app");
+
+  if (isAskingAppTour && routes.length < 4) {
+    ["tab:gross", "tab:revenue_trends", "tab:agents", "tab:incident_reports", "tab:memo", "comm:directory", "comm:attendance", "tab:geotagging"].forEach((id) => {
+      pushModule(HRHUB_MODULE_CATALOG.find((m) => m.id === id));
+    });
+    return routes.slice(0, 8);
+  }
+
+  // Score keyword hits from userPrompt primarily (higher signal) then aiText
+  const promptLower = (userPrompt || "").toLowerCase();
+  const wantsNavigation =
+    promptLower.includes("punta") ||
+    promptLower.includes("pumunta") ||
+    promptLower.includes("open") ||
+    promptLower.includes("buksan") ||
+    promptLower.includes("link") ||
+    promptLower.includes("route") ||
+    promptLower.includes("saan") ||
+    promptLower.includes("where") ||
+    promptLower.includes("go to") ||
+    promptLower.includes("paano");
+
+  for (const mod of HRHUB_MODULE_CATALOG) {
+    const matchedPrompt = mod.keywords.some((kw) => promptLower.includes(kw));
+    if (matchedPrompt) {
+      pushModule(mod);
+    }
+  }
+
+  // If user asked for navigation/help and we still have room, scan AI text for strong module mentions
+  if (wantsNavigation && routes.length < 4) {
+    const aiLower = (aiText || "").toLowerCase();
+    for (const mod of HRHUB_MODULE_CATALOG) {
+      if (aiLower.includes(mod.shortLabel.toLowerCase()) || aiLower.includes(mod.label.toLowerCase())) {
+        pushModule(mod);
+      }
+    }
+  }
+
+  return routes.slice(0, 6);
+}
+
 export const SIMPAL_COMPANIES_CONTEXT = `
 You are HRHub Ai Buddy, an executive AI partner for the Simpal Group of Companies.
 You assist Human Resources, Executives, Field Operations, and Administrative Personnel.
@@ -14,7 +505,11 @@ Style & Persona:
 - Speak conversationally, naturally, and warmly in the user's language (Tagalog, Taglish, or English).
 - Be direct, insightful, and practical. Avoid overly stiff or robotic phrasing.
 - Structure answers clearly with bullet points, bold key terms, and easy-to-read sections.
-- When computing DOLE 13th month, overtime, or holiday pay, present the standard formula and a clean step-by-step example.
+- When computing DOLE 13th month, overtime, holiday pay, or STL winnings (panalo), present the clear formula and a clean step-by-step peso example.
+- Interactive App Routing Capability: You know the ENTIRE HRHub application and can guide users step-by-step on how to use any feature AND provide clickable direct module links! Whenever you recommend or guide a user to a module, append the exact tag [[NAV:targetId|Module Label]] at the end of your reply (the UI automatically renders these as interactive clickable buttons!).
+  Available route targetIds:
+  - Communication Portal: comm:bulletin, comm:directory, comm:attendance, comm:policies, comm:hr_helpdesk, comm:it_helpdesk, comm:finance_desk, comm:knowledge_center, comm:suggestion_box, comm:leaderboards, comm:polls_surveys
+  - Workspace Modules: tab:home, tab:meetings, tab:gross, tab:revenue_trends, tab:agents, tab:incident_reports, tab:memo, tab:doc_studio, tab:salary_compensation, tab:payroll_calc, tab:petty_cash, tab:geotagging, tab:weather, tab:sops, tab:supervisors_attendance, tab:dole_handbook, tab:hr_analytics, tab:permission_matrix, tab:api_health
 - When asked to draft an official memorandum, advisory, or notice, you MUST strictly structure it in the authentic corporate format of the organization (matching our official physical printed memorandum):
   TO: [RECIPIENT IN ALL CAPS, e.g. HR ON-SITE, CIC, AND FIELD MONITORING or ALL EMPLOYEES AND CONCERNED PERSONNEL]
   FROM: HUMAN RESOURCES DEPARTMENT
@@ -49,7 +544,30 @@ Simpal Group of Companies Knowledge:
 Operational & Labor Standards:
 - Official HR Email: imsoroglohr@gmail.com
 - DOLE Standards: Regular holiday pay is 200%, Special non-working day is 130%, Rest day is 130%. 13th month pay is (Total basic salary earned during the year ÷ 12). Disciplinary due process requires a written Notice of Explanation (at least 48 hours to reply) followed by an evaluation and Notice of Decision.
+- STL Operations Expertise:
+  - Daily Draw Schedules: 2:00 PM (1st Draw), 5:00 PM (2nd Draw), 9:00 PM (3rd Draw), cut-off 15 minutes before draw.
+  - Winnings / Panalo Computation: Explain Straight (Target), Rambolito (6-way for 3 unique digits, 3-way for double digits), 2D / Last Two, and Pares payout structures clearly, noting exact branch payout multiplier tables set by PCSO/AAC operations, plus Payout Ratio = (Total Hits ÷ Total Gross) × 100%.
+  - Gross Up/Down Diagnostics: Analyze weather/typhoon impact (check Weather Radar), inactive booths/kiosks (check Agents Directory & GeoTagging), betting ratio shifts (check Revenue Trends), agent tardiness/cutoffs, competitor leakage, and high-payout days.
+  - AWOL Agent Protocol: Immediate accountability check (POS terminal, ticket rolls, cash float), attempt verified contact (calls/SMS/home check), document missed draws, file Incident Report via HRHub (tab:incident_reports), coordinate with Head Office HRMD for Return-to-Work Order (RTWO) and Notice to Explain (NTE) observing DOLE procedural due process, and re-assign territory coverage.
 `;
+
+export function buildSystemPromptForUser(currentUser = null, isHRMD = null) {
+  const isHoHr = isHeadOfficeHrAdminUser(currentUser, isHRMD);
+  if (isHoHr || !currentUser) {
+    return SIMPAL_COMPANIES_CONTEXT;
+  }
+
+  const companyName = currentUser.company || "Subsidiary Branch";
+  const userName = currentUser.name || "Branch Officer";
+  const userRole = currentUser.role || "Branch Staff";
+
+  return `${SIMPAL_COMPANIES_CONTEXT}
+
+ACTIVE LOGGED-IN USER CONTEXT (SUBSIDIARY OPERATIONS MODE):
+- User: ${userName} (${userRole})
+- Assigned Subsidiary: ${companyName}
+- Focus: Prioritize practical, actionable guidance tailored for ${companyName}'s STL & branch operations: studying daily STL Gross sales, diagnosing why STL Gross goes up or down with concrete sales-boosting strategies, computing STL winning hits/panalo & payout ratios, handling AWOL agents properly (accountability + Incident Report + HRMD NTE coordination), and routing them directly to any HRHub module using [[NAV:targetId|Label]] tags.`;
+}
 
 const DEFAULT_GEMINI_KEY = API_CONFIG.GEMINI_API_KEY;
 
@@ -325,7 +843,7 @@ Strict compliance is expected.`;
 }
 
 // Built-in Smart HR & Operations Knowledge Engine (when no external API key is configured)
-function generateLocalAiResponse(userPrompt, conversationHistory = []) {
+function generateLocalAiResponse(userPrompt, conversationHistory = [], currentUser = null, isHRMD = null) {
   const query = userPrompt.toLowerCase().trim();
 
   // Check if this is a request for Memorandum Body Directives or Polish
@@ -465,29 +983,159 @@ Batay sa mga opisyal na panuntunan ng **Department of Labor and Employment (DOLE
 *💡 Paalala mula sa HR: Para sa mga STL on-duty tellers o SIMCON field staff na may shifting sa araw ng holiday, tiyaking naipasa ang aprubadong attendance log sa imsoroglohr@gmail.com para sa payroll processing.*`;
   }
 
-  // 4. STL Operations, Gross, and Hits calculation
-  if (query.includes("gross") || query.includes("hits") || query.includes("stl") || query.includes("teller") || query.includes("mandaue")) {
-    return `### 📊 LUCKY BETPLAY STL OPERATIONS & GROSS LEDGER GUIDE
+  // 3B. App Walkthrough & Direct Module Routing ("paano gamitin ang app", "pumunta sa", "link ng module")
+  if (
+    query.includes("paano gamitin") ||
+    query.includes("how to use") ||
+    query.includes("buong project") ||
+    query.includes("app tour") ||
+    query.includes("lahat ng module") ||
+    query.includes("all modules") ||
+    query.includes("gabay sa app") ||
+    ((query.includes("pumunta") || query.includes("punta") || query.includes("buksan") || query.includes("go to") || query.includes("open") || query.includes("link") || query.includes("route") || query.includes("saan")) &&
+      (query.includes("module") || query.includes("tab") || query.includes("gross") || query.includes("agent") || query.includes("memo") || query.includes("incident") || query.includes("nte") || query.includes("payslip") || query.includes("salary") || query.includes("weather") || query.includes("geotag") || query.includes("attendance") || query.includes("directory") || query.includes("bulletin") || query.includes("petty cash") || query.includes("dole") || query.includes("permission") || query.includes("meeting")))
+  ) {
+    return `### 🧭 Gabay sa Paggamit ng Buong **HRHub App** & Direct Module Links
 
-Ang **Lucky Betplay Corporation** ay ang PCSO STL Authorized Agent Corporation (AAC) para sa Mandaue City. Narito ang buod ng mga operational metrics:
+Puwede kitang dalhin nang direkta sa kahit anong module sa isang click lang sa mga button sa ibaba! Narito ang kumpletong mapa ng buong HRHub system:
 
-#### 1. Paano Kino-compute ang Gross?
-* **Gross Sales (Kabuuan ng Taya):**
-  * Ang bawat transaksyon ng mga field agents/tellers sa bawat draw schedule:
-    * **Draw 1 (2:00 PM)**
-    * **Draw 2 (5:00 PM)**
-    * **Draw 3 (9:00 PM)**
-  * **Formula:** $\\text{Gross} = \\sum (\\text{Lahat ng lehitimong taya sa bawat draw})$
+#### 1. 📢 Enterprise Communication Portal (Itaas na Menu → Communication)
+* **Company Bulletin:** Mga opisyal na anunsyo at memo ng kumpanya.
+* **Employee Directory:** Listahan ng empleyado, 201 records, at profiling.
+* **Shift & Attendance:** Live na activity timesheet, Active/AFK monitoring, at DTR export.
+* **Policies & Handbooks:** Code of Conduct, OSH safety, at handbook.
 
-#### 2. Ano ang "Hits" at Paano Ito Naaapektuhan ang Net?
-* **Hits (Mga Nanalo):**
-  * Ito ang halaga ng napanalunang premyo mula sa opisyal na winning combination sa bawat draw.
-* **Net Sales Remittance:**
-  * $\\text{Net Collection} = \\text{Gross} - \\text{Authorized Hits Paid} - \\text{Agent Commission}$
+#### 2. 📊 STL Finance & Revenue Operations (Left Sidebar → Finance)
+* **Gross Report:** Araw-araw at historical na STL Gross sales, hits, at teller remittance.
+* **Revenue Trends (Betting Ratio):** Pag-aaral kung bakit tumataas o bumababa ang gross bawat area.
+* **13th Month Calculator & Petty Cash:** Pro-rated 13th month pay at liquidation ng branch expenses.
 
-#### 3. Real-Time vs. Official Accountant Ledger:
-* **Current Day (Today):** Live streaming ng taya bawat draw schedule na may quota guard (300 requests limit).
-* **Historical (Yesterday at Nakaraang mga Araw):** 1-single request sa Accountant API (\`TellerGrossPerDateRange\`) para makuha agad ang 100% reconciled figures ng lahat ng 333+ agents nang walang cooldown!`;
+#### 3. ⚖️ HR, Due Process & Field Operations (Left Sidebar → HR Admin / Operations)
+* **Agents Directory:** Listahan ng active STL agents, terminals, at supervisor assignments.
+* **Incident Reports & NTE:** Dito nagfa-file ng **AWOL / Incident Report** para ma-review at ma-isyuhan ng NTE ng Head Office HRMD.
+* **Memo Generator & Document Studio:** Paggawa ng official memo at coupon bond certificates.
+* **Territory GeoTagging & Weather Radar:** Mapa ng yellow booths/kiosks at live weather alerts.
+
+*💡 Tip: Sabihin mo lang halimbawa **"Dalhin mo ako sa Gross Report"** o **"Buksan ang Incident Reports"** at ibibigay ko agad ang direct link button!*
+
+[[NAV:tab:gross|Open Gross Report]] [[NAV:tab:revenue_trends|Open Revenue Trends]] [[NAV:tab:agents|Open Agents Directory]] [[NAV:tab:incident_reports|Open Incident Reports & NTE]] [[NAV:tab:geotagging|Open GeoTagging Map]] [[NAV:comm:directory|Open Employee Directory]]`;
+  }
+
+  // 3C. AWOL Agent Step-by-Step Operational & DOLE Due Process Guide
+  if (
+    query.includes("awol") ||
+    query.includes("nag-awol") ||
+    query.includes("nag awol") ||
+    query.includes("hindi pumasok") ||
+    query.includes("biglang nawala") ||
+    query.includes("abandona")
+  ) {
+    return `### 🛡️ Ano ang Kailangan Gawin Kapag Nag-AWOL ang STL Agent?
+
+Kapag ang isang **STL Agent / Teller** ay biglang hindi pumasok nang walang paalam (**AWOL — Absence Without Official Leave**), sundin ang eksaktong **6-Step Operational & DOLE Due Process Protocol** na ito:
+
+#### Step 1: Immediate Accountability & Asset Verification (Unang 2–4 Oras)
+* I-check agad sa **Gross Report** at sa Area Supervisor kung may **unremitted cash collection**, pending hits payout, o hawak na **POS terminal / ticket rolls / booth keys** ang agent.
+* I-freeze o i-flag muna ang terminal account niya para walang unauthorized betting entry.
+
+#### Step 2: Documented Contact Attempts (Araw 1–2)
+* Tawagan at i-text ang agent at ang kanyang emergency contact (makikita sa **Agents Directory / Employee Directory**).
+* Mag-screenshot ng lahat ng tawag, SMS, at chat attempts bilang ebidensya ng good faith.
+* Kung may hawak na POS terminal o cash float, magsagawa ng documented home/booth check ang Field Supervisor kasama ang witness.
+
+#### Step 3: Mag-file ng Official Incident Report (IR) sa HRHub
+* Pumunta sa **Incident Reports & NTE** module at i-submit ang **Branch Incident Report** na may kumpletong petsa ng mga na-miss na draw (2PM / 5PM / 9PM), halaga ng anumang cash/terminal accountability, at screenshots ng contact attempts.
+
+#### Step 4: Head Office HRMD — Return-to-Work Order (RTWO) & NTE
+* Ipapadala ng **Head Office HRMD** ang pormal na **Return-to-Work Order (RTWO)** at **Notice to Explain (NTE)** sa huling alam na address ng agent (via registered mail / personal service with witness), na nagbibigay ng **hindi bababa sa 5 calendar days** para magpaliwanag ayon sa **DOLE Twin-Notice Rule (Labor Code Art. 297)**.
+
+#### Step 5: Administrative Evaluation & Notice of Decision
+* Kung hindi sumagot o walang balidong dahilan (abandonment of work / gross neglect), ilalabas ng Head Office HRMD ang **Notice of Termination / Decision** at clearance para sa anumang accountability.
+
+#### Step 6: Territory & Booth Handover
+* Mag-assign agad ng relief teller o bagong agent sa bakanteng kiosk/booth (i-verify sa **GeoTagging Map**) para **hindi bumaba ang STL Gross** ng inyong area!
+
+[[NAV:tab:incident_reports|File Incident Report (AWOL)]] [[NAV:tab:agents|Check Agents Directory]] [[NAV:tab:gross|Verify Agent Remittance]] [[NAV:tab:memo|Open Memo Generator]]`;
+  }
+
+  // 3D. How to Compute STL Winnings / Panalo (Hits & Payouts)
+  if (
+    query.includes("panalo") ||
+    query.includes("winning") ||
+    query.includes("rambol") ||
+    query.includes("swer3") ||
+    query.includes("swer2") ||
+    query.includes("last two") ||
+    query.includes("pares") ||
+    query.includes("payout") ||
+    (query.includes("compute") && (query.includes("stl") || query.includes("taya") || query.includes("hit")))
+  ) {
+    return `### 🧮 Paano Mag-Compute ng Panalo (STL Hits & Payouts)
+
+Narito ang malinaw na formula at halimbawa kung paano kino-compute ang **Panalo (Hits Payout)** at **Payout Ratio** sa PCSO STL operations *(paalala: laging sundin ang opisyal na approved payout multiplier table ng inyong branch/AAC)*:
+
+#### 1. Basic Formula ng Panalo
+* **Formula:** \`Panalo (Prize) = Halaga ng Taya (Bet Amount) × Approved Payout Multiplier\`
+
+#### 2. Mga Karaniwang Uri ng Taya sa STL (Halimbawa):
+* **🎯 Straight / Target (Eksaktong Pagkakasunod-sunod):**
+  * Halimbawa: Tumaya ng **₱10** sa \`1-2-3\` (3-Digit / Swer3) at eksaktong \`1-2-3\` ang lumabas.
+  * Kung ang approved branch multiplier ay halimbawa **× 450** (₱4,500 per ₱10):
+  * \`₱10 × 450 = ₱4,500\` na panalo.
+* **🔀 Rambolito (Kahit Anong Ayos ng Numero):**
+  * **Rambolito 6 (3 magkakaibang numero, hal. 1-2-3 = 6 combinations):**
+    * Hinahati ang taya sa **6** combinations: \`(Bet ÷ 6) × Straight Multiplier\` (o gamit ang fixed Rambol-6 multiplier, hal. × 75 → \`₱10 × 75 = ₱750\`).
+  * **Rambolito 3 (May dobleng numero, hal. 1-1-2 = 3 combinations):**
+    * Hinahati ang taya sa **3** combinations: \`(Bet ÷ 3) × Straight Multiplier\` (o fixed Rambol-3 multiplier, hal. × 150 → \`₱10 × 150 = ₱1,500\`).
+* **✌️ 2-Digit / Last Two / Pares:**
+  * \`Bet Amount × Approved 2D/Pares Multiplier\` (hal. kung ₱10 taya sa approved rate na × 70 o × 75 = \`₱700–₱750\`).
+
+#### 3. Paano I-compute ang Payout Ratio at Net Remittance ng Branch?
+* **Payout Ratio (%):** \`(Total Hits ÷ Total Gross) × 100%\`
+  * *Halimbawa:* Gross = **₱100,000**, Total Hits = **₱42,000** → Payout Ratio = **42%**.
+* **Net Collection:** \`Total Gross − Total Validated Hits − Agent Commission\`
+
+*💡 Gusto mo bang mag-compute ng isang eksaktong taya? I-type lang ang **halaga ng taya, uri ng laro (Straight/Rambol/2D), at ang rate ng branch niyo**, at iko-compute ko agad!*
+
+[[NAV:tab:gross|Open Gross & Hits Report]] [[NAV:tab:revenue_trends|Check Betting Ratio Trends]]`;
+  }
+
+  // 4. STL Gross Study, Up/Down Diagnostics & Sales-Boosting Suggestions
+  if (
+    query.includes("gross") ||
+    query.includes("hits") ||
+    query.includes("stl") ||
+    query.includes("teller") ||
+    query.includes("mandaue") ||
+    query.includes("bumaba") ||
+    query.includes("tumaas") ||
+    query.includes("pagbaba") ||
+    query.includes("pagtaas") ||
+    query.includes("boost")
+  ) {
+    return `### 📈 Pag-aaral ng STL Gross: Bakit Bumababa/Tumataas & Paano Pataasin
+
+Narito ang gabay sa pag-study ng inyong **STL Gross** (2:00 PM, 5:00 PM, 9:00 PM draws) at mga praktikal na rekomendasyon para mapanatiling mataas ang benta ng inyong branch:
+
+#### 1. Mga Pangunahing Dahilan Bakit **Bumababa** ang STL Gross
+* **🌧️ Panahon (Ulan / Bagyo):** Kapag malakas ang ulan, kumakaunti ang walk-in bettors sa kalye. *(Laging i-check ang **Weather Radar** sa HRHub para makapag-adjust ng mobile/roving tellers.)*
+* **😴 Inactive o Late na Agents/Booths:** Kapag sarado ang booth bago mag-cutoff (1:45 PM / 4:45 PM / 8:45 PM) o may **AWOL na agent**, nawawalan agad ng benta ang area.
+* **💸 Petsa de Peligro (Mid-week / Bago Sahod):** Normal na bahagyang mababa ang taya ilang araw bago ang 15th/30th payday.
+* **🎯 Kompetisyon o Mahinang Booth Visibility:** Mga lugar na mataas ang foot traffic pero walang nakapwestong yellow booth.
+
+#### 2. Mga Dahilan Bakit **Tumataas** ang STL Gross
+* **💰 Payday & Weekend Surge (15th / 30th / Biyernes–Linggo):** Mas malaki ang disposable bet ng mga mananaya.
+* **🔥 Hot Numbers & Recent Local Winners:** Kapag may bagong nanalo sa barangay, mabilis kumalat ang balita at tumataas ang taya sa susunod na 2–3 draws.
+* **📍 Kumpletong Active Tellers sa Lahat ng 3 Draws:** Mataas ang gross kapag 95%+ ng agents ay aktibong nagbebenta hanggang 9:00 PM draw.
+
+#### 3. 5 Praktikal na Suggestions Para **Pataasin ang STL Gross**
+1. **Daily Zero-Sales Audit:** Buksan ang **Gross Report** tuwing pagkatapos ng 2PM draw at i-call out agad ang mga agents na ₱0 o mababa ang benta para makabawi sa 5PM at 9PM draw.
+2. **Focus sa 9:00 PM Prime Draw:** Siguraduhing may roving agents sa mga palengke, terminal, at sakayan mula 5:30 PM – 8:30 PM.
+3. **GeoTagging Blank-Spot Expansion:** Gamitin ang **Territory GeoTagging Map** para makita ang mga mataong barangay na kulang ng yellow booth.
+4. **Fast & Transparent Hits Payout:** Kapag mabilis mabayaran ang panalo ng bettor, bumabalik at mas lumalaki ang tiwala at taya nila.
+5. **Supervisor Spot Checks:** I-verify sa **Supervisors Attendance** na nakakaikot nang regular ang area supervisors sa mga low-performing outlets.
+
+[[NAV:tab:gross|Open Gross Report]] [[NAV:tab:revenue_trends|Open Revenue Trends]] [[NAV:tab:geotagging|Open GeoTagging Map]] [[NAV:tab:weather|Check Weather Radar]] [[NAV:tab:agents|Open Agents Directory]]`;
   }
 
   // 5. SOP Generation
@@ -496,7 +1144,7 @@ Ang **Lucky Betplay Corporation** ay ang PCSO STL Authorized Agent Corporation (
 
 **DOCUMENT CODE:** SOP-OPS-LBC-003
 **EFFECTIVE DATE:** Current Fiscal Year
-**APPLICABLE ENTITY:** Lucky Betplay Corporation (STL Mandaue Operations)
+**APPLICABLE ENTITY:** STL Branch Operations
 
 ---
 
@@ -521,22 +1169,43 @@ To standardize cash collection, minimize discrepancies, ensure physical ticket r
   * The Area Supervisor remits total pooled collections to the Central Cashier Office within two (2) hours of draw completion.
 
 * **Step 5: Digital Ledger Reconciliation**
-  * Accounting uploads and validates collections against the official Accountant API Ledger in HrHub.
+  * Accounting uploads and validates collections against the official Accountant API Ledger in HRHub.
 
-**COMPLIANCE NOTE:** Non-adherence to dual-signoff constitutes a Category B operational infraction under company policy.`;
+**COMPLIANCE NOTE:** Non-adherence to dual-signoff constitutes a Category B operational infraction under company policy.
+
+[[NAV:tab:sops|Open Task Board]] [[NAV:tab:gross|Open Gross Report]]`;
   }
 
-  // 6. General / Default Executive Response
+  // 6. General / Default Response (Account-Aware: Head Office HR Admin vs Subsidiary)
+  if (!isHeadOfficeHrAdminUser(currentUser, isHRMD)) {
+    const compName = currentUser?.company || "inyong Subsidiary Branch";
+    return `### 👋 Kumusta! Ako ang iyong **HRHub AI Buddy** para sa **${compName}**!
+
+Handa akong tumulong sa inyong pang-araw-araw na operasyon sa STL at branch management:
+
+* 📊 **Pag-study ng STL Gross:** Pagsusuri ng daily sales, draw cutoffs (2PM / 5PM / 9PM), at remittance reconciliation.
+* 📈 **Suggestions sa Pagbaba at Pagtaas ng Gross:** Mga praktikal na paraan para mapalakas ang benta ng mga booth at agents.
+* 🧮 **Paano Mag-compute ng Panalo (Hits):** Formula at step-by-step computation para sa Straight, Rambolito, 2D/Last Two, at Payout Ratio.
+* 🛡️ **Ano ang Gagawin Kapag Nag-AWOL ang Agent:** Kumpletong gabay mula cash/POS check hanggang Incident Report at NTE.
+* 🧭 **Gabay sa Buong HRHub App:** Sabihin lang kung saan mong module gustong pumunta at bibigyan kita ng direct clickable link!
+
+Ano ang gusto mong pag-usapan o puntahan ngayon?
+
+[[NAV:tab:gross|Open Gross Report]] [[NAV:tab:revenue_trends|Open Revenue Trends]] [[NAV:tab:incident_reports|Open Incident Reports]] [[NAV:tab:agents|Open Agents Directory]]`;
+  }
+
   return `### 👋 Kumusta! Ako ang inyong **HRHub Ai Buddy**
 
 Handa akong tumulong sa inyo sa anumang operasyon ng **Simpal Group of Companies**:
 
 * 📄 **Paggawa ng Memos & Advisories:** Magpagawa ng memo para sa Holiday, Emergency Shifting, Workplace Safety, o Policy Directives na handang i-transfer sa **Memo Generator**.
 * ⚖️ **DOLE & Labor Policies:** Magtanong ukol sa holiday pay computation, overtime rules, 13th-month pay, disciplinary due process, o regularization.
-* 📊 **STL Mandaue Operations & Gross Reports:** Pagpapaliwanag ng teller draw schedules, supervisor audits, hits, at gross remittance.
-* 📋 **Paggawa ng SOPs at Task Checklists:** Standard operating procedures para sa konstruksyon (SIMCON) o gaming branches.
+* 📊 **STL Operations & Gross Reports:** Pagpapaliwanag ng teller draw schedules, supervisor audits, hits, at gross remittance.
+* 🧭 **App Walkthrough & Direct Module Links:** Magtanong kung paano gamitin ang buong HRHub o sabihin lang kung anong module ang gusto mong buksan!
 
-Mayroon ka bang gustong ipagawa o itanong ngayon?`;
+Mayroon ka bang gustong ipagawa o itanong ngayon?
+
+[[NAV:tab:memo|Open Memo Generator]] [[NAV:tab:incident_reports|Open Incident Reports]] [[NAV:comm:directory|Open Employee Directory]] [[NAV:comm:attendance|Open Shift & Attendance]]`;
 }
 
 // Main AI Completion Handler: Dual Engine with automatic Smart Local fallback
@@ -544,8 +1213,25 @@ export async function sendAiChatMessage({
   messages,
   userPrompt,
   customApiKey = "",
-  model = "gpt-4o-mini"
+  model = "gpt-4o-mini",
+  currentUser = null,
+  isHRMD = null
 }) {
+  const systemPrompt = buildSystemPromptForUser(currentUser, isHRMD);
+
+  const finalizeReply = (rawText, source, modelName) => {
+    const suggestedRoutes = extractSuggestedRoutes(rawText, userPrompt);
+    const cleanedText = stripNavMarkers(rawText);
+    return {
+      content: cleanedText,
+      text: cleanedText,
+      source,
+      model: modelName,
+      memoData: extractMemoFromText(cleanedText),
+      suggestedRoutes
+    };
+  };
+
   const activeApiKey =
     customApiKey.trim() ||
     (typeof import.meta !== "undefined" && import.meta.env?.VITE_OPENAI_API_KEY ? import.meta.env.VITE_OPENAI_API_KEY.trim() : "") ||
@@ -589,7 +1275,7 @@ export async function sendAiChatMessage({
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               systemInstruction: {
-                parts: [{ text: SIMPAL_COMPANIES_CONTEXT }]
+                parts: [{ text: systemPrompt }]
               },
               contents: geminiContents
             })
@@ -600,13 +1286,7 @@ export async function sendAiChatMessage({
           const data = await res.json();
           const geminiText = data.candidates?.[0]?.content?.parts?.[0]?.text;
           if (geminiText && geminiText.trim().length > 0) {
-            return {
-              content: geminiText.trim(),
-              text: geminiText.trim(),
-              source: "gemini_core",
-              model: `HRHub Ai Buddy (${gModel})`,
-              memoData: extractMemoFromText(geminiText)
-            };
+            return finalizeReply(geminiText.trim(), "gemini_core", `HRHub Ai Buddy (${gModel})`);
           }
         } else {
           console.warn(`Gemini model ${gModel} returned status:`, res.status);
@@ -632,7 +1312,7 @@ export async function sendAiChatMessage({
           messages: [
             {
               role: "system",
-              content: SIMPAL_COMPANIES_CONTEXT
+              content: systemPrompt
             },
             ...messages.map((m) => ({
               role: m.role,
@@ -650,13 +1330,7 @@ export async function sendAiChatMessage({
         const data = await response.json();
         const content = data.choices?.[0]?.message?.content;
         if (content) {
-          return {
-            content,
-            text: content,
-            source: "ai_buddy_core",
-            model: "HRHub Ai Buddy",
-            memoData: extractMemoFromText(content)
-          };
+          return finalizeReply(content, "ai_buddy_core", "HRHub Ai Buddy");
         }
       }
     } catch (err) {
@@ -670,7 +1344,7 @@ export async function sendAiChatMessage({
     const timeoutTimer = setTimeout(() => controller.abort(), 6000);
 
     const liveMessages = [
-      { role: "system", content: SIMPAL_COMPANIES_CONTEXT },
+      { role: "system", content: systemPrompt },
       ...messages.slice(-6).map((m) => ({ role: m.role, content: m.content })),
       { role: "user", content: userPrompt }
     ];
@@ -703,13 +1377,7 @@ export async function sendAiChatMessage({
       }
 
       if (responseText && responseText.length > 0) {
-        return {
-          content: responseText,
-          text: responseText,
-          source: "ai_buddy_live",
-          model: "HRHub Ai Buddy",
-          memoData: extractMemoFromText(responseText)
-        };
+        return finalizeReply(responseText, "ai_buddy_live", "HRHub Ai Buddy");
       }
     }
   } catch (liveErr) {
@@ -717,12 +1385,6 @@ export async function sendAiChatMessage({
   }
 
   // Tier 3 Fallback: Smart Local HR & Operations Knowledge Engine
-  const localReply = generateLocalAiResponse(userPrompt, messages);
-  return {
-    content: localReply,
-    text: localReply,
-    source: "local_brain",
-    model: "HRHub Ai Buddy",
-    memoData: extractMemoFromText(localReply)
-  };
+  const localReply = generateLocalAiResponse(userPrompt, messages, currentUser, isHRMD);
+  return finalizeReply(localReply, "local_brain", "HRHub Ai Buddy");
 }

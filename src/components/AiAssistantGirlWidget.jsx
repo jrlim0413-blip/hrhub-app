@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { X, ChevronDown, Sparkles, MessageSquare, Volume2, VolumeX } from "lucide-react";
 import AiAssistantLiveCanvas from "./AiAssistantLiveCanvas";
+import { isHeadOfficeHrAdminUser } from "../lib/aiAssistantService";
 
 /**
  * High-Definition Neural Voice Playlist (Microsoft Jenny Neural AI)
@@ -91,6 +92,55 @@ const DIALOG_PLAYLIST = [
   }
 ];
 
+// Helper: Generate proportional word reveal boundaries synced to speech duration
+function buildProportionalBoundaries(words, totalSpeakMs = 5400) {
+  const cleanWords = words.filter((w) => w && !/^[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]+$/u.test(w));
+  const weights = cleanWords.map((w) => Math.max(2, w.replace(/[^a-zA-Z0-9]/g, "").length));
+  const totalWeight = weights.reduce((a, b) => a + b, 0) || 1;
+  let cursor = 120;
+  return cleanWords.map((_, idx) => {
+    const dur = Math.max(140, Math.round((weights[idx] / totalWeight) * (totalSpeakMs - 260)));
+    const entry = { offsetMs: cursor, durationMs: dur };
+    cursor += dur;
+    return entry;
+  });
+}
+
+/**
+ * Subsidiary / STL Operations Voice Playlist (Dedicated MP3 files for Subsidiary Accounts)
+ * Covers: Studying STL Gross, Suggestions on Gross Up/Down, Computing Winnings (Panalo), & AWOL Agent protocol.
+ */
+const SUBSIDIARY_DIALOG_PLAYLIST = [
+  {
+    audioUrl: "/audio/sub_greeting_0.mp3",
+    display: "Hello! Need help studying your daily STL Gross sales and branch remittance today? 📊",
+    words: ["Hello!", "Need", "help", "studying", "your", "daily", "STL", "Gross", "sales", "and", "branch", "remittance", "today?", "📊"],
+    boundaries: buildProportionalBoundaries(["Hello!", "Need", "help", "studying", "your", "daily", "STL", "Gross", "sales", "and", "branch", "remittance", "today?", "📊"], 5800),
+    durationMs: 6300
+  },
+  {
+    audioUrl: "/audio/sub_greeting_1.mp3",
+    display: "Want smart suggestions on why STL Gross goes up or down, and how to boost branch sales? 📈",
+    words: ["Want", "smart", "suggestions", "on", "why", "STL", "Gross", "goes", "up", "or", "down,", "and", "how", "to", "boost", "branch", "sales?", "📈"],
+    boundaries: buildProportionalBoundaries(["Want", "smart", "suggestions", "on", "why", "STL", "Gross", "goes", "up", "or", "down,", "and", "how", "to", "boost", "branch", "sales?", "📈"], 6400),
+    durationMs: 6900
+  },
+  {
+    audioUrl: "/audio/sub_greeting_2.mp3",
+    display: "Need help computing STL winning hits, payout ratios, and teller prizes? Just ask me! 🧮",
+    words: ["Need", "help", "computing", "STL", "winning", "hits,", "payout", "ratios,", "and", "teller", "prizes?", "Just", "ask", "me!", "🧮"],
+    boundaries: buildProportionalBoundaries(["Need", "help", "computing", "STL", "winning", "hits,", "payout", "ratios,", "and", "teller", "prizes?", "Just", "ask", "me!", "🧮"], 6800),
+    durationMs: 7300
+  },
+  {
+    audioUrl: "/audio/sub_greeting_3.mp3",
+    display: "Dealing with an AWOL agent? I can guide you on reporting, NTE, and proper next steps! 🛡️",
+    words: ["Dealing", "with", "an", "AWOL", "agent?", "I", "can", "guide", "you", "on", "reporting,", "NTE,", "and", "proper", "next", "steps!", "🛡️"],
+    boundaries: buildProportionalBoundaries(["Dealing", "with", "an", "AWOL", "agent?", "I", "can", "guide", "you", "on", "reporting,", "NTE,", "and", "proper", "next", "steps!", "🛡️"], 7000),
+    durationMs: 7500
+  }
+];
+
 // Helper: Select natural female voice for speech synthesis fallback
 export function getFemaleVoice() {
   if (typeof window === "undefined" || !window.speechSynthesis) return null;
@@ -120,8 +170,16 @@ export function getFemaleVoice() {
 export default function AiAssistantGirlWidget({
   onOpenChat,
   isChatOpen = false,
-  hidden = false
+  hidden = false,
+  currentUser = null,
+  isHRMD = null
 }) {
+  // Determine playlist based on logged-in account:
+  // - Head Office HR Administrator (Simpal Group of Companies) -> keeps original DIALOG_PLAYLIST & MP3s AS-IS
+  // - Subsidiary / STL Branch Accounts -> uses SUBSIDIARY_DIALOG_PLAYLIST & dedicated MP3s
+  const isHeadOfficeHr = isHeadOfficeHrAdminUser(currentUser, isHRMD);
+  const activePlaylist = isHeadOfficeHr ? DIALOG_PLAYLIST : SUBSIDIARY_DIALOG_PLAYLIST;
+
   const [isMinimized, setIsMinimized] = useState(false); // Animated waving anime character visible by default
   const [bubbleDismissed, setBubbleDismissed] = useState(false);
   const [isBlinking, setIsBlinking] = useState(false);
@@ -208,7 +266,7 @@ export default function AiAssistantGirlWidget({
       window.speechSynthesis.cancel();
     }
 
-    const item = DIALOG_PLAYLIST[index];
+    const item = activePlaylist[index % activePlaylist.length];
     if (!item) return;
 
     setDisplayedWords([]);
@@ -250,13 +308,17 @@ export default function AiAssistantGirlWidget({
       setMouthState("resting"); // Resting closed smile
 
       const tNext = setTimeout(() => {
-        setMsgIndex((prev) => (prev + 1) % DIALOG_PLAYLIST.length);
+        setMsgIndex((prev) => (prev + 1) % activePlaylist.length);
       }, 60000);
       activeTimersRef.current.push(tNext);
     }, item.durationMs);
 
     activeTimersRef.current.push(tEnd);
   };
+
+  useEffect(() => {
+    setMsgIndex(0);
+  }, [isHeadOfficeHr]);
 
   useEffect(() => {
     if (!hidden && !isChatOpen && !isMinimized) {
@@ -272,10 +334,10 @@ export default function AiAssistantGirlWidget({
         window.speechSynthesis.cancel();
       }
     };
-  }, [msgIndex, hidden, isChatOpen, isMinimized]);
+  }, [msgIndex, hidden, isChatOpen, isMinimized, isHeadOfficeHr]);
 
   const handleCharacterInteraction = () => {
-    setMsgIndex((prev) => (prev + 1) % DIALOG_PLAYLIST.length);
+    setMsgIndex((prev) => (prev + 1) % activePlaylist.length);
   };
 
   const handleToggleVoice = () => {

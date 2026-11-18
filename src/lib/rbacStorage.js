@@ -75,6 +75,15 @@ export const WORKSPACE_TABS_CONFIG = [
     sidebarTabId: "meetings"
   },
   {
+    id: "ai_buddy_assistant",
+    label: "HRHub AI Buddy & Interactive App Guide",
+    shortLabel: "HRHub AI Buddy",
+    category: "Home",
+    code: "WORKSPACE FEATURE: AI ASSISTANT • ACCESS_AI_BUDDY",
+    description: "Account-aware AI Assistant for Head Office HR, Subsidiary STL Gross/Winnings/AWOL guidance, and direct module routing.",
+    sidebarTabId: "home"
+  },
+  {
     id: "geotagging",
     label: "Territory GeoTagging & Road Map",
     shortLabel: "GeoTagging Map",
@@ -94,11 +103,11 @@ export const WORKSPACE_TABS_CONFIG = [
   },
   {
     id: "sops",
-    label: "Field Operations Board & SOPs",
-    shortLabel: "SOP & Task Board",
-    category: "Operations",
-    code: "WORKSPACE TAB: OPERATIONS • VIEW_OPERATIONS_BOARD",
-    description: "Standard Operating Procedures (SOPs) task boards, equipment readiness tracking, and checklists.",
+    label: "Task Board",
+    shortLabel: "Task Board",
+    category: "Home",
+    code: "WORKSPACE TAB: TASK BOARD • VIEW_TASK_BOARD",
+    description: "Enterprise Kanban Task Board with General HR tasks, per-employee task assignments, For Review submissions, and HR Admin approval.",
     sidebarTabId: "sops"
   },
   {
@@ -290,6 +299,69 @@ export const IN_TAB_FEATURES_CONFIG = [
     belongsToLabel: "Enterprise Communication & Employee Portal",
     description: "Allows viewing company code of conduct, labor compliance standards, safety guidelines, and employee handbook documents."
   },
+  {
+    id: "comm_hr_helpdesk",
+    label: "Access HR Helpdesk Support Tickets",
+    parentTab: "communication",
+    belongsToLabel: "Enterprise Communication & Employee Portal",
+    description: "Allows filing and tracking HR support tickets for COE, government benefits, leaves, 201 files, and personnel concerns."
+  },
+  {
+    id: "comm_it_helpdesk",
+    label: "Access IT Helpdesk Technical Support",
+    parentTab: "communication",
+    belongsToLabel: "Enterprise Communication & Employee Portal",
+    description: "Allows reporting POS/STL terminal issues, HRHub login/password support, biometrics, printers, and network outages."
+  },
+  {
+    id: "comm_finance_desk",
+    label: "Access Finance Desk Remittance & Inquiry Tickets",
+    parentTab: "communication",
+    belongsToLabel: "Enterprise Communication & Employee Portal",
+    description: "Allows coordinating STL gross remittance queries, hits payout verification, petty cash liquidation, and payslip concerns."
+  },
+  {
+    id: "comm_knowledge_center",
+    label: "Access Knowledge Center & Operational Guides",
+    parentTab: "communication",
+    belongsToLabel: "Enterprise Communication & Employee Portal",
+    description: "Allows browsing and searching company playbooks, STL gross guides, DOLE protocols, and HRHub walkthroughs."
+  },
+  {
+    id: "comm_suggestion_box",
+    label: "Access Employee Suggestion Box & Feedback",
+    parentTab: "communication",
+    belongsToLabel: "Enterprise Communication & Employee Portal",
+    description: "Allows submitting named or anonymous suggestions, upvoting ideas, and reviewing official management responses."
+  },
+  {
+    id: "comm_leaderboards",
+    label: "Access Employee & Subsidiary Leaderboards",
+    parentTab: "communication",
+    belongsToLabel: "Enterprise Communication & Employee Portal",
+    description: "Allows viewing real-time performance rankings, completed task scores, and executive recognition awards."
+  },
+  {
+    id: "comm_polls_surveys",
+    label: "Access Company Polls & Pulse Surveys",
+    parentTab: "communication",
+    belongsToLabel: "Enterprise Communication & Employee Portal",
+    description: "Allows participating in company-wide polls, employee pulse surveys, and viewing real-time voting tallies."
+  },
+  {
+    id: "comm_manage_helpdesk",
+    label: "Manage & Resolve Helpdesk Tickets (HR, IT, Finance)",
+    parentTab: "communication",
+    belongsToLabel: "Enterprise Communication & Employee Portal",
+    description: "Authority to view all submitted tickets across HR, IT, and Finance Desks, update ticket statuses, reply as desk support, and delete tickets."
+  },
+  {
+    id: "comm_manage_engagement",
+    label: "Administer Knowledge Center, Suggestions, Awards & Polls",
+    parentTab: "communication",
+    belongsToLabel: "Enterprise Communication & Employee Portal",
+    description: "Authority to publish Knowledge Center guides, post official Suggestion Box responses, grant Leaderboard Awards, and create or close Polls & Surveys."
+  },
 
   // 1. Home & Meetings Features
   {
@@ -300,13 +372,13 @@ export const IN_TAB_FEATURES_CONFIG = [
     description: "Allows scheduling corporate meetings, setting agendas, and coordinating inter-departmental sessions."
   },
 
-  // 2. Field Operations Board & Weather Features
+  // 2. Task Board & Weather Features
   {
     id: "manage_sop_tasks",
-    label: "Administer Standard Operating Procedure Tasks",
+    label: "Post, Assign & Approve Task Board Submissions (HR Admin)",
     parentTab: "sops",
-    belongsToLabel: "Field Operations Board & SOPs",
-    description: "Permits updating checklist status, assigning SOP protocols, and verifying field compliance."
+    belongsToLabel: "Task Board",
+    description: "Authority to post General HR or Specific Employee tasks, view full Backlog/In Progress/For Review/Done columns, review subsidiary actions, and mark tasks Done."
   },
   {
     id: "access_weather_radar",
@@ -463,6 +535,7 @@ export const FACTORY_ROLE_TIER_PERMISSIONS = {
     home: true,
     overview: true,
     meetings: true,
+    ai_buddy_assistant: true,
     geotagging: true,
     weather: true,
     sops: true,
@@ -489,6 +562,15 @@ export const FACTORY_ROLE_TIER_PERMISSIONS = {
     comm_add_employee: true,
     comm_attendance: true,
     comm_policies: true,
+    comm_hr_helpdesk: true,
+    comm_it_helpdesk: true,
+    comm_finance_desk: true,
+    comm_knowledge_center: true,
+    comm_suggestion_box: true,
+    comm_leaderboards: true,
+    comm_polls_surveys: true,
+    comm_manage_helpdesk: true,
+    comm_manage_engagement: true,
     schedule_corporate_meetings: true,
     manage_sop_tasks: true,
     access_weather_radar: true,
@@ -517,6 +599,7 @@ export const FACTORY_ROLE_TIER_PERMISSIONS = {
     home: true,
     overview: true,
     meetings: true,
+    ai_buddy_assistant: true,
     geotagging: true,
     weather: true,
     sops: true,
@@ -543,6 +626,15 @@ export const FACTORY_ROLE_TIER_PERMISSIONS = {
     comm_add_employee: true,
     comm_attendance: true,
     comm_policies: true,
+    comm_hr_helpdesk: true,
+    comm_it_helpdesk: true,
+    comm_finance_desk: true,
+    comm_knowledge_center: true,
+    comm_suggestion_box: true,
+    comm_leaderboards: true,
+    comm_polls_surveys: true,
+    comm_manage_helpdesk: false,
+    comm_manage_engagement: false,
     schedule_corporate_meetings: true,
     manage_sop_tasks: false,
     access_weather_radar: true,
@@ -571,6 +663,7 @@ export const FACTORY_ROLE_TIER_PERMISSIONS = {
     home: true,
     overview: true,
     meetings: true,
+    ai_buddy_assistant: true,
     geotagging: true,
     weather: true,
     sops: true,
@@ -597,8 +690,17 @@ export const FACTORY_ROLE_TIER_PERMISSIONS = {
     comm_add_employee: false,
     comm_attendance: true,
     comm_policies: true,
+    comm_hr_helpdesk: true,
+    comm_it_helpdesk: true,
+    comm_finance_desk: true,
+    comm_knowledge_center: true,
+    comm_suggestion_box: true,
+    comm_leaderboards: true,
+    comm_polls_surveys: true,
+    comm_manage_helpdesk: false,
+    comm_manage_engagement: false,
     schedule_corporate_meetings: false,
-    manage_sop_tasks: true,
+    manage_sop_tasks: false,
     access_weather_radar: true,
     investigate_and_issue_ir: true,
     issue_official_nte: false,
@@ -625,9 +727,10 @@ export const FACTORY_ROLE_TIER_PERMISSIONS = {
     home: true,
     overview: true,
     meetings: false,
+    ai_buddy_assistant: true,
     geotagging: false,
     weather: false,
-    sops: false,
+    sops: true,
     supervisors_attendance: false,
     incident_reports: true,
     memo: true,
@@ -651,6 +754,15 @@ export const FACTORY_ROLE_TIER_PERMISSIONS = {
     comm_add_employee: false,
     comm_attendance: false,
     comm_policies: true,
+    comm_hr_helpdesk: true,
+    comm_it_helpdesk: true,
+    comm_finance_desk: true,
+    comm_knowledge_center: true,
+    comm_suggestion_box: true,
+    comm_leaderboards: true,
+    comm_polls_surveys: true,
+    comm_manage_helpdesk: false,
+    comm_manage_engagement: false,
     schedule_corporate_meetings: false,
     manage_sop_tasks: false,
     access_weather_radar: false,

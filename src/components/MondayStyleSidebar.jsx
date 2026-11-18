@@ -10,6 +10,14 @@ import {
 
 export const FUNCTIONAL_WORKSPACE_TABS = [
   {
+    id: "sops",
+    label: "Task Board",
+    icon: Layers,
+    tag: "Tasks",
+    category: "home",
+    color: "text-emerald-600"
+  },
+  {
     id: "home",
     label: "Home Dashboard",
     icon: Home,
@@ -214,11 +222,18 @@ export default function MondayStyleSidebar({
     }
   ];
 
-  // Specific specialized features per category with all 6 functional tabs included
+  // Specific specialized features per category (Task Board is #1 inside Home — zero redundancy)
   const categoryModules = {
     home: {
       title: "Home & HR Dashboard",
       items: [
+        {
+          id: "sops",
+          label: "Task Board",
+          icon: Layers,
+          tag: "Tasks",
+          tabId: "sops"
+        },
         {
           id: "home",
           label: "Home Dashboard",
@@ -251,13 +266,6 @@ export default function MondayStyleSidebar({
           icon: CloudSun,
           tag: "Live Radar",
           tabId: "weather"
-        },
-        {
-          id: "sops",
-          label: "SOP & Field Operations Board",
-          icon: Layers,
-          tag: "SOPs",
-          tabId: "sops"
         },
         {
           id: "supervisors_attendance",
