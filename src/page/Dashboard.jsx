@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import {
   Bell, MessageSquare, Search, Users, ShieldCheck,
   ThumbsUp, MessageCircle, Share2, Send,
@@ -657,8 +657,8 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
   const handleOpenWorkspaceTab = (tabId) => {
     const targetId = tabId === "betting_ratio" ? "revenue_trends" : tabId;
     if (!targetId || !WORKSPACE_TAB_DEFS[targetId]) return;
-    // Strict HRMD gate for Role Permission Matrix & System Health API Config
-    if (!isHRMD && (targetId === "permission_matrix" || targetId === "api_health")) {
+    // Strict Enterprise RBAC Matrix Gate: block any module disabled for this user/role
+    if (!isUserTabAllowed(currentUserObj, targetId, matrixData)) {
       return;
     }
     setActiveView("workspace");
@@ -963,12 +963,19 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
     );
   }, [currentUserObj]);
 
+  const canAccessTab = useCallback(
+    (tabId) => {
+      if (!tabId) return true;
+      return isUserTabAllowed(currentUserObj, tabId, matrixData);
+    },
+    [currentUserObj, matrixData]
+  );
+
   const isCommWorkspaceAllowed = isUserTabAllowed(currentUserObj, "communication", matrixData);
   const canViewBulletin = isUserFeatureAllowed(currentUserObj, "comm_bulletin", matrixData);
   const canPostBulletin = isUserFeatureAllowed(currentUserObj, "comm_post_bulletin", matrixData);
   const canViewDirectory = isUserFeatureAllowed(currentUserObj, "comm_directory", matrixData);
-  // Shift & Attendance is strictly restricted to HRMD master accounts
-  const canViewAttendance = isHRMD && isUserFeatureAllowed(currentUserObj, "comm_attendance", matrixData);
+  const canViewAttendance = isUserFeatureAllowed(currentUserObj, "comm_attendance", matrixData);
   const canViewPolicies = isUserFeatureAllowed(currentUserObj, "comm_policies", matrixData);
 
   // Automatically select the first authorized sub-tab if active sub-tab is restricted
@@ -977,7 +984,7 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
       const tabs = [
         { id: "bulletin", allowed: canViewBulletin },
         { id: "directory", allowed: canViewDirectory },
-        { id: "attendance", allowed: true },
+        { id: "attendance", allowed: canViewAttendance },
         { id: "policies", allowed: canViewPolicies }
       ];
       const currentAllowed = tabs.find((t) => t.id === communicationTab)?.allowed;
@@ -988,21 +995,22 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
         }
       }
     }
-  }, [activeView, isCommWorkspaceAllowed, communicationTab, canViewBulletin, canViewDirectory, canViewAttendance, canViewPolicies, isHRMD]);
+  }, [activeView, isCommWorkspaceAllowed, communicationTab, canViewBulletin, canViewDirectory, canViewAttendance, canViewPolicies]);
 
-  // Strict HRMD Access Enforcement:
-  // Non-HRMD accounts can never keep permission_matrix or api_health open in workspace tabs
+  // Strict Real-Time RBAC Workspace Enforcement:
+  // Immediately closes any open workspace tab whose capability is disabled in the matrix
   useEffect(() => {
-    if (!isHRMD) {
-      setOpenTabs((prev) => {
-        const filtered = prev.filter((id) => id !== "permission_matrix" && id !== "api_health");
-        return filtered.length !== prev.length ? filtered : prev;
-      });
-      if (workspaceTab === "permission_matrix" || workspaceTab === "api_health") {
-        setWorkspaceTab("home");
-      }
+    setOpenTabs((prev) => {
+      const filtered = prev.filter((id) => canAccessTab(id));
+      return filtered.length !== prev.length ? filtered : prev;
+    });
+    if (workspaceTab && workspaceTab !== "home" && !canAccessTab(workspaceTab)) {
+      const firstAllowedTab = Object.keys(WORKSPACE_TAB_DEFS).find(
+        (id) => id !== "home" && canAccessTab(id)
+      );
+      setWorkspaceTab(canAccessTab("home") ? "home" : (firstAllowedTab || null));
     }
-  }, [isHRMD, workspaceTab]);
+  }, [canAccessTab, workspaceTab]);
 
   // Telemetry: Auto-log Daily Shift Start for HR Officer
   useEffect(() => {
@@ -1872,15 +1880,12 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
     </div>
   );
 
-  // Compute frequently used tabs sorted by 10-day usage count
+  // Compute frequently used tabs sorted by 10-day usage count (strictly filtered by RBAC permissions)
   const frequentTabs = useMemo(() => {
     const counts = frequentStats?.counts || {};
-    // Non-HRMD accounts can never see permission_matrix or api_health
     const allTabs = Object.values(WORKSPACE_TAB_DEFS).filter((tab) => {
-      if (!isHRMD && (tab.id === "permission_matrix" || tab.id === "api_health")) {
-        return false;
-      }
-      return true;
+      if (tab.id === "home") return false;
+      return canAccessTab(tab.id);
     });
 
     // Filter tabs with at least 1 click in this 10-day cycle, sorted descending
@@ -1889,23 +1894,31 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
       .sort((a, b) => (counts[b.id] || 0) - (counts[a.id] || 0));
 
     // If fewer than 4 tabs have been opened yet in this 10-day cycle,
-    // supplement with default popular core tabs
+    // supplement with default popular core tabs that are allowed for this user
     if (openedTabs.length < 4) {
       const existingIds = new Set(openedTabs.map((t) => t.id));
       for (const defId of DEFAULT_POPULAR_TAB_IDS) {
-        if (!isHRMD && (defId === "permission_matrix" || defId === "api_health")) {
-          continue;
-        }
+        if (!canAccessTab(defId)) continue;
         if (!existingIds.has(defId) && WORKSPACE_TAB_DEFS[defId]) {
           openedTabs.push(WORKSPACE_TAB_DEFS[defId]);
           existingIds.add(defId);
           if (openedTabs.length >= 6) break;
         }
       }
+      // If user is restricted to specific non-default modules (e.g. single-module user), surface their allowed modules
+      if (openedTabs.length < 6) {
+        for (const tab of allTabs) {
+          if (!existingIds.has(tab.id)) {
+            openedTabs.push(tab);
+            existingIds.add(tab.id);
+            if (openedTabs.length >= 6) break;
+          }
+        }
+      }
     }
 
     return openedTabs.slice(0, 6);
-  }, [frequentStats, isHRMD]);
+  }, [frequentStats, canAccessTab]);
 
   const displayedWorkspaceTabs = frequentTabs;
 
@@ -2262,7 +2275,7 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
                   {[
                     { id: "bulletin", icon: Megaphone, label: "Company Bulletin", allowed: canViewBulletin },
                     { id: "directory", icon: Users, label: "Employee Directory", badge: supabaseProfiles.filter(p => !p.is_approved).length, allowed: canViewDirectory },
-                    { id: "attendance", icon: Calendar, label: "Shift & Attendance", allowed: true },
+                    { id: "attendance", icon: Calendar, label: "Shift & Attendance", allowed: canViewAttendance },
                     { id: "policies", icon: ShieldCheck, label: "Policies & Handbooks", allowed: canViewPolicies }
                   ].map(({ id, icon: Icon, label, badge, allowed }) => (
                     <button
@@ -2360,21 +2373,31 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
                     </div>
                   )
                 ) : communicationTab === "attendance" ? (
-                  <ShiftAttendanceOverviewPanel
-                    profiles={supabaseProfiles}
-                    presenceMap={presenceMap}
-                    currentProfile={{
-                      name: profileName,
-                      role: profileRole,
-                      email: profileEmail,
-                      company: profileCompany,
-                      branch: currentUser?.branch || "Head Office (SGC)"
-                    }}
-                    currentUser={currentUser}
-                    isHRMD={isHRMD}
-                    onOpenChat={handleOpenDirectChat}
-                    onOpenWorkspaceTab={handleOpenWorkspaceTab}
-                  />
+                  canViewAttendance ? (
+                    <ShiftAttendanceOverviewPanel
+                      profiles={supabaseProfiles}
+                      presenceMap={presenceMap}
+                      currentProfile={{
+                        name: profileName,
+                        role: profileRole,
+                        email: profileEmail,
+                        company: profileCompany,
+                        branch: currentUser?.branch || "Head Office (SGC)"
+                      }}
+                      currentUser={currentUser}
+                      isHRMD={isHRMD}
+                      onOpenChat={handleOpenDirectChat}
+                      onOpenWorkspaceTab={handleOpenWorkspaceTab}
+                    />
+                  ) : (
+                    <div className="bg-white rounded-3xl border border-slate-200/90 p-8 text-center space-y-3">
+                      <Lock size={28} className="mx-auto text-amber-500" />
+                      <h3 className="text-base font-extrabold text-slate-900">Shift & Attendance Access Restricted</h3>
+                      <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
+                        Viewing shift rosters and attendance timesheets has been disabled for your account under the Role Access Matrix.
+                      </p>
+                    </div>
+                  )
                 ) : communicationTab === "policies" ? (
                   canViewPolicies ? (
                     <PoliciesHandbooksPanel />
@@ -2437,6 +2460,7 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
             isCollapsed={isSidebarCollapsed}
             setIsCollapsed={setIsSidebarCollapsed}
             isHRMD={isHRMD}
+            isTabAllowed={canAccessTab}
           />
           <div className="flex-1 min-w-0 p-3 sm:p-4 transition-all duration-300 overflow-x-hidden antialiased">
           {/* WORKSPACE CENTRAL OPERATIONS HUB */}
@@ -2525,40 +2549,72 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
               </div>
 
               {/* Grid of Frequent (or All) Module Cards */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-2.5 max-w-3xl mx-auto text-left">
-                {displayedWorkspaceTabs.map((tab) => {
-                  const Icon = tab.icon;
-                  const useCount = frequentStats.counts?.[tab.id] || 0;
-                  return (
-                    <button
-                      key={tab.id}
-                      type="button"
-                      onClick={() => handleOpenWorkspaceTab(tab.id)}
-                      className="p-2.5 rounded-xl border border-slate-200/90 bg-white hover:border-emerald-400 hover:bg-emerald-50/20 hover:shadow-2xs transition text-left cursor-pointer group flex items-start gap-2.5 relative"
-                    >
-                      <div className="p-1.5 rounded-lg bg-slate-50 border border-slate-200/80 group-hover:border-emerald-200 group-hover:bg-white text-slate-700 group-hover:text-emerald-700 transition shrink-0">
-                        <Icon size={14} />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="font-bold text-xs text-slate-800 group-hover:text-emerald-800 transition truncate flex items-center justify-between gap-1">
-                          <span className="truncate">{tab.label}</span>
-                          {useCount > 0 && (
-                            <span className="text-[9px] font-bold text-emerald-700 bg-emerald-50 px-1 py-0.2 rounded border border-emerald-200 shrink-0">
-                              {useCount}x
-                            </span>
-                          )}
+              {displayedWorkspaceTabs.length === 0 ? (
+                <div className="max-w-md mx-auto rounded-2xl border border-amber-200 bg-amber-50/70 p-4 text-center space-y-1">
+                  <Lock size={20} className="mx-auto text-amber-600" />
+                  <p className="text-xs font-bold text-slate-800">No Workspace Modules Authorized</p>
+                  <p className="text-[11px] text-slate-600">
+                    Your account currently has no enabled workspace modules in the Role & Capabilities Access Control Matrix.
+                  </p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-2.5 max-w-3xl mx-auto text-left">
+                  {displayedWorkspaceTabs.map((tab) => {
+                    const Icon = tab.icon;
+                    const useCount = frequentStats.counts?.[tab.id] || 0;
+                    return (
+                      <button
+                        key={tab.id}
+                        type="button"
+                        onClick={() => handleOpenWorkspaceTab(tab.id)}
+                        className="p-2.5 rounded-xl border border-slate-200/90 bg-white hover:border-emerald-400 hover:bg-emerald-50/20 hover:shadow-2xs transition text-left cursor-pointer group flex items-start gap-2.5 relative"
+                      >
+                        <div className="p-1.5 rounded-lg bg-slate-50 border border-slate-200/80 group-hover:border-emerald-200 group-hover:bg-white text-slate-700 group-hover:text-emerald-700 transition shrink-0">
+                          <Icon size={14} />
                         </div>
-                        <div className="text-[10px] text-slate-400 mt-0.5">
-                          {useCount > 0 ? "Frequently opened" : "Click to open tab"}
+                        <div className="min-w-0 flex-1">
+                          <div className="font-bold text-xs text-slate-800 group-hover:text-emerald-800 transition truncate flex items-center justify-between gap-1">
+                            <span className="truncate">{tab.label}</span>
+                            {useCount > 0 && (
+                              <span className="text-[9px] font-bold text-emerald-700 bg-emerald-50 px-1 py-0.2 rounded border border-emerald-200 shrink-0">
+                                {useCount}x
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-[10px] text-slate-400 mt-0.5">
+                            {useCount > 0 ? "Frequently opened" : "Click to open tab"}
+                          </div>
                         </div>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
 
+          {/* UNIVERSAL RBAC WORKSPACE MODULE GATE */}
+          {workspaceTab && workspaceTab !== "home" && !canAccessTab(workspaceTab) ? (
+            <div className="bg-white border border-rose-200 rounded-3xl p-8 text-center space-y-3 max-w-lg mx-auto my-12 shadow-sm">
+              <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mx-auto">
+                <Lock size={24} />
+              </div>
+              <h3 className="font-extrabold text-slate-800 text-lg">Module Access Restricted</h3>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                This module has been disabled for your account under the Enterprise Role & Capabilities Access Control Matrix. Contact Head Office HRMD if you require access.
+              </p>
+              <div className="pt-2">
+                <button
+                  type="button"
+                  onClick={() => handleCloseWorkspaceTab(null, workspaceTab)}
+                  className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition cursor-pointer"
+                >
+                  Close Tab
+                </button>
+              </div>
+            </div>
+          ) : (
+          <>
           {/* TAB: ZOOM & GOOGLE MEET VIDEO CONFERENCES */}
           {workspaceTab === "meetings" && (
             <div className="animate-in fade-in">
@@ -2702,7 +2758,7 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
 
           {/* TAB 6: ROLE & ACCOUNT CAPABILITIES MATRIX */}
           {workspaceTab === "permission_matrix" && (
-            isHRMD ? (
+            (isHRMD || canAccessTab("permission_matrix")) ? (
               <RolePermissionMatrixPanel
                 currentUser={currentUser}
                 onClose={() => handleCloseWorkspaceTab(null, "permission_matrix")}
@@ -2731,7 +2787,7 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
 
           {/* TAB 7: SYSTEM HEALTH & API CONFIGURATION */}
           {workspaceTab === "api_health" && (
-            isHRMD ? (
+            (isHRMD || canAccessTab("api_health")) ? (
               <ApiHealthConfigurationPanel />
             ) : (
               <div className="bg-white border border-rose-200 rounded-3xl p-8 text-center space-y-3 max-w-lg mx-auto my-12 shadow-sm">
@@ -2805,6 +2861,8 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
               profiles={supabaseProfiles}
               onClose={() => handleCloseWorkspaceTab(null, "salary_compensation")}
             />
+          )}
+          </>
           )}
           </div>
         </div>

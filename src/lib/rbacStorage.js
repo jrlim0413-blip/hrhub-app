@@ -45,32 +45,76 @@ export const STANDARD_ROLE_TIERS = [
   }
 ];
 
-// Authentic Workspace Tabs matching the entire HR Hub project
+// Authentic Workspace Tabs & Modules matching the entire HR Hub project
 export const WORKSPACE_TABS_CONFIG = [
   {
     id: "communication",
     label: "Enterprise Communication & Employee Portal",
+    shortLabel: "Communication Portal",
+    category: "Portal",
     code: "WORKSPACE TAB: COMMUNICATION • ACCESS_PORTAL",
     description: "Company-wide announcements bulletin, employee directory, shift rosters, and compliance handbooks.",
     sidebarTabId: "communication"
   },
   {
-    id: "overview",
-    label: "Executive Operations Dashboard & Strategic KPIs",
-    code: "WORKSPACE TAB: OVERVIEW • VIEW_EXECUTIVE_DASHBOARD",
-    description: "Central executive operational monitoring, corporate meeting calendar, and cross-entity activity metrics.",
+    id: "home",
+    label: "Home Dashboard & Executive KPIs",
+    shortLabel: "Home Dashboard",
+    category: "Home",
+    code: "WORKSPACE TAB: HOME • VIEW_EXECUTIVE_DASHBOARD",
+    description: "Central executive operational hub, frequently used modules, and cross-entity activity overview.",
     sidebarTabId: "home"
   },
   {
+    id: "meetings",
+    label: "Zoom & Google Meet Scheduler",
+    shortLabel: "Zoom & Meet",
+    category: "Home",
+    code: "WORKSPACE TAB: MEETINGS • SCHEDULE_VIDEO_MEETINGS",
+    description: "Live video conference scheduling, Zoom/Google Meet session management, and executive calendar.",
+    sidebarTabId: "meetings"
+  },
+  {
+    id: "geotagging",
+    label: "Territory GeoTagging & Road Map",
+    shortLabel: "GeoTagging Map",
+    category: "Operations",
+    code: "WORKSPACE TAB: OPERATIONS • VIEW_GEOTAGGING_MAP",
+    description: "Interactive territory boundaries, yellow booth kiosk plotting, and navigable road distance routing.",
+    sidebarTabId: "geotagging"
+  },
+  {
+    id: "weather",
+    label: "Field Weather Radar",
+    shortLabel: "Weather Radar",
+    category: "Operations",
+    code: "WORKSPACE TAB: OPERATIONS • VIEW_WEATHER_RADAR",
+    description: "Real-time regional Doppler weather radar and natural hazard advisories for field branches.",
+    sidebarTabId: "weather"
+  },
+  {
     id: "sops",
-    label: "Field Operations Board & Doppler Weather Radar",
+    label: "Field Operations Board & SOPs",
+    shortLabel: "SOP & Task Board",
+    category: "Operations",
     code: "WORKSPACE TAB: OPERATIONS • VIEW_OPERATIONS_BOARD",
-    description: "Standard Operating Procedures (SOPs) task boards, equipment readiness tracking, and live weather hazard radar.",
+    description: "Standard Operating Procedures (SOPs) task boards, equipment readiness tracking, and checklists.",
     sidebarTabId: "sops"
+  },
+  {
+    id: "supervisors_attendance",
+    label: "Supervisors Attendance & Biometric Audit Trail",
+    shortLabel: "Supervisors Attendance",
+    category: "Operations",
+    code: "WORKSPACE TAB: ATTENDANCE • AUDIT_SUPERVISOR_ATTENDANCE",
+    description: "Field supervisor on-site check-in logs, biometric timestamp verification, and monthly attendance rosters.",
+    sidebarTabId: "supervisors_attendance"
   },
   {
     id: "incident_reports",
     label: "Incident Reports & Due Process (Notice to Explain)",
+    shortLabel: "Incident Reports & NTE",
+    category: "HR Admin",
     code: "WORKSPACE TAB: DUE PROCESS • MANAGE_INCIDENT_REPORTS",
     description: "Formal investigation, branch incident report transmittal, and legal Notice to Explain (NTE) adjudication.",
     sidebarTabId: "incident_reports"
@@ -78,51 +122,119 @@ export const WORKSPACE_TABS_CONFIG = [
   {
     id: "memo",
     label: "Official Corporate Memorandum Generator",
+    shortLabel: "Memo Generator",
+    category: "HR Admin",
     code: "WORKSPACE TAB: MEMORANDUMS • GENERATE_CORPORATE_MEMOS",
     description: "Official executive memorandum creation, digital sign-off, and multi-entity regulatory notice dissemination.",
     sidebarTabId: "memo"
   },
   {
+    id: "doc_studio",
+    label: "Document Studio (Coupon Bond Certificates)",
+    shortLabel: "Document Studio",
+    category: "HR Admin",
+    code: "WORKSPACE TAB: DOCUMENTS • GENERATE_DOC_STUDIO",
+    description: "Printable legal coupon bond certificates, employment contracts, and formal company notices.",
+    sidebarTabId: "doc_studio"
+  },
+  {
     id: "salary_compensation",
     label: "Salary & Compensation w/ Payslip (Excel & OCR)",
+    shortLabel: "Salary & Payslip",
+    category: "HR Admin",
     code: "WORKSPACE TAB: HR PAYROLL • MANAGE_SALARY_COMPENSATION",
     description: "Upload Excel or OCR payroll files, verify extracted compensation records, save batches to database, and issue printable payslips.",
     sidebarTabId: "salary_compensation"
   },
   {
-    id: "gross",
-    label: "Gross Revenue & Financial Remittance Reports",
-    code: "WORKSPACE TAB: FINANCE • VIEW_FINANCIAL_REPORTS",
-    description: "Multi-entity betting draw financial ledgers, cashier shortage audits, and official remittance reconciliation.",
-    sidebarTabId: "gross"
-  },
-  {
     id: "agents",
-    label: "Enterprise Personnel Directory & 201 Registry",
-    code: "WORKSPACE TAB: PERSONNEL • VIEW_EMPLOYEE_DIRECTORY",
-    description: "Centralized staff 201 records, organizational entity assignments, and emergency contact registry.",
+    label: "Agents Directory & 201 Registry",
+    shortLabel: "Agents Directory",
+    category: "HR Admin",
+    code: "WORKSPACE TAB: PERSONNEL • VIEW_AGENTS_DIRECTORY",
+    description: "Centralized active retail agents, terminal outlets, staff 201 records, and entity assignments.",
     sidebarTabId: "agents"
   },
   {
     id: "employee_pre_registration",
     label: "Personnel Pre-Registration & Credential Onboarding",
+    shortLabel: "Pre-Registration",
+    category: "HR Admin",
     code: "WORKSPACE TAB: PERSONNEL • PRE_REGISTER_EMPLOYEE",
-    description: "Authority to register new employee credentials, assign company entities, and initiate First-Time Setup accounts. Exclusively for HR Administrator by default.",
+    description: "Authority to register new employee credentials, assign company entities, and initiate First-Time Setup accounts.",
     sidebarTabId: "agents"
   },
   {
-    id: "supervisors_attendance",
-    label: "Supervisors Attendance & Biometric Audit Trail",
-    code: "WORKSPACE TAB: ATTENDANCE • AUDIT_SUPERVISOR_ATTENDANCE",
-    description: "Field supervisor on-site check-in logs, biometric timestamp verification, and monthly attendance rosters.",
-    sidebarTabId: "supervisors_attendance"
+    id: "dole_handbook",
+    label: "DOLE Legal Guidelines & Labor Suite",
+    shortLabel: "DOLE Guidelines",
+    category: "HR Admin",
+    code: "WORKSPACE TAB: LEGAL • VIEW_DOLE_HANDBOOK",
+    description: "DOLE Department Orders, Labor Code statutory compliance guidelines, and legal references.",
+    sidebarTabId: "dole_handbook"
+  },
+  {
+    id: "gross",
+    label: "Gross Revenue & Financial Remittance Reports",
+    shortLabel: "Gross Report",
+    category: "Finance",
+    code: "WORKSPACE TAB: FINANCE • VIEW_FINANCIAL_REPORTS",
+    description: "Multi-entity betting draw financial ledgers, cashier shortage audits, and official remittance reconciliation.",
+    sidebarTabId: "gross"
+  },
+  {
+    id: "revenue_trends",
+    label: "Multi-Entity Revenue Trends & Betting Ratio",
+    shortLabel: "Revenue Trends",
+    category: "Finance",
+    code: "WORKSPACE TAB: FINANCE • VIEW_REVENUE_TRENDS",
+    description: "Multi-area betting ratio analytics, draw performance comparison, and revenue trend charts.",
+    sidebarTabId: "revenue_trends"
+  },
+  {
+    id: "payroll_calc",
+    label: "13th Month Payroll Calculator (DOLE P.D. 851)",
+    shortLabel: "13th Month Calc",
+    category: "Finance",
+    code: "WORKSPACE TAB: FINANCE • ACCESS_PAYROLL_CALC",
+    description: "Pro-rated 13th month entitlement calculator and statutory payroll computation utility.",
+    sidebarTabId: "payroll_calc"
+  },
+  {
+    id: "petty_cash",
+    label: "Branch Expenses & Petty Cash Vouchers",
+    shortLabel: "Petty Cash & Vouchers",
+    category: "Finance",
+    code: "WORKSPACE TAB: FINANCE • MANAGE_PETTY_CASH",
+    description: "Regional branch expense vouchers, receipt liquidation logs, and petty cash replenishment.",
+    sidebarTabId: "petty_cash"
+  },
+  {
+    id: "hr_analytics",
+    label: "HR Analytics & Workforce KPI Dashboard",
+    shortLabel: "HR Analytics",
+    category: "Analytics",
+    code: "WORKSPACE TAB: ANALYTICS • VIEW_HR_ANALYTICS",
+    description: "Workforce headcount demographics, disciplinary analytics, attendance trends, and compliance scorecards.",
+    sidebarTabId: "hr_analytics"
   },
   {
     id: "permission_matrix",
     label: "Role & Capabilities Access Control Matrix",
+    shortLabel: "Permission Matrix",
+    category: "Security",
     code: "WORKSPACE TAB: SECURITY • MANAGE_RBAC_MATRIX",
-    description: "Granular role tier permissions, workstation feature gating, and security policy administration.",
+    description: "Granular role tier permissions, per-user access tags, workstation feature gating, and security administration.",
     sidebarTabId: "permission_matrix"
+  },
+  {
+    id: "api_health",
+    label: "System Health & API Configuration",
+    shortLabel: "API Health & Config",
+    category: "Security",
+    code: "WORKSPACE TAB: SECURITY • MANAGE_API_CONFIG",
+    description: "Enterprise live API endpoints, latency diagnostics, and multi-entity stream configuration.",
+    sidebarTabId: "api_health"
   }
 ];
 
@@ -179,28 +291,28 @@ export const IN_TAB_FEATURES_CONFIG = [
     description: "Allows viewing company code of conduct, labor compliance standards, safety guidelines, and employee handbook documents."
   },
 
-  // 1. Executive Operations Dashboard Features
+  // 1. Home & Meetings Features
   {
     id: "schedule_corporate_meetings",
     label: "Schedule Executive Operational Meetings",
-    parentTab: "overview",
-    belongsToLabel: "Executive Operations Dashboard",
+    parentTab: "meetings",
+    belongsToLabel: "Zoom & Google Meet Scheduler",
     description: "Allows scheduling corporate meetings, setting agendas, and coordinating inter-departmental sessions."
   },
 
-  // 2. Field Operations Board Features
+  // 2. Field Operations Board & Weather Features
   {
     id: "manage_sop_tasks",
     label: "Administer Standard Operating Procedure Tasks",
     parentTab: "sops",
-    belongsToLabel: "Field Operations Board",
+    belongsToLabel: "Field Operations Board & SOPs",
     description: "Permits updating checklist status, assigning SOP protocols, and verifying field compliance."
   },
   {
     id: "access_weather_radar",
     label: "Inspect Real-time Field Weather Radar",
-    parentTab: "sops",
-    belongsToLabel: "Field Operations Board",
+    parentTab: "weather",
+    belongsToLabel: "Field Weather Radar",
     description: "Displays live satellite weather maps and regional hazard alerts for field branch operations."
   },
 
@@ -346,18 +458,29 @@ export const IN_TAB_FEATURES_CONFIG = [
 // Baseline factory capabilities configuration
 export const FACTORY_ROLE_TIER_PERMISSIONS = {
   system_admin: {
-    // Tabs
+    // Workspace Tabs & Modules (All 21)
     communication: true,
+    home: true,
     overview: true,
+    meetings: true,
+    geotagging: true,
+    weather: true,
     sops: true,
+    supervisors_attendance: true,
     incident_reports: true,
     memo: true,
+    doc_studio: true,
     salary_compensation: true,
-    gross: true,
     agents: true,
     employee_pre_registration: true,
-    supervisors_attendance: true,
+    dole_handbook: true,
+    gross: true,
+    revenue_trends: true,
+    payroll_calc: true,
+    petty_cash: true,
+    hr_analytics: true,
     permission_matrix: true,
+    api_health: true,
     // Features
     comm_bulletin: true,
     comm_post_bulletin: true,
@@ -389,18 +512,29 @@ export const FACTORY_ROLE_TIER_PERMISSIONS = {
     synchronize_cloud_security: true
   },
   hr_admin: {
-    // Tabs
+    // Workspace Tabs & Modules
     communication: true,
+    home: true,
     overview: true,
+    meetings: true,
+    geotagging: true,
+    weather: true,
     sops: true,
+    supervisors_attendance: true,
     incident_reports: true,
     memo: true,
+    doc_studio: true,
     salary_compensation: true,
-    gross: false,
     agents: true,
     employee_pre_registration: false,
-    supervisors_attendance: true,
+    dole_handbook: true,
+    gross: false,
+    revenue_trends: false,
+    payroll_calc: true,
+    petty_cash: true,
+    hr_analytics: true,
     permission_matrix: false,
+    api_health: false,
     // Features
     comm_bulletin: true,
     comm_post_bulletin: true,
@@ -432,18 +566,29 @@ export const FACTORY_ROLE_TIER_PERMISSIONS = {
     synchronize_cloud_security: false
   },
   operations_supervisor: {
-    // Tabs
+    // Workspace Tabs & Modules
     communication: true,
+    home: true,
     overview: true,
+    meetings: true,
+    geotagging: true,
+    weather: true,
     sops: true,
+    supervisors_attendance: true,
     incident_reports: true,
     memo: true,
+    doc_studio: false,
     salary_compensation: false,
-    gross: true,
     agents: true,
     employee_pre_registration: false,
-    supervisors_attendance: true,
+    dole_handbook: true,
+    gross: true,
+    revenue_trends: true,
+    payroll_calc: false,
+    petty_cash: true,
+    hr_analytics: false,
     permission_matrix: false,
+    api_health: false,
     // Features
     comm_bulletin: true,
     comm_post_bulletin: false,
@@ -475,18 +620,29 @@ export const FACTORY_ROLE_TIER_PERMISSIONS = {
     synchronize_cloud_security: false
   },
   finance_cashier: {
-    // Tabs
+    // Workspace Tabs & Modules
     communication: true,
+    home: true,
     overview: true,
+    meetings: false,
+    geotagging: false,
+    weather: false,
     sops: false,
+    supervisors_attendance: false,
     incident_reports: true,
     memo: true,
+    doc_studio: false,
     salary_compensation: true,
-    gross: true,
     agents: false,
     employee_pre_registration: false,
-    supervisors_attendance: false,
+    dole_handbook: false,
+    gross: true,
+    revenue_trends: true,
+    payroll_calc: true,
+    petty_cash: true,
+    hr_analytics: false,
     permission_matrix: false,
+    api_health: false,
     // Features
     comm_bulletin: true,
     comm_post_bulletin: false,
@@ -709,28 +865,69 @@ export function resetRbacMatrixToDefaults() {
 }
 
 /**
+ * Normalize legacy or aliased workspace tab keys so enforcement is always consistent
+ */
+export function normalizeTabKey(key) {
+  if (!key) return key;
+  const k = String(key).trim();
+  if (k === "overview") return "home";
+  if (k === "betting_ratio") return "revenue_trends";
+  return k;
+}
+
+/**
+ * Case-insensitive helper to retrieve an account's override object
+ */
+function getAccountOverrideMap(matrixData, targetEmail) {
+  if (!matrixData?.accountOverrides || !targetEmail) return null;
+  const norm = String(targetEmail).toLowerCase().trim();
+  if (matrixData.accountOverrides[norm]) return matrixData.accountOverrides[norm];
+  // Fallback scan in case an existing key was stored with mixed casing
+  const matchedKey = Object.keys(matrixData.accountOverrides).find(
+    (k) => k.toLowerCase().trim() === norm
+  );
+  return matchedKey ? matrixData.accountOverrides[matchedKey] : null;
+}
+
+/**
  * Resolve effective capability for a specific role tier or account
  */
 export function getEffectiveCapability(type, targetId, capId, matrixData = null, accountsList = []) {
   const data = matrixData || getRbacMatrixData();
+  const normCapId = normalizeTabKey(capId);
+
+  // If this capability is an in-tab feature, check if its parent workspace tab is allowed first
+  const featureDef = IN_TAB_FEATURES_CONFIG.find((f) => f.id === normCapId);
+  if (featureDef && featureDef.parentTab) {
+    const parentAllowed = getEffectiveCapability(type, targetId, featureDef.parentTab, data, accountsList);
+    if (!parentAllowed) return false;
+  }
 
   if (type === "role") {
     const roleConfig = data.roleTiers?.[targetId] || FACTORY_ROLE_TIER_PERMISSIONS[targetId] || {};
-    return Boolean(roleConfig[capId]);
+    if (typeof roleConfig[normCapId] === "boolean") return roleConfig[normCapId];
+    if (normCapId === "home" && typeof roleConfig.overview === "boolean") return roleConfig.overview;
+    return Boolean(FACTORY_ROLE_TIER_PERMISSIONS[targetId]?.[normCapId]);
   }
 
   if (type === "account") {
-    const override = data.accountOverrides?.[targetId];
-    if (override && typeof override[capId] === "boolean") {
-      return override[capId];
+    const normEmail = String(targetId || "").toLowerCase().trim();
+    const override = getAccountOverrideMap(data, normEmail);
+    if (override) {
+      if (typeof override[normCapId] === "boolean") return override[normCapId];
+      if (normCapId === "home" && typeof override.overview === "boolean") return override.overview;
     }
 
     // Fall back to account's resolved role tier
-    const matchedAccount = accountsList.find((a) => a.id === targetId || a.email === targetId);
+    const matchedAccount = accountsList.find(
+      (a) =>
+        String(a.id || "").toLowerCase() === normEmail ||
+        String(a.email || "").toLowerCase().trim() === normEmail
+    );
     if (matchedAccount?.roleTier) {
-      return getEffectiveCapability("role", matchedAccount.roleTier, capId, data);
+      return getEffectiveCapability("role", matchedAccount.roleTier, normCapId, data, accountsList);
     }
-    return getEffectiveCapability("role", "system_admin", capId, data);
+    return getEffectiveCapability("role", "operations_supervisor", normCapId, data, accountsList);
   }
 
   return false;
@@ -741,35 +938,51 @@ export function getEffectiveCapability(type, targetId, capId, matrixData = null,
  */
 export function toggleCapability(type, targetId, capId, nextValue) {
   const data = getRbacMatrixData();
+  const normCapId = normalizeTabKey(capId);
 
   if (type === "role") {
     if (!data.roleTiers) data.roleTiers = {};
     if (!data.roleTiers[targetId]) {
       data.roleTiers[targetId] = { ...(FACTORY_ROLE_TIER_PERMISSIONS[targetId] || {}) };
     }
-    data.roleTiers[targetId][capId] = nextValue;
+    data.roleTiers[targetId][normCapId] = nextValue;
+    if (normCapId === "home") data.roleTiers[targetId].overview = nextValue;
 
     // If parent tab toggled OFF, toggle OFF dependent child features
-    const tabItem = WORKSPACE_TABS_CONFIG.find((t) => t.id === capId);
+    const tabItem = WORKSPACE_TABS_CONFIG.find((t) => t.id === normCapId);
     if (tabItem && !nextValue) {
-      const childFeatures = IN_TAB_FEATURES_CONFIG.filter((f) => f.parentTab === capId);
+      const childFeatures = IN_TAB_FEATURES_CONFIG.filter((f) => f.parentTab === normCapId);
       childFeatures.forEach((f) => {
         data.roleTiers[targetId][f.id] = false;
       });
     }
-  } else if (type === "account") {
-    if (!data.accountOverrides) data.accountOverrides = {};
-    if (!data.accountOverrides[targetId]) {
-      data.accountOverrides[targetId] = {};
-    }
-    data.accountOverrides[targetId][capId] = nextValue;
 
-    const tabItem = WORKSPACE_TABS_CONFIG.find((t) => t.id === capId);
+    // If enabling a child feature, ensure its parent tab is enabled too
+    const featureItem = IN_TAB_FEATURES_CONFIG.find((f) => f.id === normCapId);
+    if (featureItem && nextValue && featureItem.parentTab) {
+      data.roleTiers[targetId][featureItem.parentTab] = true;
+    }
+  } else if (type === "account") {
+    const normEmail = String(targetId || "").toLowerCase().trim();
+    if (!data.accountOverrides) data.accountOverrides = {};
+    if (!data.accountOverrides[normEmail]) {
+      data.accountOverrides[normEmail] = {};
+    }
+    data.accountOverrides[normEmail][normCapId] = nextValue;
+    if (normCapId === "home") data.accountOverrides[normEmail].overview = nextValue;
+
+    const tabItem = WORKSPACE_TABS_CONFIG.find((t) => t.id === normCapId);
     if (tabItem && !nextValue) {
-      const childFeatures = IN_TAB_FEATURES_CONFIG.filter((f) => f.parentTab === capId);
+      const childFeatures = IN_TAB_FEATURES_CONFIG.filter((f) => f.parentTab === normCapId);
       childFeatures.forEach((f) => {
-        data.accountOverrides[targetId][f.id] = false;
+        data.accountOverrides[normEmail][f.id] = false;
       });
+    }
+
+    // If enabling a child feature, ensure its parent tab is enabled too
+    const featureItem = IN_TAB_FEATURES_CONFIG.find((f) => f.id === normCapId);
+    if (featureItem && nextValue && featureItem.parentTab) {
+      data.accountOverrides[normEmail][featureItem.parentTab] = true;
     }
   }
 
@@ -778,6 +991,155 @@ export function toggleCapability(type, targetId, capId, nextValue) {
   // Instantly auto-sync to cloud so changes take effect globally across all workstations
   syncMatrixToCloud().catch((err) => console.debug("[rbacStorage] Auto-sync notice:", err?.message));
   return data;
+}
+
+/**
+ * Tag-Based Helper: Add (+ Grant) or Remove (x Disable) a module or feature tag on a user account.
+ * When adding a module tag, optionally enables its standard read features if the user has none.
+ * When adding a feature tag, automatically enables its parent module tag so it works immediately.
+ */
+export function setAccountCapabilityTag(email, capId, isEnabled) {
+  const normEmail = String(email || "").toLowerCase().trim();
+  if (!normEmail || !capId) return getRbacMatrixData();
+
+  const data = getRbacMatrixData();
+  const normCapId = normalizeTabKey(capId);
+  if (!data.accountOverrides) data.accountOverrides = {};
+  if (!data.accountOverrides[normEmail]) data.accountOverrides[normEmail] = {};
+
+  data.accountOverrides[normEmail][normCapId] = Boolean(isEnabled);
+  if (normCapId === "home") data.accountOverrides[normEmail].overview = Boolean(isEnabled);
+
+  const tabItem = WORKSPACE_TABS_CONFIG.find((t) => t.id === normCapId);
+  if (tabItem) {
+    const childFeatures = IN_TAB_FEATURES_CONFIG.filter((f) => f.parentTab === normCapId);
+    if (!isEnabled) {
+      childFeatures.forEach((f) => {
+        data.accountOverrides[normEmail][f.id] = false;
+      });
+    } else {
+      // When enabling Communication Portal via tag, make sure at least Bulletin is accessible if all child features were false
+      if (normCapId === "communication") {
+        const anyCommChildEnabled = childFeatures.some((f) => data.accountOverrides[normEmail][f.id] === true);
+        if (!anyCommChildEnabled) {
+          data.accountOverrides[normEmail].comm_bulletin = true;
+        }
+      }
+    }
+  }
+
+  const featureItem = IN_TAB_FEATURES_CONFIG.find((f) => f.id === normCapId);
+  if (featureItem && isEnabled && featureItem.parentTab) {
+    data.accountOverrides[normEmail][featureItem.parentTab] = true;
+    if (featureItem.parentTab === "home") data.accountOverrides[normEmail].overview = true;
+  }
+
+  data.lastSyncedAt = new Date().toISOString();
+  saveRbacMatrixData(data);
+  syncMatrixToCloud().catch((err) => console.debug("[rbacStorage] Auto-sync notice:", err?.message));
+  return data;
+}
+
+/**
+ * Single-Module / Restricted Whitelist Mode:
+ * Locks ALL workspace tabs & in-tab features for a user account EXCEPT the specified allowedCapIds.
+ * Makes creating single-module or strict limited-access user accounts effortless in 1 click.
+ */
+export function setAccountRestrictedOnlyMode(email, allowedCapIds = []) {
+  const normEmail = String(email || "").toLowerCase().trim();
+  if (!normEmail) return getRbacMatrixData();
+
+  const data = getRbacMatrixData();
+  if (!data.accountOverrides) data.accountOverrides = {};
+
+  const allowedSet = new Set(allowedCapIds.map(normalizeTabKey));
+  const nextOverrides = { overview: false };
+
+  // Set every tab to false unless explicitly in allowedSet
+  WORKSPACE_TABS_CONFIG.forEach((t) => {
+    nextOverrides[t.id] = allowedSet.has(t.id);
+  });
+  if (nextOverrides.home) nextOverrides.overview = true;
+
+  // Set every feature to false unless explicitly in allowedSet
+  IN_TAB_FEATURES_CONFIG.forEach((f) => {
+    const granted = allowedSet.has(f.id);
+    nextOverrides[f.id] = granted;
+    if (granted && f.parentTab) {
+      nextOverrides[f.parentTab] = true;
+      if (f.parentTab === "home") nextOverrides.overview = true;
+    }
+  });
+
+  data.accountOverrides[normEmail] = nextOverrides;
+  data.lastSyncedAt = new Date().toISOString();
+  saveRbacMatrixData(data);
+  syncMatrixToCloud().catch((err) => console.debug("[rbacStorage] Auto-sync notice:", err?.message));
+  return data;
+}
+
+/**
+ * Grant all operational modules & features to a specific user account
+ */
+export function grantAllAccountCapabilities(email, excludeAdminOnly = true) {
+  const normEmail = String(email || "").toLowerCase().trim();
+  if (!normEmail) return getRbacMatrixData();
+
+  const data = getRbacMatrixData();
+  if (!data.accountOverrides) data.accountOverrides = {};
+
+  const nextOverrides = { overview: true };
+  WORKSPACE_TABS_CONFIG.forEach((t) => {
+    if (excludeAdminOnly && (t.id === "permission_matrix" || t.id === "api_health")) {
+      nextOverrides[t.id] = false;
+    } else {
+      nextOverrides[t.id] = true;
+    }
+  });
+  IN_TAB_FEATURES_CONFIG.forEach((f) => {
+    if (excludeAdminOnly && f.parentTab === "permission_matrix") {
+      nextOverrides[f.id] = false;
+    } else {
+      nextOverrides[f.id] = true;
+    }
+  });
+
+  data.accountOverrides[normEmail] = nextOverrides;
+  data.lastSyncedAt = new Date().toISOString();
+  saveRbacMatrixData(data);
+  syncMatrixToCloud().catch((err) => console.debug("[rbacStorage] Auto-sync notice:", err?.message));
+  return data;
+}
+
+/**
+ * Clear all custom overrides for a specific user account so it reverts to its Role Tier defaults
+ */
+export function clearAccountOverrides(email) {
+  const normEmail = String(email || "").toLowerCase().trim();
+  if (!normEmail) return getRbacMatrixData();
+
+  const data = getRbacMatrixData();
+  if (data.accountOverrides) {
+    Object.keys(data.accountOverrides).forEach((k) => {
+      if (k.toLowerCase().trim() === normEmail) {
+        delete data.accountOverrides[k];
+      }
+    });
+  }
+
+  data.lastSyncedAt = new Date().toISOString();
+  saveRbacMatrixData(data);
+  syncMatrixToCloud().catch((err) => console.debug("[rbacStorage] Auto-sync notice:", err?.message));
+  return data;
+}
+
+/**
+ * Check if a user account has custom per-account overrides active
+ */
+export function hasAccountCustomOverrides(email, matrixData = null) {
+  const data = matrixData || getRbacMatrixData();
+  const override = getAccountOverrideMap(data, email);
+  return Boolean(override && Object.keys(override).length > 0);
 }
 
 /**
@@ -807,21 +1169,28 @@ export function isUserTabAllowed(user, tabKey, passedMatrix = null) {
   if (!user) return true;
 
   const email = (user.email || "").toLowerCase().trim();
+  const normTab = normalizeTabKey(tabKey);
   const matrix = passedMatrix || getRbacMatrixData();
 
-  // Safety protection: ensure master administrator can access permission matrix to avoid lockouts
-  if (tabKey === "permission_matrix" && (email === "admin@hrhub.com" || email === "jay@simpalgroup.com")) {
+  // Safety protection: ensure master administrator can always access permission matrix to avoid self-lockout
+  if (normTab === "permission_matrix" && (email === "admin@hrhub.com" || email === "jay@simpalgroup.com")) {
     return true;
   }
 
-  // 1. Check account override first (individual account policy set by Head Office)
-  if (matrix?.accountOverrides?.[email] && typeof matrix.accountOverrides[email][tabKey] === "boolean") {
-    return matrix.accountOverrides[email][tabKey];
+  // 1. Check account override first (individual account policy / tags set by Head Office)
+  const override = getAccountOverrideMap(matrix, email);
+  if (override) {
+    if (typeof override[normTab] === "boolean") {
+      return override[normTab];
+    }
+    if (normTab === "home" && typeof override.overview === "boolean") {
+      return override.overview;
+    }
   }
 
   // 2. Fall back to user's assigned role tier
   const roleTier = classifyEmployeeRoleTier(user);
-  return getEffectiveCapability("role", roleTier, tabKey, matrix);
+  return getEffectiveCapability("role", roleTier, normTab, matrix);
 }
 
 /**
@@ -833,9 +1202,18 @@ export function isUserFeatureAllowed(user, featureKey, passedMatrix = null) {
   const email = (user.email || "").toLowerCase().trim();
   const matrix = passedMatrix || getRbacMatrixData();
 
+  // Enforce parent tab requirement: if parent workspace tab is disabled, child features are disabled
+  const featureDef = IN_TAB_FEATURES_CONFIG.find((f) => f.id === featureKey);
+  if (featureDef && featureDef.parentTab) {
+    if (!isUserTabAllowed(user, featureDef.parentTab, matrix)) {
+      return false;
+    }
+  }
+
   // 1. Check account override first
-  if (matrix?.accountOverrides?.[email] && typeof matrix.accountOverrides[email][featureKey] === "boolean") {
-    return matrix.accountOverrides[email][featureKey];
+  const override = getAccountOverrideMap(matrix, email);
+  if (override && typeof override[featureKey] === "boolean") {
+    return override[featureKey];
   }
 
   // 2. Fall back to user's assigned role tier

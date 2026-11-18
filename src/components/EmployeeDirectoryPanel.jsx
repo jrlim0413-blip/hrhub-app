@@ -23,6 +23,7 @@ import {
   isEmployeeLoginEnabled
 } from "../lib/employeeStorage";
 import {
+  isUserTabAllowed,
   isUserFeatureAllowed,
   getRbacMatrixData
 } from "../lib/rbacStorage";
@@ -358,28 +359,32 @@ export default function EmployeeDirectoryPanel({
     return { total, onlineCount, approvedCount, pendingCount, entityEnrolledCount };
   }, [managedProfiles, onlineEmails, currentEmail]);
 
-  // Pre-Registration: Exclusively for Head Office HR Administrator
-  const canPreRegister = isHRMD;
+  const currentUserRbacObj = useMemo(() => ({
+    email: (currentEmail || "").toLowerCase().trim(),
+    role: currentProfile?.role || "Team Member",
+    company: currentProfile?.company || "Simpal Group of Companies"
+  }), [currentEmail, currentProfile]);
 
-  // Add Employee Profile: For Per-Entity / Company Accounts to add their branch employees
-  const canAddEntityEmployee = isEntityAccount;
-
-  // Profile Administration Permission Check (Edit, Approve, Decommission)
-  const canManageProfiles = useMemo(() => {
-    // Both HRMD and accounts managing their own added employees can manage
-    if (isHRMD || isEntityAccount) return true;
-    const curEmail = (currentEmail || "").toLowerCase().trim();
-    const userObj = {
-      email: curEmail,
-      role: currentProfile?.role || "Team Member",
-      company: currentProfile?.company || "Simpal Group of Companies"
-    };
-
+  // Pre-Registration: Strictly governed by RBAC Matrix (default ON for HRMD, customizable per account via tags/toggles)
+  const canPreRegister = useMemo(() => {
     return (
-      isUserFeatureAllowed(userObj, "comm_manage_profiles", matrixData) ||
-      isUserFeatureAllowed(userObj, "provision_employee_records", matrixData)
+      isUserFeatureAllowed(currentUserRbacObj, "pre_register_employee", matrixData) ||
+      isUserTabAllowed(currentUserRbacObj, "employee_pre_registration", matrixData)
     );
-  }, [isHRMD, isEntityAccount, currentEmail, currentProfile, matrixData]);
+  }, [currentUserRbacObj, matrixData]);
+
+  // Add Employee Profile: Strictly governed by RBAC Matrix (comm_add_employee)
+  const canAddEntityEmployee = useMemo(() => {
+    return isUserFeatureAllowed(currentUserRbacObj, "comm_add_employee", matrixData);
+  }, [currentUserRbacObj, matrixData]);
+
+  // Profile Administration Permission Check (Edit, Approve, Decommission): Strictly governed by RBAC Matrix
+  const canManageProfiles = useMemo(() => {
+    return (
+      isUserFeatureAllowed(currentUserRbacObj, "comm_manage_profiles", matrixData) ||
+      isUserFeatureAllowed(currentUserRbacObj, "provision_employee_records", matrixData)
+    );
+  }, [currentUserRbacObj, matrixData]);
 
   // Filtered & Sorted profiles
   const filteredProfiles = useMemo(() => {

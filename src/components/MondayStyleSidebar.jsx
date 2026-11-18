@@ -154,7 +154,8 @@ export default function MondayStyleSidebar({
   onOpenAiBuddy,
   isCollapsed,
   setIsCollapsed,
-  isHRMD = false
+  isHRMD = false,
+  isTabAllowed = () => true
 }) {
   // Selected active icon category on the primary rail ('home' | 'operations' | 'finance' | 'hr' | 'analytics' | 'tools')
   const [selectedCategory, setSelectedCategory] = useState("home");
@@ -250,6 +251,13 @@ export default function MondayStyleSidebar({
           icon: CloudSun,
           tag: "Live Radar",
           tabId: "weather"
+        },
+        {
+          id: "sops",
+          label: "SOP & Field Operations Board",
+          icon: Layers,
+          tag: "SOPs",
+          tabId: "sops"
         },
         {
           id: "supervisors_attendance",
@@ -412,37 +420,61 @@ export default function MondayStyleSidebar({
     tools: {
       title: "Tools",
       items: [
-        ...(isHRMD
-          ? [
-              {
-                id: "permission_matrix",
-                label: "Role Permission Matrix",
-                icon: ShieldCheck,
-                tag: "RBAC Matrix",
-                tabId: "permission_matrix"
-              }
-            ]
-          : []),
+        {
+          id: "permission_matrix",
+          label: "Role Permission Matrix",
+          icon: ShieldCheck,
+          tag: "RBAC Matrix",
+          tabId: "permission_matrix"
+        },
         {
           id: "email_webhook",
           label: "Mass Email & Webhook Dispatch",
           icon: MailCheck,
           tag: "Dispatch"
         },
-        ...(isHRMD
-          ? [
-              {
-                id: "api_health",
-                label: "System Health & API Configuration",
-                icon: Wrench,
-                tag: "System",
-                tabId: "api_health"
-              }
-            ]
-          : [])
+        {
+          id: "api_health",
+          label: "System Health & API Configuration",
+          icon: Wrench,
+          tag: "System",
+          tabId: "api_health"
+        }
       ]
     }
   };
+
+  // RBAC Access Check for Sidebar Items
+  const isSidebarItemAllowed = (item) => {
+    if (!item) return false;
+    if (item.tabId) {
+      return Boolean(isTabAllowed(item.tabId));
+    }
+    if (item.id === "leave_queue" || item.id === "offboarding_clearance" || item.id === "employee_rewards") {
+      return Boolean(isTabAllowed("agents") || isTabAllowed("incident_reports"));
+    }
+    if (item.id === "email_webhook") {
+      return Boolean(isTabAllowed("api_health") || isTabAllowed("permission_matrix"));
+    }
+    if (item.id === "ai_sidekick_action") {
+      return Boolean(isTabAllowed("hr_analytics") || isTabAllowed("memo") || isTabAllowed("home"));
+    }
+    return true;
+  };
+
+  // Filter rail categories so only categories with at least 1 authorized module appear
+  const allowedRailCategories = railCategories.filter((cat) => {
+    const mod = categoryModules[cat.id];
+    if (!mod || !Array.isArray(mod.items)) return false;
+    return mod.items.some((item) => isSidebarItemAllowed(item));
+  });
+
+  // Automatically switch selectedCategory if current category has no authorized items left
+  useEffect(() => {
+    if (allowedRailCategories.length > 0 && !allowedRailCategories.some((c) => c.id === selectedCategory)) {
+      setSelectedCategory(allowedRailCategories[0].id);
+    }
+  }, [allowedRailCategories.map((c) => c.id).join(","), selectedCategory]);
 
   // Handle clicking an icon on the primary rail
   const handleCategoryIconClick = (catId) => {
@@ -461,15 +493,18 @@ export default function MondayStyleSidebar({
     );
   };
 
-  // Active category module ONLY
-  const activeModule = categoryModules[selectedCategory] || categoryModules.operations;
+  // Active category module ONLY (strictly filtered by RBAC permissions)
+  const activeModule = categoryModules[selectedCategory] || categoryModules[allowedRailCategories[0]?.id] || { title: "Modules", items: [] };
 
-  // Filter items inside active category
-  const filteredActiveItems = activeModule.items.filter((item) =>
-    item.label.toLowerCase().includes(searchTerm.toLowerCase())
+  // Filter items inside active category by RBAC access AND search query
+  const filteredActiveItems = activeModule.items.filter(
+    (item) =>
+      isSidebarItemAllowed(item) &&
+      item.label.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const handleItemSelect = (item) => {
+    if (!isSidebarItemAllowed(item)) return;
     setActiveItemId(item.id);
     if (item.subView) {
       try {
@@ -519,7 +554,7 @@ export default function MondayStyleSidebar({
 
             {/* Primary Rail Category Icons */}
             <div className="flex flex-col items-center gap-1 w-full px-1">
-              {railCategories.map((cat) => {
+              {allowedRailCategories.map((cat) => {
                 const Icon = cat.icon;
                 const isActiveIcon = selectedCategory === cat.id && !isCollapsed;
 
