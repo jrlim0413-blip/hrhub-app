@@ -21,8 +21,11 @@ export const API_CONFIG = {
   TELLER_BET_URL: (typeof import.meta !== "undefined" && import.meta.env?.VITE_TELLER_BET_API_URL) || "https://stl-mandaue-api.com/api/teller/bet",
   TELLER_BET_TOKEN: (typeof import.meta !== "undefined" && import.meta.env?.VITE_TELLER_BET_API_TOKEN) || "7770|buTtUAGup02YXYefPfDwwh44wp0AOnRQuxsPHZ2f",
 
-  // Google Gemini API Key
-  GEMINI_API_KEY: (typeof import.meta !== "undefined" && import.meta.env?.VITE_GEMINI_API_KEY) || (typeof atob !== "undefined" ? atob("QVEuQWI4Uk42SUtwLTc4bDlnSmFfWDl6UlpDbTNOTXBBS3RsVHppRFdJX1VrTzYwbXRHNFE=") : ""),
+  // Google Gemini API Key (Set via VITE_GEMINI_API_KEY in .env and Vercel Environment Variables)
+  GEMINI_API_KEY: (typeof import.meta !== "undefined" && import.meta.env?.VITE_GEMINI_API_KEY) || "",
+
+  // Optional Free-Tier TomTom Traffic API Key (Set via VITE_TOMTOM_API_KEY for live real-time road traffic overlay & delay)
+  TOMTOM_API_KEY: (typeof import.meta !== "undefined" && import.meta.env?.VITE_TOMTOM_API_KEY) || "",
 
   // HR Email Webhook URL
   HR_EMAIL_WEBHOOK_URL: (typeof import.meta !== "undefined" && import.meta.env?.VITE_HR_EMAIL_WEBHOOK_URL) || "",

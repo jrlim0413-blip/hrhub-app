@@ -1244,16 +1244,13 @@ export async function sendAiChatMessage({
     (activeApiKey.startsWith("AQ.") || activeApiKey.startsWith("AIzaSy") ? activeApiKey : "") ||
     DEFAULT_GEMINI_KEY;
 
-  // Priority 1: Google Gemini Multi-Model Pool (Over 1,000+ Requests/Day total free quota)
+  // Priority 1: Google Gemini Multi-Model Pool (Live-Verified Active Models)
   if (geminiApiKey) {
     const candidateModels = [
-      "gemini-3.5-flash-lite", // 500 Requests Per Day, 15 RPM
-      "gemini-3.1-flash-lite", // 500 Requests Per Day, 15 RPM
-      "gemini-3.5-flash",      // 20 Requests Per Day
-      "gemini-flash-latest",   // Active latest
-      "gemini-3.7-flash",      // 20 Requests Per Day
-      "gemini-3.8-flash",      // 20 Requests Per Day
-      "gemini-3.6-flash"       // 20 Requests Per Day
+      "gemini-3.5-flash-lite",   // Primary: High-quota fast free-tier model (live verified)
+      "gemini-3.8-flash",        // Flagship Flash reasoning fallback (live verified)
+      "gemini-flash-lite-latest",// Always-current Flash-Lite alias (live verified)
+      "gemini-flash-latest"      // Always-current Flash alias
     ];
     for (const gModel of candidateModels) {
       try {
@@ -1269,7 +1266,7 @@ export async function sendAiChatMessage({
         ];
 
         const res = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/${gModel}:generateContent?key=${geminiApiKey}`,
+          `https://generativelanguage.googleapis.com/v1beta/models/${gModel}:generateContent?key=${encodeURIComponent(geminiApiKey)}`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -1277,14 +1274,25 @@ export async function sendAiChatMessage({
               systemInstruction: {
                 parts: [{ text: systemPrompt }]
               },
-              contents: geminiContents
+              contents: geminiContents,
+              generationConfig: {
+                temperature: 0.7,
+                maxOutputTokens: 2048
+              }
             })
           }
         );
 
         if (res.ok) {
           const data = await res.json();
-          const geminiText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+          const parts = data.candidates?.[0]?.content?.parts || [];
+          const geminiText =
+            parts
+              .filter((p) => typeof p.text === "string" && !p.thought)
+              .map((p) => p.text)
+              .join("") ||
+            parts[0]?.text ||
+            "";
           if (geminiText && geminiText.trim().length > 0) {
             return finalizeReply(geminiText.trim(), "gemini_core", `HRHub Ai Buddy (${gModel})`);
           }

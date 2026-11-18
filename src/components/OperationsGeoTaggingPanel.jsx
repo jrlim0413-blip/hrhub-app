@@ -8,7 +8,8 @@ import {
   LocateFixed, Play, Pause, RotateCcw, FastForward, ArrowRight,
   MoveRight, Navigation2, Crosshair, ListFilter, ArrowLeft,
   Bus, Factory, Warehouse, Users, Clock, Sparkles, Copy,
-  Store, Phone, Wifi, Smartphone, Cloud, Ruler, Scale, CircleDollarSign, TrendingUp
+  Store, Phone, Wifi, Smartphone, Cloud, Ruler, Scale, CircleDollarSign, TrendingUp,
+  Volume2, VolumeX
 } from "lucide-react";
 
 // Centralized Multi-User Cloud Database & Realtime Sync Service for Booths
@@ -128,14 +129,408 @@ export function calculateDistanceMeters(lat1, lon1, lat2, lon2) {
   return R * c;
 }
 
-// Computes actual road-based navigable distance and route polyline between two GPS coordinates
-export async function fetchRoadRouteBetweenPoints(startCoords, endCoords) {
+// Formats an OSRM route step into a clean Waze / Google Maps style turn-by-turn instruction
+function formatOsrmManeuver(step, destinationLabel = "Kiosk") {
+  const m = step?.maneuver || {};
+  const type = String(m.type || "").toLowerCase();
+  const modifier = String(m.modifier || "").toLowerCase();
+  const street = (step?.name || "").trim();
+  const streetSuffix = street ? ` onto ${street}` : "";
+  const distMeters = Math.round(step?.distance || 0);
+
+  let instruction = street ? `Continue on ${street}` : "Continue straight";
+  let dir = "straight";
+
+  if (type === "depart") {
+    instruction = street
+      ? `Head ${modifier || "forward"} on ${street}`
+      : `Depart heading ${modifier || "forward"}`;
+    dir = "depart";
+  } else if (type === "arrive") {
+    instruction = `Arrive at ${destinationLabel}`;
+    dir = "arrive";
+  } else if (type === "roundabout" || type === "rotary") {
+    const exitNum = m.exit ? ` (Exit ${m.exit})` : "";
+    instruction = `Take roundabout${exitNum}${streetSuffix}`;
+    dir = "roundabout";
+  } else if (type === "turn" || type === "end of road" || type === "fork" || type === "off ramp" || type === "on ramp") {
+    if (modifier.includes("uturn")) {
+      instruction = `Make a U-turn${streetSuffix}`;
+      dir = "uturn";
+    } else if (modifier.includes("left")) {
+      const prefix = modifier.includes("slight") ? "Keep left" : modifier.includes("sharp") ? "Sharp left" : "Turn left";
+      instruction = `${prefix}${streetSuffix}`;
+      dir = "left";
+    } else if (modifier.includes("right")) {
+      const prefix = modifier.includes("slight") ? "Keep right" : modifier.includes("sharp") ? "Sharp right" : "Turn right";
+      instruction = `${prefix}${streetSuffix}`;
+      dir = "right";
+    } else {
+      instruction = `Continue straight${streetSuffix}`;
+      dir = "straight";
+    }
+  } else if (type === "merge") {
+    instruction = `Merge${streetSuffix}`;
+    dir = modifier.includes("left") ? "left" : modifier.includes("right") ? "right" : "straight";
+  } else if (type === "new name" || type === "continue") {
+    instruction = street ? `Continue onto ${street}` : "Continue straight";
+    dir = "straight";
+  }
+
+  return {
+    instruction,
+    street: street || (type === "arrive" ? destinationLabel : "Local Road"),
+    distanceMeters: distMeters,
+    durationSec: Math.round(step?.duration || 0),
+    dir,
+    location: Array.isArray(m.location) && m.location.length >= 2 ? [m.location[1], m.location[0]] : null
+  };
+}
+
+function formatNavDistance(meters) {
+  if (!Number.isFinite(meters) || meters < 0) return "0 m";
+  if (meters >= 1000) return `${(meters / 1000).toFixed(2)} km`;
+  return `${Math.round(meters)} m`;
+}
+
+function formatNavDuration(sec) {
+  const mins = Math.max(1, Math.round((sec || 0) / 60));
+  if (mins < 60) return `${mins} min`;
+  const hrs = Math.floor(mins / 60);
+  const rem = mins % 60;
+  return rem > 0 ? `${hrs} hr ${rem} min` : `${hrs} hr`;
+}
+
+function formatNavArrivalClock(sec) {
+  const arrival = new Date(Date.now() + Math.max(60, sec || 60) * 1000);
+  return arrival.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+}
+
+// Known high-traffic urban arterial corridors across STL operating sectors (PH)
+const PH_ARTERIAL_CORRIDORS = [
+  "m.c. briones", "mc briones", "a.s. fortuna", "as fortuna", "u.n. avenue", "un avenue", "united nations",
+  "ouano", "marcelo fernan", "a.c. cortes", "ac cortes", "d.m. cortes", "gov. m. cuenco", "cuenco",
+  "lopez jaena", "plaridel", "national highway", "cebu north", "sinsuat", "quezon ave", "roxb", "roxas",
+  "tubod", "pala-o", "ibabao", "subangdaku", "banilad", "maguikay", "tipolo"
+];
+
+// Translates a navigation step instruction to natural Taglish Waze-style speech
+function toTaglishVoiceInstruction(step) {
+  if (!step) return "";
+  const street = step.street && step.street !== "Local Road" && step.street !== "Starting Point" ? step.street : "";
+  const distText =
+    step.distanceMeters >= 1000
+      ? `Sa loob ng ${(step.distanceMeters / 1000).toFixed(1)} kilometers, `
+      : step.distanceMeters >= 50
+      ? `Sa loob ng ${Math.round(step.distanceMeters / 10) * 10} meters, `
+      : "";
+
+  switch (step.dir) {
+    case "arrive":
+      return `Nakarating ka na sa ${step.street || "destinasyon"}. Mag-ingat sa paghinto.`;
+    case "depart":
+      return street ? `Magsimula at dumiretso sa ${street}.` : `Magsimula at sundan ang ruta sa mapa.`;
+    case "left":
+      return `${distText}kumaliwa${street ? ` papuntang ${street}` : ""}.`;
+    case "right":
+      return `${distText}kumanan${street ? ` papuntang ${street}` : ""}.`;
+    case "uturn":
+      return `${distText}mag-U-turn${street ? ` sa ${street}` : ""}.`;
+    case "roundabout":
+      return `${distText}pumasok sa rotonda${street ? ` papuntang ${street}` : ""}.`;
+    default:
+      return `${distText}dumiretso lang${street ? ` sa ${street}` : ""}.`;
+  }
+}
+
+// Expands street abbreviations so navigation voice pronounces Philippine roads naturally
+function normalizeSpokenNavigationText(text) {
+  return String(text || "")
+    .replace(/\bBrgy\.?\s+/gi, "Barangay ")
+    .replace(/\bSt\.?\b/g, "Street")
+    .replace(/\bAve\.?\b/gi, "Avenue")
+    .replace(/\bHwy\.?\b/gi, "Highway")
+    .replace(/\bBlvd\.?\b/gi, "Boulevard")
+    .replace(/\bRd\.?\b/gi, "Road")
+    .replace(/\bExt\.?\b/gi, "Extension")
+    .replace(/\bkm\b/gi, "kilometers")
+    .replace(/\bmin\b/gi, "minutes")
+    .replace(/\bhr\b/gi, "hour")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+// Splits long navigation announcements into natural ≤165-char phrases for smooth neural playback
+function splitSpeechChunks(text, maxLen = 165) {
+  const sentences = text.split(/(?<=[.!?])\s+/).filter(Boolean);
+  const chunks = [];
+  let current = "";
+  for (const s of sentences) {
+    if ((current + " " + s).trim().length <= maxLen) {
+      current = (current + " " + s).trim();
+    } else {
+      if (current) chunks.push(current);
+      if (s.length <= maxLen) {
+        current = s;
+      } else {
+        const parts = s.split(/,\s*/);
+        let sub = "";
+        for (const p of parts) {
+          if ((sub + ", " + p).trim().length <= maxLen) {
+            sub = sub ? `${sub}, ${p}` : p;
+          } else {
+            if (sub) chunks.push(sub);
+            sub = p.slice(0, maxLen);
+          }
+        }
+        current = sub;
+      }
+    }
+  }
+  if (current) chunks.push(current);
+  return chunks;
+}
+
+let activeNavAudioEl = null;
+let activeNavSpeechToken = 0;
+const navTtsAudioCache = Object.create(null);
+const navTtsCacheKeys = [];
+let navAudioUnlocked = false;
+
+// Unlocks HTML5 audio playback synchronously inside a user click so async post-GPS voice auto-plays like Google Maps
+function unlockNavAudioPlayback() {
+  if (navAudioUnlocked || typeof window === "undefined") return;
+  try {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (AudioCtx) {
+      const ctx = new AudioCtx();
+      if (ctx.state === "suspended") ctx.resume().catch(() => {});
+      const buf = ctx.createBuffer(1, 1, 22050);
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      src.connect(ctx.destination);
+      src.start(0);
+    }
+    navAudioUnlocked = true;
+  } catch { }
+}
+
+function stopWazeVoice() {
+  activeNavSpeechToken += 1;
+  if (activeNavAudioEl) {
+    try {
+      activeNavAudioEl.pause();
+      activeNavAudioEl.currentTime = 0;
+    } catch { }
+    activeNavAudioEl = null;
+  }
+  if (typeof window !== "undefined" && "speechSynthesis" in window) {
+    try {
+      window.speechSynthesis.cancel();
+    } catch { }
+  }
+}
+
+function speakBrowserNeuralFallback(text, lang = "tl") {
+  if (typeof window === "undefined" || !("speechSynthesis" in window) || !text) return;
+  try {
+    window.speechSynthesis.cancel();
+    const utter = new SpeechSynthesisUtterance(text);
+    const voices = window.speechSynthesis.getVoices() || [];
+
+    // Strictly prefer Natural / Online Neural voices over robotic legacy SAPI (David/Zira/Mark)
+    const isNatural = (v) => /natural|online|google|samantha|karen|ava|blessica|angelo|rosa/i.test(v.name || "");
+    const preferred =
+      lang === "tl"
+        ? voices.find((v) => /fil|tl-ph/i.test(v.lang) && isNatural(v)) ||
+          voices.find((v) => /en-ph/i.test(v.lang) && isNatural(v)) ||
+          voices.find((v) => /fil|tl-ph|en-ph/i.test(v.lang)) ||
+          voices.find((v) => /en/i.test(v.lang) && isNatural(v))
+        : voices.find((v) => /en-(us|ph|gb)/i.test(v.lang) && isNatural(v)) ||
+          voices.find((v) => /en/i.test(v.lang) && isNatural(v));
+
+    if (preferred) utter.voice = preferred;
+    utter.lang = preferred?.lang || (lang === "tl" ? "fil-PH" : "en-US");
+    utter.rate = 0.98;
+    utter.pitch = 1.02;
+    utter.volume = 1.0;
+    window.speechSynthesis.speak(utter);
+  } catch (err) {
+    console.warn("Voice fallback notice:", err?.message);
+  }
+}
+
+// Natural Human Neural Voice Engine (/api/tts MP3 with in-memory cache + Neural Browser Fallback; 0 DB egress, ₱0 cost)
+async function speakWazeVoice(text, lang = "tl") {
+  if (typeof window === "undefined" || !text) return;
+  const normalized = normalizeSpokenNavigationText(text);
+  if (!normalized) return;
+
+  stopWazeVoice();
+  const myToken = activeNavSpeechToken;
+  const ttsLang = lang === "en" ? "en" : "tl";
+  const chunks = splitSpeechChunks(normalized, 165);
+
+  try {
+    for (const chunk of chunks) {
+      if (myToken !== activeNavSpeechToken) return;
+      const cacheKey = `${ttsLang}:${chunk}`;
+      let blobUrl = navTtsAudioCache[cacheKey];
+
+      if (!blobUrl) {
+        const res = await fetch(`/api/tts?lang=${encodeURIComponent(ttsLang)}&text=${encodeURIComponent(chunk)}`);
+        if (!res.ok) throw new Error(`TTS HTTP ${res.status}`);
+        const ctype = res.headers.get("content-type") || "";
+        if (!ctype.includes("audio")) throw new Error("Non-audio TTS response");
+        const blob = await res.blob();
+        blobUrl = URL.createObjectURL(blob);
+        if (navTtsCacheKeys.length > 60) {
+          const oldestKey = navTtsCacheKeys.shift();
+          const oldUrl = navTtsAudioCache[oldestKey];
+          if (oldUrl) URL.revokeObjectURL(oldUrl);
+          delete navTtsAudioCache[oldestKey];
+        }
+        navTtsAudioCache[cacheKey] = blobUrl;
+        navTtsCacheKeys.push(cacheKey);
+      }
+
+      if (myToken !== activeNavSpeechToken) return;
+
+      await new Promise((resolve, reject) => {
+        const audio = new Audio(blobUrl);
+        activeNavAudioEl = audio;
+        audio.playbackRate = 1.04;
+        audio.onended = () => {
+          if (activeNavAudioEl === audio) activeNavAudioEl = null;
+          resolve();
+        };
+        audio.onerror = (e) => {
+          if (activeNavAudioEl === audio) activeNavAudioEl = null;
+          reject(e);
+        };
+        audio.play().catch(reject);
+      });
+    }
+  } catch (err) {
+    if (myToken !== activeNavSpeechToken) return;
+    console.warn("Natural neural TTS unavailable, using browser voice fallback:", err?.message);
+    speakBrowserNeuralFallback(normalized, ttsLang);
+  }
+}
+
+// Analyzes route traffic using optional Free-Tier TomTom Live Traffic API OR zero-cost PH Peak-Hour + Road Speed intelligence
+async function analyzeRouteTraffic(startCoords, endCoords, baseDistanceMeters, baseDurationSec, steps = []) {
+  const tomtomKey = (API_CONFIG?.TOMTOM_API_KEY || "").trim();
+
+  // 1. Live Real-Time Traffic via TomTom Free Tier (if VITE_TOMTOM_API_KEY is configured — 0 DB egress)
+  if (tomtomKey) {
+    try {
+      const ttUrl = `https://api.tomtom.com/routing/1/calculateRoute/${startCoords[0]},${startCoords[1]}:${endCoords[0]},${endCoords[1]}/json?traffic=true&travelMode=car&key=${encodeURIComponent(tomtomKey)}`;
+      const controller = new AbortController();
+      const t = setTimeout(() => controller.abort(), 5000);
+      const res = await fetch(ttUrl, { signal: controller.signal });
+      clearTimeout(t);
+      if (res.ok) {
+        const data = await res.json();
+        const summary = data?.routes?.[0]?.summary;
+        if (summary) {
+          const delaySec = Math.max(0, Math.round(summary.trafficDelayInSeconds || 0));
+          const liveDurationSec = Math.round(summary.travelTimeInSeconds || (baseDurationSec + delaySec));
+          const delayRatio = baseDurationSec > 0 ? delaySec / baseDurationSec : 0;
+          const level = delaySec >= 360 || delayRatio >= 0.35 ? "heavy" : delaySec >= 120 || delayRatio >= 0.14 ? "moderate" : "clear";
+          return {
+            isLiveSensor: true,
+            sourceLabel: "Live Traffic",
+            level,
+            label: level === "heavy" ? "Heavy Traffic" : level === "moderate" ? "Moderate Traffic" : "Light / Clear",
+            delaySec,
+            adjustedDurationSec: liveDurationSec,
+            congestedStreets: [],
+            advisoryText:
+              level === "heavy"
+                ? `Heavy live traffic detected (+${Math.max(1, Math.round(delaySec / 60))} min delay).`
+                : level === "moderate"
+                ? `Moderate traffic along route (+${Math.max(1, Math.round(delaySec / 60))} min delay).`
+                : "Roads are mostly clear with smooth live traffic flow."
+          };
+        }
+      }
+    } catch (err) {
+      console.warn("TomTom live traffic fallback notice:", err?.message);
+    }
+  }
+
+  // 2. Zero-Cost Built-In Traffic Estimator (PH Peak-Hour Window + Road Speed Ratio + Arterial Choke-Point Check)
+  const now = new Date();
+  const hour = now.getHours() + now.getMinutes() / 60;
+  const day = now.getDay(); // 0=Sun, 6=Sat
+  const isWeekdayOrSat = day >= 1 && day <= 6;
+
+  const isSeverePeak = isWeekdayOrSat && ((hour >= 7.0 && hour <= 9.25) || (hour >= 16.75 && hour <= 19.75));
+  const isModeratePeak = isWeekdayOrSat && ((hour >= 11.5 && hour <= 13.5) || (hour >= 15.5 && hour < 16.75) || (hour > 19.75 && hour <= 21.0));
+
+  const congestedSet = new Set();
+  const slowSteps = [];
+  (steps || []).forEach((st) => {
+    const streetLower = (st.street || "").toLowerCase();
+    const isArterial = PH_ARTERIAL_CORRIDORS.some((c) => streetLower.includes(c));
+    const speedKmh = st.durationSec > 0 ? (st.distanceMeters / st.durationSec) * 3.6 : 30;
+    if (isArterial && st.street && st.street !== "Local Road") {
+      congestedSet.add(st.street);
+    }
+    if ((isArterial && (isSeverePeak || isModeratePeak)) || (st.distanceMeters > 120 && speedKmh < 19)) {
+      slowSteps.push(st);
+    }
+  });
+
+  const avgSpeedKmh = baseDurationSec > 0 ? (baseDistanceMeters / baseDurationSec) * 3.6 : 28;
+  const congestedStreets = Array.from(congestedSet).slice(0, 3);
+
+  let level = "clear";
+  let multiplier = 1.0;
+
+  if (isSeverePeak && (congestedStreets.length > 0 || avgSpeedKmh < 24 || baseDistanceMeters > 1500)) {
+    level = "heavy";
+    multiplier = 1.48;
+  } else if (isSeverePeak || (isModeratePeak && (congestedStreets.length > 0 || avgSpeedKmh < 26)) || avgSpeedKmh < 18) {
+    level = "moderate";
+    multiplier = 1.24;
+  } else if (congestedStreets.length > 0 && hour >= 9.25 && hour <= 20.5 && isWeekdayOrSat) {
+    level = "moderate";
+    multiplier = 1.15;
+  }
+
+  const adjustedDurationSec = Math.round(baseDurationSec * multiplier);
+  const delaySec = Math.max(0, adjustedDurationSec - baseDurationSec);
+  const delayMin = Math.round(delaySec / 60);
+  const corridorNote = congestedStreets.length > 0 ? ` near ${congestedStreets.join(", ")}` : "";
+
+  return {
+    isLiveSensor: false,
+    sourceLabel: "Est. Traffic",
+    level,
+    label: level === "heavy" ? "Heavy Traffic Expected" : level === "moderate" ? "Moderate Traffic" : "Light / Clear Flow",
+    delaySec,
+    adjustedDurationSec,
+    congestedStreets,
+    slowSteps,
+    advisoryText:
+      level === "heavy"
+        ? `Peak-hour heavy traffic expected${corridorNote}${delayMin > 0 ? ` (+${delayMin} min est.)` : ""}.`
+        : level === "moderate"
+        ? `Moderate urban traffic${corridorNote}${delayMin > 0 ? ` (+${delayMin} min est.)` : ""}.`
+        : `Roads appear clear${corridorNote}. Normal travel speed expected.`
+  };
+}
+
+// Computes actual road-based navigable distance, route polyline, and optional turn-by-turn steps between two GPS coordinates
+export async function fetchRoadRouteBetweenPoints(startCoords, endCoords, includeSteps = false, destinationLabel = "Target Kiosk") {
   const straightDist = calculateDistanceMeters(startCoords[0], startCoords[1], endCoords[0], endCoords[1]);
 
   try {
-    const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${startCoords[1]},${startCoords[0]};${endCoords[1]},${endCoords[0]}?overview=full&geometries=geojson`;
+    const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${startCoords[1]},${startCoords[0]};${endCoords[1]},${endCoords[0]}?overview=full&geometries=geojson${includeSteps ? "&steps=true" : ""}`;
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 3500);
+    const timeout = setTimeout(() => controller.abort(), includeSteps ? 6000 : 3500);
     const res = await fetch(osrmUrl, { signal: controller.signal });
     clearTimeout(timeout);
 
@@ -146,12 +541,17 @@ export async function fetchRoadRouteBetweenPoints(startCoords, endCoords) {
         const roadDistance = Math.round(route.distance);
         const roadDurationSec = Math.round(route.duration);
         const roadCoords = (route.geometry?.coordinates || []).map(([lng, lat]) => [lat, lng]);
+        const rawSteps = includeSteps ? (route.legs?.[0]?.steps || []) : [];
+        const parsedSteps = rawSteps
+          .filter((s) => s && (s.distance > 0 || s.maneuver?.type === "arrive" || s.maneuver?.type === "depart"))
+          .map((s) => formatOsrmManeuver(s, destinationLabel));
 
         if (roadCoords.length > 1) {
           return {
             distanceMeters: roadDistance,
             durationSec: roadDurationSec,
             coordinates: roadCoords,
+            steps: parsedSteps,
             isRoadBased: true,
             method: "OSRM Live Road Network"
           };
@@ -166,6 +566,7 @@ export async function fetchRoadRouteBetweenPoints(startCoords, endCoords) {
   // Philippine urban road networks typically exhibit ~1.30x to 1.35x circuity over straight-line distance
   const circuityFactor = 1.32;
   const estimatedRoadDistance = Math.round(straightDist * circuityFactor);
+  const estDuration = Math.round(estimatedRoadDistance / (28 * 1000 / 3600));
 
   const [lat1, lng1] = startCoords;
   const [lat2, lng2] = endCoords;
@@ -181,10 +582,40 @@ export async function fetchRoadRouteBetweenPoints(startCoords, endCoords) {
     [lat2, lng2]
   ];
 
+  const fallbackSteps = includeSteps
+    ? [
+        {
+          instruction: "Head toward nearest main road from your coordinates",
+          street: "Starting Point",
+          distanceMeters: Math.round(estimatedRoadDistance * 0.4),
+          durationSec: Math.round(estDuration * 0.4),
+          dir: "depart",
+          location: [lat1, lng1]
+        },
+        {
+          instruction: `Continue along local corridor toward ${destinationLabel}`,
+          street: "Main Road",
+          distanceMeters: Math.round(estimatedRoadDistance * 0.6),
+          durationSec: Math.round(estDuration * 0.6),
+          dir: "straight",
+          location: roadWaypoints[2]
+        },
+        {
+          instruction: `Arrive at ${destinationLabel}`,
+          street: destinationLabel,
+          distanceMeters: 0,
+          durationSec: 0,
+          dir: "arrive",
+          location: [lat2, lng2]
+        }
+      ]
+    : [];
+
   return {
     distanceMeters: estimatedRoadDistance,
-    durationSec: Math.round(estimatedRoadDistance / (30 * 1000 / 3600)),
+    durationSec: estDuration,
     coordinates: roadWaypoints,
+    steps: fallbackSteps,
     isRoadBased: true,
     method: "Urban Road Network Grid Model"
   };
@@ -609,8 +1040,48 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
   const carMarkerRef = useRef(null);
   const clickedMarkerRef = useRef(null);
   const measureLineGroupRef = useRef(null);
+  const navRouteGroupRef = useRef(null);
+  const gpsWatchIdRef = useRef(null);
   const boothMarkersRef = useRef({});
   const searchContainerRef = useRef(null);
+
+  // Waze / Google Maps Style Kiosk Navigation States
+  const [focusedBooth, setFocusedBooth] = useState(null); // { booth, agentName }
+  const [activeNavRoute, setActiveNavRoute] = useState(null);
+  const [isCalculatingNavRoute, setIsCalculatingNavRoute] = useState(false);
+  const [isPickingNavOrigin, setIsPickingNavOrigin] = useState(false);
+  const isPickingNavOriginRef = useRef(false);
+  const focusedBoothRef = useRef(null);
+  const [isNavStepsExpanded, setIsNavStepsExpanded] = useState(false);
+  const [isLiveGpsTracking, setIsLiveGpsTracking] = useState(false);
+  const [navErrorNotice, setNavErrorNotice] = useState("");
+  const [voiceGuidanceEnabled, setVoiceGuidanceEnabled] = useState(true);
+  const [voiceLang, setVoiceLang] = useState("tl"); // "tl" (Taglish Waze style) | "en" (English)
+  const [activeNavStepIdx, setActiveNavStepIdx] = useState(0);
+  const [showLiveTrafficTiles, setShowLiveTrafficTiles] = useState(false);
+  const trafficTileLayerRef = useRef(null);
+  const spokenStepsRef = useRef(new Set());
+  const voiceGuidanceEnabledRef = useRef(true);
+  const voiceLangRef = useRef("tl");
+
+  useEffect(() => {
+    voiceGuidanceEnabledRef.current = voiceGuidanceEnabled;
+    if (!voiceGuidanceEnabled) {
+      stopWazeVoice();
+    }
+  }, [voiceGuidanceEnabled]);
+
+  useEffect(() => {
+    voiceLangRef.current = voiceLang;
+  }, [voiceLang]);
+
+  useEffect(() => {
+    isPickingNavOriginRef.current = isPickingNavOrigin;
+  }, [isPickingNavOrigin]);
+
+  useEffect(() => {
+    focusedBoothRef.current = focusedBooth;
+  }, [focusedBooth]);
 
   // Top Agent Search Bar states (replaces the sub-navigation pills)
   const [topAgentSearchQuery, setTopAgentSearchQuery] = useState("");
@@ -629,6 +1100,26 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
 
   const [leafletLoaded, setLeafletLoaded] = useState(false);
   const [selectedEdgeBarangay, setSelectedEdgeBarangay] = useState(EDGE_BARANGAYS_CIRCUIT[0]);
+
+  // Optional Free-Tier TomTom Real-Time Traffic Flow Tile Overlay (0 DB egress, activates when VITE_TOMTOM_API_KEY is set)
+  useEffect(() => {
+    if (!leafletLoaded || !leafletMapRef.current || !window.L) return;
+    const map = leafletMapRef.current;
+    const tomtomKey = (API_CONFIG?.TOMTOM_API_KEY || "").trim();
+
+    if (trafficTileLayerRef.current) {
+      try { map.removeLayer(trafficTileLayerRef.current); } catch { }
+      trafficTileLayerRef.current = null;
+    }
+
+    if (showLiveTrafficTiles && tomtomKey) {
+      const ttLayer = window.L.tileLayer(
+        `https://api.tomtom.com/traffic/map/4/tile/flow/relative0/{z}/{x}/{y}.png?key=${encodeURIComponent(tomtomKey)}&tileSize=256`,
+        { opacity: 0.78, maxZoom: 19, zIndex: 450 }
+      ).addTo(map);
+      trafficTileLayerRef.current = ttLayer;
+    }
+  }, [showLiveTrafficTiles, leafletLoaded]);
 
   // Kiosk Distance Measuring & Agent Gross Performance States
   const [measuringSourceKiosk, setMeasuringSourceKiosk] = useState(null);
@@ -1846,6 +2337,393 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
     }
   };
 
+  // ================= WAZE / GOOGLE MAPS STYLE LIVE KIOSK NAVIGATION ENGINE =================
+  const stopLiveGpsWatch = useCallback(() => {
+    if (gpsWatchIdRef.current !== null && typeof navigator !== "undefined" && navigator.geolocation) {
+      try {
+        navigator.geolocation.clearWatch(gpsWatchIdRef.current);
+      } catch { }
+      gpsWatchIdRef.current = null;
+    }
+    setIsLiveGpsTracking(false);
+  }, []);
+
+  const speakRouteStep = useCallback((step, langOverride = null) => {
+    if (!step) return;
+    const lang = langOverride || voiceLangRef.current || "tl";
+    const phrase =
+      lang === "tl"
+        ? toTaglishVoiceInstruction(step)
+        : step.distanceMeters >= 50 && step.dir !== "arrive" && step.dir !== "depart"
+        ? `In ${formatNavDistance(step.distanceMeters)}, ${step.instruction}.`
+        : `${step.instruction}.`;
+    speakWazeVoice(phrase, lang);
+  }, []);
+
+  const speakRouteStartSummary = useCallback((routePayload, langOverride = null) => {
+    if (!routePayload || !voiceGuidanceEnabledRef.current) return;
+    const lang = langOverride || voiceLangRef.current || "tl";
+    const boothName = routePayload.targetBooth?.name || "001";
+    const agentPart = routePayload.agentName ? `, ${routePayload.agentName}` : "";
+    const distStr = formatNavDistance(routePayload.distanceMeters);
+    const durStr = formatNavDuration(routePayload.durationSec);
+    const traffic = routePayload.traffic;
+    const firstStep = routePayload.steps?.[0];
+
+    let trafficPhrase = "";
+    if (traffic?.level === "heavy") {
+      trafficPhrase =
+        lang === "tl"
+          ? ` Paalala, may mabigat na traffic sa ruta${traffic.congestedStreets?.length ? ` banda sa ${traffic.congestedStreets[0]}` : ""}.`
+          : ` Caution, heavy traffic detected along your route${traffic.congestedStreets?.length ? ` near ${traffic.congestedStreets[0]}` : ""}.`;
+    } else if (traffic?.level === "moderate") {
+      trafficPhrase =
+        lang === "tl"
+          ? ` May katamtamang traffic sa ilang bahagi ng kalsada.`
+          : ` Moderate traffic ahead along parts of the route.`;
+    }
+
+    const firstInstruction = firstStep
+      ? lang === "tl"
+        ? ` ${toTaglishVoiceInstruction(firstStep)}`
+        : ` ${firstStep.instruction}.`
+      : "";
+
+    const msg =
+      lang === "tl"
+        ? `Magsisimula na ang biyahe papuntang Booth ${boothName}${agentPart}. Ang layo ay ${distStr}, tinatayang ${durStr}.${trafficPhrase}${firstInstruction}`
+        : `Starting navigation to Booth ${boothName}${agentPart}. Total distance is ${distStr}, estimated ${durStr}.${trafficPhrase}${firstInstruction}`;
+
+    speakWazeVoice(msg, lang);
+  }, []);
+
+  const handleClearNavRoute = useCallback(() => {
+    stopLiveGpsWatch();
+    stopWazeVoice();
+    spokenStepsRef.current.clear();
+    setActiveNavStepIdx(0);
+    setActiveNavRoute(null);
+    setIsNavStepsExpanded(false);
+    setIsPickingNavOrigin(false);
+    setNavErrorNotice("");
+    if (navRouteGroupRef.current) {
+      navRouteGroupRef.current.clearLayers();
+    }
+  }, [stopLiveGpsWatch]);
+
+  const drawNavRouteOnMap = useCallback((routePayload, shouldFitBounds = true) => {
+    if (!leafletMapRef.current || !navRouteGroupRef.current || !window.L || !routePayload) return;
+    const map = leafletMapRef.current;
+    const navGroup = navRouteGroupRef.current;
+    navGroup.clearLayers();
+
+    const { startCoords, startLabel, targetBooth, coordinates, distanceMeters, durationSec, isLiveGps, traffic } = routePayload;
+    if (!Array.isArray(coordinates) || coordinates.length < 2) return;
+
+    const trafficLevel = traffic?.level || "clear";
+    const outerColor = trafficLevel === "heavy" ? "#991b1b" : trafficLevel === "moderate" ? "#92400e" : "#1e3a8a";
+    const borderColor = trafficLevel === "heavy" ? "#dc2626" : trafficLevel === "moderate" ? "#d97706" : "#1d4ed8";
+    const coreColor = trafficLevel === "heavy" ? "#f87171" : trafficLevel === "moderate" ? "#fbbf24" : "#38bdf8";
+    const pillBorder = trafficLevel === "heavy" ? "#ef4444" : trafficLevel === "moderate" ? "#f59e0b" : "#38bdf8";
+    const trafficDot = trafficLevel === "heavy" ? "🔴" : trafficLevel === "moderate" ? "🟠" : "🟢";
+
+    // 1. Waze / Google Maps Traffic-Aware Layered Route Polyline
+    // Outer soft aura
+    window.L.polyline(coordinates, {
+      color: outerColor,
+      weight: 12,
+      opacity: 0.45,
+      lineCap: "round",
+      lineJoin: "round"
+    }).addTo(navGroup);
+
+    // Dark border casing
+    window.L.polyline(coordinates, {
+      color: borderColor,
+      weight: 8,
+      opacity: 0.92,
+      lineCap: "round",
+      lineJoin: "round"
+    }).addTo(navGroup);
+
+    // Vibrant core route line (Blue=Clear, Amber=Moderate, Coral-Red=Heavy Traffic)
+    window.L.polyline(coordinates, {
+      color: coreColor,
+      weight: 5,
+      opacity: 1,
+      lineCap: "round",
+      lineJoin: "round"
+    }).addTo(navGroup);
+
+    // Animated directional flow dashes gliding toward the destination kiosk
+    window.L.polyline(coordinates, {
+      color: "#ffffff",
+      weight: 2.5,
+      opacity: 0.9,
+      dashArray: "6, 16",
+      lineCap: "round",
+      className: "nav-route-flow-line"
+    }).addTo(navGroup);
+
+    // 2. Pulsing Blue GPS Locator Dot ("You Are Here" / Starting Coordinates)
+    const startPinIcon = window.L.divIcon({
+      className: "nav-origin-pin",
+      html: `
+        <div style="display:flex;flex-direction:column;align-items:center;transform:translate(-50%,-50%);pointer-events:none;">
+          <div style="
+            background: #0f172a;
+            color: #38bdf8;
+            border: 1.5px solid #38bdf8;
+            border-radius: 9999px;
+            padding: 2px 8px;
+            font-family: Inter, system-ui, sans-serif;
+            font-size: 10px;
+            font-weight: 800;
+            white-space: nowrap;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.6);
+            margin-bottom: 5px;
+          ">${isLiveGps ? "📍 You (Live GPS)" : `📍 ${startLabel || "Start Point"}`}</div>
+          <div style="position:relative;width:24px;height:24px;display:flex;align-items:center;justify-content:center;">
+            <div style="
+              position:absolute;inset:-8px;border-radius:50%;
+              background:rgba(56,189,248,0.28);
+              border:2px solid rgba(56,189,248,0.75);
+              animation: ping 1.6s cubic-bezier(0,0,0.2,1) infinite;
+            "></div>
+            <div style="
+              width:16px;height:16px;border-radius:50%;
+              background:#2563eb;
+              border:3px solid #ffffff;
+              box-shadow:0 0 12px rgba(37,99,235,0.9), 0 2px 6px rgba(0,0,0,0.5);
+            "></div>
+          </div>
+        </div>
+      `,
+      iconSize: [140, 56],
+      iconAnchor: [0, 0]
+    });
+    window.L.marker(startCoords, { icon: startPinIcon, zIndexOffset: 1000 }).addTo(navGroup);
+
+    // 3. Pulsing Arrival Beacon Ring on Destination Kiosk
+    if (targetBooth?.coords) {
+      const destRingIcon = window.L.divIcon({
+        className: "nav-dest-ring",
+        html: `
+          <div style="
+            width:54px;height:54px;border-radius:50%;
+            border:3px solid #10b981;
+            background:rgba(16,185,129,0.2);
+            transform:translate(-50%,-50%);
+            animation: ping 1.8s cubic-bezier(0,0,0.2,1) infinite;
+            pointer-events:none;
+          "></div>
+        `,
+        iconSize: [54, 54],
+        iconAnchor: [0, 0]
+      });
+      window.L.marker(targetBooth.coords, { icon: destRingIcon, interactive: false }).addTo(navGroup);
+    }
+
+    // 4. Mid-Route Google Maps / Waze Style Floating ETA, Distance & Traffic Pill
+    const midIdx = Math.floor(coordinates.length / 2);
+    const midPt = coordinates[midIdx] || [
+      (startCoords[0] + targetBooth.coords[0]) / 2,
+      (startCoords[1] + targetBooth.coords[1]) / 2
+    ];
+    const etaBadgeIcon = window.L.divIcon({
+      className: "nav-eta-pill",
+      html: `
+        <div style="
+          transform: translate(-50%, -50%);
+          background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+          color: #ffffff;
+          border: 2px solid ${pillBorder};
+          border-radius: 9999px;
+          padding: 4px 11px;
+          font-family: Inter, system-ui, sans-serif;
+          font-size: 11px;
+          font-weight: 800;
+          white-space: nowrap;
+          box-shadow: 0 6px 18px rgba(15,23,42,0.75);
+          display: inline-flex;
+          align-items: center;
+          gap: 5px;
+          cursor: pointer;
+        ">
+          <span>${trafficDot}</span>
+          <span style="color:${coreColor};">${formatNavDuration(durationSec)}</span>
+          <span style="opacity:0.6;">•</span>
+          <span>${formatNavDistance(distanceMeters)}</span>
+        </div>
+      `,
+      iconSize: [180, 28],
+      iconAnchor: [0, 0]
+    });
+    const etaMarker = window.L.marker(midPt, { icon: etaBadgeIcon, zIndexOffset: 900 }).addTo(navGroup);
+    etaMarker.on("click", () => setIsNavStepsExpanded((prev) => !prev));
+
+    // 5. Fit Map Camera neatly to frame Start & Destination Kiosk
+    if (shouldFitBounds) {
+      try {
+        const bounds = window.L.latLngBounds(coordinates);
+        bounds.extend(startCoords);
+        if (targetBooth?.coords) bounds.extend(targetBooth.coords);
+        map.fitBounds(bounds, { padding: [95, 95], maxZoom: 17 });
+      } catch { }
+    }
+  }, []);
+
+  const computeAndDisplayNavRoute = useCallback(async (startCoords, targetBooth, agentName = "", startLabel = "Your Location", isLiveGps = false, shouldFitBounds = true, isLiveUpdate = false) => {
+    if (!startCoords || !targetBooth?.coords) return;
+    if (!isLiveUpdate) setIsCalculatingNavRoute(true);
+    setNavErrorNotice("");
+    setIsPickingNavOrigin(false);
+
+    const destLabel = `Booth ${targetBooth.name || "001"}${agentName ? ` (${agentName})` : ""}`;
+    try {
+      const roadRoute = await fetchRoadRouteBetweenPoints(startCoords, targetBooth.coords, true, destLabel);
+      const traffic = await analyzeRouteTraffic(
+        startCoords,
+        targetBooth.coords,
+        roadRoute.distanceMeters,
+        roadRoute.durationSec,
+        roadRoute.steps || []
+      );
+      const payload = {
+        targetBooth,
+        agentName: agentName || targetBooth.tellerName || "",
+        startCoords,
+        startLabel,
+        isLiveGps,
+        coordinates: roadRoute.coordinates,
+        distanceMeters: roadRoute.distanceMeters,
+        baseDurationSec: roadRoute.durationSec,
+        durationSec: traffic?.adjustedDurationSec || roadRoute.durationSec,
+        steps: roadRoute.steps || [],
+        traffic,
+        method: roadRoute.method
+      };
+      setActiveNavRoute(payload);
+      setFocusedBooth({ booth: targetBooth, agentName: agentName || targetBooth.tellerName || "" });
+      drawNavRouteOnMap(payload, shouldFitBounds);
+
+      if (!isLiveUpdate) {
+        spokenStepsRef.current.clear();
+        setActiveNavStepIdx(0);
+        // Automatically speak complete Google Maps style route + traffic + first turn briefing (hands-free!)
+        speakRouteStartSummary(payload);
+      } else if (voiceGuidanceEnabledRef.current) {
+        // Hands-Free Google Maps Style Proximity Voice Triggers (0 DB egress — runs locally in browser)
+        const distToDest = calculateDistanceMeters(startCoords[0], startCoords[1], targetBooth.coords[0], targetBooth.coords[1]);
+        if (distToDest <= 45 && !spokenStepsRef.current.has("arrived")) {
+          spokenStepsRef.current.add("arrived");
+          speakRouteStep({ dir: "arrive", street: destLabel, distanceMeters: 0 });
+        } else if (payload.steps && payload.steps.length > 1) {
+          const nextStep = payload.steps[1] || payload.steps[0];
+          if (nextStep && nextStep.location) {
+            const dStep = calculateDistanceMeters(startCoords[0], startCoords[1], nextStep.location[0], nextStep.location[1]);
+            const farKey = `far_${nextStep.dir}_${nextStep.street}`;
+            const nearKey = `near_${nextStep.dir}_${nextStep.street}`;
+            if (dStep <= 75 && !spokenStepsRef.current.has(nearKey)) {
+              spokenStepsRef.current.add(nearKey);
+              spokenStepsRef.current.add(farKey);
+              setActiveNavStepIdx(1);
+              speakRouteStep({ ...nextStep, distanceMeters: Math.round(dStep) });
+            } else if (dStep <= 220 && !spokenStepsRef.current.has(farKey)) {
+              spokenStepsRef.current.add(farKey);
+              setActiveNavStepIdx(1);
+              speakRouteStep({ ...nextStep, distanceMeters: Math.round(dStep) });
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.warn("Nav route computation notice:", err);
+      if (!isLiveUpdate) {
+        setNavErrorNotice("Could not compute road route right now. Try picking a start point on the map.");
+      }
+    } finally {
+      if (!isLiveUpdate) setIsCalculatingNavRoute(false);
+    }
+  }, [drawNavRouteOnMap, speakRouteStartSummary, speakRouteStep]);
+
+  const startLiveGpsWatchForBooth = useCallback((targetBooth, targetAgent = "") => {
+    if (!targetBooth?.coords || typeof navigator === "undefined" || !navigator.geolocation) return;
+    stopLiveGpsWatch();
+    setIsLiveGpsTracking(true);
+    let lastRecalcAt = Date.now();
+    gpsWatchIdRef.current = navigator.geolocation.watchPosition(
+      (pos) => {
+        const now = Date.now();
+        if (now - lastRecalcAt < 7000) return; // Throttle OSRM route refresh every 7s (zero DB egress)
+        lastRecalcAt = now;
+        const liveCoords = [pos.coords.latitude, pos.coords.longitude];
+        computeAndDisplayNavRoute(liveCoords, targetBooth, targetAgent, "Your Live Location", true, false, true);
+      },
+      (err) => {
+        console.warn("Live GPS watch warning:", err?.message);
+        stopLiveGpsWatch();
+      },
+      { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
+    );
+  }, [computeAndDisplayNavRoute, stopLiveGpsWatch]);
+
+  const handleRouteFromMyLocation = useCallback((boothOverride = null, agentNameOverride = "") => {
+    const targetBooth = boothOverride || focusedBoothRef.current?.booth;
+    const targetAgent = agentNameOverride || focusedBoothRef.current?.agentName || targetBooth?.tellerName || "";
+    if (!targetBooth?.coords) return;
+
+    // Synchronously unlock browser audio inside click gesture so voice auto-speaks immediately like Google Maps!
+    unlockNavAudioPlayback();
+    setFocusedBooth({ booth: targetBooth, agentName: targetAgent });
+    setNavErrorNotice("");
+
+    if (typeof navigator === "undefined" || !navigator.geolocation) {
+      setNavErrorNotice("GPS geolocation is not supported on this browser. Click 'Pick Start on Map' to set your starting point.");
+      return;
+    }
+
+    setIsCalculatingNavRoute(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const myCoords = [pos.coords.latitude, pos.coords.longitude];
+        computeAndDisplayNavRoute(myCoords, targetBooth, targetAgent, "Your Live Location", true, true, false);
+        // Automatically enable Live GPS hands-free turn-by-turn tracking like Google Maps
+        startLiveGpsWatchForBooth(targetBooth, targetAgent);
+      },
+      (err) => {
+        setIsCalculatingNavRoute(false);
+        const reason =
+          err?.code === 1
+            ? "Location permission denied. Allow browser GPS or click 'Pick Start on Map' below."
+            : err?.code === 3
+            ? "GPS request timed out. Try again or click 'Pick Start on Map' below."
+            : "Unable to detect device GPS. Click 'Pick Start on Map' below to set your coordinates.";
+        setNavErrorNotice(reason);
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 15000 }
+    );
+  }, [computeAndDisplayNavRoute, startLiveGpsWatchForBooth]);
+
+  const handleToggleLiveGpsTracking = useCallback(() => {
+    unlockNavAudioPlayback();
+    if (isLiveGpsTracking) {
+      stopLiveGpsWatch();
+      return;
+    }
+    const targetBooth = activeNavRoute?.targetBooth || focusedBoothRef.current?.booth;
+    const targetAgent = activeNavRoute?.agentName || focusedBoothRef.current?.agentName || "";
+    startLiveGpsWatchForBooth(targetBooth, targetAgent);
+  }, [isLiveGpsTracking, activeNavRoute, startLiveGpsWatchForBooth, stopLiveGpsWatch]);
+
+  // Clean up GPS watcher & active audio on unmount
+  useEffect(() => {
+    return () => {
+      stopLiveGpsWatch();
+      stopWazeVoice();
+    };
+  }, [stopLiveGpsWatch]);
+
   // Global trigger for Leaflet HTML popups
   useEffect(() => {
     window.startMeasuringKiosk = (boothId) => {
@@ -1854,10 +2732,20 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
         startMeasuringFromKiosk(b);
       }
     };
+    window.startNavRouteToKiosk = (boothId) => {
+      const b = userTaggedBooths.find(booth => String(booth.id) === String(boothId));
+      if (b) {
+        if (leafletMapRef.current) {
+          try { leafletMapRef.current.closePopup(); } catch { }
+        }
+        handleRouteFromMyLocation(b, b.tellerName || "");
+      }
+    };
     return () => {
       delete window.startMeasuringKiosk;
+      delete window.startNavRouteToKiosk;
     };
-  }, [userTaggedBooths]);
+  }, [userTaggedBooths, handleRouteFromMyLocation]);
 
   // Load Leaflet CSS & JS
   useEffect(() => {
@@ -1872,6 +2760,13 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
         .yellow-booth-pin {
           background: transparent !important;
           border: none !important;
+        }
+        @keyframes navRouteFlow {
+          from { stroke-dashoffset: 44; }
+          to { stroke-dashoffset: 0; }
+        }
+        .nav-route-flow-line {
+          animation: navRouteFlow 1.1s linear infinite;
         }
       `;
       document.head.appendChild(customStyle);
@@ -1926,14 +2821,24 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
     const measureGroup = window.L.layerGroup().addTo(map);
     measureLineGroupRef.current = measureGroup;
 
+    const navGroup = window.L.layerGroup().addTo(map);
+    navRouteGroupRef.current = navGroup;
+
     leafletMapRef.current = map;
 
-    // Click handler anywhere on the map to drop coordinates pin & open Google Maps button
+    // Click handler anywhere on the map to drop coordinates pin OR pick navigation starting point
     map.on("click", (e) => {
       // Do not drop pin if currently in kiosk-to-kiosk measuring mode
       if (measuringSourceKioskRef.current) return;
       const lat = e.latlng.lat;
       const lng = e.latlng.lng;
+      // If user is picking a custom starting point for Waze/Maps Kiosk Route
+      if (isPickingNavOriginRef.current && focusedBoothRef.current?.booth) {
+        unlockNavAudioPlayback();
+        const { booth, agentName } = focusedBoothRef.current;
+        computeAndDisplayNavRoute([lat, lng], booth, agentName, "Picked Map Point", false, true, false);
+        return;
+      }
       setClickedPoint({ lat, lng });
     });
 
@@ -1963,6 +2868,7 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
       leafletMapRef.current = null;
       layersGroupRef.current = null;
       measureLineGroupRef.current = null;
+      navRouteGroupRef.current = null;
     };
   }, [leafletLoaded]);
 
@@ -2681,7 +3587,7 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
         boothMarkersRef.current[`teller_${booth.tellerName.trim().toLowerCase()}`] = marker;
       }
 
-      // Intercept marker click if in active distance measuring mode
+      // Intercept marker click if in active distance measuring mode; otherwise mark as focused booth
       marker.on("click", (e) => {
         if (measuringSourceKioskRef.current) {
           window.L.DomEvent.stopPropagation(e);
@@ -2691,6 +3597,7 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
           handleCompleteMeasurement(measuringSourceKioskRef.current, booth);
           return;
         }
+        setFocusedBooth({ booth, agentName: booth.tellerName || "" });
       });
 
       marker.bindPopup(`
@@ -2727,6 +3634,31 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
           </div>
 
           <div style="display: flex; flex-direction: column; gap: 5px;">
+            <!-- Live Waze / Google Maps Route from Current Location -->
+            <button
+              type="button"
+              onclick="window.startNavRouteToKiosk('${booth.id}')"
+              style="
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                gap: 6px;
+                width: 100%;
+                background: linear-gradient(135deg, #2563eb 0%, #0284c7 100%);
+                color: #ffffff;
+                font-weight: 800;
+                font-size: 11px;
+                padding: 8px 10px;
+                border-radius: 8px;
+                border: none;
+                cursor: pointer;
+                box-shadow: 0 3px 10px rgba(37, 99, 235, 0.4);
+              "
+            >
+              <span>🧭</span>
+              <span>Route From My Location</span>
+            </button>
+
             <a
               href="https://www.google.com/maps?q=${coords[0]},${coords[1]}"
               target="_blank"
@@ -2954,6 +3886,13 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
   const handleFocusBooth = (booth, agentName = "") => {
     if (!booth || !booth.coords) return;
 
+    // Clear previous navigation route if focusing a different booth
+    if (activeNavRoute && String(activeNavRoute.targetBooth?.id) !== String(booth.id)) {
+      handleClearNavRoute();
+    }
+    setFocusedBooth({ booth, agentName: agentName || booth.tellerName || "" });
+    setNavErrorNotice("");
+
     if (viewMode === "barangay" && activeBarangayCircuit && booth.barangayId !== activeBarangayCircuit.id) {
       setViewMode("city");
       setActiveBarangayCircuit(null);
@@ -3099,7 +4038,7 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
               }}
               onFocus={() => setIsTopSearchOpen(true)}
               onKeyDown={handleSearchKeyDown}
-              placeholder="Search booth number, address, or barangay..."
+              placeholder="Search Booth Code, Agent Name, address, or barangay..."
               className="w-full pl-9 pr-9 py-2 bg-white rounded-2xl border border-slate-200/90 shadow-2xs text-xs font-semibold text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 transition"
             />
             {topAgentSearchQuery && (
@@ -3235,6 +4174,429 @@ export default function OperationsGeoTaggingPanel({ onClose, currentUser = null 
         <div className="absolute top-20 left-1/2 -translate-x-1/2 z-50 bg-emerald-600 text-white font-mono text-xs font-bold px-3 py-1.5 rounded-xl shadow-xl flex items-center gap-1.5 animate-in fade-in duration-150">
           <Check size={14} />
           <span>Copied {copiedText}</span>
+        </div>
+      )}
+
+      {/* ================= WAZE / GOOGLE MAPS PICK-START-ON-MAP BANNER ================= */}
+      {isPickingNavOrigin && focusedBooth?.booth && (
+        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-50 bg-slate-900/95 backdrop-blur-xl border-2 border-sky-400 rounded-2xl shadow-2xl p-3 px-4 flex items-center gap-3 animate-in fade-in slide-in-from-top-2 duration-200 max-w-[94vw]">
+          <div className="w-9 h-9 rounded-xl bg-sky-500/20 text-sky-400 border border-sky-400/40 flex items-center justify-center shrink-0 animate-pulse">
+            <Crosshair size={18} />
+          </div>
+          <div className="min-w-0">
+            <div className="text-[10px] font-bold uppercase tracking-wider text-sky-400">
+              Select Starting Coordinates
+            </div>
+            <div className="text-xs text-white font-semibold">
+              Click anywhere on the map to route to <strong>Booth {focusedBooth.booth.name}</strong>{focusedBooth.agentName ? ` (${focusedBooth.agentName})` : ""}.
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setIsPickingNavOrigin(false)}
+            className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-semibold text-xs transition cursor-pointer border border-slate-700 shrink-0"
+          >
+            Cancel
+          </button>
+        </div>
+      )}
+
+      {/* ================= WAZE / GOOGLE MAPS TOP TURN-BY-TURN NAVIGATION BANNER (WITH VOICE & TRAFFIC) ================= */}
+      {activeNavRoute && !isPickingNavOrigin && (
+        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-40 w-[94%] max-w-xl animate-in fade-in slide-in-from-top-2 duration-200">
+          {(() => {
+            const currentStep = activeNavRoute.steps?.[activeNavStepIdx] || activeNavRoute.steps?.[0];
+            const traffic = activeNavRoute.traffic;
+            const trafficBadgeClass =
+              traffic?.level === "heavy"
+                ? "bg-rose-500/25 text-rose-100 border-rose-400/50"
+                : traffic?.level === "moderate"
+                ? "bg-amber-500/25 text-amber-100 border-amber-400/50"
+                : "bg-emerald-500/25 text-emerald-100 border-emerald-400/50";
+            return (
+              <div className="bg-gradient-to-r from-[#0f5132] via-[#0d6e47] to-[#0a5838] border border-emerald-400/50 rounded-2xl shadow-2xl overflow-hidden">
+                <div className="px-3.5 py-2.5 flex items-center justify-between gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => speakRouteStep(currentStep)}
+                    title="Click to replay voice instruction"
+                    className="flex items-center gap-3 min-w-0 text-left cursor-pointer group"
+                  >
+                    <div className="w-9 h-9 rounded-xl bg-white/15 group-hover:bg-white/25 border border-white/25 flex items-center justify-center text-white shrink-0 transition">
+                      {currentStep?.dir === "left" ? (
+                        <ArrowLeft size={19} />
+                      ) : currentStep?.dir === "right" ? (
+                        <ArrowRight size={19} />
+                      ) : currentStep?.dir === "uturn" ? (
+                        <RotateCcw size={18} />
+                      ) : (
+                        <Navigation size={18} />
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-[9.5px] font-bold uppercase tracking-wider text-emerald-100 bg-black/25 px-1.5 py-0.5 rounded">
+                          {activeNavRoute.isLiveGps ? "Live GPS" : "Road Nav"}
+                        </span>
+                        {currentStep?.distanceMeters > 0 && (
+                          <span className="text-[11px] font-bold text-white/95 font-mono">
+                            {formatNavDistance(currentStep.distanceMeters)}
+                          </span>
+                        )}
+                        {traffic && (
+                          <span className={`text-[9.5px] font-bold px-1.5 py-0.5 rounded border inline-flex items-center gap-1 ${trafficBadgeClass}`}>
+                            <span>{traffic.level === "heavy" ? "🔴" : traffic.level === "moderate" ? "🟠" : "🟢"}</span>
+                            <span>{traffic.label}</span>
+                            <span className="opacity-75">({traffic.sourceLabel})</span>
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs sm:text-[13px] font-bold text-white truncate mt-0.5">
+                        {voiceLang === "tl" && currentStep
+                          ? toTaglishVoiceInstruction(currentStep)
+                          : currentStep?.instruction || `Proceed to Booth ${activeNavRoute.targetBooth?.name}`}
+                      </p>
+                    </div>
+                  </button>
+
+                  <div className="flex items-center gap-1 shrink-0">
+                    {/* Voice ON/OFF Mute Toggle */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const next = !voiceGuidanceEnabled;
+                        setVoiceGuidanceEnabled(next);
+                        if (next && currentStep) {
+                          speakRouteStep(currentStep);
+                        }
+                      }}
+                      className={`p-1.5 rounded-xl border transition cursor-pointer ${
+                        voiceGuidanceEnabled
+                          ? "bg-white/20 hover:bg-white/30 text-white border-white/30"
+                          : "bg-black/30 hover:bg-black/45 text-emerald-200/70 border-white/10"
+                      }`}
+                      title={voiceGuidanceEnabled ? "Voice Guidance ON (click to mute)" : "Voice Muted (click to unmute)"}
+                    >
+                      {voiceGuidanceEnabled ? <Volume2 size={14} /> : <VolumeX size={14} />}
+                    </button>
+
+                    {/* Taglish / English Voice Language Switch */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const nextLang = voiceLang === "tl" ? "en" : "tl";
+                        setVoiceLang(nextLang);
+                        if (voiceGuidanceEnabled && currentStep) {
+                          speakRouteStep(currentStep, nextLang);
+                        }
+                      }}
+                      className="px-2 py-1 rounded-xl bg-black/25 hover:bg-black/40 text-emerald-100 text-[10px] font-extrabold border border-white/15 transition cursor-pointer uppercase"
+                      title="Switch Voice Language (Taglish / English)"
+                    >
+                      {voiceLang === "tl" ? "TL" : "EN"}
+                    </button>
+
+                    {/* Expand Turn-by-Turn Steps */}
+                    <button
+                      type="button"
+                      onClick={() => setIsNavStepsExpanded((prev) => !prev)}
+                      className="px-2.5 py-1.5 rounded-xl bg-black/25 hover:bg-black/40 text-white text-[11px] font-semibold border border-white/15 transition cursor-pointer flex items-center gap-1"
+                    >
+                      <Route size={12} />
+                      <span>Steps ({activeNavRoute.steps?.length || 0})</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Traffic Advisory Sub-Strip */}
+                {traffic?.advisoryText && (
+                  <div className="px-3.5 py-1.5 bg-black/25 border-t border-white/10 flex items-center justify-between gap-2 text-[10.5px] text-emerald-50/95">
+                    <span className="truncate">{traffic.advisoryText}</span>
+                    {Boolean((API_CONFIG?.TOMTOM_API_KEY || "").trim()) && (
+                      <button
+                        type="button"
+                        onClick={() => setShowLiveTrafficTiles((prev) => !prev)}
+                        className={`px-2 py-0.5 rounded-md text-[9.5px] font-bold border transition cursor-pointer shrink-0 ${
+                          showLiveTrafficTiles
+                            ? "bg-amber-400 text-slate-950 border-amber-300"
+                            : "bg-white/10 hover:bg-white/20 text-white border-white/20"
+                        }`}
+                      >
+                        {showLiveTrafficTiles ? "Traffic Map ON" : "Traffic Map"}
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {/* Expandable Full Turn-by-Turn Directions List (Click any step to fly + hear voice!) */}
+                {isNavStepsExpanded && activeNavRoute.steps && activeNavRoute.steps.length > 0 && (
+                  <div className="bg-slate-950/95 border-t border-emerald-400/30 max-h-56 overflow-y-auto custom-scrollbar divide-y divide-slate-800/80">
+                    {activeNavRoute.steps.map((st, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => {
+                          setActiveNavStepIdx(idx);
+                          if (st.location && leafletMapRef.current) {
+                            leafletMapRef.current.flyTo(st.location, 17, { duration: 0.7 });
+                          }
+                          if (voiceGuidanceEnabled) {
+                            speakRouteStep(st);
+                          }
+                        }}
+                        className={`w-full px-3.5 py-2 text-left hover:bg-slate-900/90 transition flex items-center justify-between gap-2.5 cursor-pointer ${
+                          activeNavStepIdx === idx ? "bg-emerald-950/60 border-l-2 border-l-emerald-400" : ""
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <span className={`w-6 h-6 rounded-lg flex items-center justify-center text-[10px] font-bold shrink-0 ${
+                            st.dir === "arrive"
+                              ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
+                              : st.dir === "depart"
+                              ? "bg-sky-500/20 text-sky-300 border border-sky-500/40"
+                              : "bg-slate-800 text-slate-300 border border-slate-700"
+                          }`}>
+                            {st.dir === "left" ? "↰" : st.dir === "right" ? "↱" : st.dir === "uturn" ? "↺" : st.dir === "roundabout" ? "⟳" : st.dir === "arrive" ? "🏁" : st.dir === "depart" ? "📍" : "↑"}
+                          </span>
+                          <div className="min-w-0">
+                            <p className="text-[11.5px] font-semibold text-slate-100 truncate">
+                              {voiceLang === "tl" ? toTaglishVoiceInstruction(st) : st.instruction}
+                            </p>
+                            <p className="text-[10px] text-slate-400 truncate">{st.street}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          {st.distanceMeters > 0 && (
+                            <span className="text-[10.5px] font-mono font-bold text-sky-300">
+                              {formatNavDistance(st.distanceMeters)}
+                            </span>
+                          )}
+                          <Volume2 size={11} className="text-slate-500" />
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+        </div>
+      )}
+
+      {/* ================= FLOATING FOCUSED KIOSK / ACTIVE WAZE-MAPS NAVIGATION BAR ================= */}
+      {(activeNavRoute || focusedBooth?.booth) && !measuredPair && (
+        <div className="absolute bottom-5 left-1/2 -translate-x-1/2 z-40 w-[95%] max-w-2xl bg-slate-950/95 backdrop-blur-xl border border-sky-500/60 rounded-2xl shadow-2xl p-3 px-4 animate-in fade-in slide-in-from-bottom-2 duration-200">
+          {activeNavRoute ? (
+            <div className="space-y-2.5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className={`w-10 h-10 rounded-xl text-white flex items-center justify-center shadow-lg shrink-0 ${
+                    activeNavRoute.traffic?.level === "heavy"
+                      ? "bg-gradient-to-br from-rose-600 to-red-500 shadow-rose-900/40"
+                      : activeNavRoute.traffic?.level === "moderate"
+                      ? "bg-gradient-to-br from-amber-600 to-orange-500 shadow-amber-900/40"
+                      : "bg-gradient-to-br from-blue-600 to-sky-500 shadow-blue-900/40"
+                  }`}>
+                    <Navigation size={19} />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className={`text-base font-extrabold leading-none ${
+                        activeNavRoute.traffic?.level === "heavy"
+                          ? "text-rose-400"
+                          : activeNavRoute.traffic?.level === "moderate"
+                          ? "text-amber-400"
+                          : "text-sky-400"
+                      }`}>
+                        {formatNavDuration(activeNavRoute.durationSec)}
+                      </span>
+                      <span className="text-xs font-bold text-slate-300">
+                        ({formatNavDistance(activeNavRoute.distanceMeters)})
+                      </span>
+                      <span className="text-[10.5px] font-semibold text-emerald-300 bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 rounded-full">
+                        ETA {formatNavArrivalClock(activeNavRoute.durationSec)}
+                      </span>
+                      {activeNavRoute.traffic?.delaySec >= 60 && (
+                        <span className="text-[10px] font-bold text-amber-300 bg-amber-500/15 border border-amber-500/30 px-2 py-0.5 rounded-full">
+                          +{Math.round(activeNavRoute.traffic.delaySec / 60)}m traffic
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-xs font-semibold text-white truncate mt-1">
+                      To: <strong className="text-amber-300">Booth {activeNavRoute.targetBooth?.name || "001"}</strong>
+                      {activeNavRoute.agentName ? ` • ${activeNavRoute.agentName}` : ""}
+                      {activeNavRoute.targetBooth?.barangayName ? ` (Brgy. ${activeNavRoute.targetBooth.barangayName})` : ""}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1.5 flex-wrap shrink-0">
+                  <button
+                    type="button"
+                    onClick={handleToggleLiveGpsTracking}
+                    className={`px-2.5 py-1.5 rounded-xl text-[11px] font-bold transition cursor-pointer flex items-center gap-1.5 border ${
+                      isLiveGpsTracking
+                        ? "bg-emerald-600 text-white border-emerald-400 shadow-md shadow-emerald-900/40"
+                        : "bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700"
+                    }`}
+                    title="Auto-track your moving GPS position with automatic voice turns"
+                  >
+                    <LocateFixed size={13} className={isLiveGpsTracking ? "animate-pulse" : ""} />
+                    <span>{isLiveGpsTracking ? "Live GPS ON" : "Live GPS"}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => speakRouteStartSummary(activeNavRoute)}
+                    className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-[11px] font-semibold border border-slate-700 transition cursor-pointer flex items-center gap-1"
+                    title="Replay voice summary & traffic briefing"
+                  >
+                    <Volume2 size={12} className="text-sky-400" />
+                    <span>Speak</span>
+                  </button>
+
+                  <a
+                    href={`https://www.google.com/maps/dir/?api=1&origin=${activeNavRoute.startCoords[0]},${activeNavRoute.startCoords[1]}&destination=${activeNavRoute.targetBooth.coords[0]},${activeNavRoute.targetBooth.coords[1]}&travelmode=driving&layer=t`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-2.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-[11px] font-bold transition flex items-center gap-1 shadow-md"
+                    title="Open turn-by-turn navigation & live traffic in Google Maps"
+                  >
+                    <span>Google Maps</span>
+                    <ExternalLink size={11} />
+                  </a>
+
+                  <a
+                    href={`https://waze.com/ul?ll=${activeNavRoute.targetBooth.coords[0]},${activeNavRoute.targetBooth.coords[1]}&navigate=yes`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-2.5 py-1.5 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 text-[11px] font-extrabold transition flex items-center gap-1 shadow-md"
+                    title="Open turn-by-turn navigation & live traffic in Waze"
+                  >
+                    <span>Waze</span>
+                    <ExternalLink size={11} />
+                  </a>
+
+                  <button
+                    type="button"
+                    onClick={handleClearNavRoute}
+                    className="px-2.5 py-1.5 rounded-xl bg-rose-600/90 hover:bg-rose-500 text-white text-[11px] font-bold transition cursor-pointer flex items-center gap-1"
+                    title="End Navigation Route"
+                  >
+                    <X size={13} />
+                    <span>End</span>
+                  </button>
+                </div>
+              </div>
+
+              {navErrorNotice && (
+                <div className="text-[11px] text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-xl px-3 py-1.5 flex items-center justify-between gap-2">
+                  <span>{navErrorNotice}</span>
+                  <button
+                    type="button"
+                    onClick={() => setIsPickingNavOrigin(true)}
+                    className="text-sky-300 font-bold underline shrink-0 cursor-pointer"
+                  >
+                    Pick Start on Map
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-9 h-9 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-400/40 flex items-center justify-center shrink-0">
+                    <Store size={17} />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-xs font-extrabold text-white">
+                        Booth {focusedBooth.booth.name || "001"}
+                      </span>
+                      {focusedBooth.agentName && (
+                        <span className="text-[10.5px] font-semibold text-emerald-300 bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 rounded-full truncate max-w-[180px]">
+                          {focusedBooth.agentName}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[10.5px] text-slate-400 truncate">
+                      Brgy. {focusedBooth.booth.barangayName || "Territory"} • {formatGPS(focusedBooth.booth.coords)}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1.5 flex-wrap shrink-0">
+                  <button
+                    type="button"
+                    disabled={isCalculatingNavRoute}
+                    onClick={() => handleRouteFromMyLocation(focusedBooth.booth, focusedBooth.agentName)}
+                    className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-sky-500 hover:from-blue-500 hover:to-sky-400 text-white text-xs font-extrabold transition cursor-pointer flex items-center gap-1.5 shadow-lg shadow-blue-900/40 disabled:opacity-60"
+                  >
+                    {isCalculatingNavRoute ? (
+                      <RefreshCw size={14} className="animate-spin" />
+                    ) : (
+                      <Navigation size={14} />
+                    )}
+                    <span>{isCalculatingNavRoute ? "Getting GPS & Route..." : "Route From My Location"}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNavErrorNotice("");
+                      setIsPickingNavOrigin(true);
+                    }}
+                    className="px-2.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-[11px] font-semibold border border-slate-700 transition cursor-pointer flex items-center gap-1"
+                    title="Click anywhere on the map to set custom starting coordinates"
+                  >
+                    <Crosshair size={13} className="text-sky-400" />
+                    <span>Pick Start</span>
+                  </button>
+
+                  <a
+                    href={`https://waze.com/ul?ll=${focusedBooth.booth.coords[0]},${focusedBooth.booth.coords[1]}&navigate=yes`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-2.5 py-2 rounded-xl bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 border border-sky-400/40 text-[11px] font-bold transition flex items-center gap-1"
+                    title="Navigate directly in Waze app"
+                  >
+                    <span>Waze</span>
+                    <ExternalLink size={11} />
+                  </a>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFocusedBooth(null);
+                      setNavErrorNotice("");
+                      setIsPickingNavOrigin(false);
+                    }}
+                    className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white border border-slate-700 transition cursor-pointer"
+                    title="Dismiss"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              </div>
+
+              {navErrorNotice && (
+                <div className="text-[11px] text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-xl px-3 py-1.5 flex items-center justify-between gap-2">
+                  <span>{navErrorNotice}</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNavErrorNotice("");
+                      setIsPickingNavOrigin(true);
+                    }}
+                    className="text-sky-300 font-bold underline shrink-0 cursor-pointer"
+                  >
+                    Pick Start on Map
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 
