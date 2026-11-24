@@ -2971,7 +2971,7 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
 
           {workspaceTab === "doc_studio" && (
             <DocumentStudioPanel
-              currentUser={currentUser}
+              currentUser={currentUserObj || currentUser}
               profiles={supabaseProfiles}
               onClose={() => handleCloseWorkspaceTab(null, "doc_studio")}
               onOpenAiBuddy={() => setAiDrawerOpen(true)}
@@ -3141,18 +3141,16 @@ export default function Dashboard({ onLogout, currentUser, onNavigate }) {
       </div>
     )}
 
-      {canUseAiBuddy && (
+      {canUseAiBuddy && isCommunicationView && (
         <AiAssistantGirlWidget
           isChatOpen={aiDrawerOpen}
           onOpenChat={() => setAiDrawerOpen(true)}
           currentUser={currentUserObj}
           isHRMD={isHRMD}
           hidden={
+            !isCommunicationView ||
             isGeoTaggingMounted ||
-            workspaceTab === "geotagging" ||
-            (!isCommunicationView && workspaceTab === "salary_compensation") ||
-            (workspaceTab === "sops" && operationsSubTab === "geotagging") ||
-            (activeView === "sop" && (workspaceTab === "home" || workspaceTab === "memo"))
+            workspaceTab === "geotagging"
           }
         />
       )}

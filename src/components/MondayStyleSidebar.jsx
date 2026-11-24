@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import AiAgentAvatar from "./AiAgentAvatar";
 import {
   ChevronLeft, ChevronRight, Layers, FileText, BarChart3,
   Bot, CloudSun, Sparkles, Search, Plus, Star, ShieldCheck, ShieldAlert,
@@ -582,10 +583,10 @@ export default function MondayStyleSidebar({
                 className="w-[58px] py-2 px-1 rounded-xl flex flex-col items-center justify-center transition cursor-pointer gap-1 hover:bg-emerald-50 text-[#008559] group"
                 title="HR AI Buddy"
               >
-                <div className="p-1.5 rounded-lg bg-gradient-to-tr from-emerald-500 to-teal-400 text-white shadow-xs group-hover:scale-105 transition-transform">
-                  <Sparkles size={16} />
+                <div className="relative flex items-center justify-center group-hover:scale-110 transition-transform">
+                  <AiAgentAvatar size="sm" showStatus={true} />
                 </div>
-                <span className="text-[10px] tracking-tight leading-none text-center font-semibold text-emerald-700 truncate w-full">
+                <span className="text-[10px] tracking-tight leading-none text-center font-semibold text-emerald-700 truncate w-full mt-0.5">
                   Ai Buddy
                 </span>
               </button>
@@ -657,12 +658,16 @@ export default function MondayStyleSidebar({
                   }`}
                 >
                   <div className="flex items-center gap-2.5 min-w-0">
-                    <ItemIcon
-                      size={16}
-                      className={`shrink-0 ${
-                        isSelected ? "text-[#008559]" : "text-slate-600 group-hover:text-[#323338]"
-                      }`}
-                    />
+                    {item.id === "ai_sidekick_action" ? (
+                      <AiAgentAvatar size="xs" showStatus={false} className="shrink-0" />
+                    ) : (
+                      <ItemIcon
+                        size={16}
+                        className={`shrink-0 ${
+                          isSelected ? "text-[#008559]" : "text-slate-600 group-hover:text-[#323338]"
+                        }`}
+                      />
+                    )}
 
                     <span className="text-xs tracking-tight truncate font-['Figtree','Inter',sans-serif]">
                       {item.label}
@@ -713,9 +718,9 @@ export default function MondayStyleSidebar({
             <button
               type="button"
               onClick={onOpenAiBuddy}
-              className="w-full py-2 px-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-semibold text-xs rounded-xl flex items-center justify-center gap-2 shadow-2xs transition cursor-pointer"
+              className="w-full py-2 px-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-semibold text-xs rounded-xl flex items-center justify-center gap-2 shadow-2xs transition cursor-pointer group"
             >
-              <Sparkles size={14} />
+              <AiAgentAvatar size="xs" showStatus={false} className="group-hover:scale-110 transition-transform" />
               <span>Open HR AI Buddy</span>
             </button>
           </div>

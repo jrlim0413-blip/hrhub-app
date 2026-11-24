@@ -1,17 +1,24 @@
+/* eslint react-refresh/only-export-components: "off" -- This module exports reusable document-studio data alongside its component. */
 import { useState, useEffect, useRef, useMemo } from "react";
+import { createPortal } from "react-dom";
+import jsPDF from "jspdf";
+import { toPng } from "html-to-image";
 import {
-  FileText, Award, ShieldAlert, X, Printer, Save, Archive, Star, Pencil, Bookmark, PlusCircle, FilePlus,
-  Search, RefreshCw, CheckCircle2, ChevronRight, Copy, Check,
-  Sliders, Move, ArrowRight, ArrowUp, ArrowDown, Building2, UserCheck, Calendar,
-  Download, Eye, Trash2, FileCheck, HelpCircle, Sparkles,
-  Layers, Lock, AlertTriangle, Scissors, Stamp, GripVertical,
-  Plus, RotateCcw, Layout, Type, AlignLeft, AlignCenter,
-  Shield, QrCode, Receipt, Scale, Info
+  FileText, Award, ShieldAlert, X, Printer, Save, Archive, Pencil, Bookmark, PlusCircle,
+  Search, RefreshCw, CheckCircle2, ChevronRight, Copy,
+  Sliders, ArrowUp, ArrowDown, Building2, UserCheck, Calendar,
+  Download, Eye, Trash2, Sparkles,
+  Layers, AlertTriangle, Scissors, GripVertical,
+  Plus, RotateCcw, Layout, Type, AlignLeft, AlignCenter, AlignRight, AlignJustify,
+  Indent, Outdent, Settings2, Columns,
+  Shield, Scale,
+  Undo2, Redo2, Bold, Italic, Underline, Strikethrough, Highlighter,
+  Palette, Shapes, List, ListOrdered, Heading, Minus, CaseUpper, Eraser,
 } from "lucide-react";
 import {
   COMPANIES,
   resolveCompanyFromMemoRef,
-  sanitizeMemoRef
+  DIRECTIVE_FONT_FAMILIES
 } from "./MemoGeneratorPanel";
 import {
   getUserSettings,
@@ -38,7 +45,7 @@ export const PAPER_SIZES = [
     aspectRatio: "8.5 / 11",
     desc: "Short Bond • 8.5\" × 11\" (279 mm)",
     printCss: "8.5in 11in",
-    pageMargin: "0.5in 0.65in"
+    pageMargin: "3.5rem"
   },
   {
     id: "legal",
@@ -50,7 +57,7 @@ export const PAPER_SIZES = [
     aspectRatio: "8.5 / 13",
     desc: "Long Bond • 8.5\" × 13\" (330 mm / Folio)",
     printCss: "8.5in 13in",
-    pageMargin: "0.45in 0.65in"
+    pageMargin: "3.5rem"
   },
   {
     id: "legal14",
@@ -62,7 +69,7 @@ export const PAPER_SIZES = [
     aspectRatio: "8.5 / 14",
     desc: "Legal Standard • 8.5\" × 14\" (356 mm)",
     printCss: "8.5in 14in",
-    pageMargin: "0.45in 0.65in"
+    pageMargin: "3.5rem"
   },
   {
     id: "a4",
@@ -74,7 +81,7 @@ export const PAPER_SIZES = [
     aspectRatio: "210 / 297",
     desc: "A4 Standard • 210 × 297 mm",
     printCss: "A4 portrait",
-    pageMargin: "12mm 15mm"
+    pageMargin: "3.5rem"
   }
 ];
 
@@ -84,6 +91,25 @@ export const FONT_FAMILIES = [
   { id: "times", label: "Legal Formal (Times New Roman)", css: "'Times New Roman', Times, serif" },
   { id: "georgia", label: "Executive Serif (Georgia)", css: "Georgia, Cambria, serif" }
 ];
+
+export const DOCUMENT_FONT_SIZES = [
+  { label: "8 pt", value: 10.6 },
+  { label: "9 pt (Compact)", value: 12 },
+  { label: "10 pt (Standard)", value: 13.3 },
+  { label: "10.5 pt", value: 14.0 },
+  { label: "11 pt (Executive)", value: 14.6 },
+  { label: "12 pt (Formal)", value: 16 },
+  { label: "13 pt", value: 17.3 },
+  { label: "14 pt (Large)", value: 18.6 },
+  { label: "16 pt (Heading)", value: 21.3 },
+  { label: "18 pt (Title)", value: 24 }
+];
+
+const getDocumentPagePadding = (marginMode, reduceTopSpacing = false) => {
+  if (marginMode === "narrow") return reduceTopSpacing ? "0.5rem 1.25rem 1.25rem" : "1.5rem 1.25rem 1.25rem";
+  if (marginMode === "compact") return reduceTopSpacing ? "0.5rem 2rem 2rem" : "2rem";
+  return reduceTopSpacing ? "0.5rem 2.5rem 2.5rem" : "2.75rem 2.5rem";
+};
 
 export const resolveCompanyTokens = (text, company) => {
   if (!text || typeof text !== "string" || !company) return text || "";
@@ -1305,13 +1331,20 @@ function ElementVisualPreview({ item, selectedCompany, docRef, docDate }) {
   return null;
 }
 
-export const CUSTOM_TEMPLATES_STORAGE_KEY = "hrhub_doc_studio_custom_templates";
+export const CUSTOM_TEMPLATES_STORAGE_KEY = "hrhub_doc_custom_templates";
+const LEGACY_CUSTOM_TEMPLATES_STORAGE_KEY = "hrhub_doc_studio_custom_templates";
 
 export function getStoredCustomTemplates() {
   try {
-    const raw = localStorage.getItem(CUSTOM_TEMPLATES_STORAGE_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
+    const raw = localStorage.getItem(CUSTOM_TEMPLATES_STORAGE_KEY)
+      || localStorage.getItem(LEGACY_CUSTOM_TEMPLATES_STORAGE_KEY);
+    if (!raw) return [];
+    const templates = JSON.parse(raw);
+    if (Array.isArray(templates)) return templates;
+    console.warn("Saved document templates are not in the expected format.");
+    return [];
+  } catch (error) {
+    console.warn("Failed to load custom templates from localStorage:", error);
     return [];
   }
 }
@@ -1334,13 +1367,13 @@ function TemplateEditorModal({
   onSave,
   onSaveAndApply
 }) {
-  if (!isOpen) return null;
-
   const [name, setName] = useState(initialData?.name || "");
   const [description, setDescription] = useState(initialData?.description || "");
-  const [category, setCategory] = useState(initialData?.category || "body");
-  const [variant, setVariant] = useState(initialData?.variant || "body_standard");
+  const [category] = useState(initialData?.category || "body");
+  const [variant] = useState(initialData?.variant || "body_standard");
   const [formData, setFormData] = useState(initialData?.data || {});
+
+  if (!isOpen) return null;
 
   const updateField = (key, val) => {
     setFormData((prev) => ({ ...prev, [key]: val }));
@@ -2590,10 +2623,7 @@ function TemplateEditorModal({
 
 export default function DocumentStudioPanel({
   currentUser = null,
-  profiles = [],
   onClose = () => { },
-  onOpenAiBuddy = () => { },
-  onSwitchToMemo = () => { }
 }) {
   const [selectedCompanyId, setSelectedCompanyId] = useState("lucky_betplay");
   const [letterheadOverrides, setLetterheadOverrides] = useState({});
@@ -2607,18 +2637,146 @@ export default function DocumentStudioPanel({
     return companies.find((c) => c.id === selectedCompanyId) || companies[0];
   }, [companies, selectedCompanyId]);
   const selectedCompanyCodeRef = useRef(selectedCompany?.code || "LBC");
-  selectedCompanyCodeRef.current = selectedCompany?.code || "LBC";
+  useEffect(() => {
+    selectedCompanyCodeRef.current = selectedCompany?.code || "LBC";
+  }, [selectedCompany?.code]);
 
   const [paperSize, setPaperSize] = useState("letter");
-  const [fontFamily, setFontFamily] = useState("inter");
-  const [fontSize, setFontSize] = useState(13.8);
-  const [zoomScale, setZoomScale] = useState(100);
+  const [fontFamily, setFontFamily] = useState("Arial, Helvetica, sans-serif");
+  const [toolbarFontFamily, setToolbarFontFamily] = useState("Arial, Helvetica, sans-serif");
+  const [toolbarFontSize, setToolbarFontSize] = useState(16);
+  const [highlightMenuOpen, setHighlightMenuOpen] = useState(false);
+  const [colorMenuOpen, setColorMenuOpen] = useState(false);
+  const [shapesMenuOpen, setShapesMenuOpen] = useState(false);
+  const [clausesMenuOpen, setClausesMenuOpen] = useState(false);
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
+  const [isCopyingImage, setIsCopyingImage] = useState(false);
+  const [docLineHeight, setDocLineHeight] = useState("1.55");
+  const [isPrintConfigOpen, setIsPrintConfigOpen] = useState(false);
+  const [printMarginMode, setPrintMarginMode] = useState("standard");
+  const [reduceTopSpacingInPrint, setReduceTopSpacingInPrint] = useState(false);
+  const [printColorMode, setPrintColorMode] = useState("color");
+  const [includeLetterheadInPrint, setIncludeLetterheadInPrint] = useState(true);
+  const [includeSignaturesInPrint, setIncludeSignaturesInPrint] = useState(true);
+  const [includeFooterInPrint, setIncludeFooterInPrint] = useState(true);
+  const [includeWatermarkInPrint, setIncludeWatermarkInPrint] = useState(true);
+  const [printOrientation, setPrintOrientation] = useState("portrait");
+  const [printCustomScale, setPrintCustomScale] = useState(100);
+  const [printPreviewZoom, setPrintPreviewZoom] = useState(1.0);
+  const [previewFitMode, setPreviewFitMode] = useState("fit-page");
+  const [windowDimensions, setWindowDimensions] = useState(() => ({
+    width: typeof window !== "undefined" ? window.innerWidth : 1280,
+    height: typeof window !== "undefined" ? window.innerHeight : 800
+  }));
+
+  useEffect(() => {
+    const handleResize = () => {
+      setWindowDimensions({
+        width: window.innerWidth,
+        height: window.innerHeight
+      });
+    };
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  const [paletteDrawerWidth, setPaletteDrawerWidth] = useState("normal");
+  const [printModalPreviewHtml, setPrintModalPreviewHtml] = useState("");
+  const lastSelectionRangeRef = useRef(null);
+
+  useEffect(() => {
+    const handleEscapePrint = (e) => {
+      if (e.key === "Escape" && isPrintConfigOpen) {
+        setIsPrintConfigOpen(false);
+      }
+    };
+    window.addEventListener("keydown", handleEscapePrint);
+    return () => window.removeEventListener("keydown", handleEscapePrint);
+  }, [isPrintConfigOpen]);
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (!e.target.closest(".doc-toolbar-container")) {
+        setHighlightMenuOpen(false);
+        setColorMenuOpen(false);
+        setShapesMenuOpen(false);
+        setClausesMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
   const [watermarkOpacity, setWatermarkOpacity] = useState(4);
   const [watermarkScale, setWatermarkScale] = useState(100);
+  const [activeTopToolbarTab, setActiveTopToolbarTab] = useState("formatting");
+  const [isTopToolbarVisible, setIsTopToolbarVisible] = useState(false);
+  const [isPaletteDrawerOpen, setIsPaletteDrawerOpen] = useState(false);
+  const [isDraggingItem, setIsDraggingItem] = useState(false);
+  const [contentDensity, setContentDensity] = useState("normal");
+  const contentFlowRef = useRef(null);
+  const topToolbarRef = useRef(null);
+
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        setIsTopToolbarVisible(false);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, []);
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape" && isPaletteDrawerOpen) {
+        setIsPaletteDrawerOpen(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isPaletteDrawerOpen]);
 
   const currentPaperDef = useMemo(() => {
     return PAPER_SIZES.find((p) => p.id === paperSize) || PAPER_SIZES[0];
   }, [paperSize]);
+  const [pageHeightMeasurement, setPageHeightMeasurement] = useState({ paperId: "", heightPx: 0 });
+  const measuredPageHeightPx = pageHeightMeasurement.paperId === currentPaperDef.id
+    ? pageHeightMeasurement.heightPx
+    : currentPaperDef.heightPx;
+  const effectivePageHeightPx = Math.max(currentPaperDef.heightPx, measuredPageHeightPx);
+  const effectivePageHeightIn = effectivePageHeightPx > currentPaperDef.heightPx
+    ? `${(effectivePageHeightPx / 96).toFixed(3)}in`
+    : currentPaperDef.heightIn;
+
+  const selectedPaper = useMemo(() => {
+    return {
+      ...currentPaperDef,
+      name: currentPaperDef.label.split(" (")[0],
+      dimensions: `${currentPaperDef.widthIn || '8.5in'} × ${currentPaperDef.heightIn || '11in'}`
+    };
+  }, [currentPaperDef]);
+
+  const calculatedFitScale = useMemo(() => {
+    const isLandscape = printOrientation === "landscape";
+    const targetW = isLandscape ? effectivePageHeightPx : currentPaperDef.widthPx;
+    const targetH = isLandscape ? currentPaperDef.widthPx : effectivePageHeightPx;
+    const availH = Math.max(300, windowDimensions.height - 110);
+    const availW = Math.max(360, windowDimensions.width - 360);
+    const scaleH = availH / targetH;
+    const scaleW = availW / targetW;
+    const rawScale = Math.min(scaleH, scaleW, 1.0);
+    return Math.max(0.35, Math.min(1.0, parseFloat(rawScale.toFixed(2))));
+  }, [printOrientation, currentPaperDef, effectivePageHeightPx, windowDimensions]);
+
+  const effectivePreviewZoom = useMemo(() => {
+    if (previewFitMode === "fit-page") {
+      return calculatedFitScale;
+    }
+    return printPreviewZoom;
+  }, [previewFitMode, calculatedFitScale, printPreviewZoom]);
 
   const [docRef, setDocRef] = useState(() => generateUniqueDocRef("LBC"));
   const [docDate, setDocDate] = useState(() => {
@@ -2636,18 +2794,12 @@ export default function DocumentStudioPanel({
   const [paletteActiveCategory, setPaletteActiveCategory] = useState("header");
 
   const [customTemplates, setCustomTemplates] = useState(() => {
-    try {
-      const raw = localStorage.getItem("hrhub_doc_custom_templates");
-      return raw ? JSON.parse(raw) : [];
-    } catch {
-      return [];
-    }
+    return getStoredCustomTemplates();
   });
 
   const [templateEditorModal, setTemplateEditorModal] = useState(null);
 
   const [savedDocs, setSavedDocs] = useState([]);
-  const [isLoadingSavedDocs, setIsLoadingSavedDocs] = useState(true);
   const [archiveModalOpen, setArchiveModalOpen] = useState(false);
   const [archiveSearchQuery, setArchiveSearchQuery] = useState("");
   const [archiveCompanyFilter, setArchiveCompanyFilter] = useState("ALL");
@@ -2659,7 +2811,6 @@ export default function DocumentStudioPanel({
     let isMounted = true;
     (async () => {
       try {
-        setIsLoadingSavedDocs(true);
         const [{ documents }, globalRefs, userSettingsRes] = await Promise.all([
           getSavedDocumentsFromDb(currentUser),
           getAllGlobalDocumentRefs(),
@@ -2680,8 +2831,6 @@ export default function DocumentStudioPanel({
         }
       } catch (e) {
         console.warn("Failed fetching saved documents:", e);
-      } finally {
-        if (isMounted) setIsLoadingSavedDocs(false);
       }
     })();
     return () => { isMounted = false; };
@@ -2866,11 +3015,7 @@ export default function DocumentStudioPanel({
       } else {
         updated = [newTemplate, ...prev];
       }
-      try {
-        localStorage.setItem("hrhub_doc_custom_templates", JSON.stringify(updated));
-      } catch (e) {
-        console.error("Failed to save custom templates to localStorage:", e);
-      }
+      saveStoredCustomTemplates(updated);
       return updated;
     });
 
@@ -2881,9 +3026,7 @@ export default function DocumentStudioPanel({
   const handleDeleteCustomTemplate = (templateId) => {
     setCustomTemplates((prev) => {
       const updated = prev.filter((t) => t.id !== templateId);
-      try {
-        localStorage.setItem("hrhub_doc_custom_templates", JSON.stringify(updated));
-      } catch { }
+      saveStoredCustomTemplates(updated);
       return updated;
     });
     triggerToast("Custom template deleted", "info");
@@ -2936,34 +3079,95 @@ export default function DocumentStudioPanel({
   };
 
   const addBlockToPaper = (item, insertIndex = null) => {
+    const baseData = item.data ? JSON.parse(JSON.stringify(item.data)) : (item.defaultData ? JSON.parse(JSON.stringify(item.defaultData)) : {});
+
+    for (const k of Object.keys(baseData)) {
+      if (typeof baseData[k] === "string") {
+        baseData[k] = resolveCompanyTokens(baseData[k], selectedCompany);
+      }
+    }
+
+    if (item.variant === "body_non_affiliation_salesforce") {
+      const pName = baseData.personName || "ARJUN BAGUIO PATALINGHUG";
+      const pTitle = baseData.personNameTitle || "Arjun Baguio Patalinghug";
+      const cLegal = selectedCompany.legalName || selectedCompany.name;
+      const agency = baseData.agencyName || "Philippine Charity Sweepstakes Office (PCSO)";
+      const cNumber = baseData.contactNumber || "09243223514";
+
+      if (!baseData.para1) {
+        baseData.para1 = `This is to certify that <strong class="font-black text-slate-950">${pName}</strong>, is not <strong class="font-bold">affiliated</strong> with <strong class="font-bold">${cLegal}</strong> as a Salesforce partner under the <strong class="font-bold text-slate-950">${agency}</strong>.`;
+      }
+      if (!baseData.para2) {
+        baseData.para2 = `We affirm that the aforementioned individual <strong class="font-bold">has no formal or informal association</strong> with <strong class="font-bold">${cLegal}</strong> in any capacity related to Salesforce services, nor do they represent the company in any activities associated with PCSO.`;
+      }
+      if (!baseData.para3) {
+        baseData.para3 = `Any claims or representation made by this individual suggesting that He is a Salesforce partner of <strong class="font-bold">${cLegal}</strong> or have any related business dealings with the company are <strong class="font-bold">false and unauthorized</strong>.`;
+      }
+      if (!baseData.para4) {
+        baseData.para4 = `This certification is issued for the <strong class="font-bold">purpose of clarifying</strong> that <strong class="font-bold text-slate-950">${pTitle}</strong> has <strong class="font-bold">never been affiliated</strong> with <strong class="font-bold">${cLegal} as a Salesforce partner</strong>.`;
+      }
+      if (!baseData.para5) {
+        baseData.para5 = `For verification or further inquiries, please contact #: <strong class="font-black text-slate-950">${cNumber}</strong>.`;
+      }
+    }
+
     const newElement = {
       id: "elem_" + Date.now() + "_" + Math.random().toString(36).substring(2, 6),
       category: item.category,
       variant: item.variant,
       name: item.name,
-      data: item.data ? JSON.parse(JSON.stringify(item.data)) : (item.defaultData ? JSON.parse(JSON.stringify(item.defaultData)) : {})
+      data: baseData
     };
 
     setPaperElements((prev) => {
-      if (insertIndex === null || insertIndex >= prev.length) {
-        return [...prev, newElement];
+      const existingIdx = prev.findIndex((el) => el.category === item.category);
+      if (existingIdx !== -1) {
+        const clone = [...prev];
+        clone[existingIdx] = newElement;
+        const catLabel = item.category === "body" ? "Directives" : item.category.toUpperCase();
+        triggerToast(`✓ Replaced ${catLabel} with "${item.name}"`, "success");
+        return clone;
       }
-      const clone = [...prev];
-      clone.splice(insertIndex, 0, newElement);
-      return clone;
+
+      const CATEGORY_ORDER = ["header", "addressing", "body", "signatory", "footer"];
+      const targetCatOrder = CATEGORY_ORDER.indexOf(item.category);
+
+      if (insertIndex !== null && insertIndex < prev.length) {
+        const clone = [...prev];
+        clone.splice(insertIndex, 0, newElement);
+        triggerToast(`✓ Added "${item.name}" to Coupon Bond`, "success");
+        return clone;
+      }
+
+      if (targetCatOrder !== -1) {
+        let insertAt = prev.length;
+        for (let i = 0; i < prev.length; i++) {
+          const elCatOrder = CATEGORY_ORDER.indexOf(prev[i].category);
+          if (elCatOrder > targetCatOrder) {
+            insertAt = i;
+            break;
+          }
+        }
+        const clone = [...prev];
+        clone.splice(insertAt, 0, newElement);
+        triggerToast(`✓ Added "${item.name}" to Coupon Bond`, "success");
+        return clone;
+      }
+
+      return [...prev, newElement];
     });
 
     setActiveElementId(newElement.id);
-    triggerToast(`✓ Added "${item.name}" to Coupon Bond`, "success");
   };
 
-  const handleTokenAwareBlur = (elemId, key, rawValue, editedText, fallbackTemplate = "") => {
-    const baseTemplate = rawValue || fallbackTemplate;
-    const resolvedBefore = resolveCompanyTokens(baseTemplate, selectedCompany).trim();
-    const nextTrimmed = (editedText || "").trim();
-    if (nextTrimmed === resolvedBefore) {
-      return;
+  const handleFieldInput = (elemId, key, value) => {
+    const target = paperElements.find((el) => el.id === elemId);
+    if (target) {
+      if (!target.data) target.data = {};
+      target.data[key] = value;
     }
+  };
+  const handleTokenAwareBlur = (elemId, key, rawValue, editedText) => {
     updateElementData(elemId, key, editedText);
   };
 
@@ -2996,6 +3200,597 @@ export default function DocumentStudioPanel({
       clone.splice(targetIndex, 0, moved);
       return clone;
     });
+  };
+
+  const duplicateElement = (elemId) => {
+    setPaperElements((prev) => {
+      const idx = prev.findIndex((el) => el.id === elemId);
+      if (idx === -1) return prev;
+      const target = prev[idx];
+      const cloned = {
+        ...target,
+        id: "elem_" + Date.now() + "_" + Math.random().toString(36).substring(2, 6),
+        name: `${target.name} (Copy)`,
+        data: JSON.parse(JSON.stringify(target.data || {}))
+      };
+      const copy = [...prev];
+      copy.splice(idx + 1, 0, cloned);
+      return copy;
+    });
+    triggerToast("✓ Duplicated block", "success");
+  };
+
+  const adjustElementLayout = (elemId, updates) => {
+    setPaperElements((prev) =>
+      prev.map((el) => {
+        if (el.id !== elemId) return el;
+        return {
+          ...el,
+          data: {
+            ...(el.data || {}),
+            ...updates
+          }
+        };
+      })
+    );
+  };
+
+  const handleStartBlockResize = (e, elemId, direction) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const targetElem = paperElements.find((p) => p.id === elemId);
+    if (!targetElem) return;
+
+    const startY = e.clientY;
+    const startX = e.clientX;
+    const initialPaddingTop = targetElem.data?.paddingTop ?? 4;
+    const initialPaddingBottom = targetElem.data?.paddingBottom ?? 8;
+    const initialWidth = targetElem.data?.widthPercent ?? 100;
+
+    const handleMouseMove = (moveEvent) => {
+      const deltaY = moveEvent.clientY - startY;
+      const deltaX = moveEvent.clientX - startX;
+
+      if (direction === "bottom" || direction === "se" || direction === "sw") {
+        const nextPadding = Math.max(0, Math.min(60, initialPaddingBottom + Math.round(deltaY / 2)));
+        adjustElementLayout(elemId, { paddingBottom: nextPadding });
+      } else if (direction === "top" || direction === "ne" || direction === "nw") {
+        const nextPadding = Math.max(0, Math.min(60, initialPaddingTop - Math.round(deltaY / 2)));
+        adjustElementLayout(elemId, { paddingTop: nextPadding });
+      }
+
+      if (direction === "se" || direction === "ne" || direction === "right") {
+        const nextWidth = Math.max(40, Math.min(100, initialWidth + Math.round(deltaX / 4)));
+        adjustElementLayout(elemId, { widthPercent: nextWidth });
+      } else if (direction === "sw" || direction === "nw" || direction === "left") {
+        const nextWidth = Math.max(40, Math.min(100, initialWidth - Math.round(deltaX / 4)));
+        adjustElementLayout(elemId, { widthPercent: nextWidth });
+      }
+    };
+
+    const handleMouseUp = () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+  };
+
+  const saveSelection = () => {
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount > 0) {
+      lastSelectionRangeRef.current = sel.getRangeAt(0);
+    }
+  };
+
+  const restoreSelection = () => {
+    const sel = window.getSelection();
+    if (lastSelectionRangeRef.current && sel) {
+      try {
+        sel.removeAllRanges();
+        sel.addRange(lastSelectionRangeRef.current);
+      } catch (error) {
+        console.warn("Could not restore the document text selection:", error);
+      }
+    }
+  };
+
+  const executeCommand = (command, value = null) => {
+    restoreSelection();
+    document.execCommand(command, false, value);
+    saveSelection();
+
+    const sel = window.getSelection();
+    if (sel && sel.anchorNode) {
+      let node = sel.anchorNode;
+      while (node && node !== document.body) {
+        if (node.nodeType === 1 && node.getAttribute && node.getAttribute("contenteditable") === "true") {
+          node.dispatchEvent(new Event("input", { bubbles: true }));
+          break;
+        }
+        node = node.parentNode;
+      }
+    }
+  };
+
+  const insertHtmlAtCursor = (html) => {
+    restoreSelection();
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount > 0 && !sel.getRangeAt(0).collapsed) {
+      const range = sel.getRangeAt(0);
+      range.deleteContents();
+      const tempDiv = document.createElement("div");
+      tempDiv.innerHTML = html;
+      const frag = document.createDocumentFragment();
+      let node;
+      let lastNode;
+      while ((node = tempDiv.firstChild)) {
+        lastNode = frag.appendChild(node);
+      }
+      range.insertNode(frag);
+      if (lastNode) {
+        range.setStartAfter(lastNode);
+        range.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(range);
+      }
+      saveSelection();
+    } else if (sel && sel.rangeCount > 0 && sel.getRangeAt(0).startContainer) {
+      const range = sel.getRangeAt(0);
+      const tempDiv = document.createElement("div");
+      tempDiv.innerHTML = html;
+      const frag = document.createDocumentFragment();
+      let node;
+      let lastNode;
+      while ((node = tempDiv.firstChild)) {
+        lastNode = frag.appendChild(node);
+      }
+      range.insertNode(frag);
+      if (lastNode) {
+        range.setStartAfter(lastNode);
+        range.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(range);
+      }
+      saveSelection();
+    } else {
+      const printable = document.getElementById("coupon-bond-printable");
+      if (printable) {
+        const activeEl = printable.querySelector("[contenteditable='true']:focus") || printable.querySelector("[data-last-active='true']") || printable.querySelector("[contenteditable='true']");
+        if (activeEl) {
+          activeEl.innerHTML += html;
+        }
+      }
+    }
+  };
+
+  const transformSelectedToUppercase = () => {
+    restoreSelection();
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed) return;
+    const text = sel.toString().toUpperCase();
+    document.execCommand("insertText", false, text);
+    saveSelection();
+  };
+
+  const handleUndo = () => {
+    restoreSelection();
+    document.execCommand("undo", false, null);
+    saveSelection();
+  };
+
+  const handleRedo = () => {
+    restoreSelection();
+    document.execCommand("redo", false, null);
+    saveSelection();
+  };
+
+  const handleAlign = (align) => {
+    switch (align) {
+      case "center":
+        executeCommand("justifyCenter");
+        break;
+      case "right":
+        executeCommand("justifyRight");
+        break;
+      case "justify":
+        executeCommand("justifyFull");
+        break;
+      case "left":
+      default:
+        executeCommand("justifyLeft");
+        break;
+    }
+  };
+
+  const handleIncreaseIndent = () => {
+    executeCommand("indent");
+  };
+
+  const handleDecreaseIndent = () => {
+    executeCommand("outdent");
+  };
+
+  const handleSetLineHeight = (val) => {
+    setDocLineHeight(val);
+    const printable = document.getElementById("coupon-bond-printable");
+    if (printable) {
+      printable.style.setProperty("--doc-line-height", val);
+      printable.style.lineHeight = val;
+    }
+  };
+
+  const handleInsertParagraph = () => {
+    insertHtmlAtCursor('<p style="margin: 0.5rem 0; line-height: inherit;">Insert new directive or paragraph here...</p><p><br></p>');
+    triggerToast("✓ Inserted editable paragraph block at cursor", "success");
+  };
+
+  const handleSetToolbarFontFamily = (val) => {
+    setToolbarFontFamily(val);
+    setFontFamily(val);
+    restoreSelection();
+    document.execCommand("fontName", false, val);
+    saveSelection();
+  };
+
+  const handleSetToolbarFontSize = (sizeVal) => {
+    const numVal = Math.max(8, Math.min(36, Number(sizeVal) || 16));
+    setToolbarFontSize(numVal);
+    restoreSelection();
+    try {
+      document.execCommand("fontSize", false, "3");
+    } catch (error) {
+      console.warn("Could not apply the selected font size:", error);
+    }
+    saveSelection();
+  };
+
+  const selectedFontSizeValue = useMemo(() => {
+    let closest = DOCUMENT_FONT_SIZES[5];
+    let minDiff = 999;
+    for (const sz of DOCUMENT_FONT_SIZES) {
+      const diff = Math.abs(sz.value - toolbarFontSize);
+      if (diff < minDiff) {
+        minDiff = diff;
+        closest = sz;
+      }
+    }
+    return closest.value;
+  }, [toolbarFontSize]);
+
+  const handleStepFontSize = (direction) => {
+    let currentIndex = -1;
+    let minDiff = 999;
+    DOCUMENT_FONT_SIZES.forEach((sz, idx) => {
+      const diff = Math.abs(sz.value - toolbarFontSize);
+      if (diff < minDiff) {
+        minDiff = diff;
+        currentIndex = idx;
+      }
+    });
+    const nextIndex = Math.max(0, Math.min(DOCUMENT_FONT_SIZES.length - 1, currentIndex + direction));
+    handleSetToolbarFontSize(DOCUMENT_FONT_SIZES[nextIndex].value);
+  };
+
+  useEffect(() => {
+    const flowEl = contentFlowRef.current;
+    const pageEl = flowEl?.closest("#coupon-bond-printable");
+    if (!flowEl || !pageEl) {
+      setPageHeightMeasurement({ paperId: currentPaperDef.id, heightPx: currentPaperDef.heightPx });
+      return;
+    }
+
+    const measureRequiredPageHeight = () => {
+      const pageStyles = window.getComputedStyle(pageEl);
+      const topPadding = parseFloat(pageStyles.paddingTop) || 0;
+      const bottomPadding = parseFloat(pageStyles.paddingBottom) || 0;
+      const flowStyles = window.getComputedStyle(flowEl);
+      const rowGap = parseFloat(flowStyles.rowGap) || 0;
+      const contentHeight = Array.from(flowEl.children).reduce((total, child) => {
+        const childStyles = window.getComputedStyle(child);
+        const marginTop = childStyles.marginTop === "auto" ? 0 : parseFloat(childStyles.marginTop) || 0;
+        const marginBottom = childStyles.marginBottom === "auto" ? 0 : parseFloat(childStyles.marginBottom) || 0;
+        return total + child.getBoundingClientRect().height + marginTop + marginBottom;
+      }, 0) + Math.max(0, flowEl.children.length - 1) * rowGap;
+      const requiredHeight = Math.max(
+        currentPaperDef.heightPx,
+        Math.ceil(topPadding + contentHeight + bottomPadding + 12)
+      );
+      setPageHeightMeasurement((previous) => (
+        previous.paperId === currentPaperDef.id && Math.abs(previous.heightPx - requiredHeight) <= 1
+          ? previous
+          : { paperId: currentPaperDef.id, heightPx: requiredHeight }
+      ));
+    };
+
+    const resizeObserver = new ResizeObserver(measureRequiredPageHeight);
+    resizeObserver.observe(flowEl);
+    resizeObserver.observe(pageEl);
+    measureRequiredPageHeight();
+    return () => resizeObserver.disconnect();
+  }, [paperElements, paperSize, toolbarFontSize, toolbarFontFamily, contentDensity, printMarginMode, reduceTopSpacingInPrint, currentPaperDef]);
+
+  const handleCanvasKeyDown = (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
+      e.preventDefault();
+      if (e.shiftKey) {
+        handleRedo();
+      } else {
+        handleUndo();
+      }
+      return;
+    }
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "y") {
+      e.preventDefault();
+      handleRedo();
+      return;
+    }
+    if (e.key === "Tab") {
+      e.preventDefault();
+      executeCommand("insertHTML", "&nbsp;&nbsp;&nbsp;&nbsp;");
+      return;
+    }
+    if (e.key === " ") {
+      const sel = window.getSelection();
+      if (sel && sel.isCollapsed && sel.anchorNode) {
+        const textNode = sel.anchorNode;
+        if (textNode.nodeType === Node.TEXT_NODE) {
+          const textBeforeCursor = textNode.textContent.slice(0, sel.anchorOffset).trim();
+          if (/^(\d+)[.)]$/.test(textBeforeCursor)) {
+            e.preventDefault();
+            textNode.textContent = textNode.textContent.slice(sel.anchorOffset);
+            document.execCommand("insertOrderedList", false, null);
+            return;
+          }
+          if (/^[-*\u2022]$/.test(textBeforeCursor)) {
+            e.preventDefault();
+            textNode.textContent = textNode.textContent.slice(sel.anchorOffset);
+            document.execCommand("insertUnorderedList", false, null);
+            return;
+          }
+        }
+      }
+    }
+  };
+
+  const addTerminationClause = (elemId) => {
+    setPaperElements((prev) =>
+      prev.map((el) => {
+        if (el.id !== elemId) return el;
+        const current = el.data?.terminationClauses || [
+          "5.6. If the concerned member violates, in any way, any provision of this Contract.",
+          "5.8. In case of loss of trust and confidence in the concerned member.",
+          "5.9. In case of violation of any provision of the 2020 STL RIRR, rules, regulations, and ethical conduct now in force and those which may from time to time be promulgated by the Company."
+        ];
+        return {
+          ...el,
+          data: {
+            ...el.data,
+            terminationClauses: [...current, "5.10. Additional specific violation grounds or operational clause."]
+          }
+        };
+      })
+    );
+  };
+
+  const removeTerminationClause = (elemId, idx) => {
+    setPaperElements((prev) =>
+      prev.map((el) => {
+        if (el.id !== elemId) return el;
+        const current = [...(el.data?.terminationClauses || [])];
+        current.splice(idx, 1);
+        return {
+          ...el,
+          data: {
+            ...el.data,
+            terminationClauses: current
+          }
+        };
+      })
+    );
+  };
+
+  const addAllegation = (elemId) => {
+    setPaperElements((prev) =>
+      prev.map((el) => {
+        if (el.id !== elemId) return el;
+        const current = el.data?.allegations || [
+          "It was reported that you insisted on obtaining your fuel allowance in advance despite the prescribed release schedule and borrowed PHP 1,000.00 from company cash, contrary to Company policy prohibiting such borrowing."
+        ];
+        return {
+          ...el,
+          data: {
+            ...el.data,
+            allegations: [...current, "Additional reported allegation or violation incident details."]
+          }
+        };
+      })
+    );
+  };
+
+  const removeAllegation = (elemId, idx) => {
+    setPaperElements((prev) =>
+      prev.map((el) => {
+        if (el.id !== elemId) return el;
+        const current = [...(el.data?.allegations || [])];
+        current.splice(idx, 1);
+        return {
+          ...el,
+          data: {
+            ...el.data,
+            allegations: current
+          }
+        };
+      })
+    );
+  };
+
+  const addContractClause = (elemId) => {
+    setPaperElements((prev) =>
+      prev.map((el) => {
+        if (el.id !== elemId) return el;
+        const current = el.data?.contractClauses || [
+          { num: "9.11", text: "Acts of theft, dishonesty, fraud, misrepresentation, or breach of trust." },
+          { num: "9.12", text: "Violation of any terms in the Agency Agreement." },
+          { num: "9.14", text: "Loss of trust and confidence in the Cabo or Cobrador." },
+          { num: "9.15", text: "Violation of any provision of the 2020 STL RIRR, existing rules, regulations, or ethical standards, as well as future directives from the STL-AAC." }
+        ];
+        return {
+          ...el,
+          data: {
+            ...el.data,
+            contractClauses: [...current, { num: "9.16", text: "New contractual directive or breach condition." }]
+          }
+        };
+      })
+    );
+  };
+
+  const removeContractClause = (elemId, idx) => {
+    setPaperElements((prev) =>
+      prev.map((el) => {
+        if (el.id !== elemId) return el;
+        const current = [...(el.data?.contractClauses || [])];
+        current.splice(idx, 1);
+        return {
+          ...el,
+          data: {
+            ...el.data,
+            contractClauses: current
+          }
+        };
+      })
+    );
+  };
+
+  const addTableRow = (elemId) => {
+    setPaperElements((prev) =>
+      prev.map((el) => {
+        if (el.id !== elemId) return el;
+        const current = el.data?.tableRows || [
+          { desc: "10 LITER OF BOTTLED WATER", qty: "106 PIECES", price: "PHP 88.50", total: "PHP 9,381.00" },
+          { desc: "5 KILOS OF RICE", qty: "106 PIECES", price: "PHP 250.50", total: "PHP 26,553.00" }
+        ];
+        return {
+          ...el,
+          data: {
+            ...el.data,
+            tableRows: [...current, { desc: "NEW ITEM DESCRIPTION", qty: "1 PIECE", price: "PHP 0.00", total: "PHP 0.00" }]
+          }
+        };
+      })
+    );
+  };
+
+  const removeTableRow = (elemId, idx) => {
+    setPaperElements((prev) =>
+      prev.map((el) => {
+        if (el.id !== elemId) return el;
+        const current = [...(el.data?.tableRows || [])];
+        current.splice(idx, 1);
+        return {
+          ...el,
+          data: {
+            ...el.data,
+            tableRows: current
+          }
+        };
+      })
+    );
+  };
+
+  const addDirectiveItem = (elemId) => {
+    setPaperElements((prev) =>
+      prev.map((el) => {
+        if (el.id !== elemId) return el;
+        const current = el.data?.items || [
+          "Strict adherence to official timekeeping and biometric verification schedules.",
+          "Immediate cash handover and zero-float remittal at the end of each drawing shift.",
+          "Mandatory wearing of official company uniform and valid identification cards on premises.",
+          "Prohibition of unauthorized visitors or former personnel within cash teller enclosures."
+        ];
+        return {
+          ...el,
+          data: {
+            ...el.data,
+            items: [...current, "New sequential operational directive or protocol requirement."]
+          }
+        };
+      })
+    );
+  };
+
+  const removeDirectiveItem = (elemId, idx) => {
+    setPaperElements((prev) =>
+      prev.map((el) => {
+        if (el.id !== elemId) return el;
+        const current = [...(el.data?.items || [])];
+        current.splice(idx, 1);
+        return {
+          ...el,
+          data: {
+            ...el.data,
+            items: current
+          }
+        };
+      })
+    );
+  };
+
+  const addCcRecipient = (elemId) => {
+    setPaperElements((prev) =>
+      prev.map((el) => {
+        if (el.id !== elemId) return el;
+        const current = el.data?.ccRecipients || [
+          {
+            name: "JEVINCE JAYE S. JUBAY, CHRP",
+            title: "HRMD Manager",
+            company: "SGC Corporation",
+            address: "Purok Daisy, New Isabela, Tacurong City, Sultan Kudarat"
+          },
+          {
+            name: "FATIMA MARIE B. OBILLOS",
+            title: "CFO Head",
+            company: "SGC Corporation",
+            address: "Purok Daisy, New Isabela, Tacurong City, Sultan Kudarat"
+          }
+        ];
+        return {
+          ...el,
+          data: {
+            ...el.data,
+            ccRecipients: [
+              ...current,
+              {
+                name: "OFFICER / RECIPIENT NAME",
+                title: "Designation / Position",
+                company: selectedCompany.name || "SGC Corporation",
+                address: selectedCompany.address || ""
+              }
+            ]
+          }
+        };
+      })
+    );
+  };
+
+  const removeCcRecipient = (elemId, idx) => {
+    setPaperElements((prev) =>
+      prev.map((el) => {
+        if (el.id !== elemId) return el;
+        const current = [...(el.data?.ccRecipients || [])];
+        current.splice(idx, 1);
+        return {
+          ...el,
+          data: {
+            ...el.data,
+            ccRecipients: current
+          }
+        };
+      })
+    );
   };
 
   const handleLoadFullDocumentPreset = (presetKey) => {
@@ -3092,6 +3887,15 @@ export default function DocumentStudioPanel({
     }));
 
     setPaperElements(constructed);
+    if (presetKey === "request_letter_csr") {
+      setPaperSize("legal14");
+      setToolbarFontSize(16);
+      setContentDensity("compact");
+      setPrintMarginMode("compact");
+    } else {
+      setToolbarFontSize(16);
+      setContentDensity("normal");
+    }
     triggerToast(`✓ Loaded full layout preset on Coupon Bond!`, "success");
   };
 
@@ -3099,13 +3903,20 @@ export default function DocumentStudioPanel({
     if (paperElements.length === 0) return;
     if (window.confirm("Clear all elements and start with a completely blank coupon bond?")) {
       setPaperElements([]);
+      setContentDensity("normal");
       triggerToast("Coupon Bond reset to blank", "info");
-    }
+    };
   };
 
   const handlePaletteDragStart = (e, item) => {
+    setIsDraggingItem(true);
     e.dataTransfer.setData("application/json", JSON.stringify(item));
     e.dataTransfer.effectAllowed = "copy";
+  };
+
+  const handlePaletteDragEnd = () => {
+    setIsDraggingItem(false);
+    setIsDragOverCanvas(false);
   };
 
   const handleCanvasDragOver = (e) => {
@@ -3122,6 +3933,7 @@ export default function DocumentStudioPanel({
   const handleCanvasDrop = (e) => {
     e.preventDefault();
     setIsDragOverCanvas(false);
+    setIsDraggingItem(false);
     try {
       const raw = e.dataTransfer.getData("application/json");
       if (!raw) return;
@@ -3146,7 +3958,14 @@ export default function DocumentStudioPanel({
     for (const el of paperElements) {
       if (el.data?.title) { docTitle = el.data.title; break; }
       if (el.data?.bannerTitle) { docTitle = el.data.bannerTitle; break; }
+      if (el.data?.subject) { docTitle = el.data.subject; break; }
     }
+
+    const authorName = currentUser?.name || currentUser?.displayName || currentUser?.username || "HR Officer";
+    const authorEmail = currentUser?.email || "";
+    const authorRole = currentUser?.role || "HR Administrator";
+    const authorCompany = currentUser?.company || selectedCompany.name;
+    const nowIso = new Date().toISOString();
 
     const docRecord = {
       id: "doc_" + Date.now(),
@@ -3158,21 +3977,28 @@ export default function DocumentStudioPanel({
       companyName: selectedCompany.name,
       paperSize,
       fontFamily,
-      fontSize,
-      paperElements,
-      savedAt: new Date().toISOString()
+      fontSize: toolbarFontSize,
+      toolbarFontSize,
+      paperElements: JSON.parse(JSON.stringify(paperElements)),
+      savedBy: authorName,
+      savedByEmail: authorEmail,
+      savedByRole: authorRole,
+      savedByCompany: authorCompany,
+      savedAt: nowIso,
+      createdAt: nowIso,
+      updatedAt: nowIso
     };
 
-    const updated = [docRecord, ...savedDocs.filter((d) => d.ref !== cleanRef || d.id !== docRecord.id)];
+    const updated = [docRecord, ...savedDocs.filter((d) => d.ref !== cleanRef && d.id !== docRecord.id)];
     setSavedDocs(updated);
     registerUsedDocRef(cleanRef);
 
     try {
       const res = await saveDocumentRecordToDb(currentUser, docRecord);
       if (res.syncedToSupabase) {
-        triggerToast(`✓ Document '${cleanRef}' saved to Database!`, "success");
+        triggerToast(`✓ Document '${cleanRef}' saved to Database! (Visible to all HR users)`, "success");
       } else {
-        triggerToast(`✓ Saved '${cleanRef}' to local system archive`, "info");
+        triggerToast(`✓ Saved '${cleanRef}' to shared HR records archive`, "info");
       }
     } catch (e) {
       console.error("Save document error:", e);
@@ -3191,11 +4017,36 @@ export default function DocumentStudioPanel({
     if (cleanRef) setDocRef(cleanRef);
     if (d.date) setDocDate(d.date);
     if (d.paperSize) setPaperSize(d.paperSize);
-    if (d.fontFamily) setFontFamily(d.fontFamily);
-    if (d.fontSize) setFontSize(Number(d.fontSize) || 13.8);
+    if (d.fontFamily) {
+      setFontFamily(d.fontFamily);
+      setToolbarFontFamily(d.fontFamily);
+    }
+    const savedToolbarFontSize = Number(d.toolbarFontSize);
+    const savedLegacyFontSize = Number(d.fontSize);
+    const restoredToolbarFontSize = Number.isFinite(savedToolbarFontSize) && savedToolbarFontSize > 0
+      ? savedToolbarFontSize
+      : Number.isFinite(savedLegacyFontSize) && savedLegacyFontSize > 0
+        ? savedLegacyFontSize * (16 / 12)
+        : 16;
+    const clampedToolbarFontSize = Math.max(8, Math.min(36, restoredToolbarFontSize));
+    setToolbarFontSize(clampedToolbarFontSize);
 
+    let loadedElements = [];
     if (Array.isArray(d.paperElements) && d.paperElements.length > 0) {
-      setPaperElements(d.paperElements);
+      loadedElements = JSON.parse(JSON.stringify(d.paperElements));
+    } else if (typeof d.content === "string" && d.content.trim().startsWith("[")) {
+      try {
+        const parsed = JSON.parse(d.content);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          loadedElements = parsed;
+        }
+      } catch (e) {
+        console.warn("Could not parse content as JSON:", e);
+      }
+    }
+
+    if (loadedElements.length > 0) {
+      setPaperElements(loadedElements);
     } else {
       handleLoadFullDocumentPreset(d.templateType || "non_affiliation");
     }
@@ -3213,49 +4064,133 @@ export default function DocumentStudioPanel({
   };
 
   const activeFont = useMemo(() => {
-    return FONT_FAMILIES.find((f) => f.id === fontFamily)?.css || FONT_FAMILIES[0].css;
-  }, [fontFamily]);
+    return toolbarFontFamily || FONT_FAMILIES.find((f) => f.id === fontFamily)?.css || FONT_FAMILIES[0].css;
+  }, [toolbarFontFamily, fontFamily]);
+  const directPrintPageWidthIn = printOrientation === "landscape"
+    ? effectivePageHeightIn
+    : currentPaperDef.widthIn || "8.5in";
+  const directPrintPageHeightIn = printOrientation === "landscape"
+    ? currentPaperDef.widthIn || "8.5in"
+    : effectivePageHeightIn;
+  const directPrintPadding = getDocumentPagePadding(printMarginMode, reduceTopSpacingInPrint);
 
-  const handlePrintDocument = () => {
+  const generatePrintHtml = (customOptions = {}) => {
     const printableElement = document.getElementById("coupon-bond-printable");
     if (!printableElement) {
-      window.print();
-      return;
+      return "";
     }
 
-    const clone = printableElement.cloneNode(true);
+    const marginMode = customOptions.marginMode || printMarginMode;
+    const reduceTopSpacing = customOptions.reduceTopSpacing !== undefined
+      ? customOptions.reduceTopSpacing
+      : reduceTopSpacingInPrint;
+    const colorMode = customOptions.colorMode || printColorMode;
+    const includeLetterhead = customOptions.includeLetterhead !== undefined ? customOptions.includeLetterhead : includeLetterheadInPrint;
+    const includeSignatures = customOptions.includeSignatures !== undefined ? customOptions.includeSignatures : includeSignaturesInPrint;
+    const includeFooter = customOptions.includeFooter !== undefined ? customOptions.includeFooter : includeFooterInPrint;
+    const includeWatermark = customOptions.includeWatermark !== undefined ? customOptions.includeWatermark : includeWatermarkInPrint;
+    const orientation = customOptions.orientation || printOrientation || "portrait";
+    const customScale = customOptions.scale !== undefined ? customOptions.scale : printCustomScale;
 
-    clone.querySelectorAll(".no-print, .block-hover-controls, [role='tooltip']").forEach((el) => el.remove());
+    const clone = printableElement.cloneNode(true);
+    const sourceElements = [printableElement, ...printableElement.querySelectorAll("*")];
+    const clonedElements = [clone, ...clone.querySelectorAll("*")];
+    const viewerStyleProperties = [
+      "font-family",
+      "font-size",
+      "font-weight",
+      "font-style",
+      "line-height",
+      "letter-spacing",
+      "text-align",
+      "text-indent",
+      "margin-top",
+      "margin-right",
+      "margin-bottom",
+      "margin-left",
+      "padding-top",
+      "padding-right",
+      "padding-bottom",
+      "padding-left"
+    ];
+    sourceElements.forEach((sourceElement, index) => {
+      if (index === 0 || !clonedElements[index]) return;
+      const computedStyle = window.getComputedStyle(sourceElement);
+      viewerStyleProperties.forEach((property) => {
+        clonedElements[index].style.setProperty(
+          property,
+          computedStyle.getPropertyValue(property),
+          "important"
+        );
+      });
+    });
+
+    clone.querySelectorAll(".no-print, .block-hover-controls, [role='tooltip'], button, .block-resize-handle, .glass-blue-inspector").forEach((el) => el.remove());
     clone.querySelectorAll("[contenteditable]").forEach((el) => {
       el.removeAttribute("contenteditable");
       el.removeAttribute("suppresscontenteditablewarning");
     });
 
-    const wmSize = Math.round((360 * watermarkScale) / 100);
+    clone.querySelectorAll("[data-category]").forEach((el) => {
+      el.classList.remove(
+        "ring-2",
+        "ring-blue-500",
+        "ring-blue-500/90",
+        "bg-blue-50/20",
+        "border-2",
+        "border-blue-400/80",
+        "shadow-lg",
+        "shadow-blue-500/15",
+        "backdrop-blur-[0.5px]",
+        "hover:ring-1",
+        "hover:ring-blue-300/40"
+      );
+    });
+
+    if (!includeLetterhead) {
+      clone.querySelectorAll("[data-category='header']").forEach((el) => el.remove());
+    }
+    if (!includeSignatures) {
+      clone.querySelectorAll("[data-category='signatory']").forEach((el) => el.remove());
+    }
+    if (!includeFooter) {
+      clone.querySelectorAll("[data-category='footer']").forEach((el) => el.remove());
+    }
+
+    const wmSize = Math.round((340 * watermarkScale) / 100);
     const wmOpacity = (watermarkOpacity / 100).toFixed(2);
 
     const watermarkEl = clone.querySelector(".doc-watermark-layer, [class*='opacity-[0.03'], [class*='opacity-[0.04']");
     if (watermarkEl) {
-      if (watermarkOpacity <= 0) {
+      if (!includeWatermark || watermarkOpacity <= 0) {
         watermarkEl.remove();
       } else {
-        watermarkEl.setAttribute("style", `position: absolute !important; top: 50% !important; left: 50% !important; transform: translate(-50%, -50%) !important; width: ${wmSize}px !important; height: ${wmSize}px !important; pointer-events: none !important; z-index: 0 !important; display: flex !important; align-items: center !important; justify-content: center !important; opacity: ${wmOpacity} !important; user-select: none !important; margin: 0 !important; padding: 0 !important; overflow: hidden !important;`);
+        watermarkEl.setAttribute(
+          "style",
+          `position: absolute !important; top: 50% !important; left: 50% !important; transform: translate(-50%, -50%) !important; width: ${wmSize}px !important; height: ${wmSize}px !important; pointer-events: none !important; z-index: 0 !important; display: flex !important; align-items: center !important; justify-content: center !important; opacity: ${wmOpacity} !important; user-select: none !important; margin: 0 !important; padding: 0 !important; overflow: hidden !important;`
+        );
         const wmImg = watermarkEl.querySelector("img");
         if (wmImg) {
-          wmImg.setAttribute("style", "max-width: 100% !important; max-height: 100% !important; object-fit: contain !important; filter: grayscale(15%) !important; display: block !important; margin: 0 auto !important;");
+          wmImg.setAttribute(
+            "style",
+            `max-width: 100% !important; max-height: 100% !important; object-fit: contain !important; filter: ${colorMode === "monochrome" ? "grayscale(100%)" : "grayscale(15%)"} !important; display: block !important; margin: 0 auto !important;`
+          );
         }
       }
     }
 
-    const hasFooter = Boolean(clone.querySelector("[data-category='footer'], .footer-stick-bottom"));
-    const contentEl = clone.querySelector(".space-y-6");
-    if (contentEl) {
-      contentEl.setAttribute("style", `position: relative !important; z-index: 10 !important; display: flex !important; flex-direction: column !important; justify-content: ${hasFooter ? "space-between" : "flex-start"} !important; flex: 1 1 0% !important; width: 100% !important; height: 100% !important; min-height: 100% !important;`);
-    }
-
-    const fontCss = FONT_FAMILIES.find((f) => f.id === fontFamily)?.css || "'Inter', sans-serif";
-    const currentPaper = currentPaperDef;
-
+    const currentPaper = customOptions.paperDef || currentPaperDef;
+    const pageContentHeightPx = Math.max(currentPaper.heightPx, effectivePageHeightPx);
+    const pageContentHeightIn = pageContentHeightPx > currentPaper.heightPx
+      ? `${(pageContentHeightPx / 96).toFixed(3)}in`
+      : currentPaper.heightIn || "11in";
+    const pageWidthIn = orientation === "landscape"
+      ? pageContentHeightIn
+      : currentPaper.widthIn || "8.5in";
+    const pageHeightIn = orientation === "landscape"
+      ? currentPaper.widthIn || "8.5in"
+      : pageContentHeightIn;
+    const pagePaddingCss = getDocumentPagePadding(marginMode, reduceTopSpacing);
     const headStyles = Array.from(document.querySelectorAll("link[rel='stylesheet'], style"))
       .filter((node) => {
         const text = node.textContent || "";
@@ -3264,7 +4199,9 @@ export default function DocumentStudioPanel({
       .map((node) => node.outerHTML)
       .join("\n");
 
-    const printHtml = `<!doctype html>
+    const monoFilterCss = colorMode === "monochrome" ? "filter: grayscale(100%) contrast(105%) !important;" : "";
+
+    const printHtml = String.raw`<!doctype html>
 <html>
 <head>
   <meta charset="utf-8">
@@ -3273,8 +4210,8 @@ export default function DocumentStudioPanel({
   ${headStyles}
   <style>
     @page {
-      size: ${currentPaper.printCss} !important;
-      margin: 0 !important;
+      size: ${pageWidthIn} ${pageHeightIn};
+      margin: 0;
     }
     *, *::before, *::after {
       box-sizing: border-box !important;
@@ -3285,47 +4222,74 @@ export default function DocumentStudioPanel({
     }
     html, body {
       width: 100% !important;
+      min-height: 100% !important;
       height: auto !important;
-      min-height: auto !important;
-      max-height: none !important;
       margin: 0 !important;
       padding: 0 !important;
       background: #ffffff !important;
       overflow: visible !important;
-      font-family: ${fontCss} !important;
-      font-size: ${fontSize}pt !important;
-      line-height: 1.6 !important;
+      font-family: ${activeFont} !important;
+      font-size: ${toolbarFontSize}px !important;
+      line-height: ${docLineHeight || (contentDensity === "compact" ? 1.48 : 1.55)} !important;
       color: #0f172a !important;
     }
     .print-sheet {
-      width: ${currentPaper.widthIn || '8.5in'} !important;
-      height: ${currentPaper.heightIn || '11in'} !important;
-      min-height: ${currentPaper.heightIn || '11in'} !important;
-      max-height: ${currentPaper.heightIn || '11in'} !important;
+      --doc-font-size: ${toolbarFontSize}px;
+      --doc-font-family: ${activeFont};
+      --doc-line-height: ${docLineHeight || (contentDensity === "compact" ? 1.48 : 1.55)};
+      width: 100% !important;
+      min-height: ${pageHeightIn} !important;
+      height: ${pageHeightIn} !important;
+      max-width: ${pageWidthIn} !important;
+      zoom: ${(customScale || 100) / 100} !important;
       box-sizing: border-box !important;
       position: relative !important;
-      overflow: hidden !important;
       display: flex !important;
       flex-direction: column !important;
-      justify-content: space-between !important;
-      padding: ${currentPaper.pageMargin || '0.5in 0.65in'} !important;
+      justify-content: flex-start !important;
+      padding: ${pagePaddingCss} !important;
       margin: 0 auto !important;
       background: #ffffff !important;
+      font-family: ${activeFont} !important;
+      font-size: ${toolbarFontSize}px !important;
+      line-height: ${docLineHeight || (contentDensity === "compact" ? 1.48 : 1.55)} !important;
+      overflow: visible !important;
       page-break-before: avoid !important;
       break-before: avoid !important;
       page-break-after: avoid !important;
       break-after: avoid !important;
       page-break-inside: avoid !important;
       break-inside: avoid !important;
+      ${monoFilterCss}
     }
-    .print-sheet * {
-      visibility: visible !important;
+    .print-sheet [data-category="footer"],
+    .print-sheet .footer-stick-bottom {
+      margin-top: auto !important;
+      break-inside: avoid !important;
     }
-    /* Centered faint watermark layer - 0 impact on vertical flow */
-    .doc-watermark-layer,
-    .print-sheet > div.doc-watermark-layer,
-    .print-sheet > div[class*="opacity-[0.03"],
-    .print-sheet > div[class*="opacity-[0.04"] {
+    @media print {
+      html, body {
+        width: 100% !important;
+        height: auto !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        overflow: visible !important;
+      }
+      .print-sheet {
+        width: ${pageWidthIn} !important;
+        height: ${pageHeightIn} !important;
+        min-height: ${pageHeightIn} !important;
+        max-height: none !important;
+        padding: ${pagePaddingCss} !important;
+        margin: 0 auto !important;
+        box-sizing: border-box !important;
+        overflow: visible !important;
+        display: flex !important;
+        flex-direction: column !important;
+        justify-content: flex-start !important;
+      }
+    }
+    .doc-watermark-layer {
       position: absolute !important;
       top: 50% !important;
       left: 50% !important;
@@ -3343,40 +4307,13 @@ export default function DocumentStudioPanel({
       padding: 0 !important;
       overflow: hidden !important;
     }
-    .doc-watermark-layer img,
-    .print-sheet > div.doc-watermark-layer img {
+    .doc-watermark-layer img {
       max-width: 100% !important;
       max-height: 100% !important;
       object-fit: contain !important;
-      filter: grayscale(15%) !important;
+      filter: ${colorMode === "monochrome" ? "grayscale(100%)" : "grayscale(15%)"} !important;
       display: block !important;
       margin: 0 auto !important;
-    }
-
-    /* Content flow: occupies full sheet height, top items stay top, bottom items stay bottom */
-    .print-sheet > div.space-y-6,
-    .print-sheet > div:not(.doc-watermark-layer):not([class*="absolute"]) {
-      position: relative !important;
-      z-index: 10 !important;
-      flex: 1 1 0% !important;
-      height: 100% !important;
-      min-height: 100% !important;
-      display: flex !important;
-      flex-direction: column !important;
-      justify-content: ${hasFooter ? "space-between" : "flex-start"} !important;
-      width: 100% !important;
-    }
-    .print-sheet .space-y-6 > * + * {
-      margin-top: 1.15rem !important;
-    }
-    .space-y-3\.5 > * + * {
-      margin-top: 0.75rem !important;
-    }
-    .space-y-4 > * + * {
-      margin-top: 0.85rem !important;
-    }
-    .print-sheet p {
-      color: #0f172a !important;
     }
     .print-sheet table {
       border-collapse: collapse !important;
@@ -3391,13 +4328,6 @@ export default function DocumentStudioPanel({
       object-fit: contain !important;
       visibility: visible !important;
     }
-    /* Comprehensive utility fallback rules */
-    .w-18, .w-20 { width: 4.5rem !important; height: 4.5rem !important; }
-    .h-18, .h-20 { height: 4.5rem !important; }
-    .w-14 { width: 3.5rem !important; }
-    .h-14 { height: 3.5rem !important; }
-    .w-16 { width: 4rem !important; }
-    .h-16 { height: 4rem !important; }
     .max-h-full { max-height: 100% !important; }
     .max-w-full { max-width: 100% !important; }
     .object-contain { object-fit: contain !important; }
@@ -3407,6 +4337,7 @@ export default function DocumentStudioPanel({
     .items-center { align-items: center !important; }
     .items-start { align-items: flex-start !important; }
     .items-end { align-items: flex-end !important; }
+    .items-baseline { align-items: baseline !important; }
     .justify-between { justify-content: space-between !important; }
     .justify-center { justify-content: center !important; }
     .shrink-0 { flex-shrink: 0 !important; }
@@ -3419,23 +4350,127 @@ export default function DocumentStudioPanel({
     .font-semibold { font-weight: 600 !important; }
     .font-mono { font-family: monospace !important; }
     .grid { display: grid !important; }
+    .grid-cols-1 { grid-template-columns: repeat(1, minmax(0, 1fr)) !important; }
     .grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
     .grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
-    .gap-8 { gap: 2rem !important; }
-    .gap-6 { gap: 1.5rem !important; }
-    .gap-4 { gap: 1rem !important; }
-    .gap-3 { gap: 0.75rem !important; }
-    .gap-2 { gap: 0.5rem !important; }
-    .pb-4 { padding-bottom: 1rem !important; }
-    .mb-4 { margin-bottom: 1rem !important; }
-    .pb-2 { padding-bottom: 0.5rem !important; }
-    .mb-3 { margin-bottom: 0.75rem !important; }
-    .pt-4 { padding-top: 1rem !important; }
+    .w-14 { width: 3.5rem !important; min-width: 3.5rem !important; }
+    .h-14 { height: 3.5rem !important; min-height: 3.5rem !important; }
+    .w-16 { width: 4rem !important; min-width: 4rem !important; }
+    .h-16 { height: 4rem !important; min-height: 4rem !important; }
+    .w-18 { width: 4.5rem !important; min-width: 4.5rem !important; }
+    .h-18 { height: 4.5rem !important; min-height: 4.5rem !important; }
+    .w-20, [class*="w-20"] { width: 5.5rem !important; min-width: 5.5rem !important; display: inline-block !important; flex-shrink: 0 !important; }
+    .h-20 { height: 5rem !important; min-height: 5rem !important; }
+    .w-24, [class*="w-24"] { width: 6.5rem !important; min-width: 6.5rem !important; display: inline-block !important; flex-shrink: 0 !important; }
+    .h-24 { height: 6rem !important; min-height: 6rem !important; }
+    .w-28 { width: 7rem !important; min-width: 7rem !important; }
+    .h-28 { height: 7rem !important; min-height: 7rem !important; }
+    .w-52 { width: 13rem !important; }
+    .w-56 { width: 14rem !important; }
+    .w-60 { width: 15rem !important; }
+    .w-full { width: 100% !important; }
+    .h-full { height: 100% !important; }
+    .p-1 { padding: 0.25rem !important; }
+    .p-1\.5 { padding: 0.375rem !important; }
+    .p-2 { padding: 0.5rem !important; }
+    .p-2\.5 { padding: 0.625rem !important; }
+    .p-3 { padding: 0.75rem !important; }
+    .p-4 { padding: 1rem !important; }
+    .px-1 { padding-left: 0.25rem !important; padding-right: 0.25rem !important; }
+    .px-2 { padding-left: 0.5rem !important; padding-right: 0.5rem !important; }
+    .px-2\.5 { padding-left: 0.625rem !important; padding-right: 0.625rem !important; }
+    .px-3 { padding-left: 0.75rem !important; padding-right: 0.75rem !important; }
+    .py-0\.5 { padding-top: 0.125rem !important; padding-bottom: 0.125rem !important; }
+    .py-1 { padding-top: 0.25rem !important; padding-bottom: 0.25rem !important; }
+    .py-1\.5 { padding-top: 0.375rem !important; padding-bottom: 0.375rem !important; }
+    .py-2 { padding-top: 0.5rem !important; padding-bottom: 0.5rem !important; }
+    .pt-1 { padding-top: 0.25rem !important; }
+    .pt-2 { padding-top: 0.5rem !important; }
     .pt-3 { padding-top: 0.75rem !important; }
-    .mt-8 { margin-top: 2rem !important; }
-    .mb-1 { margin-bottom: 0.25rem !important; }
+    .pt-4 { padding-top: 1rem !important; }
+    .pt-5 { padding-top: 1.25rem !important; }
+    .pt-6 { padding-top: 1.5rem !important; }
+    .pt-8 { padding-top: 2rem !important; }
+    .pb-1 { padding-bottom: 0.25rem !important; }
+    .pb-1\.5 { padding-bottom: 0.375rem !important; }
+    .pb-2 { padding-bottom: 0.5rem !important; }
+    .pb-3 { padding-bottom: 0.75rem !important; }
+    .pb-4 { padding-bottom: 1rem !important; }
+    .pl-3 { padding-left: 0.75rem !important; }
+    .pl-6 { padding-left: 1.5rem !important; }
+    .my-2 { margin-top: 0.5rem !important; margin-bottom: 0.5rem !important; }
+    .my-2\.5 { margin-top: 0.625rem !important; margin-bottom: 0.625rem !important; }
+    .my-3 { margin-top: 0.75rem !important; margin-bottom: 0.75rem !important; }
+    .my-4 { margin-top: 1rem !important; margin-bottom: 1rem !important; }
+    .my-6 { margin-top: 1.5rem !important; margin-bottom: 1.5rem !important; }
     .mt-0\.5 { margin-top: 0.125rem !important; }
     .mt-1 { margin-top: 0.25rem !important; }
+    .mt-2 { margin-top: 0.5rem !important; }
+    .mt-3 { margin-top: 0.75rem !important; }
+    .mt-4 { margin-top: 1rem !important; }
+    .mt-6 { margin-top: 1.5rem !important; }
+    .mt-auto { margin-top: auto !important; }
+    .mb-1 { margin-bottom: 0.25rem !important; }
+    .mb-2 { margin-bottom: 0.5rem !important; }
+    .mb-2\.5 { margin-bottom: 0.625rem !important; }
+    .mb-3 { margin-bottom: 0.75rem !important; }
+    .mb-3\.5 { margin-bottom: 0.875rem !important; }
+    .mb-4 { margin-bottom: 1rem !important; }
+    .mb-5 { margin-bottom: 1.25rem !important; }
+    .mb-6 { margin-bottom: 1.5rem !important; }
+    .mb-8 { margin-bottom: 2rem !important; }
+    .gap-1 { gap: 0.25rem !important; }
+    .gap-1\.5 { gap: 0.375rem !important; }
+    .gap-2 { gap: 0.5rem !important; }
+    .gap-2\.5 { gap: 0.625rem !important; }
+    .gap-3 { gap: 0.75rem !important; }
+    .gap-4 { gap: 1rem !important; }
+    .gap-6 { gap: 1.5rem !important; }
+    .gap-8 { gap: 2rem !important; }
+    .space-y-1 > * + * { margin-top: 0.25rem !important; }
+    .space-y-1\.5 > * + * { margin-top: 0.375rem !important; }
+    .space-y-2 > * + * { margin-top: 0.5rem !important; }
+    .space-y-2\.5 > * + * { margin-top: 0.625rem !important; }
+    .space-y-3 > * + * { margin-top: 0.75rem !important; }
+    .space-y-3\.5 > * + * { margin-top: 0.875rem !important; }
+    .space-y-4 > * + * { margin-top: 1rem !important; }
+    .space-y-6 > * + * { margin-top: 1.5rem !important; }
+    .text-\[10px\] { font-size: 10px !important; }
+    .text-\[10\.5px\] { font-size: 10.5px !important; }
+    .text-\[11px\] { font-size: 11px !important; }
+    .text-xs { font-size: 0.75rem !important; }
+    .text-sm { font-size: 0.875rem !important; }
+    .text-base { font-size: 1rem !important; }
+    .text-lg { font-size: 1.125rem !important; }
+    .text-xl { font-size: 1.25rem !important; }
+    .text-slate-400 { color: #94a3b8 !important; }
+    .text-slate-500 { color: #64748b !important; }
+    .text-slate-600 { color: #475569 !important; }
+    .text-slate-700 { color: #334155 !important; }
+    .text-slate-800 { color: #1e293b !important; }
+    .text-slate-900 { color: #0f172a !important; }
+    .text-slate-950 { color: #020617 !important; }
+    .text-emerald-800 { color: #065f46 !important; }
+    .text-emerald-700 { color: #047857 !important; }
+    .text-emerald-600 { color: #059669 !important; }
+    .text-amber-700 { color: #b45309 !important; }
+    .text-amber-800 { color: #92400e !important; }
+    .text-amber-950 { color: #451a03 !important; }
+    .tracking-wide { letter-spacing: 0.025em !important; }
+    .tracking-wider { letter-spacing: 0.05em !important; }
+    .tracking-widest { letter-spacing: 0.1em !important; }
+    .tracking-tight { letter-spacing: -0.025em !important; }
+    .indent-2 { text-indent: 0.5rem !important; }
+    .indent-4 { text-indent: 1rem !important; }
+    .indent-6 { text-indent: 1.5rem !important; }
+    .indent-8 { text-indent: 2rem !important; }
+    .indent-10 { text-indent: 2.5rem !important; }
+    .indent-12 { text-indent: 3rem !important; }
+    .whitespace-pre-line { white-space: pre-line !important; }
+    .whitespace-pre-wrap { white-space: pre-wrap !important; }
+    .inline-block { display: inline-block !important; }
+    .block { display: block !important; }
+    blockquote { margin: 0.5rem 0 0.5rem 2rem !important; padding: 0 !important; border: none !important; }
     .border-b-2 { border-bottom-width: 2px !important; border-bottom-style: solid !important; }
     .border-b { border-bottom-width: 1px !important; border-bottom-style: solid !important; }
     .border-t { border-top-width: 1px !important; border-top-style: solid !important; }
@@ -3443,115 +4478,378 @@ export default function DocumentStudioPanel({
     .border-emerald-700 { border-color: #047857 !important; }
     .border-slate-900, .border-slate-800, .border-black { border-color: #0f172a !important; }
     .border-slate-300, .border-slate-200 { border-color: #cbd5e1 !important; }
-    .leading-tight { line-height: 1.25 !important; }
-    .leading-snug { line-height: 1.375 !important; }
-    .leading-relaxed { line-height: 1.55 !important; }
-    .tracking-wider { letter-spacing: 0.05em !important; }
-    .tracking-wide { letter-spacing: 0.025em !important; }
-    .no-print, .block-hover-controls, [role="tooltip"] {
+    .leading-tight { line-height: 1.2 !important; }
+    .leading-snug { line-height: 1.35 !important; }
+    .leading-relaxed { line-height: 1.45 !important; }
+    .no-print, .block-hover-controls, [role="tooltip"], button, .block-resize-handle, .glass-blue-inspector {
       display: none !important;
       visibility: hidden !important;
     }
   </style>
 </head>
 <body>
-  <div class="print-sheet">
+  <div class="print-sheet" id="print-sheet-root">
     ${clone.innerHTML}
   </div>
 </body>
 </html>`;
 
-    let printWindow = null;
+    return printHtml;
+  };
+
+  const updatePrintModalPreview = (opts = {}) => {
     try {
-      printWindow = window.open("", "_blank", "width=920,height=1100");
-    } catch {
-      printWindow = null;
+      const html = generatePrintHtml(opts);
+      if (html) setPrintModalPreviewHtml(html);
+    } catch (e) {
+      console.warn("Print preview generation error:", e);
+    }
+  };
+
+  const updatePrintModalPreviewRef = useRef(null);
+  useEffect(() => {
+    updatePrintModalPreviewRef.current = updatePrintModalPreview;
+  });
+
+  useEffect(() => {
+    if (isPrintConfigOpen) {
+      const timer = setTimeout(() => {
+        const updatePreview = updatePrintModalPreviewRef.current;
+        if (updatePreview) updatePreview();
+      }, 50);
+      return () => clearTimeout(timer);
+    }
+  }, [
+    isPrintConfigOpen,
+    paperSize,
+    selectedPaper,
+    printMarginMode,
+    reduceTopSpacingInPrint,
+    printColorMode,
+    includeLetterheadInPrint,
+    includeSignaturesInPrint,
+    includeFooterInPrint,
+    includeWatermarkInPrint,
+    docLineHeight,
+    printOrientation,
+    printCustomScale,
+    paperElements,
+    effectivePageHeightPx
+  ]);
+
+  const handlePrintDocument = (customOptions = {}) => {
+    const printableElement = document.getElementById("coupon-bond-printable");
+    if (!printableElement) {
+      window.print();
+      return;
     }
 
-    if (printWindow && printWindow.document) {
-      printWindow.document.open();
-      printWindow.document.write(printHtml);
-      printWindow.document.close();
-      printWindow.focus();
+    if (paperElements.length === 0) {
+      triggerToast("Please add elements onto the coupon bond paper before printing.", "error");
+      return;
+    }
 
-      const doTriggerPrint = () => {
-        try {
-          printWindow.focus();
-          printWindow.onafterprint = () => {
-            try {
-              printWindow.close();
-            } catch {}
-          };
-          printWindow.print();
-        } catch (e) {
-          console.warn("Popup print failed, falling back to direct window.print", e);
-          window.print();
+    const currentPaper = customOptions.paperDef || currentPaperDef;
+    const orientation = customOptions.orientation || printOrientation;
+    const contentHeightIn = effectivePageHeightPx > currentPaper.heightPx
+      ? `${(effectivePageHeightPx / 96).toFixed(3)}in`
+      : currentPaper.heightIn || "11in";
+    const pageWidthIn = orientation === "landscape"
+      ? contentHeightIn
+      : currentPaper.widthIn || "8.5in";
+    const pageHeightIn = orientation === "landscape"
+      ? currentPaper.widthIn || "8.5in"
+      : contentHeightIn;
+    const printHtml = generatePrintHtml(customOptions);
+    if (!printHtml) {
+      window.print();
+      return;
+    }
+
+    let printFrame = document.getElementById("doc-studio-print-frame");
+    if (!printFrame) {
+      printFrame = document.createElement("iframe");
+      printFrame.id = "doc-studio-print-frame";
+      printFrame.style.position = "fixed";
+      printFrame.style.top = "0";
+      printFrame.style.left = "-99999px";
+      printFrame.style.width = pageWidthIn;
+      printFrame.style.height = pageHeightIn;
+      printFrame.style.opacity = "0.01";
+      printFrame.style.pointerEvents = "none";
+      printFrame.style.border = "none";
+      printFrame.style.zIndex = "-9999";
+      document.body.appendChild(printFrame);
+    } else {
+      printFrame.style.width = pageWidthIn;
+      printFrame.style.height = pageHeightIn;
+    }
+
+    const frameDoc = printFrame.contentWindow.document;
+    frameDoc.open();
+    frameDoc.write(printHtml);
+    frameDoc.close();
+
+    const executeSeamlessPrint = () => {
+      try {
+        printFrame.contentWindow.focus();
+        printFrame.contentWindow.print();
+      } catch (err) {
+        console.warn("Direct iframe print error, fallback to window.print", err);
+        window.print();
+      }
+    };
+
+    const frameImages = Array.from(frameDoc.images || []);
+    if (frameImages.length === 0) {
+      setTimeout(executeSeamlessPrint, 150);
+    } else {
+      let loadedCount = 0;
+      let hasTriggered = false;
+      const onImageFinished = () => {
+        loadedCount++;
+        if (loadedCount >= frameImages.length && !hasTriggered) {
+          hasTriggered = true;
+          setTimeout(executeSeamlessPrint, 120);
         }
       };
-
-      const imgs = Array.from(printWindow.document.images || []);
-      if (imgs.length === 0) {
-        setTimeout(doTriggerPrint, 250);
-      } else {
-        let loaded = 0;
-        let triggered = false;
-        const onImgDone = () => {
-          loaded++;
-          if (loaded >= imgs.length && !triggered) {
-            triggered = true;
-            setTimeout(doTriggerPrint, 180);
-          }
-        };
-        imgs.forEach((img) => {
-          if (img.complete) {
-            onImgDone();
-          } else {
-            img.onload = onImgDone;
-            img.onerror = onImgDone;
-          }
-        });
-        setTimeout(() => {
-          if (!triggered) {
-            triggered = true;
-            doTriggerPrint();
-          }
-        }, 650);
-      }
-    } else {
-      let printFrame = document.getElementById("doc-studio-print-frame");
-      if (!printFrame) {
-        printFrame = document.createElement("iframe");
-        printFrame.id = "doc-studio-print-frame";
-        printFrame.style.position = "fixed";
-        printFrame.style.right = "0";
-        printFrame.style.bottom = "0";
-        printFrame.style.width = "0";
-        printFrame.style.height = "0";
-        printFrame.style.border = "none";
-        document.body.appendChild(printFrame);
-      }
-      const frameDoc = printFrame.contentWindow.document;
-      frameDoc.open();
-      frameDoc.write(printHtml);
-      frameDoc.close();
-      setTimeout(() => {
-        try {
-          printFrame.contentWindow.focus();
-          printFrame.contentWindow.print();
-        } catch {
-          window.print();
+      frameImages.forEach((img) => {
+        if (img.complete) {
+          onImageFinished();
+        } else {
+          img.onload = onImageFinished;
+          img.onerror = onImageFinished;
         }
-      }, 400);
+      });
+      setTimeout(() => {
+        if (!hasTriggered) {
+          hasTriggered = true;
+          executeSeamlessPrint();
+        }
+      }, 500);
+    }
+  };
+
+  const handleCopyDocumentImage = async (customOptions = {}) => {
+    const printableElement = document.getElementById("coupon-bond-printable");
+    if (!printableElement) {
+      triggerToast("Document preview element not found.", "error");
+      return;
+    }
+    if (paperElements.length === 0) {
+      triggerToast("Please add elements onto the coupon bond paper before copying.", "error");
+      return;
+    }
+
+    setIsCopyingImage(true);
+    const originalTransform = printableElement.style.transform;
+    const originalTransition = printableElement.style.transition;
+    const originalFilter = printableElement.style.filter;
+
+    const colorMode = customOptions.colorMode || printColorMode;
+    const includeLetterhead = customOptions.includeLetterhead !== undefined ? customOptions.includeLetterhead : includeLetterheadInPrint;
+    const includeFooter = customOptions.includeFooter !== undefined ? customOptions.includeFooter : includeFooterInPrint;
+    const includeWatermark = customOptions.includeWatermark !== undefined ? customOptions.includeWatermark : includeWatermarkInPrint;
+
+    const tempHidden = [];
+    if (!includeLetterhead) {
+      printableElement.querySelectorAll("[data-category='header']").forEach((el) => {
+        el.style.display = "none";
+        tempHidden.push(el);
+      });
+    }
+    if (!includeFooter) {
+      printableElement.querySelectorAll("[data-category='footer']").forEach((el) => {
+        el.style.display = "none";
+        tempHidden.push(el);
+      });
+    }
+    if (!includeWatermark) {
+      const wm = printableElement.querySelector(".doc-watermark-layer");
+      if (wm) {
+        wm.style.display = "none";
+        tempHidden.push(wm);
+      }
+    }
+
+    try {
+      printableElement.style.transform = "none";
+      printableElement.style.transition = "none";
+      if (colorMode === "monochrome") {
+        printableElement.style.filter = "grayscale(100%) contrast(105%)";
+      }
+
+      const dataUrl = await toPng(printableElement, {
+        pixelRatio: 2.5,
+        backgroundColor: "#ffffff",
+        filter: (node) => {
+          if (
+            node.classList &&
+            (node.classList.contains("no-print") ||
+              node.classList.contains("block-hover-controls") ||
+              node.classList.contains("glass-blue-inspector") ||
+              node.classList.contains("block-resize-handle") ||
+              node.getAttribute?.("role") === "tooltip")
+          ) {
+            return false;
+          }
+          if (node.tagName === "BUTTON") {
+            return false;
+          }
+          return true;
+        }
+      });
+
+      const response = await fetch(dataUrl);
+      const blob = await response.blob();
+
+      if (navigator.clipboard && window.ClipboardItem) {
+        const item = new ClipboardItem({ "image/png": blob });
+        await navigator.clipboard.write([item]);
+        triggerToast("✓ Document image copied to clipboard! Ready to paste (Ctrl+V) into Word, chat, or email.", "success");
+      } else {
+        const cleanDocRef = (docRef || "DOCUMENT").replace(/[^a-zA-Z0-9_-]/g, "_");
+        const a = document.createElement("a");
+        a.href = dataUrl;
+        a.download = `${cleanDocRef}.png`;
+        a.click();
+        triggerToast("✓ Document image downloaded as high-res PNG file!", "success");
+      }
+    } catch (err) {
+      console.error("Copy image error:", err);
+      try {
+        const dataUrl = await toPng(printableElement, { pixelRatio: 2, backgroundColor: "#ffffff" });
+        const a = document.createElement("a");
+        a.href = dataUrl;
+        a.download = `${(docRef || "DOCUMENT").replace(/[^a-zA-Z0-9_-]/g, "_")}.png`;
+        a.click();
+        triggerToast("✓ Image downloaded as PNG (clipboard access was restricted).", "info");
+      } catch {
+        triggerToast("Failed to copy image. Please try again.", "error");
+      }
+    } finally {
+      printableElement.style.transform = originalTransform;
+      printableElement.style.transition = originalTransition;
+      printableElement.style.filter = originalFilter;
+      tempHidden.forEach((el) => {
+        el.style.display = "";
+      });
+      setIsCopyingImage(false);
+    }
+  };
+
+  const handleDownloadPdf = async (customOptions = {}) => {
+    const printableElement = document.getElementById("coupon-bond-printable");
+    if (!printableElement) {
+      triggerToast("Document preview element not found.", "error");
+      return;
+    }
+    if (paperElements.length === 0) {
+      triggerToast("Please add elements onto the coupon bond paper before downloading.", "error");
+      return;
+    }
+
+    setIsExportingPdf(true);
+    let printFrame = null;
+    try {
+      const paperDef = customOptions.paperDef || currentPaperDef;
+      const orientation = customOptions.orientation || printOrientation;
+      const pageHeightPx = Math.max(paperDef.heightPx, effectivePageHeightPx);
+      const contentHeightIn = pageHeightPx > paperDef.heightPx
+        ? `${(pageHeightPx / 96).toFixed(3)}in`
+        : paperDef.heightIn || "11in";
+      const pageWidthIn = orientation === "landscape"
+        ? contentHeightIn
+        : paperDef.widthIn || "8.5in";
+      const pageHeightIn = orientation === "landscape"
+        ? paperDef.widthIn || "8.5in"
+        : contentHeightIn;
+      const printHtml = generatePrintHtml(customOptions);
+      if (!printHtml) {
+        throw new Error("Could not create the configured document print layout.");
+      }
+
+      printFrame = document.createElement("iframe");
+      printFrame.title = "Configured document PDF render";
+      printFrame.style.position = "fixed";
+      printFrame.style.left = "-10000px";
+      printFrame.style.top = "0";
+      printFrame.style.width = pageWidthIn;
+      printFrame.style.height = pageHeightIn;
+      printFrame.style.border = "0";
+      printFrame.style.pointerEvents = "none";
+
+      const frameLoaded = new Promise((resolve, reject) => {
+        printFrame.addEventListener("load", resolve, { once: true });
+        printFrame.addEventListener("error", () => reject(new Error("Could not load the configured document print layout.")), { once: true });
+      });
+      printFrame.srcdoc = printHtml;
+      document.body.appendChild(printFrame);
+      await frameLoaded;
+
+      const frameDocument = printFrame.contentDocument;
+      const printSheet = frameDocument?.querySelector(".print-sheet");
+      if (!frameDocument || !printSheet) {
+        throw new Error("The configured document print layout did not render.");
+      }
+      await frameDocument.fonts.ready;
+      await Promise.all(Array.from(frameDocument.images, (image) => {
+        if (image.complete) return Promise.resolve();
+        return new Promise((resolve) => {
+          image.addEventListener("load", resolve, { once: true });
+          image.addEventListener("error", resolve, { once: true });
+        });
+      }));
+
+      const dataUrl = await toPng(printSheet, {
+        pixelRatio: 2.5,
+        backgroundColor: "#ffffff"
+      });
+      const unitToIn = (value) => {
+        const match = String(value).match(/^([\d.]+)\s*(mm|cm|px|in)?$/i);
+        if (!match) return NaN;
+        const amount = Number(match[1]);
+        switch ((match[2] || "in").toLowerCase()) {
+          case "mm": return amount / 25.4;
+          case "cm": return amount / 2.54;
+          case "px": return amount / 96;
+          default: return amount;
+        }
+      };
+      const pdfWidthIn = unitToIn(pageWidthIn);
+      const pdfHeightIn = unitToIn(pageHeightIn);
+      if (!Number.isFinite(pdfWidthIn) || !Number.isFinite(pdfHeightIn)) {
+        throw new Error(`Unsupported PDF page dimensions: ${pageWidthIn} × ${pageHeightIn}`);
+      }
+      const pdf = new jsPDF({
+        orientation: orientation === "landscape" ? "landscape" : "portrait",
+        unit: "in",
+        format: [pdfWidthIn, pdfHeightIn]
+      });
+
+      pdf.addImage(dataUrl, "PNG", 0, 0, pdfWidthIn, pdfHeightIn, undefined, "FAST");
+      const cleanDocRef = (docRef || "DOCUMENT").replace(/[^a-zA-Z0-9_-]/g, "_");
+      const cleanCompany = (selectedCompany?.name || "HR").replace(/[^a-zA-Z0-9_-]/g, "_");
+      const filename = `${cleanDocRef}_${cleanCompany}.pdf`;
+      pdf.save(filename);
+      triggerToast(`✓ PDF successfully exported: ${filename}`, "success");
+      setIsPrintConfigOpen(false);
+    } catch (err) {
+      console.error("PDF export error:", err);
+      triggerToast("Failed to generate PDF. Print -> Save as PDF is also available.", "error");
+    } finally {
+      printFrame?.remove();
+      setIsExportingPdf(false);
     }
   };
 
   return (
-    <div className="relative min-h-screen bg-slate-100 flex flex-col font-sans select-none antialiased">
+    <div id="document-studio-panel" className="relative h-screen max-h-screen overflow-hidden bg-slate-100 flex flex-col font-sans select-none antialiased">
       <style>{`
         @media print {
           @page {
-            size: ${currentPaperDef.printCss} !important;
-            margin: 0 !important;
+            size: ${directPrintPageWidthIn} ${directPrintPageHeightIn};
+            margin: 0;
           }
           html, body {
             background: #ffffff !important;
@@ -3559,32 +4857,49 @@ export default function DocumentStudioPanel({
             padding: 0 !important;
             width: 100% !important;
             height: auto !important;
-            min-height: auto !important;
+            max-height: none !important;
             overflow: visible !important;
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
           }
-          header, aside, nav, .no-print, .block-hover-controls, [role="tooltip"] {
+          header, aside, nav, .no-print, .block-hover-controls, [role="tooltip"], button {
             display: none !important;
             visibility: hidden !important;
           }
+          #root,
+          #root > div,
+          #document-studio-panel,
+          #document-studio-workspace,
+          #document-studio-workspace > main {
+            height: auto !important;
+            min-height: 0 !important;
+            max-height: none !important;
+            overflow: visible !important;
+            display: block !important;
+          }
+          #document-studio-panel,
+          #document-studio-workspace {
+            position: relative !important;
+          }
           #coupon-bond-printable {
-            position: static !important;
+            position: absolute !important;
+            top: 0 !important;
+            left: 0 !important;
             transform: none !important;
-            width: ${currentPaperDef.widthIn || '8.5in'} !important;
-            max-width: ${currentPaperDef.widthIn || '8.5in'} !important;
-            height: ${currentPaperDef.heightIn || '11in'} !important;
-            min-height: ${currentPaperDef.heightIn || '11in'} !important;
-            max-height: ${currentPaperDef.heightIn || '11in'} !important;
+            width: ${directPrintPageWidthIn} !important;
+            max-width: ${directPrintPageWidthIn} !important;
+            height: ${directPrintPageHeightIn} !important;
+            min-height: ${directPrintPageHeightIn} !important;
+            max-height: none !important;
             margin: 0 auto !important;
-            padding: ${currentPaperDef.pageMargin || '0.5in 0.65in'} !important;
+            padding: ${directPrintPadding} !important;
             box-shadow: none !important;
             border: none !important;
             background: #ffffff !important;
-            overflow: hidden !important;
+            overflow: visible !important;
             display: flex !important;
             flex-direction: column !important;
-            justify-content: space-between !important;
+            justify-content: flex-start !important;
             page-break-before: avoid !important;
             break-before: avoid !important;
             page-break-after: avoid !important;
@@ -3592,22 +4907,50 @@ export default function DocumentStudioPanel({
             page-break-inside: avoid !important;
             break-inside: avoid !important;
           }
-          #coupon-bond-printable > div.space-y-6,
-          #coupon-bond-printable > div:not([class*="absolute"]) {
-            flex: 1 1 0% !important;
-            height: 100% !important;
-            min-height: 100% !important;
-            display: flex !important;
-            flex-direction: column !important;
-            justify-content: ${paperElements.some((e) => e.category === "footer") ? "space-between" : "flex-start"} !important;
+          .doc-palette-scroll {
+            scrollbar-width: thin;
+            scrollbar-color: #f59e0b #f1f5f9;
+            overscroll-behavior: contain;
           }
-          #coupon-bond-printable .space-y-6 > * + * {
-            margin-top: 1.15rem !important;
+          .doc-palette-scroll::-webkit-scrollbar {
+            width: 7px;
           }
+          .doc-palette-scroll::-webkit-scrollbar-track {
+            background: #f1f5f9;
+            border-radius: 9999px;
+          }
+          .doc-palette-scroll::-webkit-scrollbar-thumb {
+            background: #f59e0b;
+            border-radius: 9999px;
+          }
+          .doc-palette-scroll::-webkit-scrollbar-thumb:hover {
+            background: #d97706;
+          }
+        }
+        #coupon-bond-printable {
+          --doc-font-size: ${toolbarFontSize}px;
+          --doc-font-family: ${activeFont};
+          --doc-line-height: ${contentDensity === "ultra" ? 1.32 : contentDensity === "compact" ? 1.42 : 1.55};
+          --doc-gap: ${contentDensity === "ultra" ? "6px" : contentDensity === "compact" ? "10px" : "14px"};
+        }
+        #coupon-bond-printable [data-category="body"],
+        #coupon-bond-printable [data-category="body"] p,
+        #coupon-bond-printable [data-category="body"] span:not([class*="badge"]),
+        #coupon-bond-printable [data-category="body"] div,
+        #coupon-bond-printable [data-category="body"] li,
+        #coupon-bond-printable [data-category="body"] [contenteditable="true"] {
+          font-size: var(--doc-font-size, 16px) !important;
+          font-family: var(--doc-font-family, inherit) !important;
+          line-height: var(--doc-line-height, 1.55) !important;
+        }
+        #coupon-bond-printable [data-category="addressing"] [contenteditable="true"],
+        #coupon-bond-printable [data-category="signatory"] [contenteditable="true"],
+        #coupon-bond-printable [data-category="footer"] [contenteditable="true"] {
+          font-family: var(--doc-font-family, inherit) !important;
         }
       `}</style>
 
-      <header className="no-print sticky top-0 z-40 bg-white border-b border-slate-200 px-4 py-3 shadow-xs flex flex-wrap items-center justify-between gap-3">
+      <header className="no-print sticky top-0 z-40 bg-white border-b border-slate-200 px-4 py-3 shadow-xs flex flex-wrap items-center justify-between gap-3 shrink-0">
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-500 to-amber-600 text-white shadow-xs">
             <Layout size={20} />
@@ -3691,12 +5034,36 @@ export default function DocumentStudioPanel({
 
           <button
             type="button"
-            onClick={handlePrintDocument}
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-black text-slate-800 bg-amber-400 hover:bg-amber-300 active:scale-95 shadow-xs transition cursor-pointer"
-            title="Print or Save as PDF"
+            onClick={() => setIsPrintConfigOpen(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 active:scale-95 shadow-2xs transition cursor-pointer"
+            title="Configure Print Margins, Ink Mode, Watermark, and Paper Size"
+          >
+            <Settings2 size={14} className="text-slate-600" />
+            <span className="hidden sm:inline">Print Setup</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleCopyDocumentImage()}
+            disabled={isCopyingImage}
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-black text-white bg-indigo-600 hover:bg-indigo-500 active:scale-95 shadow-xs transition cursor-pointer disabled:opacity-60"
+            title="Copy 1:1 High-Resolution Document Image to Clipboard (Ctrl+V into Word, chat, email)"
+          >
+            {isCopyingImage ? <RefreshCw size={14} className="animate-spin" /> : <Copy size={14} />}
+            <span>Copy Image</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              updatePrintModalPreview();
+              setIsPrintConfigOpen(true);
+            }}
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-black text-slate-900 bg-amber-400 hover:bg-amber-300 active:scale-95 shadow-xs transition cursor-pointer"
+            title="Open Print Configuration &amp; Live Preview (Epson L120 / Printer / PDF)"
           >
             <Printer size={14} />
-            <span>Print / PDF</span>
+            <span>Print Document</span>
           </button>
 
           {onClose && (
@@ -3728,7 +5095,7 @@ export default function DocumentStudioPanel({
         </div>
       )}
 
-      {hoveredPreview?.item && (() => {
+      {isPaletteDrawerOpen && hoveredPreview?.item && (() => {
         const previewWidth = 580;
         const targetX = hoveredPreview.x ?? 900;
         const targetY = hoveredPreview.y ?? 200;
@@ -3743,7 +5110,7 @@ export default function DocumentStudioPanel({
               top: `${topPos}px`,
               width: `${previewWidth}px`,
             }}
-            className="no-print fixed z-50 bg-white rounded-2xl border-2 border-amber-400 shadow-2xl p-4.5 animate-in fade-in zoom-in-95 duration-100 pointer-events-none max-w-[calc(100vw-450px)]"
+            className="no-print fixed z-[60] bg-white rounded-2xl border-2 border-amber-400 shadow-2xl p-4.5 animate-in fade-in zoom-in-95 duration-100 pointer-events-none max-w-[calc(100vw-450px)]"
           >
             <div className="flex items-center justify-between border-b border-slate-200 pb-2.5 mb-3">
               <div className="flex items-center gap-2">
@@ -3785,15 +5152,663 @@ export default function DocumentStudioPanel({
         );
       })()}
 
-      <div className="flex-1 flex flex-col lg:flex-row min-h-0 relative">
+      <div id="document-studio-workspace" className="flex-1 flex flex-col lg:flex-row min-h-0 relative overflow-hidden">
         <main
-          className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 flex flex-col items-center justify-start bg-slate-200/70"
+          id="document-studio-canvas"
+          className={`flex-1 h-full min-h-0 overflow-y-auto p-4 sm:p-6 lg:p-8 flex flex-col items-center justify-start bg-slate-200/70 transition-all duration-300 ${
+            isPaletteDrawerOpen
+              ? paletteDrawerWidth === "compact"
+                ? "xl:pr-[430px]"
+                : "xl:pr-[530px]"
+              : ""
+          }`}
           onDragOver={handleCanvasDragOver}
           onDragLeave={handleCanvasDragLeave}
           onDrop={handleCanvasDrop}
         >
-          <div className="no-print w-full max-w-4xl mb-4 flex flex-wrap items-center justify-between gap-3 text-xs bg-white/95 backdrop-blur-xs p-3 rounded-2xl border border-slate-300 shadow-sm">
-            <div className="flex items-center gap-2">
+          {!isTopToolbarVisible && (
+            <button
+              type="button"
+              onClick={() => setIsTopToolbarVisible(true)}
+              className="no-print fixed left-1/2 top-0 z-[70] flex h-3 w-20 -translate-x-1/2 items-center justify-center rounded-b-lg border border-t-0 border-slate-300 bg-white/95 text-slate-500 shadow-sm transition-colors hover:bg-white hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+              title="Show formatting toolbar"
+              aria-label="Show formatting toolbar"
+            >
+              <span className="h-1 w-8 rounded-full bg-current" />
+            </button>
+          )}
+          <div
+            ref={topToolbarRef}
+            className="no-print fixed left-1/2 top-2 w-[calc(100%-1rem)] max-w-4xl doc-toolbar-container bg-white border border-slate-200 shadow-sm rounded-2xl p-2.5 sm:p-3 select-none z-[60] will-change-transform"
+            style={{
+              transform: `translate(-50%, ${isTopToolbarVisible ? "0" : "calc(-100% - 14px)"})`,
+              opacity: isTopToolbarVisible ? 1 : 0,
+              visibility: isTopToolbarVisible ? "visible" : "hidden",
+              transition: `transform 300ms ease-in-out, opacity 300ms ease-in-out, visibility ${isTopToolbarVisible ? "0ms" : "300ms"} linear`,
+              pointerEvents: isTopToolbarVisible ? "auto" : "none",
+              maxHeight: "calc(100vh - 1rem)",
+              overflowY: "auto"
+            }}
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2 pb-2 mb-2 border-b border-slate-100">
+              <div className="inline-flex rounded-xl bg-slate-100 p-0.5 border border-slate-200/80 gap-1">
+                <button
+                  type="button"
+                  onClick={() => setActiveTopToolbarTab("formatting")}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-black transition cursor-pointer flex items-center gap-1.5 ${
+                    activeTopToolbarTab === "formatting"
+                      ? "bg-white text-slate-900 shadow-2xs border border-slate-200"
+                      : "text-slate-500 hover:text-slate-800"
+                  }`}
+                >
+                  <CaseUpper size={14} className={activeTopToolbarTab === "formatting" ? "text-amber-600" : "text-slate-400"} />
+                  <span>Text &amp; Formatting</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTopToolbarTab("page_setup")}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-black transition cursor-pointer flex items-center gap-1.5 ${
+                    activeTopToolbarTab === "page_setup"
+                      ? "bg-white text-slate-900 shadow-2xs border border-slate-200"
+                      : "text-slate-500 hover:text-slate-800"
+                  }`}
+                >
+                  <Scissors size={14} className={activeTopToolbarTab === "page_setup" ? "text-amber-600" : "text-slate-400"} />
+                  <span>Paper Size &amp; Page Setup</span>
+                </button>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] font-bold text-slate-600 bg-slate-50 border border-slate-200 px-2.5 py-1 rounded-lg">
+                  Paper: <span className="text-amber-700 font-extrabold ml-1">{currentPaperDef.label.split(" ")[0]}</span>
+                </span>
+                <span className="text-[11px] font-bold text-slate-600 bg-slate-50 border border-slate-200 px-2.5 py-1 rounded-lg">
+                  Elements: <span className="text-amber-700 font-extrabold ml-1">{paperElements.length}</span>
+                </span>
+              </div>
+            </div>
+
+            {activeTopToolbarTab === "formatting" ? (
+              <div className="space-y-2">
+                {/* Row 1: Undo/Redo, Font, Size, Bold/Italic/Underline/Strikethrough, Highlight, Color */}
+            <div className="flex flex-wrap items-center gap-1.5">
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={handleUndo}
+                  className="p-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 text-slate-700 hover:text-slate-950 transition flex items-center justify-center cursor-pointer shadow-2xs"
+                  title="Undo (Ctrl+Z)"
+                >
+                  <Undo2 size={14} />
+                </button>
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={handleRedo}
+                  className="p-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 text-slate-700 hover:text-slate-950 transition flex items-center justify-center cursor-pointer shadow-2xs"
+                  title="Redo (Ctrl+Y or Ctrl+Shift+Z)"
+                >
+                  <Redo2 size={14} />
+                </button>
+              </div>
+
+              <div className="h-5 w-px bg-slate-300 mx-0.5" />
+
+              <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-lg px-2 py-1 shadow-2xs">
+                <Type size={13} className="text-slate-500 shrink-0" />
+                <select
+                  value={toolbarFontFamily}
+                  onChange={(e) => handleSetToolbarFontFamily(e.target.value)}
+                  className="text-xs font-bold text-slate-800 bg-transparent focus:outline-none cursor-pointer max-w-[130px] sm:max-w-[150px] truncate"
+                  title="Change Directives Font Style / Family"
+                >
+                  {DIRECTIVE_FONT_FAMILIES.map((font) => (
+                    <option key={font.value} value={font.value} style={{ fontFamily: font.value }}>
+                      {font.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex items-center gap-0.5 bg-white border border-slate-200 rounded-lg p-0.5 shadow-2xs">
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => handleStepFontSize(-1)}
+                  className="px-1.5 py-0.5 rounded text-[11px] font-black text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+                  title="Decrease Font Size (A-)"
+                >
+                  A-
+                </button>
+                <select
+                  value={selectedFontSizeValue}
+                  onChange={(e) => handleSetToolbarFontSize(Number(e.target.value))}
+                  className="text-xs font-black text-slate-800 bg-transparent focus:outline-none cursor-pointer px-1 text-center"
+                  title="Set Exact Font Size"
+                >
+                  {DOCUMENT_FONT_SIZES.map((sz) => (
+                    <option key={sz.value} value={sz.value}>
+                      {sz.label}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => handleStepFontSize(1)}
+                  className="px-1.5 py-0.5 rounded text-[11px] font-black text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+                  title="Increase Font Size (A+)"
+                >
+                  A+
+                </button>
+              </div>
+
+              <div className="h-5 w-px bg-slate-300 mx-0.5" />
+
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => executeCommand("bold")}
+                  className="p-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 text-slate-800 hover:text-slate-950 font-bold transition flex items-center justify-center cursor-pointer shadow-2xs"
+                  title="Bold (Ctrl+B)"
+                >
+                  <Bold size={14} className="stroke-[2.5]" />
+                </button>
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => executeCommand("italic")}
+                  className="p-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 text-slate-800 hover:text-slate-950 italic transition flex items-center justify-center cursor-pointer shadow-2xs"
+                  title="Italic (Ctrl+I)"
+                >
+                  <Italic size={14} />
+                </button>
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => executeCommand("underline")}
+                  className="p-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 text-slate-800 hover:text-slate-950 underline transition flex items-center justify-center cursor-pointer shadow-2xs"
+                  title="Underline (Ctrl+U)"
+                >
+                  <Underline size={14} />
+                </button>
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => executeCommand("strikeThrough")}
+                  className="p-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 text-slate-700 hover:text-slate-950 line-through transition flex items-center justify-center cursor-pointer shadow-2xs"
+                  title="Strikethrough"
+                >
+                  <Strikethrough size={14} />
+                </button>
+              </div>
+
+              <div className="h-5 w-px bg-slate-300 mx-0.5" />
+
+              <div className="relative">
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => {
+                    setHighlightMenuOpen(!highlightMenuOpen);
+                    setShapesMenuOpen(false);
+                    setColorMenuOpen(false);
+                    setClausesMenuOpen(false);
+                  }}
+                  className={`px-2 py-1.5 rounded-lg border text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs ${
+                    highlightMenuOpen ? "bg-amber-100 border-amber-300 text-amber-950" : "bg-white border-slate-200 hover:bg-slate-100 text-slate-800"
+                  }`}
+                  title="Highlight Text with Color"
+                >
+                  <Highlighter size={14} className="text-amber-500" />
+                  <span className="text-[11px] hidden sm:inline">Highlight</span>
+                </button>
+
+                {highlightMenuOpen && (
+                  <div className="absolute left-0 top-full mt-1.5 w-48 bg-white border border-slate-200 rounded-xl shadow-xl p-2 z-50 space-y-1 animate-in fade-in duration-100">
+                    <div className="text-[10px] font-black uppercase text-slate-400 px-2 py-1">Highlight Colors</div>
+                    {[
+                      { label: "Yellow Highlight", color: "#fef08a", bg: "bg-yellow-300 border-yellow-400" },
+                      { label: "Green Highlight", color: "#bbf7d0", bg: "bg-emerald-300 border-emerald-400" },
+                      { label: "Cyan Highlight", color: "#bae6fd", bg: "bg-sky-300 border-sky-400" },
+                      { label: "Pink Highlight", color: "#fbcfe8", bg: "bg-pink-300 border-pink-400" }
+                    ].map((h) => (
+                      <button
+                        key={h.color}
+                        type="button"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => {
+                          executeCommand("hiliteColor", h.color);
+                          setHighlightMenuOpen(false);
+                        }}
+                        className="w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-semibold hover:bg-slate-50 flex items-center gap-2 cursor-pointer transition text-slate-800"
+                      >
+                        <span className={`w-3.5 h-3.5 rounded-full border ${h.bg}`} />
+                        <span>{h.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="relative">
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => {
+                    setColorMenuOpen(!colorMenuOpen);
+                    setShapesMenuOpen(false);
+                    setHighlightMenuOpen(false);
+                    setClausesMenuOpen(false);
+                  }}
+                  className={`px-2 py-1.5 rounded-lg border text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs ${
+                    colorMenuOpen ? "bg-rose-50 border-rose-300 text-rose-950" : "bg-white border-slate-200 hover:bg-slate-100 text-slate-800"
+                  }`}
+                  title="Text Color"
+                >
+                  <Palette size={14} className="text-rose-600" />
+                  <span className="text-[11px] hidden sm:inline">Color</span>
+                </button>
+
+                {colorMenuOpen && (
+                  <div className="absolute left-0 top-full mt-1.5 w-44 bg-white border border-slate-200 rounded-xl shadow-xl p-2 z-50 space-y-1 animate-in fade-in duration-100">
+                    <div className="text-[10px] font-black uppercase text-slate-400 px-2 py-1">Text Color</div>
+                    {[
+                      { label: "Red Alert", color: "#dc2626", dot: "bg-red-600" },
+                      { label: "Emerald Green", color: "#059669", dot: "bg-emerald-600" },
+                      { label: "Navy Blue", color: "#1e40af", dot: "bg-blue-800" },
+                      { label: "Dark Slate", color: "#0f172a", dot: "bg-slate-900" }
+                    ].map((c) => (
+                      <button
+                        key={c.color}
+                        type="button"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => {
+                          executeCommand("foreColor", c.color);
+                          setColorMenuOpen(false);
+                        }}
+                        className="w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-bold hover:bg-slate-50 flex items-center gap-2 cursor-pointer transition text-slate-800"
+                      >
+                        <span className={`w-3 h-3 rounded-full ${c.dot}`} />
+                        <span>{c.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="h-5 w-px bg-slate-300 mx-0.5" />
+
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => executeCommand("removeFormat")}
+                className="p-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 text-slate-500 hover:text-rose-600 transition flex items-center justify-center cursor-pointer shadow-2xs"
+                title="Clear Formatting (Remove Font Styles, Colors, Highlights)"
+              >
+                <Eraser size={14} />
+              </button>
+            </div>
+
+            {/* Row 2: Alignment, Indentation, Line Spacing, Lists, Paragraph Insertion, Badges & Directives */}
+            <div className="flex flex-wrap items-center gap-1.5 pt-1.5 border-t border-slate-100">
+              {/* MS Word Alignment Controls */}
+              <div className="flex items-center gap-0.5 bg-white border border-slate-200 rounded-lg p-0.5 shadow-2xs">
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => handleAlign("left")}
+                  className="p-1.5 rounded hover:bg-slate-100 text-slate-700 hover:text-slate-950 transition cursor-pointer"
+                  title="Align Left (Ctrl+L)"
+                >
+                  <AlignLeft size={14} />
+                </button>
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => handleAlign("center")}
+                  className="p-1.5 rounded hover:bg-slate-100 text-slate-700 hover:text-slate-950 transition cursor-pointer"
+                  title="Align Center (Ctrl+E)"
+                >
+                  <AlignCenter size={14} />
+                </button>
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => handleAlign("right")}
+                  className="p-1.5 rounded hover:bg-slate-100 text-slate-700 hover:text-slate-950 transition cursor-pointer"
+                  title="Align Right (Ctrl+R)"
+                >
+                  <AlignRight size={14} />
+                </button>
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => handleAlign("justify")}
+                  className="p-1.5 rounded hover:bg-slate-100 text-slate-700 hover:text-slate-950 transition cursor-pointer"
+                  title="Justify (Ctrl+J)"
+                >
+                  <AlignJustify size={14} />
+                </button>
+              </div>
+
+              <div className="h-5 w-px bg-slate-300 mx-0.5" />
+
+              {/* MS Word Indentation Controls */}
+              <div className="flex items-center gap-0.5 bg-white border border-slate-200 rounded-lg p-0.5 shadow-2xs">
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={handleDecreaseIndent}
+                  className="p-1.5 rounded hover:bg-slate-100 text-slate-700 hover:text-slate-950 transition cursor-pointer"
+                  title="Decrease Indent (Shift+Tab / Outdent)"
+                >
+                  <Outdent size={14} />
+                </button>
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={handleIncreaseIndent}
+                  className="p-1.5 rounded hover:bg-slate-100 text-slate-700 hover:text-slate-950 transition cursor-pointer"
+                  title="Increase Indent (Indent Paragraph)"
+                >
+                  <Indent size={14} />
+                </button>
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => executeCommand("insertHTML", "&nbsp;&nbsp;&nbsp;&nbsp;")}
+                  className="px-2 py-1 rounded hover:bg-slate-100 text-slate-800 font-bold text-[10px] transition cursor-pointer uppercase tracking-wider"
+                  title="Insert 4-Space Tab"
+                >
+                  Tab
+                </button>
+              </div>
+
+              <div className="h-5 w-px bg-slate-300 mx-0.5" />
+
+              {/* Line Spacing Selector */}
+              <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-lg px-2 py-1 shadow-2xs">
+                <Sliders size={12} className="text-slate-500 shrink-0" />
+                <span className="text-[10px] font-bold text-slate-500 uppercase">Spacing:</span>
+                <select
+                  value={docLineHeight}
+                  onChange={(e) => handleSetLineHeight(e.target.value)}
+                  className="text-xs font-black text-slate-800 bg-transparent focus:outline-none cursor-pointer"
+                  title="Document Line Height / Spacing"
+                >
+                  <option value="1.15">1.15 (Tight)</option>
+                  <option value="1.25">1.25 (Compact)</option>
+                  <option value="1.40">1.40 (Office)</option>
+                  <option value="1.55">1.55 (Standard)</option>
+                  <option value="1.80">1.80 (Relaxed)</option>
+                  <option value="2.0">2.0 (Double)</option>
+                </select>
+              </div>
+
+              <div className="h-5 w-px bg-slate-300 mx-0.5" />
+
+              {/* Lists */}
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => executeCommand("insertOrderedList")}
+                  className="px-2 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-emerald-50 hover:text-emerald-850 hover:border-emerald-300 text-slate-800 font-bold text-xs transition flex items-center gap-1 cursor-pointer shadow-2xs"
+                  title="Numbered List (1. 2. 3.)"
+                >
+                  <ListOrdered size={14} className="text-emerald-600" />
+                  <span className="text-[11px] hidden sm:inline">Numbers</span>
+                </button>
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => executeCommand("insertUnorderedList")}
+                  className="px-2 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-emerald-50 hover:text-emerald-850 hover:border-emerald-300 text-slate-800 font-bold text-xs transition flex items-center gap-1 cursor-pointer shadow-2xs"
+                  title="Bullet List (• • •)"
+                >
+                  <List size={14} className="text-emerald-600" />
+                  <span className="text-[11px] hidden sm:inline">Bullets</span>
+                </button>
+              </div>
+
+              <div className="h-5 w-px bg-slate-300 mx-0.5" />
+
+              {/* Quick Insert Paragraph */}
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={handleInsertParagraph}
+                className="px-2.5 py-1.5 rounded-lg border border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-950 font-black text-xs transition flex items-center gap-1 cursor-pointer shadow-2xs"
+                title="Insert New Editable Directive / Paragraph at Cursor"
+              >
+                <Plus size={13} className="text-amber-700" />
+                <span className="text-[11px]">+ Paragraph</span>
+              </button>
+
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => insertHtmlAtCursor('<h4 style="font-weight: 900; text-transform: uppercase; font-size: 1.15em; margin: 14px 0 6px 0; border-bottom: 2px solid #0f172a; padding-bottom: 2px;">SECTION TITLE</h4><p><br></p>')}
+                className="p-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 text-slate-800 transition flex items-center justify-center cursor-pointer shadow-2xs"
+                title="Section Heading Banner"
+              >
+                <Heading size={14} />
+              </button>
+
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => insertHtmlAtCursor('<hr style="border: none; border-top: 1.5px solid #cbd5e1; margin: 14px 0;"><p><br></p>')}
+                className="p-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 text-slate-800 transition flex items-center justify-center cursor-pointer shadow-2xs"
+                title="Divider Line (<hr>)"
+              >
+                <Minus size={14} />
+              </button>
+
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={transformSelectedToUppercase}
+                className="px-2 py-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 text-slate-800 font-black text-xs transition flex items-center justify-center cursor-pointer shadow-2xs"
+                title="Convert Selected Text to UPPERCASE"
+              >
+                <CaseUpper size={13} className="mr-0.5" />
+                <span className="text-[10px]">AA</span>
+              </button>
+
+              <div className="h-5 w-px bg-slate-300 mx-0.5" />
+
+              <div className="relative">
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => {
+                    setShapesMenuOpen(!shapesMenuOpen);
+                    setHighlightMenuOpen(false);
+                    setColorMenuOpen(false);
+                    setClausesMenuOpen(false);
+                  }}
+                  className={`px-2.5 py-1.5 rounded-lg border text-xs font-black transition flex items-center gap-1.5 cursor-pointer shadow-2xs ${
+                    shapesMenuOpen ? "bg-indigo-100 border-indigo-300 text-indigo-950" : "bg-white border-slate-200 hover:bg-slate-100 text-indigo-800"
+                  }`}
+                  title="Shapes, Official Badges & Callout Shape Boxes"
+                >
+                  <Shapes size={14} className="text-indigo-600" />
+                  <span className="text-[11px]">Shapes &amp; Badges</span>
+                </button>
+
+                {shapesMenuOpen && (
+                  <div className="absolute left-0 top-full mt-1.5 w-76 sm:w-84 bg-white border border-slate-200 rounded-2xl shadow-2xl p-3 z-50 space-y-3 animate-in fade-in duration-100 max-h-[460px] overflow-y-auto">
+                    <div>
+                      <div className="text-[10px] font-black uppercase tracking-wider text-slate-400 px-1 mb-1.5">
+                        Geometric Shapes &amp; Bullet Symbols
+                      </div>
+                      <div className="grid grid-cols-4 gap-1.5">
+                        {[
+                          { shape: "■ ", label: "Square" },
+                          { shape: "● ", label: "Circle" },
+                          { shape: "◆ ", label: "Diamond" },
+                          { shape: "▲ ", label: "Triangle" },
+                          { shape: "★ ", label: "Star" },
+                          { shape: "✔ ", label: "Check" },
+                          { shape: "➔ ", label: "Arrow" },
+                          { shape: "❖ ", label: "Ornate" }
+                        ].map((item) => (
+                          <button
+                            key={item.label}
+                            type="button"
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => {
+                              insertHtmlAtCursor(`<span>${item.shape}</span>`);
+                              setShapesMenuOpen(false);
+                            }}
+                            className="p-1.5 rounded-lg border border-slate-200 hover:border-indigo-300 bg-slate-50 hover:bg-indigo-50 text-slate-800 text-xs font-bold transition flex items-center justify-center gap-1 cursor-pointer"
+                            title={`Insert ${item.label}`}
+                          >
+                            <span className="text-sm font-black text-indigo-600">{item.shape.trim()}</span>
+                            <span className="text-[10px] text-slate-600">{item.label}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="border-t border-slate-100 pt-2">
+                      <div className="text-[10px] font-black uppercase tracking-wider text-slate-400 px-1 mb-1.5">
+                        Official Compliance Shape Badges
+                      </div>
+                      <div className="space-y-1.5">
+                        {[
+                          { text: "MANDATORY COMPLIANCE", color: "#fee2e2", textColor: "#991b1b", border: "#f87171", label: "Red Badge" },
+                          { text: "CONFIDENTIAL", color: "#fef3c7", textColor: "#92400e", border: "#fcd34d", label: "Amber Badge" },
+                          { text: "FOR IMMEDIATE COMPLIANCE", color: "#dbeafe", textColor: "#1e40af", border: "#93c5fd", label: "Blue Badge" },
+                          { text: "OFFICIALLY APPROVED", color: "#d1fae5", textColor: "#065f46", border: "#6ee7b7", label: "Green Badge" }
+                        ].map((b) => (
+                          <button
+                            key={b.text}
+                            type="button"
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => {
+                              insertHtmlAtCursor(`&nbsp;<span style="display: inline-block; background-color: ${b.color}; color: ${b.textColor}; border: 1px solid ${b.border}; font-weight: 900; font-size: 8pt; padding: 1px 8px; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.5px;">${b.text}</span>&nbsp;`);
+                              setShapesMenuOpen(false);
+                            }}
+                            className="w-full text-left p-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 transition flex items-center justify-between cursor-pointer"
+                          >
+                            <span
+                              style={{ backgroundColor: b.color, color: b.textColor, borderColor: b.border }}
+                              className="text-[10px] font-black uppercase px-2 py-0.5 rounded border"
+                            >
+                              {b.text}
+                            </span>
+                            <span className="text-[10px] text-slate-500 font-semibold">{b.label}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="border-t border-slate-100 pt-2">
+                      <div className="text-[10px] font-black uppercase tracking-wider text-slate-400 px-1 mb-1.5">
+                        Structured Directive Shape Boxes
+                      </div>
+                      <div className="space-y-1.5">
+                        <button
+                          type="button"
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => {
+                            insertHtmlAtCursor('<div style="border-left: 4px solid #059669; background-color: #f0fdf4; padding: 8px 14px; margin: 8px 0; border-radius: 0 6px 6px 0; font-weight: 500;"><b>📌 DIRECTIVE:</b> Insert specific operational instructions or guidelines here.</div><p><br></p>');
+                            setShapesMenuOpen(false);
+                          }}
+                          className="w-full text-left p-2 rounded-lg border-l-4 border-l-emerald-600 bg-emerald-50 hover:bg-emerald-100/70 border border-emerald-200 transition text-[11px] font-semibold text-emerald-950 cursor-pointer"
+                        >
+                          <b>📌 Green Directive Box</b>
+                          <div className="text-[10px] text-emerald-700 font-normal">Highlighted operational directive card</div>
+                        </button>
+
+                        <button
+                          type="button"
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => {
+                            insertHtmlAtCursor('<div style="border-left: 4px solid #dc2626; background-color: #fef2f2; padding: 8px 14px; margin: 8px 0; border-radius: 0 6px 6px 0; font-weight: 500;"><b>⚠️ SANCTION NOTICE:</b> Failure to strictly observe these directives shall be dealt with under company rules.</div><p><br></p>');
+                            setShapesMenuOpen(false);
+                          }}
+                          className="w-full text-left p-2 rounded-lg border-l-4 border-l-red-600 bg-red-50 hover:bg-red-100/70 border border-red-200 transition text-[11px] font-semibold text-red-950 cursor-pointer"
+                        >
+                          <b>⚠️ Red Sanction Box</b>
+                          <div className="text-[10px] text-red-700 font-normal">Disciplinary penalty notice box</div>
+                        </button>
+
+                        <button
+                          type="button"
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => {
+                            insertHtmlAtCursor('<div style="border: 1px solid #cbd5e1; background-color: #f8fafc; padding: 10px 14px; margin: 8px 0; border-radius: 6px; font-weight: 500;"><b>📋 POLICY STATEMENT:</b> All personnel are required to uphold standard corporate protocols.</div><p><br></p>');
+                            setShapesMenuOpen(false);
+                          }}
+                          className="w-full text-left p-2 rounded-lg border border-slate-300 bg-slate-50 hover:bg-slate-100 transition text-[11px] font-semibold text-slate-900 cursor-pointer"
+                        >
+                          <b>📋 Framed Policy Box</b>
+                          <div className="text-[10px] text-slate-500 font-normal">Enclosed formal policy statement</div>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="h-5 w-px bg-slate-300 mx-0.5" />
+
+              <div className="relative">
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => {
+                    setClausesMenuOpen(!clausesMenuOpen);
+                    setShapesMenuOpen(false);
+                    setHighlightMenuOpen(false);
+                    setColorMenuOpen(false);
+                  }}
+                  className={`px-2 py-1.5 rounded-lg border text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs ${
+                    clausesMenuOpen ? "bg-emerald-100 border-emerald-300 text-emerald-950" : "bg-white border-slate-200 hover:bg-slate-100 text-emerald-800"
+                  }`}
+                  title="Insert Standard HR Policy Directives"
+                >
+                  <Bookmark size={13} className="text-emerald-600" />
+                  <span className="text-[11px] hidden sm:inline">HR Clauses</span>
+                </button>
+
+                {clausesMenuOpen && (
+                  <div className="absolute right-0 top-full mt-1.5 w-72 bg-white border border-slate-200 rounded-xl shadow-xl p-2 z-50 space-y-1 animate-in fade-in duration-100">
+                    <div className="text-[10px] font-black uppercase text-slate-400 px-2 py-1">Standard HR Directives</div>
+                    {[
+                      "Strict compliance is hereby mandated for all concerned officers and personnel.",
+                      "This memorandum shall take effect immediately upon issuance and official transmission.",
+                      "Failure to comply with the guidelines stipulated herein shall warrant corresponding disciplinary penalties pursuant to company rules and regulations.",
+                      "For strict implementation and immediate observance by all concerned.",
+                      "Any unauthorized deviations or violations shall be subject to administrative sanctions under existing company rules."
+                    ].map((clause) => (
+                      <button
+                        key={clause}
+                        type="button"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => {
+                          insertHtmlAtCursor(`<p>${clause}</p>`);
+                          setClausesMenuOpen(false);
+                        }}
+                        className="w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-medium hover:bg-emerald-50 text-slate-800 cursor-pointer transition"
+                      >
+                        • &quot;{clause.slice(0, 38)}...&quot;
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+              </div>
+            ) : (
+              <div className="flex flex-wrap items-center justify-between gap-3 text-xs pt-1">
+                <div className="flex items-center gap-2">
               <span className="font-black text-slate-800 text-xs flex items-center gap-1.5">
                 <Scissors size={14} className="text-amber-600" />
                 Bond Paper Size:
@@ -3807,6 +5822,8 @@ export default function DocumentStudioPanel({
                       type="button"
                       onClick={() => {
                         setPaperSize(sz.id);
+                        setToolbarFontSize(16);
+                        setContentDensity("normal");
                         triggerToast(`Bond paper resized to ${sz.label}`, "info");
                       }}
                       className={`px-3 py-1.5 rounded-lg text-xs font-black transition cursor-pointer flex items-center gap-1.5 ${isSelected
@@ -3823,16 +5840,36 @@ export default function DocumentStudioPanel({
               </div>
             </div>
 
+            <div className="flex items-center gap-1.5 border-l border-slate-200 pl-2">
+              <span className="font-bold text-slate-500 text-[11px] uppercase flex items-center gap-1">
+                <Sliders size={12} className="text-emerald-600" />
+                Margins:
+              </span>
+              <select
+                value={printMarginMode}
+                onChange={(e) => {
+                  setPrintMarginMode(e.target.value);
+                  triggerToast(`Margin set to ${e.target.value}`, "info");
+                }}
+                className="bg-slate-50 border border-slate-200 text-xs font-bold rounded-lg px-2 py-1 text-slate-700 focus:outline-none focus:border-amber-500 cursor-pointer"
+                title="Page Margins (Upper, Lower, Left, Right Indent)"
+              >
+                <option value="standard">Standard (1.0 in)</option>
+                <option value="compact">Compact (0.75 in)</option>
+                <option value="narrow">Narrow (0.50 in)</option>
+              </select>
+            </div>
+
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-1.5">
                 <span className="font-bold text-slate-500 text-[11px] uppercase">Font:</span>
                 <select
-                  value={fontFamily}
-                  onChange={(e) => setFontFamily(e.target.value)}
-                  className="bg-slate-50 border border-slate-200 text-xs font-semibold rounded-lg px-2 py-1 text-slate-700 focus:outline-none focus:border-amber-500"
+                  value={toolbarFontFamily}
+                  onChange={(e) => handleSetToolbarFontFamily(e.target.value)}
+                  className="bg-slate-50 border border-slate-200 text-xs font-semibold rounded-lg px-2 py-1 text-slate-700 focus:outline-none focus:border-amber-500 max-w-[140px] truncate cursor-pointer"
                 >
-                  {FONT_FAMILIES.map((f) => (
-                    <option key={f.id} value={f.id}>
+                  {DIRECTIVE_FONT_FAMILIES.map((f) => (
+                    <option key={f.value} value={f.value} style={{ fontFamily: f.value }}>
                       {f.label}
                     </option>
                   ))}
@@ -3843,14 +5880,19 @@ export default function DocumentStudioPanel({
                 <span className="font-bold text-slate-500 text-[11px] uppercase">Size:</span>
                 <input
                   type="range"
-                  min="12"
-                  max="16.5"
+                  min="8"
+                  max="20"
                   step="0.5"
-                  value={fontSize}
-                  onChange={(e) => setFontSize(parseFloat(e.target.value))}
+                  value={Math.round((toolbarFontSize / 1.3333) * 10) / 10}
+                  onChange={(e) => {
+                    const ptVal = parseFloat(e.target.value);
+                    handleSetToolbarFontSize(Math.round(ptVal * 1.3333 * 10) / 10);
+                  }}
                   className="w-16 accent-amber-600 cursor-pointer"
                 />
-                <span className="font-mono text-[11px] font-bold text-slate-700">{fontSize}pt</span>
+                <span className="font-mono text-[11px] font-bold text-slate-700">
+                  {Math.round((toolbarFontSize / 1.3333) * 10) / 10}pt
+                </span>
               </div>
 
               <div className="flex items-center gap-2 border-l border-slate-200 pl-3">
@@ -3889,28 +5931,61 @@ export default function DocumentStudioPanel({
             <div className="text-[11px] font-extrabold text-slate-600 bg-slate-100 px-2.5 py-1 rounded-lg">
               Elements placed: <span className="text-amber-700">{paperElements.length}</span>
             </div>
+              </div>
+            )}
+            {isTopToolbarVisible && (
+              <button
+                type="button"
+                onClick={() => setIsTopToolbarVisible(false)}
+                className="absolute -bottom-3 left-1/2 z-[70] flex h-3 w-20 -translate-x-1/2 items-center justify-center rounded-b-lg border border-t-0 border-slate-300 bg-white text-slate-500 shadow-sm transition-colors hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+                title="Hide formatting toolbar"
+                aria-label="Hide formatting toolbar"
+              >
+                <span className="h-1 w-8 rounded-full bg-current" />
+              </button>
+            )}
           </div>
 
           <div
             id="coupon-bond-printable"
+            onSelect={saveSelection}
+            onKeyUp={saveSelection}
+            onMouseUp={saveSelection}
+            onKeyDown={handleCanvasKeyDown}
+            onClick={(e) => {
+              if (e.target.id === "coupon-bond-printable" || e.target === contentFlowRef.current) {
+                setActiveElementId(null);
+              }
+            }}
             style={{
+              "--doc-font-family": activeFont,
+              "--doc-font-size": `${toolbarFontSize}px`,
+              "--doc-line-height": docLineHeight || (contentDensity === "compact" ? 1.48 : 1.55),
               fontFamily: activeFont,
-              fontSize: `${fontSize}pt`,
-              lineHeight: 1.6,
+              fontSize: `${toolbarFontSize}px`,
+              lineHeight: docLineHeight || (contentDensity === "compact" ? 1.48 : 1.55),
               width: "100%",
               maxWidth: `${currentPaperDef.widthPx}px`,
-              minHeight: `${currentPaperDef.heightPx}px`,
-              transform: `scale(${zoomScale / 100})`,
-              transformOrigin: "top center",
-              transition: "min-height 0.35s ease, max-width 0.35s ease, transform 0.2s ease"
+              minHeight: `${effectivePageHeightPx}px`,
+              height: "auto",
+              overflow: "visible",
+              boxSizing: "border-box",
+              display: "flex",
+              flexDirection: "column",
+              justifyContent: "flex-start",
+              padding: getDocumentPagePadding(printMarginMode, reduceTopSpacingInPrint),
+              filter: printColorMode === "monochrome" ? "grayscale(100%) contrast(105%)" : "none",
+              marginBottom: "6rem",
+              transition: "min-height 0.35s ease, max-width 0.35s ease, padding 0.2s ease"
             }}
-            className={`bg-white text-slate-900 border border-slate-300 shadow-2xl rounded-sm p-8 sm:p-12 md:p-14 relative select-text flex flex-col justify-between ${isDragOverCanvas ? "ring-4 ring-amber-500/80 border-amber-500 bg-amber-50/15" : ""
-              }`}
+            className={`bg-white text-slate-900 border border-slate-300 shadow-2xl rounded-sm relative select-text flex flex-col justify-start ${
+              isDragOverCanvas ? "ring-4 ring-amber-500/80 border-amber-500 bg-amber-50/15" : ""
+            }`}
           >
             <div className="no-print absolute top-3 right-4 z-10 text-[10px] font-extrabold text-slate-400 bg-slate-50/90 border border-slate-200 px-2.5 py-1 rounded-md flex items-center gap-1.5 select-none pointer-events-none shadow-2xs">
               <span className="w-2 h-2 rounded-full bg-amber-500" />
               <span className="text-slate-700">{currentPaperDef.label}</span>
-              <span className="text-amber-700 font-mono">({currentPaperDef.heightPx}px height)</span>
+              <span className="text-amber-700 font-mono">({effectivePageHeightPx}px height)</span>
             </div>
 
             {isDragOverCanvas && (
@@ -3965,8 +6040,16 @@ export default function DocumentStudioPanel({
                     Your Coupon Bond Paper is Blank
                   </h3>
                   <p className="text-xs text-slate-500">
-                    Set your bond paper size above, then drag elements from the right palette (Header, Addressing, Directives Body, Signatory, Footer).
+                    Set your bond paper size above, then open the Elements Palette to add authentic letterheads, addressing, directives body, signatories, &amp; footers.
                   </p>
+                  <button
+                    type="button"
+                    onClick={() => setIsPaletteDrawerOpen(true)}
+                    className="mt-2 inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs shadow-xs transition cursor-pointer"
+                  >
+                    <Layers size={15} />
+                    <span>Open Elements Palette &amp; Add Blocks</span>
+                  </button>
                 </div>
 
                 <div className="pt-4 border-t border-slate-200/60 max-w-lg mx-auto">
@@ -4028,73 +6111,267 @@ export default function DocumentStudioPanel({
               </div>
             ) : (
               <div
-                className="space-y-6 flex-1 relative z-10"
+                ref={contentFlowRef}
+                data-doc-flow="true"
+                className="relative z-10 flex flex-col justify-start w-full"
                 style={{
                   position: "relative",
                   zIndex: 10,
                   display: "flex",
                   flexDirection: "column",
-                  justifyContent: paperElements.some((e) => e.category === "footer") ? "space-between" : "flex-start",
-                  flex: "1 1 0%",
-                  height: "100%",
+                  justifyContent: "flex-start",
+                  flexGrow: 1,
+                  flexShrink: 0,
+                  flexBasis: "auto",
                   minHeight: "100%",
-                  width: "100%"
+                  width: "100%",
+                  gap: contentDensity === "compact" ? "0.45rem" : "0.75rem",
+                  transition: "gap 0.2s ease"
                 }}
               >
                 {paperElements.map((el, index) => {
-                  const isHovered = activeElementId === el.id;
+                  const isSelected = activeElementId === el.id;
 
                   return (
                     <div
                       key={el.id}
                       data-category={el.category}
-                      onClick={() => setActiveElementId(el.id)}
-                      className={`relative group transition-all ${el.category === "footer" ? "mt-auto footer-stick-bottom" : ""}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setActiveElementId(el.id);
+                      }}
+                      style={{
+                        paddingTop: `${Math.max(el.data?.paddingTop ?? 4, el.category === "signatory" ? 16 : 0)}px`,
+                        paddingBottom: `${el.data?.paddingBottom ?? 8}px`,
+                        paddingLeft: `${el.data?.paddingLeft ?? 0}px`,
+                        paddingRight: `${el.data?.paddingRight ?? 0}px`,
+                        maxWidth: el.data?.widthPercent ? `${el.data.widthPercent}%` : "100%",
+                        margin: el.data?.align === "center" ? "0 auto" : el.data?.align === "right" ? "0 0 0 auto" : "0",
+                        textAlign: el.data?.align || "inherit"
+                      }}
+                      className={`relative group transition-all duration-150 ${
+                        el.category === "footer" ? "mt-auto footer-stick-bottom" : ""
+                      } ${
+                        isSelected
+                          ? "ring-2 ring-blue-500 bg-blue-50/25 border-2 border-blue-400/80 rounded-xl shadow-lg shadow-blue-500/15 backdrop-blur-[0.5px]"
+                          : "hover:ring-1 hover:ring-blue-300/40 rounded-xl"
+                      }`}
                     >
-                      <div className="no-print absolute -top-3.5 right-2 z-20 hidden group-hover:flex items-center gap-1 bg-slate-900 text-white px-2 py-0.5 rounded-lg shadow-md text-[10px] font-bold">
-                        <span className="text-amber-400 mr-1 max-w-[150px] truncate">{el.name}</span>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleOpenSaveAsTemplateFromPaper(el);
-                          }}
-                          className="px-2 py-0.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-black transition cursor-pointer flex items-center gap-1 text-[10px]"
-                          title="Save this edited element as a reusable Template"
-                        >
-                          <Bookmark size={11} />
-                          <span>Save Template</span>
-                        </button>
-                        {index > 0 && (
-                          <button
-                            type="button"
-                            onClick={(e) => { e.stopPropagation(); moveElement(index, "up"); }}
-                            className="p-1 hover:text-amber-400 cursor-pointer"
-                            title="Move Up"
-                          >
-                            <ArrowUp size={12} />
-                          </button>
-                        )}
-                        {index < paperElements.length - 1 && (
-                          <button
-                            type="button"
-                            onClick={(e) => { e.stopPropagation(); moveElement(index, "down"); }}
-                            className="p-1 hover:text-amber-400 cursor-pointer"
-                            title="Move Down"
-                          >
-                            <ArrowDown size={12} />
-                          </button>
-                        )}
-                        <button
-                          type="button"
-                          onClick={(e) => { e.stopPropagation(); removeElement(el.id); }}
-                          className="p-1 hover:text-rose-400 cursor-pointer ml-1"
-                          title="Remove Element"
-                        >
-                          <Trash2 size={12} />
-                        </button>
-                      </div>
+                      {/* Highlighted Corner & Edge Handles when Glass Blue selected */}
+                      {isSelected && (
+                        <>
+                          {/* 4 Highlighted Corner Handles */}
+                          <div
+                            onMouseDown={(e) => handleStartBlockResize(e, el.id, "nw")}
+                            className="no-print block-resize-handle absolute -top-1.5 -left-1.5 w-3.5 h-3.5 bg-blue-600 border-2 border-white rounded-full shadow-md z-30 cursor-nwse-resize hover:scale-125 transition-transform"
+                            title="Drag to resize top-left corner"
+                          />
+                          <div
+                            onMouseDown={(e) => handleStartBlockResize(e, el.id, "ne")}
+                            className="no-print block-resize-handle absolute -top-1.5 -right-1.5 w-3.5 h-3.5 bg-blue-600 border-2 border-white rounded-full shadow-md z-30 cursor-nesw-resize hover:scale-125 transition-transform"
+                            title="Drag to resize top-right corner"
+                          />
+                          <div
+                            onMouseDown={(e) => handleStartBlockResize(e, el.id, "sw")}
+                            className="no-print block-resize-handle absolute -bottom-1.5 -left-1.5 w-3.5 h-3.5 bg-blue-600 border-2 border-white rounded-full shadow-md z-30 cursor-nesw-resize hover:scale-125 transition-transform"
+                            title="Drag to resize bottom-left corner"
+                          />
+                          <div
+                            onMouseDown={(e) => handleStartBlockResize(e, el.id, "se")}
+                            className="no-print block-resize-handle absolute -bottom-1.5 -right-1.5 w-3.5 h-3.5 bg-blue-600 border-2 border-white rounded-full shadow-md z-30 cursor-nwse-resize hover:scale-125 transition-transform"
+                            title="Drag to resize bottom-right corner"
+                          />
 
+                          {/* Center Bottom Spacing Handle */}
+                          <div
+                            onMouseDown={(e) => handleStartBlockResize(e, el.id, "bottom")}
+                            className="no-print block-resize-handle absolute -bottom-1 left-1/2 -translate-x-1/2 w-8 h-2 bg-blue-600 border border-white rounded-full shadow-md z-30 cursor-ns-resize hover:scale-110 transition-transform"
+                            title="Drag down/up to adjust block spacing"
+                          />
+                        </>
+                      )}
+
+                      {/* Glass Blue Floating Quick Inspector Bar */}
+                      {isSelected ? (
+                        <div
+                          onClick={(e) => e.stopPropagation()}
+                          className="no-print glass-blue-inspector absolute -top-10 left-1/2 -translate-x-1/2 z-40 bg-slate-900/95 text-white border border-blue-500/60 rounded-xl px-2.5 py-1 flex items-center gap-2 shadow-2xl backdrop-blur-md text-xs select-none animate-in fade-in zoom-in-95 duration-100"
+                        >
+                          <span className="flex items-center gap-1 text-[11px] font-black text-blue-300 uppercase tracking-wide px-1.5 py-0.5 rounded bg-blue-950/80 border border-blue-500/40">
+                            <Layers size={12} className="text-blue-400" />
+                            <span className="max-w-[120px] truncate">{el.name}</span>
+                          </span>
+
+                          <div className="h-4 w-px bg-slate-700" />
+
+                          {/* Spacing / Padding adjustment */}
+                          <div className="flex items-center gap-1 bg-slate-800 rounded-lg px-1.5 py-0.5" title="Vertical Spacing (Padding)">
+                            <span className="text-[10px] text-slate-400 font-bold uppercase">Pad:</span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const current = el.data?.paddingBottom ?? 8;
+                                adjustElementLayout(el.id, {
+                                  paddingBottom: Math.max(0, current - 4),
+                                  paddingTop: Math.max(0, (el.data?.paddingTop ?? 4) - 2)
+                                });
+                              }}
+                              className="px-1.5 py-0.5 rounded hover:bg-slate-700 text-slate-300 hover:text-white font-black text-xs cursor-pointer"
+                              title="Decrease Spacing"
+                            >
+                              −
+                            </button>
+                            <span className="font-mono text-amber-400 text-[11px] font-bold min-w-[20px] text-center">
+                              {el.data?.paddingBottom ?? 8}px
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const current = el.data?.paddingBottom ?? 8;
+                                adjustElementLayout(el.id, {
+                                  paddingBottom: Math.min(60, current + 4),
+                                  paddingTop: Math.min(30, (el.data?.paddingTop ?? 4) + 2)
+                                });
+                              }}
+                              className="px-1.5 py-0.5 rounded hover:bg-slate-700 text-slate-300 hover:text-white font-black text-xs cursor-pointer"
+                              title="Increase Spacing"
+                            >
+                              +
+                            </button>
+                          </div>
+
+                          {/* Width Scale */}
+                          <div className="flex items-center gap-1 bg-slate-800 rounded-lg px-1.5 py-0.5" title="Block Width Size">
+                            <span className="text-[10px] text-slate-400 font-bold uppercase">Width:</span>
+                            {[100, 90, 80].map((w) => (
+                              <button
+                                key={w}
+                                type="button"
+                                onClick={() => {
+                                  adjustElementLayout(el.id, { widthPercent: w });
+                                }}
+                                className={`px-1.5 py-0.5 rounded text-[10px] font-bold cursor-pointer transition ${
+                                  (el.data?.widthPercent ?? 100) === w
+                                    ? "bg-blue-600 text-white font-black"
+                                    : "text-slate-400 hover:text-white"
+                                }`}
+                              >
+                                {w}%
+                              </button>
+                            ))}
+                          </div>
+
+                          <div className="h-4 w-px bg-slate-700" />
+
+                          {/* Move block Up / Down */}
+                          {index > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => moveElement(index, "up")}
+                              className="p-1 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-amber-400 cursor-pointer"
+                              title="Move Block Up"
+                            >
+                              <ArrowUp size={13} />
+                            </button>
+                          )}
+                          {index < paperElements.length - 1 && (
+                            <button
+                              type="button"
+                              onClick={() => moveElement(index, "down")}
+                              className="p-1 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-amber-400 cursor-pointer"
+                              title="Move Block Down"
+                            >
+                              <ArrowDown size={13} />
+                            </button>
+                          )}
+
+                          {/* Duplicate Block */}
+                          <button
+                            type="button"
+                            onClick={() => duplicateElement(el.id)}
+                            className="p-1 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-blue-300 cursor-pointer"
+                            title="Duplicate Block"
+                          >
+                            <Copy size={13} />
+                          </button>
+
+                          {/* Save as Template */}
+                          <button
+                            type="button"
+                            onClick={() => handleOpenSaveAsTemplateFromPaper(el)}
+                            className="p-1 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-amber-400 cursor-pointer"
+                            title="Save as Custom Template"
+                          >
+                            <Bookmark size={13} />
+                          </button>
+
+                          {/* Delete Block */}
+                          <button
+                            type="button"
+                            onClick={() => removeElement(el.id)}
+                            className="p-1 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-rose-400 cursor-pointer"
+                            title="Delete Block"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+
+                          {/* Close/Deselect button */}
+                          <button
+                            type="button"
+                            onClick={() => setActiveElementId(null)}
+                            className="p-1 rounded-lg hover:bg-slate-800 text-slate-500 hover:text-white cursor-pointer ml-1"
+                            title="Deselect Block"
+                          >
+                            <X size={13} />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="no-print absolute -top-3.5 right-2 z-20 hidden group-hover:flex items-center gap-1 bg-slate-900 text-white px-2 py-0.5 rounded-lg shadow-md text-[10px] font-bold">
+                          <span className="text-amber-400 mr-1 max-w-[150px] truncate">{el.name}</span>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleOpenSaveAsTemplateFromPaper(el);
+                            }}
+                            className="px-2 py-0.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-black transition cursor-pointer flex items-center gap-1 text-[10px]"
+                            title="Save this edited element as a reusable Template"
+                          >
+                            <Bookmark size={11} />
+                            <span>Save Template</span>
+                          </button>
+                          {index > 0 && (
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); moveElement(index, "up"); }}
+                              className="p-1 hover:text-amber-400 cursor-pointer"
+                              title="Move Up"
+                            >
+                              <ArrowUp size={12} />
+                            </button>
+                          )}
+                          {index < paperElements.length - 1 && (
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); moveElement(index, "down"); }}
+                              className="p-1 hover:text-amber-400 cursor-pointer"
+                              title="Move Down"
+                            >
+                              <ArrowDown size={12} />
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); removeElement(el.id); }}
+                            className="p-1 hover:text-rose-400 cursor-pointer ml-1"
+                            title="Remove Element"
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        </div>
+                      )}
+
+                      {/* 1. Header Designs */}
                       {el.category === "header" && (
                         <div>
                           {el.variant === "header_dual_logo" && (
@@ -4104,17 +6381,41 @@ export default function DocumentStudioPanel({
                                   <img src={selectedCompany.logoUrl} alt={selectedCompany.name} style={{ maxHeight: "100%", maxWidth: "100%", objectFit: "contain" }} className="max-h-full max-w-full object-contain" />
                                 </div>
                                 <div className="flex-1 text-center px-2">
-                                  <h2 className="text-base sm:text-lg font-black uppercase tracking-wider text-slate-900 leading-tight">
-                                    {selectedCompany.legalName || selectedCompany.name}
+                                  <h2
+                                    contentEditable
+                                    suppressContentEditableWarning
+                                    onFocus={saveSelection}
+                                    onInput={(e) => handleFieldInput(el.id, "companyName", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "companyName", e.currentTarget.innerText)}
+                                    className="text-base sm:text-lg font-black uppercase tracking-wider text-slate-900 leading-tight outline-none hover:bg-amber-50/50 rounded px-1 transition"
+                                  >
+                                    {resolveCompanyTokens(el.data?.companyName || selectedCompany.legalName || selectedCompany.name, selectedCompany)}
                                   </h2>
-                                  <p className="text-xs font-semibold text-emerald-800 tracking-wide mt-0.5">
-                                    {selectedCompany.tagline}
+                                  <p
+                                    contentEditable
+                                    suppressContentEditableWarning
+                                    onFocus={saveSelection}
+                                    onInput={(e) => handleFieldInput(el.id, "tagline", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "tagline", e.currentTarget.innerText)}
+                                    className="text-xs font-semibold text-emerald-800 tracking-wide mt-0.5 outline-none hover:bg-amber-50/50 rounded px-1 transition"
+                                  >
+                                    {resolveCompanyTokens(el.data?.tagline ?? (selectedCompany.tagline || ""), selectedCompany)}
                                   </p>
-                                  <p className="text-[11px] text-slate-600 mt-1 leading-snug">
-                                    {selectedCompany.address}
+                                  <p
+                                    contentEditable
+                                    suppressContentEditableWarning
+                                    onFocus={saveSelection}
+                                    onInput={(e) => handleFieldInput(el.id, "address", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "address", e.currentTarget.innerText)}
+                                    className="text-[11px] text-slate-600 mt-1 leading-snug outline-none hover:bg-amber-50/50 rounded px-1 transition whitespace-pre-line"
+                                  >
+                                    {resolveCompanyTokens(el.data?.address ?? (selectedCompany.address || ""), selectedCompany)}
                                   </p>
-                                  <p className="text-[10px] text-slate-500 font-mono mt-0.5">
-                                    {selectedCompany.contact}
+                                  <p
+                                    contentEditable
+                                    suppressContentEditableWarning
+                                    onFocus={saveSelection}
+                                    onInput={(e) => handleFieldInput(el.id, "contact", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "contact", e.currentTarget.innerText)}
+                                    className="text-[10px] text-slate-500 font-mono mt-0.5 outline-none hover:bg-amber-50/50 rounded px-1 transition"
+                                  >
+                                    {resolveCompanyTokens(el.data?.contact ?? (selectedCompany.contact || ""), selectedCompany)}
                                   </p>
                                 </div>
                                 <div className="w-18 h-18 sm:w-20 sm:h-20 flex items-center justify-center shrink-0" style={{ width: "5rem", height: "5rem", flexShrink: 0 }}>
@@ -4129,15 +6430,45 @@ export default function DocumentStudioPanel({
                               <div className="flex items-center gap-3">
                                 <img src={selectedCompany.logoUrl} alt={selectedCompany.name} className="w-14 h-14 object-contain" />
                                 <div className="border-l-2 border-amber-600 pl-3">
-                                  <h2 className="text-base font-black uppercase text-slate-950 tracking-tight leading-tight">
-                                    {selectedCompany.name}
+                                  <h2
+                                    contentEditable
+                                    suppressContentEditableWarning
+                                    onFocus={saveSelection}
+                                    onInput={(e) => handleFieldInput(el.id, "companyName", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "companyName", e.currentTarget.innerText)}
+                                    className="text-base font-black uppercase text-slate-950 tracking-tight leading-tight outline-none hover:bg-amber-50/50 rounded px-1 transition"
+                                  >
+                                    {resolveCompanyTokens(el.data?.companyName || selectedCompany.name, selectedCompany)}
                                   </h2>
-                                  <p className="text-[11px] font-bold text-slate-500 uppercase">{selectedCompany.category}</p>
+                                  <p
+                                    contentEditable
+                                    suppressContentEditableWarning
+                                    onFocus={saveSelection}
+                                    onInput={(e) => handleFieldInput(el.id, "categoryText", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "categoryText", e.currentTarget.innerText)}
+                                    className="text-[11px] font-bold text-slate-500 uppercase outline-none hover:bg-amber-50/50 rounded px-1 transition"
+                                  >
+                                    {resolveCompanyTokens(el.data?.categoryText || selectedCompany.category, selectedCompany)}
+                                  </p>
                                 </div>
                               </div>
                               <div className="text-right text-[10px] text-slate-500 font-mono">
-                                <p>{selectedCompany.address}</p>
-                                <p>{selectedCompany.contact}</p>
+                                <p
+                                  contentEditable
+                                  suppressContentEditableWarning
+                                  onFocus={saveSelection}
+                                  onInput={(e) => handleFieldInput(el.id, "address", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "address", e.currentTarget.innerText)}
+                                  className="outline-none hover:bg-amber-50/50 rounded px-1 transition"
+                                >
+                                  {resolveCompanyTokens(el.data?.address || selectedCompany.address, selectedCompany)}
+                                </p>
+                                <p
+                                  contentEditable
+                                  suppressContentEditableWarning
+                                  onFocus={saveSelection}
+                                  onInput={(e) => handleFieldInput(el.id, "contact", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "contact", e.currentTarget.innerText)}
+                                  className="outline-none hover:bg-amber-50/50 rounded px-1 transition"
+                                >
+                                  {resolveCompanyTokens(el.data?.contact || selectedCompany.contact, selectedCompany)}
+                                </p>
                               </div>
                             </div>
                           )}
@@ -4145,11 +6476,23 @@ export default function DocumentStudioPanel({
                           {el.variant === "header_formal_seal" && (
                             <div className="border-b-2 border-double border-slate-800 pb-4 mb-4 text-center space-y-1 select-text">
                               <img src={selectedCompany.logoUrl} alt={selectedCompany.name} className="w-16 h-16 mx-auto object-contain mb-1" />
-                              <h2 className="text-lg font-black uppercase tracking-widest text-slate-950">
-                                {selectedCompany.legalName || selectedCompany.name}
+                              <h2
+                                contentEditable
+                                suppressContentEditableWarning
+                                onFocus={saveSelection}
+                                onInput={(e) => handleFieldInput(el.id, "companyName", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "companyName", e.currentTarget.innerText)}
+                                className="text-lg font-black uppercase tracking-widest text-slate-950 outline-none hover:bg-amber-50/50 rounded px-1 transition"
+                              >
+                                {resolveCompanyTokens(el.data?.companyName || selectedCompany.legalName || selectedCompany.name, selectedCompany)}
                               </h2>
-                              <p className="text-[11px] font-bold uppercase tracking-wider text-slate-700">
-                                {selectedCompany.address} • {selectedCompany.contact}
+                              <p
+                                contentEditable
+                                suppressContentEditableWarning
+                                onFocus={saveSelection}
+                                onInput={(e) => handleFieldInput(el.id, "addressContact", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "addressContact", e.currentTarget.innerText)}
+                                className="text-[11px] font-bold uppercase tracking-wider text-slate-700 outline-none hover:bg-amber-50/50 rounded px-1 transition"
+                              >
+                                {resolveCompanyTokens(el.data?.addressContact || `${selectedCompany.address} • ${selectedCompany.contact}`, selectedCompany)}
                               </p>
                             </div>
                           )}
@@ -4158,9 +6501,25 @@ export default function DocumentStudioPanel({
                             <div className="border-b border-emerald-600 pb-2 mb-3 flex items-center justify-between text-xs font-bold text-slate-800 select-text">
                               <div className="flex items-center gap-2">
                                 <img src={selectedCompany.logoUrl} alt={selectedCompany.code} className="w-7 h-7 object-contain" />
-                                <span className="font-black uppercase tracking-wider">{selectedCompany.name}</span>
+                                <span
+                                  contentEditable
+                                  suppressContentEditableWarning
+                                  onFocus={saveSelection}
+                                  onInput={(e) => handleFieldInput(el.id, "companyName", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "companyName", e.currentTarget.innerText)}
+                                  className="font-black uppercase tracking-wider outline-none hover:bg-amber-50/50 rounded px-1 transition"
+                                >
+                                  {resolveCompanyTokens(el.data?.companyName || selectedCompany.name, selectedCompany)}
+                                </span>
                               </div>
-                              <span className="text-[10px] text-slate-500 font-mono">{selectedCompany.contact}</span>
+                              <span
+                                contentEditable
+                                suppressContentEditableWarning
+                                onFocus={saveSelection}
+                                onInput={(e) => handleFieldInput(el.id, "contact", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "contact", e.currentTarget.innerText)}
+                                className="text-[10px] text-slate-500 font-mono outline-none hover:bg-amber-50/50 rounded px-1 transition"
+                              >
+                                {resolveCompanyTokens(el.data?.contact || selectedCompany.contact, selectedCompany)}
+                              </span>
                             </div>
                           )}
 
@@ -4169,17 +6528,45 @@ export default function DocumentStudioPanel({
                               <div className="flex items-center gap-3">
                                 <img src={selectedCompany.logoUrl} alt={selectedCompany.name} className="w-14 h-14 object-contain" />
                                 <div>
-                                  <h2 className="text-sm font-black uppercase text-slate-900">
-                                    {selectedCompany.name}
+                                  <h2
+                                    contentEditable
+                                    suppressContentEditableWarning
+                                    onFocus={saveSelection}
+                                    onInput={(e) => handleFieldInput(el.id, "companyName", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "companyName", e.currentTarget.innerText)}
+                                    className="text-sm font-black uppercase text-slate-900 outline-none hover:bg-amber-50/50 rounded px-1 transition"
+                                  >
+                                    {resolveCompanyTokens(el.data?.companyName || selectedCompany.name, selectedCompany)}
                                   </h2>
-                                  <p className="text-[11px] font-extrabold text-emerald-800">
-                                    PCSO Authorized Agent Corporation (AAC) • Central Operations Hub
+                                  <p
+                                    contentEditable
+                                    suppressContentEditableWarning
+                                    onFocus={saveSelection}
+                                    onInput={(e) => handleFieldInput(el.id, "tagline", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "tagline", e.currentTarget.innerText)}
+                                    className="text-[11px] font-extrabold text-emerald-800 outline-none hover:bg-amber-50/50 rounded px-1 transition"
+                                  >
+                                    {resolveCompanyTokens(el.data?.tagline || "PCSO Authorized Agent Corporation (AAC) • Central Operations Hub", selectedCompany)}
                                   </p>
                                 </div>
                               </div>
                               <div className="border border-slate-300 p-1.5 rounded text-center text-[10px] font-mono bg-slate-50">
-                                <span className="block font-black text-slate-800">{resolveCompanyTokens(el.data?.aacNumber || "AAC-[COMPANY_CODE]-2026-089", selectedCompany)}</span>
-                                <span className="text-slate-500">Accredited Agency</span>
+                                <span
+                                  contentEditable
+                                  suppressContentEditableWarning
+                                  onFocus={saveSelection}
+                                  onInput={(e) => handleFieldInput(el.id, "aacNumber", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "aacNumber", e.currentTarget.innerText)}
+                                  className="block font-black text-slate-800 outline-none hover:bg-amber-50/50 rounded px-1 transition"
+                                >
+                                  {resolveCompanyTokens(el.data?.aacNumber || "AAC-[COMPANY_CODE]-2026-089", selectedCompany)}
+                                </span>
+                                <span
+                                  contentEditable
+                                  suppressContentEditableWarning
+                                  onFocus={saveSelection}
+                                  onInput={(e) => handleFieldInput(el.id, "agencySubtitle", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "agencySubtitle", e.currentTarget.innerText)}
+                                  className="text-slate-500 outline-none hover:bg-amber-50/50 rounded px-1 transition block"
+                                >
+                                  {resolveCompanyTokens(el.data?.agencySubtitle || "Accredited Agency", selectedCompany)}
+                                </span>
                               </div>
                             </div>
                           )}
@@ -4215,6 +6602,15 @@ export default function DocumentStudioPanel({
                                   />
                                 </div>
                               </div>
+                              <div
+                                contentEditable
+                                suppressContentEditableWarning
+                                onFocus={saveSelection}
+                                onInput={(e) => handleFieldInput(el.id, "companyName", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "companyName", e.currentTarget.innerText)}
+                                className="text-center font-black uppercase text-slate-800 text-xs mt-1 outline-none hover:bg-amber-50/50 rounded px-1 transition"
+                              >
+                                {resolveCompanyTokens(el.data?.companyName || selectedCompany.legalName || selectedCompany.name, selectedCompany)}
+                              </div>
                             </div>
                           )}
 
@@ -4233,6 +6629,7 @@ export default function DocumentStudioPanel({
                                   <h2
                                     contentEditable
                                     suppressContentEditableWarning
+                                    onFocus={saveSelection}
                                     onBlur={(e) => {
                                       const next = e.currentTarget.innerText.trim();
                                       const fallback = (selectedCompany.legalName || selectedCompany.name || "").trim();
@@ -4245,6 +6642,7 @@ export default function DocumentStudioPanel({
                                   <div
                                     contentEditable
                                     suppressContentEditableWarning
+                                    onFocus={saveSelection}
                                     onBlur={(e) => {
                                       const next = e.currentTarget.innerText.trim();
                                       const fallback = (selectedCompany.address || "").trim();
@@ -4269,6 +6667,7 @@ export default function DocumentStudioPanel({
                         </div>
                       )}
 
+                      {/* 2. Addressing & Metadata */}
                       {el.category === "addressing" && (
                         <div>
                           {el.variant === "address_termination_agency" && (
@@ -4276,7 +6675,8 @@ export default function DocumentStudioPanel({
                               <div
                                 contentEditable
                                 suppressContentEditableWarning
-                                onBlur={(e) => handleTokenAwareBlur(el.id, "dateLine", el.data?.dateLine, e.currentTarget.innerText, "Date: _____________________")}
+                                onFocus={saveSelection}
+                                onInput={(e) => handleFieldInput(el.id, "dateLine", e.currentTarget.innerText)} onBlur={(e) => handleTokenAwareBlur(el.id, "dateLine", el.data?.dateLine, e.currentTarget.innerText, "Date: _____________________")}
                                 className="font-bold text-xs text-slate-900 outline-none hover:bg-amber-50/50 rounded px-1 transition inline-block"
                               >
                                 {resolveCompanyTokens(el.data?.dateLine || "Date: _____________________", selectedCompany)}
@@ -4286,7 +6686,8 @@ export default function DocumentStudioPanel({
                                 <div
                                   contentEditable
                                   suppressContentEditableWarning
-                                  onBlur={(e) => handleTokenAwareBlur(el.id, "recipientName", el.data?.recipientName, e.currentTarget.innerText, "MR. DANIEL PADILLA")}
+                                  onFocus={saveSelection}
+                                  onInput={(e) => handleFieldInput(el.id, "recipientName", e.currentTarget.innerText)} onBlur={(e) => handleTokenAwareBlur(el.id, "recipientName", el.data?.recipientName, e.currentTarget.innerText, "MR. DANIEL PADILLA")}
                                   className="font-black text-sm uppercase text-slate-950 outline-none hover:bg-amber-50/50 rounded px-1 transition"
                                 >
                                   {resolveCompanyTokens(el.data?.recipientName || "MR. DANIEL PADILLA", selectedCompany)}
@@ -4294,7 +6695,8 @@ export default function DocumentStudioPanel({
                                 <div
                                   contentEditable
                                   suppressContentEditableWarning
-                                  onBlur={(e) => handleTokenAwareBlur(el.id, "recipientOffice", el.data?.recipientOffice, e.currentTarget.innerText, "STL-ILIGAN OFFICE, LANAO DEL NORTE")}
+                                  onFocus={saveSelection}
+                                  onInput={(e) => handleFieldInput(el.id, "recipientOffice", e.currentTarget.innerText)} onBlur={(e) => handleTokenAwareBlur(el.id, "recipientOffice", el.data?.recipientOffice, e.currentTarget.innerText, "STL-ILIGAN OFFICE, LANAO DEL NORTE")}
                                   className="font-bold text-xs uppercase text-slate-800 outline-none hover:bg-amber-50/50 rounded px-1 transition"
                                 >
                                   {resolveCompanyTokens(el.data?.recipientOffice || "STL-ILIGAN OFFICE, LANAO DEL NORTE", selectedCompany)}
@@ -4302,19 +6704,21 @@ export default function DocumentStudioPanel({
                                 <div
                                   contentEditable
                                   suppressContentEditableWarning
-                                  onBlur={(e) => handleTokenAwareBlur(el.id, "recipientCompany", el.data?.recipientCompany, e.currentTarget.innerText, "[COMPANY_LEGAL_NAME]")}
-                                  className="font-bold text-xs uppercase text-slate-700 outline-none hover:bg-amber-50/50 rounded px-1 transition"
+                                  onFocus={saveSelection}
+                                  onInput={(e) => handleFieldInput(el.id, "recipientCompany", e.currentTarget.innerText)} onBlur={(e) => handleTokenAwareBlur(el.id, "recipientCompany", el.data?.recipientCompany, e.currentTarget.innerText, "[COMPANY_LEGAL_NAME]")}
+                                  className="font-bold text-xs uppercase text-slate-800 outline-none hover:bg-amber-50/50 rounded px-1 transition"
                                 >
                                   {resolveCompanyTokens(el.data?.recipientCompany || "[COMPANY_LEGAL_NAME]", selectedCompany)}
                                 </div>
                               </div>
 
-                              <div className="pt-1">
+                              <div className="pt-2">
                                 <span
                                   contentEditable
                                   suppressContentEditableWarning
-                                  onBlur={(e) => handleTokenAwareBlur(el.id, "subject", el.data?.subject, e.currentTarget.innerText, "RE: TERMINATION OF AGENCY AGREEMENT")}
-                                  className="font-black text-xs uppercase text-slate-950 outline-none hover:bg-amber-50/50 rounded px-1 transition inline-block"
+                                  onFocus={saveSelection}
+                                  onInput={(e) => handleFieldInput(el.id, "subject", e.currentTarget.innerText)} onBlur={(e) => handleTokenAwareBlur(el.id, "subject", el.data?.subject, e.currentTarget.innerText, "RE: TERMINATION OF AGENCY AGREEMENT")}
+                                  className="font-black italic text-xs uppercase text-slate-950 outline-none hover:bg-amber-50/50 rounded px-1 transition"
                                 >
                                   {resolveCompanyTokens(el.data?.subject || "RE: TERMINATION OF AGENCY AGREEMENT", selectedCompany)}
                                 </span>
@@ -4323,19 +6727,22 @@ export default function DocumentStudioPanel({
                               <div
                                 contentEditable
                                 suppressContentEditableWarning
-                                onBlur={(e) => handleTokenAwareBlur(el.id, "salutation", el.data?.salutation, e.currentTarget.innerText, "Dear Mr. Padilla,")}
-                                className="font-bold text-xs text-slate-900 pt-0.5 outline-none hover:bg-amber-50/50 rounded px-1 transition"
+                                onFocus={saveSelection}
+                                onInput={(e) => handleFieldInput(el.id, "salutation", e.currentTarget.innerText)} onBlur={(e) => handleTokenAwareBlur(el.id, "salutation", el.data?.salutation, e.currentTarget.innerText, "Dear Mr. Padilla,")}
+                                className="font-bold text-xs text-slate-900 pt-1 outline-none hover:bg-amber-50/50 rounded px-1 transition"
                               >
                                 {resolveCompanyTokens(el.data?.salutation || "Dear Mr. Padilla,", selectedCompany)}
                               </div>
                             </div>
                           )}
+
                           {el.variant === "address_letter_to_explain" && (
                             <div className="mb-5 text-xs text-slate-900 space-y-3.5 select-text">
                               <div
                                 contentEditable
                                 suppressContentEditableWarning
-                                onBlur={(e) => handleTokenAwareBlur(el.id, "date", el.data?.date, e.currentTarget.innerText, docDate || "SEPTEMBER 28, 2026")}
+                                onFocus={saveSelection}
+                                onInput={(e) => handleFieldInput(el.id, "date", e.currentTarget.innerText)} onBlur={(e) => handleTokenAwareBlur(el.id, "date", el.data?.date, e.currentTarget.innerText, docDate || "SEPTEMBER 28, 2026")}
                                 className="font-bold text-xs text-slate-900 outline-none hover:bg-amber-50/50 rounded px-1 transition uppercase tracking-wide inline-block"
                               >
                                 {resolveCompanyTokens(el.data?.date || docDate || "SEPTEMBER 28, 2026", selectedCompany)}
@@ -4345,7 +6752,8 @@ export default function DocumentStudioPanel({
                                 <div
                                   contentEditable
                                   suppressContentEditableWarning
-                                  onBlur={(e) => handleTokenAwareBlur(el.id, "recipientName", el.data?.recipientName, e.currentTarget.innerText, "MOSHER BEBOT")}
+                                  onFocus={saveSelection}
+                                  onInput={(e) => handleFieldInput(el.id, "recipientName", e.currentTarget.innerText)} onBlur={(e) => handleTokenAwareBlur(el.id, "recipientName", el.data?.recipientName, e.currentTarget.innerText, "MOSHER BEBOT")}
                                   className="font-black text-sm uppercase text-slate-950 outline-none hover:bg-amber-50/50 rounded px-1 transition"
                                 >
                                   {resolveCompanyTokens(el.data?.recipientName || "MOSHER BEBOT", selectedCompany)}
@@ -4353,7 +6761,8 @@ export default function DocumentStudioPanel({
                                 <div
                                   contentEditable
                                   suppressContentEditableWarning
-                                  onBlur={(e) => handleTokenAwareBlur(el.id, "recipientTitle", el.data?.recipientTitle, e.currentTarget.innerText, "SALES SUPERVISOR")}
+                                  onFocus={saveSelection}
+                                  onInput={(e) => handleFieldInput(el.id, "recipientTitle", e.currentTarget.innerText)} onBlur={(e) => handleTokenAwareBlur(el.id, "recipientTitle", el.data?.recipientTitle, e.currentTarget.innerText, "SALES SUPERVISOR")}
                                   className="font-bold text-xs uppercase text-slate-800 outline-none hover:bg-amber-50/50 rounded px-1 transition"
                                 >
                                   {resolveCompanyTokens(el.data?.recipientTitle || "SALES SUPERVISOR", selectedCompany)}
@@ -4361,7 +6770,8 @@ export default function DocumentStudioPanel({
                                 <div
                                   contentEditable
                                   suppressContentEditableWarning
-                                  onBlur={(e) => handleTokenAwareBlur(el.id, "recipientCompany", el.data?.recipientCompany, e.currentTarget.innerText, "[COMPANY_LEGAL_NAME]")}
+                                  onFocus={saveSelection}
+                                  onInput={(e) => handleFieldInput(el.id, "recipientCompany", e.currentTarget.innerText)} onBlur={(e) => handleTokenAwareBlur(el.id, "recipientCompany", el.data?.recipientCompany, e.currentTarget.innerText, "[COMPANY_LEGAL_NAME]")}
                                   className="font-bold text-xs uppercase text-slate-800 outline-none hover:bg-amber-50/50 rounded px-1 transition"
                                 >
                                   {resolveCompanyTokens(el.data?.recipientCompany || "[COMPANY_LEGAL_NAME]", selectedCompany)}
@@ -4369,7 +6779,8 @@ export default function DocumentStudioPanel({
                                 <div
                                   contentEditable
                                   suppressContentEditableWarning
-                                  onBlur={(e) => handleTokenAwareBlur(el.id, "recipientStation", el.data?.recipientStation, e.currentTarget.innerText, "MAGUINDANAO DEL NORTE")}
+                                  onFocus={saveSelection}
+                                  onInput={(e) => handleFieldInput(el.id, "recipientStation", e.currentTarget.innerText)} onBlur={(e) => handleTokenAwareBlur(el.id, "recipientStation", el.data?.recipientStation, e.currentTarget.innerText, "MAGUINDANAO DEL NORTE")}
                                   className="font-semibold text-xs uppercase text-slate-700 outline-none hover:bg-amber-50/50 rounded px-1 transition"
                                 >
                                   {resolveCompanyTokens(el.data?.recipientStation || "MAGUINDANAO DEL NORTE", selectedCompany)}
@@ -4380,7 +6791,8 @@ export default function DocumentStudioPanel({
                                 <span
                                   contentEditable
                                   suppressContentEditableWarning
-                                  onBlur={(e) => handleTokenAwareBlur(el.id, "subject", el.data?.subject, e.currentTarget.innerText, "RE: LETTER OF EXPLANATION")}
+                                  onFocus={saveSelection}
+                                  onInput={(e) => handleFieldInput(el.id, "subject", e.currentTarget.innerText)} onBlur={(e) => handleTokenAwareBlur(el.id, "subject", el.data?.subject, e.currentTarget.innerText, "RE: LETTER OF EXPLANATION")}
                                   className="font-black italic text-xs uppercase text-slate-950 outline-none hover:bg-amber-50/50 rounded px-1 transition"
                                 >
                                   {resolveCompanyTokens(el.data?.subject || "RE: LETTER OF EXPLANATION", selectedCompany)}
@@ -4390,7 +6802,8 @@ export default function DocumentStudioPanel({
                               <div
                                 contentEditable
                                 suppressContentEditableWarning
-                                onBlur={(e) => handleTokenAwareBlur(el.id, "salutation", el.data?.salutation, e.currentTarget.innerText, "Dear Gomez,")}
+                                onFocus={saveSelection}
+                                onInput={(e) => handleFieldInput(el.id, "salutation", e.currentTarget.innerText)} onBlur={(e) => handleTokenAwareBlur(el.id, "salutation", el.data?.salutation, e.currentTarget.innerText, "Dear Gomez,")}
                                 className="font-bold text-xs text-slate-900 pt-1 outline-none hover:bg-amber-50/50 rounded px-1 transition"
                               >
                                 {resolveCompanyTokens(el.data?.salutation || "Dear Gomez,", selectedCompany)}
@@ -4401,42 +6814,109 @@ export default function DocumentStudioPanel({
                           {el.variant === "address_memo_grid" && (
                             <div className="my-3 text-xs text-slate-800 space-y-2 select-text">
                               <div className="flex justify-between items-baseline border-b-2 border-slate-900 pb-1.5 mb-2.5">
-                                <span className="font-black tracking-widest text-slate-950 text-base">MEMORANDUM</span>
-                                <span className="font-mono text-slate-500 font-bold text-xs">REF: {docRef}</span>
+                                <span
+                                  contentEditable
+                                  suppressContentEditableWarning
+                                  onFocus={saveSelection}
+                                  onInput={(e) => handleFieldInput(el.id, "memoTitle", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "memoTitle", e.currentTarget.innerText)}
+                                  className="font-black tracking-widest text-slate-950 text-base outline-none hover:bg-amber-50/50 rounded px-1"
+                                >
+                                  {el.data?.memoTitle || "MEMORANDUM"}
+                                </span>
+                                <span
+                                  contentEditable
+                                  suppressContentEditableWarning
+                                  onFocus={saveSelection}
+                                  onInput={(e) => handleFieldInput(el.id, "ref", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "ref", e.currentTarget.innerText)}
+                                  className="font-mono text-slate-500 font-bold text-xs outline-none hover:bg-amber-50/50 rounded px-1"
+                                >
+                                  {el.data?.ref || `REF: ${docRef}`}
+                                </span>
                               </div>
                               <div className="grid grid-cols-1 gap-1.5 text-xs">
-                                <div className="flex items-baseline">
-                                  <span className="font-black text-slate-500 w-20 shrink-0">FOR / TO:</span>
+                                <div className="flex items-baseline" style={{ display: "flex", alignItems: "baseline", gap: "0.5rem" }}>
                                   <span
                                     contentEditable
                                     suppressContentEditableWarning
-                                    onBlur={(e) => handleTokenAwareBlur(el.id, "to", el.data?.to, e.currentTarget.innerText, selectedCompany.defaultTo || "ALL CONCERNED")}
+                                    onFocus={saveSelection}
+                                    onInput={(e) => handleFieldInput(el.id, "toLabel", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "toLabel", e.currentTarget.innerText)}
+                                    style={{ width: "6rem", minWidth: "6rem", flexShrink: 0, display: "inline-block", color: "#64748b" }}
+                                    className="font-black text-slate-500 w-24 shrink-0 outline-none hover:bg-amber-50/50 rounded"
+                                  >
+                                    {el.data?.toLabel || "FOR / TO:"}
+                                  </span>
+                                  <span
+                                    contentEditable
+                                    suppressContentEditableWarning
+                                    onFocus={saveSelection}
+                                    onInput={(e) => handleFieldInput(el.id, "to", e.currentTarget.innerText)} onBlur={(e) => handleTokenAwareBlur(el.id, "to", el.data?.to, e.currentTarget.innerText, selectedCompany.defaultTo || "ALL CONCERNED")}
+                                    style={{ flex: "1 1 0%", minWidth: 0, paddingLeft: "0.25rem" }}
                                     className="font-bold text-slate-900 flex-1 outline-none hover:bg-amber-50/50 rounded px-1 transition"
                                   >
                                     {resolveCompanyTokens(el.data?.to || selectedCompany.defaultTo || "ALL CONCERNED", selectedCompany)}
                                   </span>
                                 </div>
-                                <div className="flex items-baseline">
-                                  <span className="font-black text-slate-500 w-20 shrink-0">FROM:</span>
+                                <div className="flex items-baseline" style={{ display: "flex", alignItems: "baseline", gap: "0.5rem" }}>
                                   <span
                                     contentEditable
                                     suppressContentEditableWarning
-                                    onBlur={(e) => handleTokenAwareBlur(el.id, "from", el.data?.from, e.currentTarget.innerText, "[COMPANY_NAME] — HUMAN RESOURCES DEPARTMENT")}
+                                    onFocus={saveSelection}
+                                    onInput={(e) => handleFieldInput(el.id, "fromLabel", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "fromLabel", e.currentTarget.innerText)}
+                                    style={{ width: "6rem", minWidth: "6rem", flexShrink: 0, display: "inline-block", color: "#64748b" }}
+                                    className="font-black text-slate-500 w-24 shrink-0 outline-none hover:bg-amber-50/50 rounded"
+                                  >
+                                    {el.data?.fromLabel || "FROM:"}
+                                  </span>
+                                  <span
+                                    contentEditable
+                                    suppressContentEditableWarning
+                                    onFocus={saveSelection}
+                                    onInput={(e) => handleFieldInput(el.id, "from", e.currentTarget.innerText)} onBlur={(e) => handleTokenAwareBlur(el.id, "from", el.data?.from, e.currentTarget.innerText, "[COMPANY_NAME] — HUMAN RESOURCES DEPARTMENT")}
+                                    style={{ flex: "1 1 0%", minWidth: 0, paddingLeft: "0.25rem" }}
                                     className="font-bold text-slate-900 flex-1 outline-none hover:bg-amber-50/50 rounded px-1 transition"
                                   >
                                     {resolveCompanyTokens(el.data?.from || "[COMPANY_NAME] — HUMAN RESOURCES DEPARTMENT", selectedCompany)}
                                   </span>
                                 </div>
-                                <div className="flex items-baseline">
-                                  <span className="font-black text-slate-500 w-20 shrink-0">DATE:</span>
-                                  <span className="font-bold text-slate-800 flex-1 px-1">{docDate}</span>
-                                </div>
-                                <div className="flex items-baseline">
-                                  <span className="font-black text-slate-500 w-20 shrink-0">SUBJECT:</span>
+                                <div className="flex items-baseline" style={{ display: "flex", alignItems: "baseline", gap: "0.5rem" }}>
                                   <span
                                     contentEditable
                                     suppressContentEditableWarning
-                                    onBlur={(e) => handleTokenAwareBlur(el.id, "subject", el.data?.subject, e.currentTarget.innerText, "OFFICIAL DIRECTIVE")}
+                                    onFocus={saveSelection}
+                                    onInput={(e) => handleFieldInput(el.id, "dateLabel", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "dateLabel", e.currentTarget.innerText)}
+                                    style={{ width: "6rem", minWidth: "6rem", flexShrink: 0, display: "inline-block", color: "#64748b" }}
+                                    className="font-black text-slate-500 w-24 shrink-0 outline-none hover:bg-amber-50/50 rounded"
+                                  >
+                                    {el.data?.dateLabel || "DATE:"}
+                                  </span>
+                                  <span
+                                    contentEditable
+                                    suppressContentEditableWarning
+                                    onFocus={saveSelection}
+                                    onInput={(e) => handleFieldInput(el.id, "date", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "date", e.currentTarget.innerText)}
+                                    style={{ flex: "1 1 0%", minWidth: 0, paddingLeft: "0.25rem" }}
+                                    className="font-bold text-slate-800 flex-1 px-1 outline-none hover:bg-amber-50/50 rounded"
+                                  >
+                                    {el.data?.date || docDate}
+                                  </span>
+                                </div>
+                                <div className="flex items-baseline" style={{ display: "flex", alignItems: "baseline", gap: "0.5rem" }}>
+                                  <span
+                                    contentEditable
+                                    suppressContentEditableWarning
+                                    onFocus={saveSelection}
+                                    onInput={(e) => handleFieldInput(el.id, "subjectLabel", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "subjectLabel", e.currentTarget.innerText)}
+                                    style={{ width: "6rem", minWidth: "6rem", flexShrink: 0, display: "inline-block", color: "#64748b" }}
+                                    className="font-black text-slate-500 w-24 shrink-0 outline-none hover:bg-amber-50/50 rounded"
+                                  >
+                                    {el.data?.subjectLabel || "SUBJECT:"}
+                                  </span>
+                                  <span
+                                    contentEditable
+                                    suppressContentEditableWarning
+                                    onFocus={saveSelection}
+                                    onInput={(e) => handleFieldInput(el.id, "subject", e.currentTarget.innerText)} onBlur={(e) => handleTokenAwareBlur(el.id, "subject", el.data?.subject, e.currentTarget.innerText, "OFFICIAL DIRECTIVE")}
+                                    style={{ flex: "1 1 0%", minWidth: 0, paddingLeft: "0.25rem" }}
                                     className="font-black text-slate-950 flex-1 uppercase outline-none hover:bg-amber-50/50 rounded px-1 transition"
                                   >
                                     {resolveCompanyTokens(el.data?.subject || "OFFICIAL DIRECTIVE", selectedCompany)}
@@ -4448,15 +6928,32 @@ export default function DocumentStudioPanel({
 
                           {el.variant === "address_formal_letter" && (
                             <div className="mb-4 text-xs text-slate-900 space-y-3 select-text">
-                              <div className="text-right text-slate-600 font-bold">
-                                <span>{docDate}</span>
-                                <span className="block font-mono text-[11px] text-slate-500">REF: {docRef}</span>
+                              <div className="text-right text-slate-600 font-bold space-y-0.5">
+                                <div
+                                  contentEditable
+                                  suppressContentEditableWarning
+                                  onFocus={saveSelection}
+                                  onInput={(e) => handleFieldInput(el.id, "date", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "date", e.currentTarget.innerText)}
+                                  className="outline-none hover:bg-amber-50/50 rounded px-1 inline-block"
+                                >
+                                  {el.data?.date || docDate}
+                                </div>
+                                <div
+                                  contentEditable
+                                  suppressContentEditableWarning
+                                  onFocus={saveSelection}
+                                  onInput={(e) => handleFieldInput(el.id, "ref", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "ref", e.currentTarget.innerText)}
+                                  className="block font-mono text-[11px] text-slate-500 outline-none hover:bg-amber-50/50 rounded px-1"
+                                >
+                                  {el.data?.ref || `REF: ${docRef}`}
+                                </div>
                               </div>
                               <div className="space-y-0.5">
                                 <div
                                   contentEditable
                                   suppressContentEditableWarning
-                                  onBlur={(e) => handleTokenAwareBlur(el.id, "recipientName", el.data?.recipientName, e.currentTarget.innerText, "RECIPIENT NAME")}
+                                  onFocus={saveSelection}
+                                  onInput={(e) => handleFieldInput(el.id, "recipientName", e.currentTarget.innerText)} onBlur={(e) => handleTokenAwareBlur(el.id, "recipientName", el.data?.recipientName, e.currentTarget.innerText, "RECIPIENT NAME")}
                                   className="font-black text-sm uppercase text-slate-900 outline-none hover:bg-amber-50/50 rounded px-1 transition"
                                 >
                                   {resolveCompanyTokens(el.data?.recipientName || "RECIPIENT NAME", selectedCompany)}
@@ -4464,7 +6961,8 @@ export default function DocumentStudioPanel({
                                 <div
                                   contentEditable
                                   suppressContentEditableWarning
-                                  onBlur={(e) => handleTokenAwareBlur(el.id, "recipientTitle", el.data?.recipientTitle, e.currentTarget.innerText, "Designation")}
+                                  onFocus={saveSelection}
+                                  onInput={(e) => handleFieldInput(el.id, "recipientTitle", e.currentTarget.innerText)} onBlur={(e) => handleTokenAwareBlur(el.id, "recipientTitle", el.data?.recipientTitle, e.currentTarget.innerText, "Designation")}
                                   className="font-semibold text-xs text-slate-700 outline-none hover:bg-amber-50/50 rounded px-1 transition"
                                 >
                                   {resolveCompanyTokens(el.data?.recipientTitle || "Designation", selectedCompany)}
@@ -4472,7 +6970,8 @@ export default function DocumentStudioPanel({
                                 <div
                                   contentEditable
                                   suppressContentEditableWarning
-                                  onBlur={(e) => handleTokenAwareBlur(el.id, "recipientCompany", el.data?.recipientCompany, e.currentTarget.innerText, "[COMPANY_NAME] — Operations Division")}
+                                  onFocus={saveSelection}
+                                  onInput={(e) => handleFieldInput(el.id, "recipientCompany", e.currentTarget.innerText)} onBlur={(e) => handleTokenAwareBlur(el.id, "recipientCompany", el.data?.recipientCompany, e.currentTarget.innerText, "[COMPANY_NAME] — Operations Division")}
                                   className="text-xs text-slate-600 outline-none hover:bg-amber-50/50 rounded px-1 transition"
                                 >
                                   {resolveCompanyTokens(el.data?.recipientCompany || "[COMPANY_NAME] — Operations Division", selectedCompany)}
@@ -4481,7 +6980,8 @@ export default function DocumentStudioPanel({
                               <div
                                 contentEditable
                                 suppressContentEditableWarning
-                                onBlur={(e) => handleTokenAwareBlur(el.id, "salutation", el.data?.salutation, e.currentTarget.innerText, "DEAR SIR/MADAM:")}
+                                onFocus={saveSelection}
+                                onInput={(e) => handleFieldInput(el.id, "salutation", e.currentTarget.innerText)} onBlur={(e) => handleTokenAwareBlur(el.id, "salutation", el.data?.salutation, e.currentTarget.innerText, "DEAR SIR/MADAM:")}
                                 className="font-black text-xs text-slate-900 pt-1 outline-none hover:bg-amber-50/50 rounded px-1 transition"
                               >
                                 {resolveCompanyTokens(el.data?.salutation || "DEAR SIR/MADAM:", selectedCompany)}
@@ -4491,13 +6991,20 @@ export default function DocumentStudioPanel({
 
                           {el.variant === "address_public_notice" && (
                             <div className="text-center my-4 space-y-2 select-text">
-                              <div className="inline-block font-mono text-[10px] font-black bg-amber-100 text-amber-950 px-2.5 py-0.5 rounded border border-amber-300">
-                                {docRef} • {docDate}
+                              <div
+                                contentEditable
+                                suppressContentEditableWarning
+                                onFocus={saveSelection}
+                                onInput={(e) => handleFieldInput(el.id, "badgeText", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "badgeText", e.currentTarget.innerText)}
+                                className="inline-block font-mono text-[10px] font-black bg-amber-100 text-amber-950 px-2.5 py-0.5 rounded border border-amber-300 outline-none hover:bg-amber-200 transition"
+                              >
+                                {el.data?.badgeText || `${docRef} • ${docDate}`}
                               </div>
                               <h2
                                 contentEditable
                                 suppressContentEditableWarning
-                                onBlur={(e) => handleTokenAwareBlur(el.id, "bannerTitle", el.data?.bannerTitle, e.currentTarget.innerText, "PUBLIC ADVISORY & FORMAL NOTICE")}
+                                onFocus={saveSelection}
+                                onInput={(e) => handleFieldInput(el.id, "bannerTitle", e.currentTarget.innerText)} onBlur={(e) => handleTokenAwareBlur(el.id, "bannerTitle", el.data?.bannerTitle, e.currentTarget.innerText, "PUBLIC ADVISORY & FORMAL NOTICE")}
                                 className="text-lg sm:text-xl font-black uppercase tracking-widest text-slate-950 outline-none hover:bg-amber-50/50 rounded px-2 transition"
                               >
                                 {resolveCompanyTokens(el.data?.bannerTitle || "PUBLIC ADVISORY & FORMAL NOTICE", selectedCompany)}
@@ -4506,7 +7013,8 @@ export default function DocumentStudioPanel({
                               <p
                                 contentEditable
                                 suppressContentEditableWarning
-                                onBlur={(e) => handleTokenAwareBlur(el.id, "to", el.data?.to, e.currentTarget.innerText, "TO THE GENERAL PATRONIZING PUBLIC AND ALL GAMING OUTLETS OF [COMPANY_NAME]")}
+                                onFocus={saveSelection}
+                                onInput={(e) => handleFieldInput(el.id, "to", e.currentTarget.innerText)} onBlur={(e) => handleTokenAwareBlur(el.id, "to", el.data?.to, e.currentTarget.innerText, "TO THE GENERAL PATRONIZING PUBLIC AND ALL GAMING OUTLETS OF [COMPANY_NAME]")}
                                 className="text-xs font-bold text-slate-700 mt-2 outline-none hover:bg-amber-50/50 rounded px-1 transition"
                               >
                                 {resolveCompanyTokens(el.data?.to || "TO THE GENERAL PATRONIZING PUBLIC AND ALL GAMING OUTLETS OF [COMPANY_NAME]", selectedCompany)}
@@ -4516,13 +7024,20 @@ export default function DocumentStudioPanel({
 
                           {el.variant === "address_certificate_ribbon" && (
                             <div className="text-center my-6 space-y-2.5 select-text">
-                              <p className="text-xs font-black tracking-widest text-amber-700 uppercase">
+                              <p
+                                contentEditable
+                                suppressContentEditableWarning
+                                onFocus={saveSelection}
+                                onInput={(e) => handleFieldInput(el.id, "conferralText", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "conferralText", e.currentTarget.innerText)}
+                                className="text-xs font-black tracking-widest text-amber-700 uppercase outline-none hover:bg-amber-50/50 rounded px-2"
+                              >
                                 {resolveCompanyTokens(el.data?.conferralText || "THIS CERTIFICATE IS PROUDLY CONFERRED UPON", selectedCompany)}
                               </p>
                               <h2
                                 contentEditable
                                 suppressContentEditableWarning
-                                onBlur={(e) => handleTokenAwareBlur(el.id, "awardeeName", el.data?.awardeeName, e.currentTarget.innerText, "AWARDEE NAME")}
+                                onFocus={saveSelection}
+                                onInput={(e) => handleFieldInput(el.id, "awardeeName", e.currentTarget.innerText)} onBlur={(e) => handleTokenAwareBlur(el.id, "awardeeName", el.data?.awardeeName, e.currentTarget.innerText, "AWARDEE NAME")}
                                 className="text-xl sm:text-2xl font-black uppercase text-slate-950 outline-none hover:bg-amber-50/50 rounded px-2 transition"
                               >
                                 {resolveCompanyTokens(el.data?.awardeeName || "AWARDEE NAME", selectedCompany)}
@@ -4530,7 +7045,8 @@ export default function DocumentStudioPanel({
                               <p
                                 contentEditable
                                 suppressContentEditableWarning
-                                onBlur={(e) => handleTokenAwareBlur(el.id, "awardeeTitle", el.data?.awardeeTitle, e.currentTarget.innerText, "Senior Area Coordinator • [COMPANY_NAME]")}
+                                onFocus={saveSelection}
+                                onInput={(e) => handleFieldInput(el.id, "awardeeTitle", e.currentTarget.innerText)} onBlur={(e) => handleTokenAwareBlur(el.id, "awardeeTitle", el.data?.awardeeTitle, e.currentTarget.innerText, "Senior Area Coordinator • [COMPANY_NAME]")}
                                 className="text-xs font-bold text-slate-600 outline-none hover:bg-amber-50/50 rounded px-1 transition"
                               >
                                 {resolveCompanyTokens(el.data?.awardeeTitle || "Senior Area Coordinator • [COMPANY_NAME]", selectedCompany)}
@@ -4539,11 +7055,12 @@ export default function DocumentStudioPanel({
                           )}
 
                           {el.variant === "address_letter_with_cc" && (
-                            <div className="mb-4 text-xs text-slate-900 space-y-3.5 select-text">
+                            <div className={`text-xs text-slate-900 select-text ${contentDensity === "compact" ? "mb-2 space-y-2" : "mb-4 space-y-3.5"}`}>
                               <div
                                 contentEditable
                                 suppressContentEditableWarning
-                                onBlur={(e) => updateElementData(el.id, "date", e.currentTarget.innerText)}
+                                onFocus={saveSelection}
+                                onInput={(e) => handleFieldInput(el.id, "date", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "date", e.currentTarget.innerText)}
                                 className="font-bold text-xs text-slate-900 outline-none hover:bg-amber-50/50 rounded px-1 transition inline-block uppercase tracking-wide"
                               >
                                 {el.data?.date || docDate || "OCTOBER 24, 2026"}
@@ -4555,7 +7072,8 @@ export default function DocumentStudioPanel({
                                   <div
                                     contentEditable
                                     suppressContentEditableWarning
-                                    onBlur={(e) => updateElementData(el.id, "toName", e.currentTarget.innerText)}
+                                    onFocus={saveSelection}
+                                    onInput={(e) => handleFieldInput(el.id, "toName", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "toName", e.currentTarget.innerText)}
                                     className="font-black text-xs uppercase text-slate-950 outline-none hover:bg-amber-50/50 rounded px-1 transition"
                                   >
                                     {el.data?.toName || "CHARMIE JEAN M. SIMPAL, RRT"}
@@ -4563,7 +7081,8 @@ export default function DocumentStudioPanel({
                                   <div
                                     contentEditable
                                     suppressContentEditableWarning
-                                    onBlur={(e) => updateElementData(el.id, "toTitle", e.currentTarget.innerText)}
+                                    onFocus={saveSelection}
+                                    onInput={(e) => handleFieldInput(el.id, "toTitle", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "toTitle", e.currentTarget.innerText)}
                                     className="font-semibold text-[11px] text-slate-800 outline-none hover:bg-amber-50/50 rounded px-1 transition"
                                   >
                                     {el.data?.toTitle || "Assistant General Manager"}
@@ -4571,7 +7090,8 @@ export default function DocumentStudioPanel({
                                   <div
                                     contentEditable
                                     suppressContentEditableWarning
-                                    onBlur={(e) => handleTokenAwareBlur(el.id, "toCompany", el.data?.toCompany, e.currentTarget.innerText, "SGC Corporation")}
+                                    onFocus={saveSelection}
+                                    onInput={(e) => handleFieldInput(el.id, "toCompany", e.currentTarget.innerText)} onBlur={(e) => handleTokenAwareBlur(el.id, "toCompany", el.data?.toCompany, e.currentTarget.innerText, "SGC Corporation")}
                                     className="text-[11px] text-slate-700 outline-none hover:bg-amber-50/50 rounded px-1 transition"
                                   >
                                     {resolveCompanyTokens(el.data?.toCompany || "SGC Corporation", selectedCompany)}
@@ -4579,7 +7099,8 @@ export default function DocumentStudioPanel({
                                   <div
                                     contentEditable
                                     suppressContentEditableWarning
-                                    onBlur={(e) => handleTokenAwareBlur(el.id, "toAddress", el.data?.toAddress, e.currentTarget.innerText, "Purok Daisy, New Isabela, Tacurong City, Sultan Kudarat")}
+                                    onFocus={saveSelection}
+                                    onInput={(e) => handleFieldInput(el.id, "toAddress", e.currentTarget.innerText)} onBlur={(e) => handleTokenAwareBlur(el.id, "toAddress", el.data?.toAddress, e.currentTarget.innerText, "Purok Daisy, New Isabela, Tacurong City, Sultan Kudarat")}
                                     className="text-[11px] text-slate-600 outline-none hover:bg-amber-50/50 rounded px-1 transition"
                                   >
                                     {resolveCompanyTokens(el.data?.toAddress || "Purok Daisy, New Isabela, Tacurong City, Sultan Kudarat", selectedCompany)}
@@ -4589,7 +7110,7 @@ export default function DocumentStudioPanel({
 
                               <div className="flex items-start text-xs leading-snug">
                                 <span className="font-black text-slate-950 w-12 shrink-0">CC:</span>
-                                <div className="space-y-3 flex-1">
+                                <div className={`flex-1 ${contentDensity === "compact" ? "space-y-1.5" : "space-y-3"}`}>
                                   {(el.data?.ccRecipients || [
                                     {
                                       name: "JEVINCE JAYE S. JUBAY, CHRP",
@@ -4604,23 +7125,81 @@ export default function DocumentStudioPanel({
                                       address: "Purok Daisy, New Isabela, Tacurong City, Sultan Kudarat"
                                     }
                                   ]).map((cc, ccIdx) => (
-                                    <div key={ccIdx} className="space-y-0.5">
-                                      <div className="font-black text-xs uppercase text-slate-950 px-1">
+                                    <div key={ccIdx} className="space-y-0.5 relative group/cc">
+                                      <div
+                                        contentEditable
+                                        suppressContentEditableWarning
+                                        onFocus={saveSelection}
+                                        onBlur={(e) => {
+                                          const nextCC = [...(el.data?.ccRecipients || [
+                                            { name: "JEVINCE JAYE S. JUBAY, CHRP", title: "HRMD Manager", company: "SGC Corporation", address: "Purok Daisy, New Isabela, Tacurong City, Sultan Kudarat" },
+                                            { name: "FATIMA MARIE B. OBILLOS", title: "CFO Head", company: "SGC Corporation", address: "Purok Daisy, New Isabela, Tacurong City, Sultan Kudarat" }
+                                          ])];
+                                          nextCC[ccIdx] = { ...nextCC[ccIdx], name: e.currentTarget.innerText };
+                                          updateElementData(el.id, "ccRecipients", nextCC);
+                                        }}
+                                        className="font-black text-xs uppercase text-slate-950 px-1 outline-none hover:bg-amber-50/50 rounded"
+                                      >
                                         {cc.name}
                                       </div>
-                                      <div className="font-semibold text-[11px] text-slate-800 px-1">
+                                      <div
+                                        contentEditable
+                                        suppressContentEditableWarning
+                                        onFocus={saveSelection}
+                                        onBlur={(e) => {
+                                          const nextCC = [...(el.data?.ccRecipients || [])];
+                                          nextCC[ccIdx] = { ...nextCC[ccIdx], title: e.currentTarget.innerText };
+                                          updateElementData(el.id, "ccRecipients", nextCC);
+                                        }}
+                                        className="font-semibold text-[11px] text-slate-800 px-1 outline-none hover:bg-amber-50/50 rounded"
+                                      >
                                         {cc.title}
                                       </div>
-                                      <div className="text-[11px] text-slate-700 px-1">
+                                      <div
+                                        contentEditable
+                                        suppressContentEditableWarning
+                                        onFocus={saveSelection}
+                                        onBlur={(e) => {
+                                          const nextCC = [...(el.data?.ccRecipients || [])];
+                                          nextCC[ccIdx] = { ...nextCC[ccIdx], company: e.currentTarget.innerText };
+                                          updateElementData(el.id, "ccRecipients", nextCC);
+                                        }}
+                                        className="text-[11px] text-slate-700 px-1 outline-none hover:bg-amber-50/50 rounded"
+                                      >
                                         {cc.company}
                                       </div>
                                       {cc.address && (
-                                        <div className="text-[11px] text-slate-600 px-1">
+                                        <div
+                                          contentEditable
+                                          suppressContentEditableWarning
+                                          onFocus={saveSelection}
+                                          onBlur={(e) => {
+                                            const nextCC = [...(el.data?.ccRecipients || [])];
+                                            nextCC[ccIdx] = { ...nextCC[ccIdx], address: e.currentTarget.innerText };
+                                            updateElementData(el.id, "ccRecipients", nextCC);
+                                          }}
+                                          className="text-[11px] text-slate-600 px-1 outline-none hover:bg-amber-50/50 rounded"
+                                        >
                                           {cc.address}
                                         </div>
                                       )}
+                                      <button
+                                        type="button"
+                                        onClick={() => removeCcRecipient(el.id, ccIdx)}
+                                        className="no-print absolute top-0 right-0 hidden group-hover/cc:inline-block text-slate-400 hover:text-rose-600 text-[10px] font-bold px-1"
+                                        title="Remove this CC recipient"
+                                      >
+                                        ✕
+                                      </button>
                                     </div>
                                   ))}
+                                  <button
+                                    type="button"
+                                    onClick={() => addCcRecipient(el.id)}
+                                    className="no-print inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 hover:text-amber-900 bg-amber-50 hover:bg-amber-100 px-2 py-0.5 rounded border border-amber-200 cursor-pointer"
+                                  >
+                                    + Add CC Recipient
+                                  </button>
                                 </div>
                               </div>
 
@@ -4630,7 +7209,8 @@ export default function DocumentStudioPanel({
                                   <span
                                     contentEditable
                                     suppressContentEditableWarning
-                                    onBlur={(e) => updateElementData(el.id, "subject", e.currentTarget.innerText)}
+                                    onFocus={saveSelection}
+                                    onInput={(e) => handleFieldInput(el.id, "subject", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "subject", e.currentTarget.innerText)}
                                     className="outline-none hover:bg-amber-50/50 rounded px-1 transition"
                                   >
                                     {el.data?.subject || "REQUEST FOR CORPORATE SOCIAL RESPONSIBILITY (CSR) DONATION FOR THE LABOGON FIRE VICTIMS"}
@@ -4641,7 +7221,8 @@ export default function DocumentStudioPanel({
                               <div
                                 contentEditable
                                 suppressContentEditableWarning
-                                onBlur={(e) => updateElementData(el.id, "salutation", e.currentTarget.innerText)}
+                                onFocus={saveSelection}
+                                onInput={(e) => handleFieldInput(el.id, "salutation", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "salutation", e.currentTarget.innerText)}
                                 className="font-black text-xs text-slate-900 pt-1 outline-none hover:bg-amber-50/50 rounded px-1 transition"
                               >
                                 {el.data?.salutation || "Dear AGM Simpal,"}
@@ -4654,7 +7235,8 @@ export default function DocumentStudioPanel({
                               <span
                                 contentEditable
                                 suppressContentEditableWarning
-                                onBlur={(e) => updateElementData(el.id, "dateLine", e.currentTarget.innerText)}
+                                onFocus={saveSelection}
+                                onInput={(e) => handleFieldInput(el.id, "dateLine", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "dateLine", e.currentTarget.innerText)}
                                 className="font-bold text-xs sm:text-sm text-slate-950 outline-none hover:bg-amber-50/50 rounded px-1 transition inline-block"
                               >
                                 {el.data?.dateLine || "Date: November 06, 2026"}
@@ -4664,6 +7246,7 @@ export default function DocumentStudioPanel({
                         </div>
                       )}
 
+                      {/* 3. Directives & Body */}
                       {el.category === "body" && (
                         <div>
                           {el.variant === "body_non_affiliation_salesforce" ? (
@@ -4672,88 +7255,108 @@ export default function DocumentStudioPanel({
                                 <h2
                                   contentEditable
                                   suppressContentEditableWarning
-                                  onBlur={(e) => updateElementData(el.id, "title", e.currentTarget.innerText)}
+                                  onFocus={saveSelection}
+                                  onInput={(e) => handleFieldInput(el.id, "title", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "title", e.currentTarget.innerText)}
                                   className="text-sm sm:text-base font-black uppercase tracking-wider text-slate-950 outline-none hover:bg-amber-50/50 rounded px-2 inline-block transition"
                                 >
-                                  {el.data?.title || "CERTIFICATE OF NON-AFFILIATION"}
+                                  {resolveCompanyTokens(el.data?.title || "CERTIFICATE OF NON-AFFILIATION", selectedCompany)}
                                 </h2>
                               </div>
 
-                              {el.data?.dateLine && (
-                                <div className="pt-1 pb-1">
-                                  <span
-                                    contentEditable
-                                    suppressContentEditableWarning
-                                    onBlur={(e) => updateElementData(el.id, "dateLine", e.currentTarget.innerText)}
-                                    className="font-bold text-xs sm:text-sm text-slate-950 outline-none hover:bg-amber-50/50 rounded px-1 transition inline-block"
-                                  >
-                                    {el.data.dateLine}
-                                  </span>
-                                </div>
-                              )}
-
-                              <p className="text-justify leading-relaxed">
-                                This is to certify that{" "}
-                                <strong
+                              <div className="pt-1 pb-1">
+                                <span
                                   contentEditable
                                   suppressContentEditableWarning
-                                  onBlur={(e) => updateElementData(el.id, "personName", e.currentTarget.innerText)}
-                                  className="font-black text-slate-950 outline-none hover:bg-amber-50/50 rounded px-0.5"
+                                  onFocus={saveSelection}
+                                  onInput={(e) => handleFieldInput(el.id, "dateLine", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "dateLine", e.currentTarget.innerText)}
+                                  className="font-bold text-xs sm:text-sm text-slate-950 outline-none hover:bg-amber-50/50 rounded px-1 transition inline-block"
                                 >
-                                  {el.data?.personName || "ARJUN BAGUIO PATALINGHUG"}
-                                </strong>
-                                , is not <strong className="font-bold">affiliated</strong> with{" "}
-                                <strong className="font-bold">{resolveCompanyTokens(el.data?.companyName || selectedCompany.name || selectedCompany.legalName, selectedCompany)}</strong> as a Salesforce partner under the{" "}
-                                <strong
-                                  contentEditable
-                                  suppressContentEditableWarning
-                                  onBlur={(e) => updateElementData(el.id, "agencyName", e.currentTarget.innerText)}
-                                  className="font-bold text-slate-950 outline-none hover:bg-amber-50/50 rounded px-0.5"
-                                >
-                                  {el.data?.agencyName || "Philippine Charity Sweepstakes Office (PCSO)"}
-                                </strong>.
-                              </p>
+                                  {resolveCompanyTokens(el.data?.dateLine || "Date: November 06, 2026", selectedCompany)}
+                                </span>
+                              </div>
 
-                              <p className="text-justify leading-relaxed">
-                                We affirm that the aforementioned individual <strong className="font-bold">has no formal or informal association</strong> with <strong className="font-bold">{resolveCompanyTokens(el.data?.companyName || selectedCompany.name || selectedCompany.legalName, selectedCompany)}</strong> in any capacity related to Salesforce services, nor do they represent the company in any activities associated with PCSO.
-                              </p>
+                              <div
+                                contentEditable
+                                suppressContentEditableWarning
+                                onFocus={saveSelection}
+                                onInput={(e) => handleFieldInput(el.id, "para1", e.currentTarget.innerHTML)} onBlur={(e) => updateElementData(el.id, "para1", e.currentTarget.innerHTML)}
+                                dangerouslySetInnerHTML={{
+                                  __html: resolveCompanyTokens(
+                                    el.data?.para1 ||
+                                      `This is to certify that <strong class="font-black text-slate-950">${el.data?.personName || "ARJUN BAGUIO PATALINGHUG"}</strong>, is not <strong class="font-bold">affiliated</strong> with <strong class="font-bold">${selectedCompany.legalName || selectedCompany.name}</strong> as a Salesforce partner under the <strong class="font-bold text-slate-950">${el.data?.agencyName || "Philippine Charity Sweepstakes Office (PCSO)"}</strong>.`,
+                                    selectedCompany
+                                  )
+                                }}
+                                className="text-justify leading-relaxed outline-none hover:bg-amber-50/20 rounded p-1 transition"
+                              />
 
-                              <p className="text-justify leading-relaxed">
-                                Any claims or representation made by this individual suggesting that He is a Salesforce partner of <strong className="font-bold">{resolveCompanyTokens(el.data?.companyName || selectedCompany.name || selectedCompany.legalName, selectedCompany)}</strong> or have any related business dealings with the company are <strong className="font-bold">false and unauthorized</strong>.
-                              </p>
+                              <div
+                                contentEditable
+                                suppressContentEditableWarning
+                                onFocus={saveSelection}
+                                onInput={(e) => handleFieldInput(el.id, "para2", e.currentTarget.innerHTML)} onBlur={(e) => updateElementData(el.id, "para2", e.currentTarget.innerHTML)}
+                                dangerouslySetInnerHTML={{
+                                  __html: resolveCompanyTokens(
+                                    el.data?.para2 ||
+                                      `We affirm that the aforementioned individual <strong class="font-bold">has no formal or informal association</strong> with <strong class="font-bold">${selectedCompany.legalName || selectedCompany.name}</strong> in any capacity related to Salesforce services, nor do they represent the company in any activities associated with PCSO.`,
+                                    selectedCompany
+                                  )
+                                }}
+                                className="text-justify leading-relaxed outline-none hover:bg-amber-50/20 rounded p-1 transition"
+                              />
 
-                              <p className="text-justify leading-relaxed">
-                                This certification is issued for the <strong className="font-bold">purpose of clarifying</strong> that{" "}
-                                <strong
-                                  contentEditable
-                                  suppressContentEditableWarning
-                                  onBlur={(e) => updateElementData(el.id, "personNameTitle", e.currentTarget.innerText)}
-                                  className="font-bold text-slate-950 outline-none hover:bg-amber-50/50 rounded px-0.5"
-                                >
-                                  {el.data?.personNameTitle || "Arjun Baguio Patalinghug"}
-                                </strong>{" "}
-                                has <strong className="font-bold">never been affiliated</strong> with <strong className="font-bold">{resolveCompanyTokens(el.data?.companyName || selectedCompany.name || selectedCompany.legalName, selectedCompany)} as a Salesforce partner</strong>.
-                              </p>
+                              <div
+                                contentEditable
+                                suppressContentEditableWarning
+                                onFocus={saveSelection}
+                                onInput={(e) => handleFieldInput(el.id, "para3", e.currentTarget.innerHTML)} onBlur={(e) => updateElementData(el.id, "para3", e.currentTarget.innerHTML)}
+                                dangerouslySetInnerHTML={{
+                                  __html: resolveCompanyTokens(
+                                    el.data?.para3 ||
+                                      `Any claims or representation made by this individual suggesting that He is a Salesforce partner of <strong class="font-bold">${selectedCompany.legalName || selectedCompany.name}</strong> or have any related business dealings with the company are <strong class="font-bold">false and unauthorized</strong>.`,
+                                    selectedCompany
+                                  )
+                                }}
+                                className="text-justify leading-relaxed outline-none hover:bg-amber-50/20 rounded p-1 transition"
+                              />
 
-                              <p className="text-justify leading-relaxed pt-1">
-                                For verification or further inquiries, please contact #:{" "}
-                                <strong
-                                  contentEditable
-                                  suppressContentEditableWarning
-                                  onBlur={(e) => updateElementData(el.id, "contactNumber", e.currentTarget.innerText)}
-                                  className="font-black text-slate-950 outline-none hover:bg-amber-50/50 rounded px-0.5"
-                                >
-                                  {el.data?.contactNumber || "09243223514"}
-                                </strong>
-                                .
-                              </p>
+                              <div
+                                contentEditable
+                                suppressContentEditableWarning
+                                onFocus={saveSelection}
+                                onInput={(e) => handleFieldInput(el.id, "para4", e.currentTarget.innerHTML)} onBlur={(e) => updateElementData(el.id, "para4", e.currentTarget.innerHTML)}
+                                dangerouslySetInnerHTML={{
+                                  __html: resolveCompanyTokens(
+                                    el.data?.para4 ||
+                                      `This certification is issued for the <strong class="font-bold">purpose of clarifying</strong> that <strong class="font-bold text-slate-950">${el.data?.personNameTitle || "Arjun Baguio Patalinghug"}</strong> has <strong class="font-bold">never been affiliated</strong> with <strong class="font-bold">${selectedCompany.legalName || selectedCompany.name} as a Salesforce partner</strong>.`,
+                                    selectedCompany
+                                  )
+                                }}
+                                className="text-justify leading-relaxed outline-none hover:bg-amber-50/20 rounded p-1 transition"
+                              />
+
+                              <div
+                                contentEditable
+                                suppressContentEditableWarning
+                                onFocus={saveSelection}
+                                onInput={(e) => handleFieldInput(el.id, "para5", e.currentTarget.innerHTML)} onBlur={(e) => updateElementData(el.id, "para5", e.currentTarget.innerHTML)}
+                                dangerouslySetInnerHTML={{
+                                  __html: resolveCompanyTokens(
+                                    el.data?.para5 ||
+                                      `For verification or further inquiries, please contact #: <strong class="font-black text-slate-950">${el.data?.contactNumber || "09243223514"}</strong>.`,
+                                    selectedCompany
+                                  )
+                                }}
+                                className="text-justify leading-relaxed pt-1 outline-none hover:bg-amber-50/20 rounded p-1 transition"
+                              />
                             </div>
                           ) : el.variant === "body_termination_agency" ? (
                             <div className="space-y-4 my-3 text-xs leading-relaxed text-slate-900 select-text">
                               <p
                                 contentEditable
                                 suppressContentEditableWarning
-                                onBlur={(e) => handleTokenAwareBlur(el.id, "incidentParagraph", el.data?.incidentParagraph, e.currentTarget.innerText, "Based on the Incident Report last March 7, 2025, it was determined that you have been involved in a quarrel within the premises of the Company. This action constitutes, based on the Agency Agreement signed and notarized on _____________________, which is attached as Annex A of this letter, which, is a terminable case.")}
+                                onFocus={saveSelection}
+                                onInput={(e) => handleFieldInput(el.id, "incidentParagraph", e.currentTarget.innerText)} onBlur={(e) => handleTokenAwareBlur(el.id, "incidentParagraph", el.data?.incidentParagraph, e.currentTarget.innerText, "Based on the Incident Report last March 7, 2025, it was determined that you have been involved in a quarrel within the premises of the Company. This action constitutes, based on the Agency Agreement signed and notarized on _____________________, which is attached as Annex A of this letter, which, is a terminable case.")}
                                 className="text-justify indent-6 outline-none hover:bg-amber-50/20 rounded p-1 transition"
                               >
                                 {resolveCompanyTokens(el.data?.incidentParagraph || "Based on the Incident Report last March 7, 2025, it was determined that you have been involved in a quarrel within the premises of the Company. This action constitutes, based on the Agency Agreement signed and notarized on _____________________, which is attached as Annex A of this letter, which, is a terminable case.", selectedCompany)}
@@ -4762,7 +7365,8 @@ export default function DocumentStudioPanel({
                               <p
                                 contentEditable
                                 suppressContentEditableWarning
-                                onBlur={(e) => handleTokenAwareBlur(el.id, "provisionsIntro", el.data?.provisionsIntro, e.currentTarget.innerText, "As stated in the General Provisions of the Agency Agreement – TERMINATION “The Company may immediately terminate this Contract of the concerned member of the SALESFORCE on account of any of the following:")}
+                                onFocus={saveSelection}
+                                onInput={(e) => handleFieldInput(el.id, "provisionsIntro", e.currentTarget.innerText)} onBlur={(e) => handleTokenAwareBlur(el.id, "provisionsIntro", el.data?.provisionsIntro, e.currentTarget.innerText, "As stated in the General Provisions of the Agency Agreement – TERMINATION “The Company may immediately terminate this Contract of the concerned member of the SALESFORCE on account of any of the following:")}
                                 className="text-justify outline-none hover:bg-amber-50/20 rounded p-1 transition"
                               >
                                 {resolveCompanyTokens(el.data?.provisionsIntro || "As stated in the General Provisions of the Agency Agreement – TERMINATION “The Company may immediately terminate this Contract of the concerned member of the SALESFORCE on account of any of the following:", selectedCompany)}
@@ -4774,13 +7378,27 @@ export default function DocumentStudioPanel({
                                   "5.8. In case of loss of trust and confidence in the concerned member.",
                                   "5.9. In case of violation of any provision of the 2020 STL RIRR, rules, regulations, and ethical conduct now in force and those which may from time to time be promulgated by the Company."
                                 ]).map((clause, cIdx) => (
-                                  <div key={cIdx} className="flex items-start gap-2 text-justify">
+                                  <div key={cIdx} className="flex items-start gap-2 text-justify relative group/clause">
                                     <span className="font-black text-slate-900">•</span>
                                     <span
                                       contentEditable
                                       suppressContentEditableWarning
+                                      onFocus={saveSelection}
+                                      onInput={(e) => {
+                                        const target = paperElements.find((item) => item.id === el.id);
+                                        if (target && target.data) {
+                                          if (!Array.isArray(target.data.terminationClauses)) {
+                                            target.data.terminationClauses = [...(el.data?.terminationClauses || [])];
+                                          }
+                                          target.data.terminationClauses[cIdx] = e.currentTarget.innerText;
+                                        }
+                                      }}
                                       onBlur={(e) => {
-                                        const newClauses = [...(el.data?.terminationClauses || [])];
+                                        const newClauses = [...(el.data?.terminationClauses || [
+                                          "5.6. If the concerned member violates, in any way, any provision of this Contract.",
+                                          "5.8. In case of loss of trust and confidence in the concerned member.",
+                                          "5.9. In case of violation of any provision of the 2020 STL RIRR, rules, regulations, and ethical conduct now in force and those which may from time to time be promulgated by the Company."
+                                        ])];
                                         newClauses[cIdx] = e.currentTarget.innerText;
                                         updateElementData(el.id, "terminationClauses", newClauses);
                                       }}
@@ -4788,14 +7406,30 @@ export default function DocumentStudioPanel({
                                     >
                                       {clause}
                                     </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => removeTerminationClause(el.id, cIdx)}
+                                      className="no-print hidden group-hover/clause:inline-block text-slate-400 hover:text-rose-600 text-[10px] font-bold px-1"
+                                      title="Remove clause"
+                                    >
+                                      ✕
+                                    </button>
                                   </div>
                                 ))}
+                                <button
+                                  type="button"
+                                  onClick={() => addTerminationClause(el.id)}
+                                  className="no-print inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 hover:text-amber-900 bg-amber-50 hover:bg-amber-100 px-2 py-0.5 rounded border border-amber-200 cursor-pointer"
+                                >
+                                  + Add Clause
+                                </button>
                               </div>
 
                               <p
                                 contentEditable
                                 suppressContentEditableWarning
-                                onBlur={(e) => handleTokenAwareBlur(el.id, "companyWarning", el.data?.companyWarning, e.currentTarget.innerText, "Moreover, this action will not be tolerated by [COMPANY_LEGAL_NAME], as these are grounds for cancellation of your Agency Agreement.")}
+                                onFocus={saveSelection}
+                                onInput={(e) => handleFieldInput(el.id, "companyWarning", e.currentTarget.innerText)} onBlur={(e) => handleTokenAwareBlur(el.id, "companyWarning", el.data?.companyWarning, e.currentTarget.innerText, "Moreover, this action will not be tolerated by [COMPANY_LEGAL_NAME], as these are grounds for cancellation of your Agency Agreement.")}
                                 className="text-justify outline-none hover:bg-amber-50/20 rounded p-1 transition"
                               >
                                 {resolveCompanyTokens(el.data?.companyWarning || "Moreover, this action will not be tolerated by [COMPANY_LEGAL_NAME], as these are grounds for cancellation of your Agency Agreement.", selectedCompany)}
@@ -4804,7 +7438,8 @@ export default function DocumentStudioPanel({
                               <p
                                 contentEditable
                                 suppressContentEditableWarning
-                                onBlur={(e) => handleTokenAwareBlur(el.id, "conclusionParagraph", el.data?.conclusionParagraph, e.currentTarget.innerText, "In conclusion, your Agency Agreement is hereby terminated effective _____________________.")}
+                                onFocus={saveSelection}
+                                onInput={(e) => handleFieldInput(el.id, "conclusionParagraph", e.currentTarget.innerText)} onBlur={(e) => handleTokenAwareBlur(el.id, "conclusionParagraph", el.data?.conclusionParagraph, e.currentTarget.innerText, "In conclusion, your Agency Agreement is hereby terminated effective _____________________.")}
                                 className="text-justify outline-none hover:bg-amber-50/20 rounded p-1 transition"
                               >
                                 {resolveCompanyTokens(el.data?.conclusionParagraph || "In conclusion, your Agency Agreement is hereby terminated effective _____________________.", selectedCompany)}
@@ -4815,51 +7450,83 @@ export default function DocumentStudioPanel({
                               <p
                                 contentEditable
                                 suppressContentEditableWarning
-                                onBlur={(e) => handleTokenAwareBlur(el.id, "reportCitation", el.data?.reportCitation, e.currentTarget.innerText, "We received a report from Ms. Quennie R. Capuyan, HR Admin, of the following allegations:")}
+                                onFocus={saveSelection}
+                                onInput={(e) => handleFieldInput(el.id, "reportCitation", e.currentTarget.innerHTML)} onBlur={(e) => handleTokenAwareBlur(el.id, "reportCitation", el.data?.reportCitation, e.currentTarget.innerHTML, "We received a report from Ms. Quennie R. Capuyan, HR Admin, of the following allegations:")}
+                                dangerouslySetInnerHTML={{
+                                  __html: resolveCompanyTokens(el.data?.reportCitation || "We received a report from Ms. Quennie R. Capuyan, HR Admin, of the following allegations:", selectedCompany)
+                                }}
                                 className="text-justify outline-none hover:bg-amber-50/20 rounded p-1 transition"
-                              >
-                                {resolveCompanyTokens(el.data?.reportCitation || "We received a report from Ms. Quennie R. Capuyan, HR Admin, of the following allegations:", selectedCompany)}
-                              </p>
+                              />
 
                               <div className="pl-6 space-y-2">
                                 {(el.data?.allegations || [
                                   "It was reported that you insisted on obtaining your fuel allowance in advance despite the prescribed release schedule and borrowed PHP 1,000.00 from company cash, contrary to Company policy prohibiting such borrowing."
                                 ]).map((allegation, aIdx) => (
-                                  <div key={aIdx} className="flex items-start gap-2 text-justify">
+                                  <div key={aIdx} className="flex items-start gap-2 text-justify relative group/alleg">
                                     <span className="font-black text-slate-900">•</span>
                                     <span
                                       contentEditable
                                       suppressContentEditableWarning
+                                      onFocus={saveSelection}
+                                      onInput={(e) => {
+                                        const target = paperElements.find((item) => item.id === el.id);
+                                        if (target && target.data) {
+                                          if (!Array.isArray(target.data.allegations)) {
+                                            target.data.allegations = [...(el.data?.allegations || [])];
+                                          }
+                                          target.data.allegations[aIdx] = e.currentTarget.innerHTML;
+                                        }
+                                      }}
                                       onBlur={(e) => {
-                                        const newAllegations = [...(el.data?.allegations || [])];
-                                        newAllegations[aIdx] = e.currentTarget.innerText;
+                                        const newAllegations = [...(el.data?.allegations || [
+                                          "It was reported that you insisted on obtaining your fuel allowance in advance despite the prescribed release schedule and borrowed PHP 1,000.00 from company cash, contrary to Company policy prohibiting such borrowing."
+                                        ])];
+                                        newAllegations[aIdx] = e.currentTarget.innerHTML;
                                         updateElementData(el.id, "allegations", newAllegations);
                                       }}
+                                      dangerouslySetInnerHTML={{ __html: allegation }}
                                       className="flex-1 outline-none hover:bg-amber-50/20 rounded px-1 transition"
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={() => removeAllegation(el.id, aIdx)}
+                                      className="no-print hidden group-hover/alleg:inline-block text-slate-400 hover:text-rose-600 text-[10px] font-bold px-1"
+                                      title="Remove allegation"
                                     >
-                                      {allegation}
-                                    </span>
+                                      ✕
+                                    </button>
                                   </div>
                                 ))}
+                                <button
+                                  type="button"
+                                  onClick={() => addAllegation(el.id)}
+                                  className="no-print inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 hover:text-amber-900 bg-amber-50 hover:bg-amber-100 px-2 py-0.5 rounded border border-amber-200 cursor-pointer"
+                                >
+                                  + Add Allegation
+                                </button>
                               </div>
 
                               <p
                                 contentEditable
                                 suppressContentEditableWarning
-                                onBlur={(e) => handleTokenAwareBlur(el.id, "explanationNotice", el.data?.explanationNotice, e.currentTarget.innerText, "In view thereof, you are hereby requested to explain in writing (in a language you are most comfortable with) within three (3) days from receipt hereof why your Agency Agreement with the company shall not be terminated for the said offense/s.")}
+                                onFocus={saveSelection}
+                                onInput={(e) => handleFieldInput(el.id, "explanationNotice", e.currentTarget.innerHTML)} onBlur={(e) => handleTokenAwareBlur(el.id, "explanationNotice", el.data?.explanationNotice, e.currentTarget.innerHTML, "In view thereof, you are hereby requested to explain in writing (in a language you are most comfortable with) within three (3) days from receipt hereof why your Agency Agreement with the company shall not be terminated for the said offense/s.")}
+                                dangerouslySetInnerHTML={{
+                                  __html: resolveCompanyTokens(el.data?.explanationNotice || "In view thereof, you are hereby requested to explain in writing (in a language you are most comfortable with) within three (3) days from receipt hereof why your Agency Agreement with the company shall not be terminated for the said offense/s.", selectedCompany)
+                                }}
                                 className="text-justify outline-none hover:bg-amber-50/20 rounded p-1 transition"
-                              >
-                                {resolveCompanyTokens(el.data?.explanationNotice || "In view thereof, you are hereby requested to explain in writing (in a language you are most comfortable with) within three (3) days from receipt hereof why your Agency Agreement with the company shall not be terminated for the said offense/s.", selectedCompany)}
-                              </p>
+                              />
 
                               <p
                                 contentEditable
                                 suppressContentEditableWarning
-                                onBlur={(e) => handleTokenAwareBlur(el.id, "contractClauseIntro", el.data?.contractClauseIntro, e.currentTarget.innerText, "As stated in the General Provisions of the Agency Agreement – TERMINATION “The Company may immediately terminate this Contract of the concerned member of the SALESFORCE on account of any of the following:")}
+                                onFocus={saveSelection}
+                                onInput={(e) => handleFieldInput(el.id, "contractClauseIntro", e.currentTarget.innerHTML)} onBlur={(e) => handleTokenAwareBlur(el.id, "contractClauseIntro", el.data?.contractClauseIntro, e.currentTarget.innerHTML, "As stated in the General Provisions of the Agency Agreement – TERMINATION “The Company may immediately terminate this Contract of the concerned member of the SALESFORCE on account of any of the following:")}
+                                dangerouslySetInnerHTML={{
+                                  __html: resolveCompanyTokens(el.data?.contractClauseIntro || "As stated in the General Provisions of the Agency Agreement – TERMINATION “The Company may immediately terminate this Contract of the concerned member of the SALESFORCE on account of any of the following:", selectedCompany)
+                                }}
                                 className="text-justify outline-none hover:bg-amber-50/20 rounded p-1 transition"
-                              >
-                                {resolveCompanyTokens(el.data?.contractClauseIntro || "As stated in the General Provisions of the Agency Agreement – TERMINATION “The Company may immediately terminate this Contract of the concerned member of the SALESFORCE on account of any of the following:", selectedCompany)}
-                              </p>
+                              />
 
                               <div className="pl-10 space-y-1.5 font-bold italic text-slate-950">
                                 {(el.data?.contractClauses || [
@@ -4868,37 +7535,86 @@ export default function DocumentStudioPanel({
                                   { num: "9.14", text: "Loss of trust and confidence in the Cabo or Cobrador." },
                                   { num: "9.15", text: "Violation of any provision of the 2020 STL RIRR, existing rules, regulations, or ethical standards, as well as future directives from the STL-AAC." }
                                 ]).map((clause, cIdx) => (
-                                  <div key={cIdx} className="flex items-baseline gap-4">
-                                    <span className="w-10 shrink-0 font-black font-mono">{clause.num}</span>
-                                    <span className="flex-1">{clause.text}</span>
+                                  <div key={cIdx} className="flex items-baseline gap-4 relative group/cclause">
+                                    <span
+                                      contentEditable
+                                      suppressContentEditableWarning
+                                      onFocus={saveSelection}
+                                      onBlur={(e) => {
+                                        const clauses = [...(el.data?.contractClauses || [])];
+                                        clauses[cIdx] = { ...clauses[cIdx], num: e.currentTarget.innerText };
+                                        updateElementData(el.id, "contractClauses", clauses);
+                                      }}
+                                      className="w-10 shrink-0 font-black font-mono outline-none hover:bg-amber-50/50 rounded"
+                                    >
+                                      {clause.num}
+                                    </span>
+                                    <span
+                                      contentEditable
+                                      suppressContentEditableWarning
+                                      onFocus={saveSelection}
+                                      onInput={(e) => {
+                                        const target = paperElements.find((item) => item.id === el.id);
+                                        if (target && target.data && Array.isArray(target.data.contractClauses)) {
+                                          target.data.contractClauses[cIdx].text = e.currentTarget.innerHTML;
+                                        }
+                                      }}
+                                      onBlur={(e) => {
+                                        const clauses = [...(el.data?.contractClauses || [])];
+                                        clauses[cIdx] = { ...clauses[cIdx], text: e.currentTarget.innerHTML };
+                                        updateElementData(el.id, "contractClauses", clauses);
+                                      }}
+                                      dangerouslySetInnerHTML={{ __html: clause.text }}
+                                      className="flex-1 outline-none hover:bg-amber-50/50 rounded"
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={() => removeContractClause(el.id, cIdx)}
+                                      className="no-print hidden group-hover/cclause:inline-block text-slate-400 hover:text-rose-600 text-[10px] font-bold px-1"
+                                      title="Remove clause"
+                                    >
+                                      ✕
+                                    </button>
                                   </div>
                                 ))}
+                                <button
+                                  type="button"
+                                  onClick={() => addContractClause(el.id)}
+                                  className="no-print inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 hover:text-amber-900 bg-amber-50 hover:bg-amber-100 px-2 py-0.5 rounded border border-amber-200 cursor-pointer"
+                                >
+                                  + Add Clause
+                                </button>
                               </div>
 
                               <p
                                 contentEditable
                                 suppressContentEditableWarning
-                                onBlur={(e) => handleTokenAwareBlur(el.id, "waiverWarning", el.data?.waiverWarning, e.currentTarget.innerText, "Failure to submit a response letter shall mean waiving your right to be heard and this case shall be dealt with given the available information.")}
+                                onFocus={saveSelection}
+                                onInput={(e) => handleFieldInput(el.id, "waiverWarning", e.currentTarget.innerHTML)} onBlur={(e) => handleTokenAwareBlur(el.id, "waiverWarning", el.data?.waiverWarning, e.currentTarget.innerHTML, "Failure to submit a response letter shall mean waiving your right to be heard and this case shall be dealt with given the available information.")}
+                                dangerouslySetInnerHTML={{
+                                  __html: resolveCompanyTokens(el.data?.waiverWarning || "Failure to submit a response letter shall mean waiving your right to be heard and this case shall be dealt with given the available information.", selectedCompany)
+                                }}
                                 className="text-justify outline-none hover:bg-amber-50/20 rounded p-1 transition"
-                              >
-                                {resolveCompanyTokens(el.data?.waiverWarning || "Failure to submit a response letter shall mean waiving your right to be heard and this case shall be dealt with given the available information.", selectedCompany)}
-                              </p>
+                              />
 
                               <p
                                 contentEditable
                                 suppressContentEditableWarning
-                                onBlur={(e) => handleTokenAwareBlur(el.id, "closingDirective", el.data?.closingDirective, e.currentTarget.innerText, "Please be guided accordingly.")}
+                                onFocus={saveSelection}
+                                onInput={(e) => handleFieldInput(el.id, "closingDirective", e.currentTarget.innerHTML)} onBlur={(e) => handleTokenAwareBlur(el.id, "closingDirective", el.data?.closingDirective, e.currentTarget.innerHTML, "Please be guided accordingly.")}
+                                dangerouslySetInnerHTML={{
+                                  __html: resolveCompanyTokens(el.data?.closingDirective || "Please be guided accordingly.", selectedCompany)
+                                }}
                                 className="outline-none hover:bg-amber-50/20 rounded p-1 transition font-medium"
-                              >
-                                {resolveCompanyTokens(el.data?.closingDirective || "Please be guided accordingly.", selectedCompany)}
-                              </p>
+                              />
                             </div>
                           ) : el.variant === "body_request_proposal_table" ? (
-                            <div className="space-y-3.5 my-3 text-xs leading-relaxed text-slate-900 select-text">
+                            <div className={`text-xs leading-relaxed text-slate-900 select-text ${contentDensity === "compact" ? "space-y-1.5 my-1.5" : "space-y-3.5 my-3"}`}>
                               <p
                                 contentEditable
                                 suppressContentEditableWarning
-                                onBlur={(e) => handleTokenAwareBlur(el.id, "introText", el.data?.introText, e.currentTarget.innerText)}
+                                onFocus={saveSelection}
+                                onInput={(e) => handleFieldInput(el.id, "introText", e.currentTarget.innerText)} onBlur={(e) => handleTokenAwareBlur(el.id, "introText", el.data?.introText, e.currentTarget.innerText)}
                                 className="text-justify outline-none hover:bg-amber-50/20 rounded p-1 transition"
                               >
                                 {resolveCompanyTokens(el.data?.introText || "", selectedCompany)}
@@ -4907,13 +7623,14 @@ export default function DocumentStudioPanel({
                               <p
                                 contentEditable
                                 suppressContentEditableWarning
-                                onBlur={(e) => handleTokenAwareBlur(el.id, "proposalText", el.data?.proposalText, e.currentTarget.innerText)}
+                                onFocus={saveSelection}
+                                onInput={(e) => handleFieldInput(el.id, "proposalText", e.currentTarget.innerText)} onBlur={(e) => handleTokenAwareBlur(el.id, "proposalText", el.data?.proposalText, e.currentTarget.innerText)}
                                 className="text-justify outline-none hover:bg-amber-50/20 rounded p-1 transition"
                               >
                                 {resolveCompanyTokens(el.data?.proposalText || "", selectedCompany)}
                               </p>
 
-                              <div className="my-3 border border-slate-900 rounded overflow-hidden">
+                              <div className={`border border-slate-900 rounded overflow-hidden ${contentDensity === "compact" ? "my-1.5" : "my-3"}`}>
                                 <table className="w-full text-xs text-slate-900 border-collapse">
                                   <thead className="bg-slate-100 font-bold border-b border-slate-900">
                                     <tr>
@@ -4921,6 +7638,7 @@ export default function DocumentStudioPanel({
                                       <th className="p-1.5 text-center font-black">QUANTITY</th>
                                       <th className="p-1.5 text-right font-black">MARKET PRICE</th>
                                       <th className="p-1.5 text-right font-black">TOTAL</th>
+                                      <th className="no-print w-6"></th>
                                     </tr>
                                   </thead>
                                   <tbody>
@@ -4928,11 +7646,72 @@ export default function DocumentStudioPanel({
                                       { desc: "10 LITER OF BOTTLED WATER", qty: "106 PIECES", price: "PHP 88.50", total: "PHP 9,381.00" },
                                       { desc: "5 KILOS OF RICE", qty: "106 PIECES", price: "PHP 250.50", total: "PHP 26,553.00" }
                                     ]).map((row, rIdx) => (
-                                      <tr key={rIdx} className="border-b border-slate-300">
-                                        <td className="p-1.5 font-bold uppercase">{row.desc}</td>
-                                        <td className="p-1.5 text-center font-semibold">{row.qty}</td>
-                                        <td className="p-1.5 text-right font-mono">{row.price}</td>
-                                        <td className="p-1.5 text-right font-mono font-bold">{row.total}</td>
+                                      <tr key={rIdx} className="border-b border-slate-300 group/row">
+                                        <td
+                                          contentEditable
+                                          suppressContentEditableWarning
+                                          onFocus={saveSelection}
+                                          onBlur={(e) => {
+                                            const rows = [...(el.data?.tableRows || [
+                                              { desc: "10 LITER OF BOTTLED WATER", qty: "106 PIECES", price: "PHP 88.50", total: "PHP 9,381.00" },
+                                              { desc: "5 KILOS OF RICE", qty: "106 PIECES", price: "PHP 250.50", total: "PHP 26,553.00" }
+                                            ])];
+                                            rows[rIdx] = { ...rows[rIdx], desc: e.currentTarget.innerText };
+                                            updateElementData(el.id, "tableRows", rows);
+                                          }}
+                                          className="p-1.5 font-bold uppercase outline-none hover:bg-amber-50/50 rounded"
+                                        >
+                                          {row.desc}
+                                        </td>
+                                        <td
+                                          contentEditable
+                                          suppressContentEditableWarning
+                                          onFocus={saveSelection}
+                                          onBlur={(e) => {
+                                            const rows = [...(el.data?.tableRows || [])];
+                                            rows[rIdx] = { ...rows[rIdx], qty: e.currentTarget.innerText };
+                                            updateElementData(el.id, "tableRows", rows);
+                                          }}
+                                          className="p-1.5 text-center font-semibold outline-none hover:bg-amber-50/50 rounded"
+                                        >
+                                          {row.qty}
+                                        </td>
+                                        <td
+                                          contentEditable
+                                          suppressContentEditableWarning
+                                          onFocus={saveSelection}
+                                          onBlur={(e) => {
+                                            const rows = [...(el.data?.tableRows || [])];
+                                            rows[rIdx] = { ...rows[rIdx], price: e.currentTarget.innerText };
+                                            updateElementData(el.id, "tableRows", rows);
+                                          }}
+                                          className="p-1.5 text-right font-mono outline-none hover:bg-amber-50/50 rounded"
+                                        >
+                                          {row.price}
+                                        </td>
+                                        <td
+                                          contentEditable
+                                          suppressContentEditableWarning
+                                          onFocus={saveSelection}
+                                          onBlur={(e) => {
+                                            const rows = [...(el.data?.tableRows || [])];
+                                            rows[rIdx] = { ...rows[rIdx], total: e.currentTarget.innerText };
+                                            updateElementData(el.id, "tableRows", rows);
+                                          }}
+                                          className="p-1.5 text-right font-mono font-bold outline-none hover:bg-amber-50/50 rounded"
+                                        >
+                                          {row.total}
+                                        </td>
+                                        <td className="no-print p-1 text-center">
+                                          <button
+                                            type="button"
+                                            onClick={() => removeTableRow(el.id, rIdx)}
+                                            className="text-slate-400 hover:text-rose-600 font-bold text-xs"
+                                            title="Delete row"
+                                          >
+                                            ✕
+                                          </button>
+                                        </td>
                                       </tr>
                                     ))}
                                   </tbody>
@@ -4942,21 +7721,31 @@ export default function DocumentStudioPanel({
                                       <td
                                         contentEditable
                                         suppressContentEditableWarning
-                                        onBlur={(e) => updateElementData(el.id, "tableTotal", e.currentTarget.innerText)}
+                                        onFocus={saveSelection}
+                                        onInput={(e) => handleFieldInput(el.id, "tableTotal", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "tableTotal", e.currentTarget.innerText)}
                                         className="p-1.5 text-right font-mono font-black outline-none hover:bg-amber-50/50 rounded"
                                       >
                                         {el.data?.tableTotal || "PHP 35,934.00"}
                                       </td>
+                                      <td className="no-print"></td>
                                     </tr>
                                   </tfoot>
                                 </table>
                               </div>
+                              <button
+                                type="button"
+                                onClick={() => addTableRow(el.id)}
+                                className="no-print inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 hover:text-amber-900 bg-amber-50 hover:bg-amber-100 px-2 py-0.5 rounded border border-amber-200 cursor-pointer"
+                              >
+                                + Add Item Row
+                              </button>
 
                               {el.data?.justificationText1 && (
                                 <p
                                   contentEditable
                                   suppressContentEditableWarning
-                                  onBlur={(e) => handleTokenAwareBlur(el.id, "justificationText1", el.data?.justificationText1, e.currentTarget.innerText)}
+                                  onFocus={saveSelection}
+                                  onInput={(e) => handleFieldInput(el.id, "justificationText1", e.currentTarget.innerText)} onBlur={(e) => handleTokenAwareBlur(el.id, "justificationText1", el.data?.justificationText1, e.currentTarget.innerText)}
                                   className="text-justify outline-none hover:bg-amber-50/20 rounded p-1 transition"
                                 >
                                   {resolveCompanyTokens(el.data.justificationText1, selectedCompany)}
@@ -4967,7 +7756,8 @@ export default function DocumentStudioPanel({
                                 <p
                                   contentEditable
                                   suppressContentEditableWarning
-                                  onBlur={(e) => handleTokenAwareBlur(el.id, "justificationText2", el.data?.justificationText2, e.currentTarget.innerText)}
+                                  onFocus={saveSelection}
+                                  onInput={(e) => handleFieldInput(el.id, "justificationText2", e.currentTarget.innerText)} onBlur={(e) => handleTokenAwareBlur(el.id, "justificationText2", el.data?.justificationText2, e.currentTarget.innerText)}
                                   className="text-justify outline-none hover:bg-amber-50/20 rounded p-1 transition"
                                 >
                                   {resolveCompanyTokens(el.data.justificationText2, selectedCompany)}
@@ -4978,7 +7768,8 @@ export default function DocumentStudioPanel({
                                 <p
                                   contentEditable
                                   suppressContentEditableWarning
-                                  onBlur={(e) => handleTokenAwareBlur(el.id, "closingRequest", el.data?.closingRequest, e.currentTarget.innerText)}
+                                  onFocus={saveSelection}
+                                  onInput={(e) => handleFieldInput(el.id, "closingRequest", e.currentTarget.innerText)} onBlur={(e) => handleTokenAwareBlur(el.id, "closingRequest", el.data?.closingRequest, e.currentTarget.innerText)}
                                   className="text-justify outline-none hover:bg-amber-50/20 rounded p-1 transition"
                                 >
                                   {resolveCompanyTokens(el.data.closingRequest, selectedCompany)}
@@ -4989,7 +7780,8 @@ export default function DocumentStudioPanel({
                                 <p
                                   contentEditable
                                   suppressContentEditableWarning
-                                  onBlur={(e) => handleTokenAwareBlur(el.id, "thankYouText", el.data?.thankYouText, e.currentTarget.innerText)}
+                                  onFocus={saveSelection}
+                                  onInput={(e) => handleFieldInput(el.id, "thankYouText", e.currentTarget.innerText)} onBlur={(e) => handleTokenAwareBlur(el.id, "thankYouText", el.data?.thankYouText, e.currentTarget.innerText)}
                                   className="text-justify outline-none hover:bg-amber-50/20 rounded p-1 transition font-medium"
                                 >
                                   {resolveCompanyTokens(el.data.thankYouText, selectedCompany)}
@@ -4999,14 +7791,21 @@ export default function DocumentStudioPanel({
                           ) : el.variant === "body_rewards_voucher" ? (
                             <div className="space-y-4 my-3 select-text">
                               <div className="text-center">
-                                <h3 className="text-base font-black uppercase tracking-wider text-slate-900">
+                                <h3
+                                  contentEditable
+                                  suppressContentEditableWarning
+                                  onFocus={saveSelection}
+                                  onInput={(e) => handleFieldInput(el.id, "title", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "title", e.currentTarget.innerText)}
+                                  className="text-base font-black uppercase tracking-wider text-slate-900 outline-none hover:bg-amber-50/50 rounded px-2 inline-block"
+                                >
                                   {resolveCompanyTokens(el.data?.title || "CERTIFICATE OF MERIT & INCENTIVE VOUCHER", selectedCompany)}
                                 </h3>
                               </div>
                               <p
                                 contentEditable
                                 suppressContentEditableWarning
-                                onBlur={(e) => handleTokenAwareBlur(el.id, "citation", el.data?.citation, e.currentTarget.innerText)}
+                                onFocus={saveSelection}
+                                onInput={(e) => handleFieldInput(el.id, "citation", e.currentTarget.innerText)} onBlur={(e) => handleTokenAwareBlur(el.id, "citation", el.data?.citation, e.currentTarget.innerText)}
                                 className="text-justify leading-relaxed text-slate-800 outline-none hover:bg-amber-50/30 rounded p-1 transition"
                               >
                                 {resolveCompanyTokens(el.data?.citation || "", selectedCompany)}
@@ -5014,10 +7813,22 @@ export default function DocumentStudioPanel({
 
                               <div className="p-4 rounded-xl border-2 border-amber-400 bg-gradient-to-r from-amber-50 via-amber-100/50 to-amber-50 text-slate-900 shadow-2xs">
                                 <div className="flex justify-between items-center border-b border-amber-300 pb-2 mb-2">
-                                  <span className="text-[11px] font-black uppercase tracking-widest text-amber-900">
-                                    Corporate Incentive Merit Voucher
+                                  <span
+                                    contentEditable
+                                    suppressContentEditableWarning
+                                    onFocus={saveSelection}
+                                    onInput={(e) => handleFieldInput(el.id, "voucherHeader", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "voucherHeader", e.currentTarget.innerText)}
+                                    className="text-[11px] font-black uppercase tracking-widest text-amber-900 outline-none hover:bg-white/50 rounded px-1"
+                                  >
+                                    {el.data?.voucherHeader || "Corporate Incentive Merit Voucher"}
                                   </span>
-                                  <span className="font-mono text-xs font-black bg-amber-200 text-amber-950 px-2 py-0.5 rounded border border-amber-300">
+                                  <span
+                                    contentEditable
+                                    suppressContentEditableWarning
+                                    onFocus={saveSelection}
+                                    onInput={(e) => handleFieldInput(el.id, "voucherCode", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "voucherCode", e.currentTarget.innerText)}
+                                    className="font-mono text-xs font-black bg-amber-200 text-amber-950 px-2 py-0.5 rounded border border-amber-300 outline-none hover:bg-white"
+                                  >
                                     {el.data?.voucherCode || "VCH-2026-REWARD"}
                                   </span>
                                 </div>
@@ -5027,7 +7838,8 @@ export default function DocumentStudioPanel({
                                     <div
                                       contentEditable
                                       suppressContentEditableWarning
-                                      onBlur={(e) => updateElementData(el.id, "voucherAmount", e.currentTarget.innerText)}
+                                      onFocus={saveSelection}
+                                      onInput={(e) => handleFieldInput(el.id, "voucherAmount", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "voucherAmount", e.currentTarget.innerText)}
                                       className="font-black text-xl text-emerald-800 outline-none hover:bg-white/50 rounded transition"
                                     >
                                       {el.data?.voucherAmount || "₱5,000.00"}
@@ -5038,74 +7850,164 @@ export default function DocumentStudioPanel({
                                     <div
                                       contentEditable
                                       suppressContentEditableWarning
-                                      onBlur={(e) => updateElementData(el.id, "voucherValidity", e.currentTarget.innerText)}
+                                      onFocus={saveSelection}
+                                      onInput={(e) => handleFieldInput(el.id, "voucherValidity", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "voucherValidity", e.currentTarget.innerText)}
                                       className="font-bold text-xs text-slate-700 outline-none hover:bg-white/50 rounded transition"
                                     >
                                       {el.data?.voucherValidity || "Valid within 60 days"}
                                     </div>
                                   </div>
                                 </div>
-                                <p className="text-[10px] text-slate-500 italic mt-2 pt-1 border-t border-amber-200">
+                                <p
+                                  contentEditable
+                                  suppressContentEditableWarning
+                                  onFocus={saveSelection}
+                                  onInput={(e) => handleFieldInput(el.id, "voucherTerms", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "voucherTerms", e.currentTarget.innerText)}
+                                  className="text-[10px] text-slate-500 italic mt-2 pt-1 border-t border-amber-200 outline-none hover:bg-white/50 rounded px-1"
+                                >
                                   {el.data?.voucherTerms || "Redeemable at Central Finance Depot."}
                                 </p>
                               </div>
                             </div>
                           ) : el.variant === "body_numbered_directives" ? (
                             <div className="space-y-2 my-3 select-text">
-                              <h4 className="text-xs font-black uppercase tracking-wider text-slate-900">
+                              <h4
+                                contentEditable
+                                suppressContentEditableWarning
+                                onFocus={saveSelection}
+                                onInput={(e) => handleFieldInput(el.id, "title", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "title", e.currentTarget.innerText)}
+                                className="text-xs font-black uppercase tracking-wider text-slate-900 outline-none hover:bg-amber-50/50 rounded px-1"
+                              >
                                 {resolveCompanyTokens(el.data?.title || "DIRECTIVES", selectedCompany)}
                               </h4>
                               <ol className="list-decimal list-inside space-y-1.5 text-xs text-justify leading-relaxed">
-                                {(el.data?.items || []).map((it, idx) => (
-                                  <li key={idx} className="text-slate-800 font-semibold">
-                                    <span>{resolveCompanyTokens(it, selectedCompany)}</span>
+                                {(el.data?.items || [
+                                  "Strict adherence to official timekeeping and biometric verification schedules.",
+                                  "Immediate cash handover and zero-float remittal at the end of each drawing shift.",
+                                  "Mandatory wearing of official company uniform and valid identification cards on premises.",
+                                  "Prohibition of unauthorized visitors or former personnel within cash teller enclosures."
+                                ]).map((it, idx) => (
+                                  <li key={idx} className="text-slate-800 font-semibold relative group/it">
+                                    <span
+                                      contentEditable
+                                      suppressContentEditableWarning
+                                      onFocus={saveSelection}
+                                      onInput={(e) => {
+                                        const target = paperElements.find((item) => item.id === el.id);
+                                        if (target && target.data) {
+                                          if (!Array.isArray(target.data.items)) {
+                                            target.data.items = [...(el.data?.items || [])];
+                                          }
+                                          target.data.items[idx] = e.currentTarget.innerText;
+                                        }
+                                      }}
+                                      onBlur={(e) => {
+                                        const newItems = [...(el.data?.items || [
+                                          "Strict adherence to official timekeeping and biometric verification schedules.",
+                                          "Immediate cash handover and zero-float remittal at the end of each drawing shift.",
+                                          "Mandatory wearing of official company uniform and valid identification cards on premises.",
+                                          "Prohibition of unauthorized visitors or former personnel within cash teller enclosures."
+                                        ])];
+                                        newItems[idx] = e.currentTarget.innerText;
+                                        updateElementData(el.id, "items", newItems);
+                                      }}
+                                      className="outline-none hover:bg-amber-50/50 rounded px-1"
+                                    >
+                                      {resolveCompanyTokens(it, selectedCompany)}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => removeDirectiveItem(el.id, idx)}
+                                      className="no-print hidden group-hover/it:inline-block text-slate-400 hover:text-rose-600 text-[10px] font-bold px-1 ml-1"
+                                      title="Remove directive item"
+                                    >
+                                      ✕
+                                    </button>
                                   </li>
                                 ))}
                               </ol>
+                              <button
+                                type="button"
+                                onClick={() => addDirectiveItem(el.id)}
+                                className="no-print inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 hover:text-amber-900 bg-amber-50 hover:bg-amber-100 px-2 py-0.5 rounded border border-amber-200 cursor-pointer"
+                              >
+                                + Add Directive Item
+                              </button>
                             </div>
                           ) : el.variant === "body_warning_callout" ? (
                             <div className="p-3.5 rounded-xl border-l-4 border-rose-600 bg-rose-50/60 my-3 space-y-1 select-text">
                               <div className="flex items-center gap-1.5 text-rose-800 font-black text-xs uppercase tracking-wider">
                                 <AlertTriangle size={15} />
-                                <span>{resolveCompanyTokens(el.data?.boxTitle || "COMPLIANCE NOTICE", selectedCompany)}</span>
+                                <span
+                                  contentEditable
+                                  suppressContentEditableWarning
+                                  onFocus={saveSelection}
+                                  onInput={(e) => handleFieldInput(el.id, "boxTitle", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "boxTitle", e.currentTarget.innerText)}
+                                  className="outline-none hover:bg-rose-100 rounded px-1"
+                                >
+                                  {resolveCompanyTokens(el.data?.boxTitle || "COMPLIANCE NOTICE", selectedCompany)}
+                                </span>
                               </div>
-                              <p className="text-xs text-rose-950 font-semibold leading-relaxed text-justify">
+                              <p
+                                contentEditable
+                                suppressContentEditableWarning
+                                onFocus={saveSelection}
+                                onInput={(e) => handleFieldInput(el.id, "boxMessage", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "boxMessage", e.currentTarget.innerText)}
+                                className="text-xs text-rose-950 font-semibold leading-relaxed text-justify outline-none hover:bg-rose-100 rounded p-1"
+                              >
                                 {resolveCompanyTokens(el.data?.boxMessage || "", selectedCompany)}
                               </p>
                             </div>
                           ) : (
                             <div className="space-y-2.5 my-3 select-text">
-                              {el.data?.title && (
-                                <h3 className="text-sm font-black uppercase tracking-wider text-slate-900">
+                              {(el.data?.title || el.data?.title === "") && (
+                                <h3
+                                  contentEditable
+                                  suppressContentEditableWarning
+                                  onFocus={saveSelection}
+                                  onInput={(e) => handleFieldInput(el.id, "title", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "title", e.currentTarget.innerText)}
+                                  className="text-sm font-black uppercase tracking-wider text-slate-900 outline-none hover:bg-amber-50/50 rounded px-1 transition"
+                                >
                                   {resolveCompanyTokens(el.data.title, selectedCompany)}
                                 </h3>
                               )}
                               <div
                                 contentEditable
                                 suppressContentEditableWarning
-                                onBlur={(e) => handleTokenAwareBlur(el.id, "bodyText", el.data?.bodyText, e.currentTarget.innerText)}
+                                onFocus={saveSelection}
+                                onInput={(e) => handleFieldInput(el.id, "bodyText", e.currentTarget.innerHTML)} onBlur={(e) => updateElementData(el.id, "bodyText", e.currentTarget.innerHTML)}
+                                dangerouslySetInnerHTML={{
+                                  __html: resolveCompanyTokens(el.data?.bodyText || "", selectedCompany)
+                                }}
+                                style={{ whiteSpace: "pre-line", textAlign: "justify" }}
                                 className="text-justify leading-relaxed text-slate-800 whitespace-pre-line outline-none hover:bg-amber-50/20 rounded p-1 transition"
-                              >
-                                {resolveCompanyTokens(el.data?.bodyText || "", selectedCompany)}
-                              </div>
+                              />
                             </div>
                           )}
                         </div>
                       )}
 
+                      {/* 4. Signatory Blocks */}
                       {el.category === "signatory" && (
                         <div>
                           {el.variant === "sig_dual_executive" && (
                             <div className="grid grid-cols-2 gap-8 text-xs pt-8 mt-6 border-t border-slate-200 select-text">
                               <div>
-                                <div className="font-bold text-slate-500 uppercase tracking-wider text-[11px] mb-8">
+                                <div
+                                  contentEditable
+                                  suppressContentEditableWarning
+                                  onFocus={saveSelection}
+                                  onInput={(e) => handleFieldInput(el.id, "leftLabel", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "leftLabel", e.currentTarget.innerText)}
+                                  className="font-bold text-slate-500 uppercase tracking-wider text-[11px] mb-8 outline-none hover:bg-amber-50/50 rounded inline-block"
+                                >
                                   {el.data?.leftLabel || "Prepared & Certified by:"}
                                 </div>
                                 <div className="w-60 border-b-2 border-slate-900 pb-1">
                                   <div
                                     contentEditable
                                     suppressContentEditableWarning
-                                    onBlur={(e) => updateElementData(el.id, "leftName", e.currentTarget.innerText)}
+                                    onFocus={saveSelection}
+                                    onInput={(e) => handleFieldInput(el.id, "leftName", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "leftName", e.currentTarget.innerText)}
                                     className="font-black text-slate-950 uppercase text-xs tracking-wide outline-none hover:bg-amber-50/50 rounded"
                                   >
                                     {el.data?.leftName || "JEVINCE JAYE S. JUBAY, CHRP"}
@@ -5114,25 +8016,39 @@ export default function DocumentStudioPanel({
                                 <div
                                   contentEditable
                                   suppressContentEditableWarning
-                                  onBlur={(e) => updateElementData(el.id, "leftTitle", e.currentTarget.innerText)}
+                                  onFocus={saveSelection}
+                                  onInput={(e) => handleFieldInput(el.id, "leftTitle", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "leftTitle", e.currentTarget.innerText)}
                                   className="text-slate-600 font-semibold text-[11px] mt-0.5 outline-none hover:bg-amber-50/50 rounded"
                                 >
                                   {el.data?.leftTitle || "HRMD Manager"}
                                 </div>
-                                <div className="text-slate-500 font-bold uppercase text-[10px]">
-                                  {selectedCompany.name}
+                                <div
+                                  contentEditable
+                                  suppressContentEditableWarning
+                                  onFocus={saveSelection}
+                                  onInput={(e) => handleFieldInput(el.id, "leftCompany", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "leftCompany", e.currentTarget.innerText)}
+                                  className="text-slate-500 font-bold uppercase text-[10px] outline-none hover:bg-amber-50/50 rounded"
+                                >
+                                  {resolveCompanyTokens(el.data?.leftCompany || selectedCompany.name, selectedCompany)}
                                 </div>
                               </div>
 
                               <div className="text-right flex flex-col items-end">
-                                <div className="font-bold text-slate-500 uppercase tracking-wider text-[11px] mb-8">
+                                <div
+                                  contentEditable
+                                  suppressContentEditableWarning
+                                  onFocus={saveSelection}
+                                  onInput={(e) => handleFieldInput(el.id, "rightLabel", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "rightLabel", e.currentTarget.innerText)}
+                                  className="font-bold text-slate-500 uppercase tracking-wider text-[11px] mb-8 outline-none hover:bg-amber-50/50 rounded inline-block"
+                                >
                                   {el.data?.rightLabel || "Approved & Confirmed by:"}
                                 </div>
                                 <div className="w-60 border-b-2 border-slate-900 pb-1 text-right">
                                   <div
                                     contentEditable
                                     suppressContentEditableWarning
-                                    onBlur={(e) => updateElementData(el.id, "rightName", e.currentTarget.innerText)}
+                                    onFocus={saveSelection}
+                                    onInput={(e) => handleFieldInput(el.id, "rightName", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "rightName", e.currentTarget.innerText)}
                                     className="font-black text-slate-950 uppercase text-xs tracking-wide outline-none hover:bg-amber-50/50 rounded"
                                   >
                                     {el.data?.rightName || "CHARMIE JEAN M. SIMPAL"}
@@ -5141,13 +8057,20 @@ export default function DocumentStudioPanel({
                                 <div
                                   contentEditable
                                   suppressContentEditableWarning
-                                  onBlur={(e) => updateElementData(el.id, "rightTitle", e.currentTarget.innerText)}
+                                  onFocus={saveSelection}
+                                  onInput={(e) => handleFieldInput(el.id, "rightTitle", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "rightTitle", e.currentTarget.innerText)}
                                   className="text-slate-600 font-semibold text-[11px] mt-0.5 outline-none hover:bg-amber-50/50 rounded"
                                 >
                                   {el.data?.rightTitle || "President & CEO"}
                                 </div>
-                                <div className="text-slate-500 font-bold uppercase text-[10px]">
-                                  {selectedCompany.name}
+                                <div
+                                  contentEditable
+                                  suppressContentEditableWarning
+                                  onFocus={saveSelection}
+                                  onInput={(e) => handleFieldInput(el.id, "rightCompany", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "rightCompany", e.currentTarget.innerText)}
+                                  className="text-slate-500 font-bold uppercase text-[10px] outline-none hover:bg-amber-50/50 rounded"
+                                >
+                                  {resolveCompanyTokens(el.data?.rightCompany || selectedCompany.name, selectedCompany)}
                                 </div>
                               </div>
                             </div>
@@ -5155,14 +8078,21 @@ export default function DocumentStudioPanel({
 
                           {el.variant === "sig_single_official" && (
                             <div className="pt-8 mt-6 border-t border-slate-200 max-w-xs text-xs select-text">
-                              <div className="font-bold text-slate-500 uppercase tracking-wider text-[11px] mb-8">
+                              <div
+                                contentEditable
+                                suppressContentEditableWarning
+                                onFocus={saveSelection}
+                                onInput={(e) => handleFieldInput(el.id, "label", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "label", e.currentTarget.innerText)}
+                                className="font-bold text-slate-500 uppercase tracking-wider text-[11px] mb-8 outline-none hover:bg-amber-50/50 rounded inline-block"
+                              >
                                 {el.data?.label || "Issued & Certified by:"}
                               </div>
                               <div className="w-60 border-b-2 border-slate-900 pb-1">
                                 <div
                                   contentEditable
                                   suppressContentEditableWarning
-                                  onBlur={(e) => updateElementData(el.id, "name", e.currentTarget.innerText)}
+                                  onFocus={saveSelection}
+                                  onInput={(e) => handleFieldInput(el.id, "name", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "name", e.currentTarget.innerText)}
                                   className="font-black text-slate-950 uppercase text-xs tracking-wide outline-none hover:bg-amber-50/50 rounded"
                                 >
                                   {el.data?.name || "JEVINCE JAYE S. JUBAY, CHRP"}
@@ -5171,13 +8101,20 @@ export default function DocumentStudioPanel({
                               <div
                                 contentEditable
                                 suppressContentEditableWarning
-                                onBlur={(e) => updateElementData(el.id, "title", e.currentTarget.innerText)}
+                                onFocus={saveSelection}
+                                onInput={(e) => handleFieldInput(el.id, "title", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "title", e.currentTarget.innerText)}
                                 className="text-slate-600 font-semibold text-[11px] mt-0.5 outline-none hover:bg-amber-50/50 rounded"
                               >
                                 {el.data?.title || "HRMD Manager"}
                               </div>
-                              <div className="text-slate-500 font-bold uppercase text-[10px]">
-                                {selectedCompany.name}
+                              <div
+                                contentEditable
+                                suppressContentEditableWarning
+                                onFocus={saveSelection}
+                                onInput={(e) => handleFieldInput(el.id, "company", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "company", e.currentTarget.innerText)}
+                                className="text-slate-500 font-bold uppercase text-[10px] outline-none hover:bg-amber-50/50 rounded"
+                              >
+                                {resolveCompanyTokens(el.data?.company || selectedCompany.name, selectedCompany)}
                               </div>
                             </div>
                           )}
@@ -5185,22 +8122,118 @@ export default function DocumentStudioPanel({
                           {el.variant === "sig_triple_authority" && (
                             <div className="grid grid-cols-3 gap-4 text-xs pt-8 mt-6 border-t border-slate-200 select-text">
                               <div>
-                                <div className="font-bold text-slate-500 uppercase text-[10px] mb-6">{el.data?.col1Label || "Prepared by:"}</div>
-                                <div className="border-b border-slate-800 pb-1 font-black text-slate-900 text-xs">{el.data?.col1Name}</div>
-                                <div className="text-slate-500 text-[10px]">{el.data?.col1Title}</div>
-                                <div className="text-slate-500 font-bold uppercase text-[9px] mt-0.5">{selectedCompany.name}</div>
+                                <div
+                                  contentEditable
+                                  suppressContentEditableWarning
+                                  onFocus={saveSelection}
+                                  onInput={(e) => handleFieldInput(el.id, "col1Label", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "col1Label", e.currentTarget.innerText)}
+                                  className="font-bold text-slate-500 uppercase text-[10px] mb-6 outline-none hover:bg-amber-50/50 rounded"
+                                >
+                                  {el.data?.col1Label || "Prepared by:"}
+                                </div>
+                                <div
+                                  contentEditable
+                                  suppressContentEditableWarning
+                                  onFocus={saveSelection}
+                                  onInput={(e) => handleFieldInput(el.id, "col1Name", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "col1Name", e.currentTarget.innerText)}
+                                  className="border-b border-slate-800 pb-1 font-black text-slate-900 text-xs outline-none hover:bg-amber-50/50 rounded"
+                                >
+                                  {el.data?.col1Name || "JEVINCE JAYE S. JUBAY, CHRP"}
+                                </div>
+                                <div
+                                  contentEditable
+                                  suppressContentEditableWarning
+                                  onFocus={saveSelection}
+                                  onInput={(e) => handleFieldInput(el.id, "col1Title", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "col1Title", e.currentTarget.innerText)}
+                                  className="text-slate-500 text-[10px] outline-none hover:bg-amber-50/50 rounded"
+                                >
+                                  {el.data?.col1Title || "HRMD Manager"}
+                                </div>
+                                <div
+                                  contentEditable
+                                  suppressContentEditableWarning
+                                  onFocus={saveSelection}
+                                  onInput={(e) => handleFieldInput(el.id, "col1Company", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "col1Company", e.currentTarget.innerText)}
+                                  className="text-slate-500 font-bold uppercase text-[9px] mt-0.5 outline-none hover:bg-amber-50/50 rounded"
+                                >
+                                  {resolveCompanyTokens(el.data?.col1Company || selectedCompany.name, selectedCompany)}
+                                </div>
                               </div>
                               <div>
-                                <div className="font-bold text-slate-500 uppercase text-[10px] mb-6">{el.data?.col2Label || "Noted by:"}</div>
-                                <div className="border-b border-slate-800 pb-1 font-black text-slate-900 text-xs">{el.data?.col2Name}</div>
-                                <div className="text-slate-500 text-[10px]">{el.data?.col2Title}</div>
-                                <div className="text-slate-500 font-bold uppercase text-[9px] mt-0.5">{selectedCompany.name}</div>
+                                <div
+                                  contentEditable
+                                  suppressContentEditableWarning
+                                  onFocus={saveSelection}
+                                  onInput={(e) => handleFieldInput(el.id, "col2Label", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "col2Label", e.currentTarget.innerText)}
+                                  className="font-bold text-slate-500 uppercase text-[10px] mb-6 outline-none hover:bg-amber-50/50 rounded"
+                                >
+                                  {el.data?.col2Label || "Noted by:"}
+                                </div>
+                                <div
+                                  contentEditable
+                                  suppressContentEditableWarning
+                                  onFocus={saveSelection}
+                                  onInput={(e) => handleFieldInput(el.id, "col2Name", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "col2Name", e.currentTarget.innerText)}
+                                  className="border-b border-slate-800 pb-1 font-black text-slate-900 text-xs outline-none hover:bg-amber-50/50 rounded"
+                                >
+                                  {el.data?.col2Name || "ATTY. REGIONAL COUNSEL"}
+                                </div>
+                                <div
+                                  contentEditable
+                                  suppressContentEditableWarning
+                                  onFocus={saveSelection}
+                                  onInput={(e) => handleFieldInput(el.id, "col2Title", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "col2Title", e.currentTarget.innerText)}
+                                  className="text-slate-500 text-[10px] outline-none hover:bg-amber-50/50 rounded"
+                                >
+                                  {el.data?.col2Title || "Corporate Legal Counsel"}
+                                </div>
+                                <div
+                                  contentEditable
+                                  suppressContentEditableWarning
+                                  onFocus={saveSelection}
+                                  onInput={(e) => handleFieldInput(el.id, "col2Company", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "col2Company", e.currentTarget.innerText)}
+                                  className="text-slate-500 font-bold uppercase text-[9px] mt-0.5 outline-none hover:bg-amber-50/50 rounded"
+                                >
+                                  {resolveCompanyTokens(el.data?.col2Company || selectedCompany.name, selectedCompany)}
+                                </div>
                               </div>
                               <div>
-                                <div className="font-bold text-slate-500 uppercase text-[10px] mb-6">{el.data?.col3Label || "Approved by:"}</div>
-                                <div className="border-b border-slate-800 pb-1 font-black text-slate-900 text-xs">{el.data?.col3Name}</div>
-                                <div className="text-slate-500 text-[10px]">{el.data?.col3Title}</div>
-                                <div className="text-slate-500 font-bold uppercase text-[9px] mt-0.5">{selectedCompany.name}</div>
+                                <div
+                                  contentEditable
+                                  suppressContentEditableWarning
+                                  onFocus={saveSelection}
+                                  onInput={(e) => handleFieldInput(el.id, "col3Label", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "col3Label", e.currentTarget.innerText)}
+                                  className="font-bold text-slate-500 uppercase text-[10px] mb-6 outline-none hover:bg-amber-50/50 rounded"
+                                >
+                                  {el.data?.col3Label || "Approved by:"}
+                                </div>
+                                <div
+                                  contentEditable
+                                  suppressContentEditableWarning
+                                  onFocus={saveSelection}
+                                  onInput={(e) => handleFieldInput(el.id, "col3Name", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "col3Name", e.currentTarget.innerText)}
+                                  className="border-b border-slate-800 pb-1 font-black text-slate-900 text-xs outline-none hover:bg-amber-50/50 rounded"
+                                >
+                                  {el.data?.col3Name || "CHARMIE JEAN M. SIMPAL"}
+                                </div>
+                                <div
+                                  contentEditable
+                                  suppressContentEditableWarning
+                                  onFocus={saveSelection}
+                                  onInput={(e) => handleFieldInput(el.id, "col3Title", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "col3Title", e.currentTarget.innerText)}
+                                  className="text-slate-500 text-[10px] outline-none hover:bg-amber-50/50 rounded"
+                                >
+                                  {el.data?.col3Title || "President & CEO"}
+                                </div>
+                                <div
+                                  contentEditable
+                                  suppressContentEditableWarning
+                                  onFocus={saveSelection}
+                                  onInput={(e) => handleFieldInput(el.id, "col3Company", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "col3Company", e.currentTarget.innerText)}
+                                  className="text-slate-500 font-bold uppercase text-[9px] mt-0.5 outline-none hover:bg-amber-50/50 rounded"
+                                >
+                                  {resolveCompanyTokens(el.data?.col3Company || selectedCompany.name, selectedCompany)}
+                                </div>
                               </div>
                             </div>
                           )}
@@ -5208,18 +8241,58 @@ export default function DocumentStudioPanel({
                           {el.variant === "sig_receiving_acknowledgment" && (
                             <div className="border-t-2 border-dashed border-slate-400 pt-3 my-4 text-xs select-text">
                               <div className="flex justify-between items-center pb-1.5 mb-2">
-                                <span className="font-black uppercase tracking-wider text-slate-900 text-[11px]">{el.data?.stubTitle || "ACKNOWLEDGMENT & RECEIVING SLIP"}</span>
-                                <span className="font-mono text-[10px] text-slate-500 font-bold">{selectedCompany.code} Copy • Return to HRMD</span>
+                                <span
+                                  contentEditable
+                                  suppressContentEditableWarning
+                                  onFocus={saveSelection}
+                                  onInput={(e) => handleFieldInput(el.id, "stubTitle", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "stubTitle", e.currentTarget.innerText)}
+                                  className="font-black uppercase tracking-wider text-slate-900 text-[11px] outline-none hover:bg-amber-50/50 rounded px-1"
+                                >
+                                  {el.data?.stubTitle || "ACKNOWLEDGMENT & RECEIVING SLIP"}
+                                </span>
+                                <span
+                                  contentEditable
+                                  suppressContentEditableWarning
+                                  onFocus={saveSelection}
+                                  onInput={(e) => handleFieldInput(el.id, "stubSubtitle", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "stubSubtitle", e.currentTarget.innerText)}
+                                  className="font-mono text-[10px] text-slate-500 font-bold outline-none hover:bg-amber-50/50 rounded px-1"
+                                >
+                                  {el.data?.stubSubtitle || `${selectedCompany.code} Copy • Return to HRMD`}
+                                </span>
                               </div>
                               <div className="grid grid-cols-3 gap-4 pt-4 text-[11px]">
                                 <div className="border-b border-slate-900 pb-1">
-                                  <span className="text-slate-400 block text-[9px] uppercase font-bold">Received by (Printed Name):</span>
+                                  <span
+                                    contentEditable
+                                    suppressContentEditableWarning
+                                    onFocus={saveSelection}
+                                    onInput={(e) => handleFieldInput(el.id, "col1Label", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "col1Label", e.currentTarget.innerText)}
+                                    className="text-slate-400 block text-[9px] uppercase font-bold outline-none hover:bg-amber-50/50 rounded"
+                                  >
+                                    {el.data?.col1Label || "Received by (Printed Name):"}
+                                  </span>
                                 </div>
                                 <div className="border-b border-slate-900 pb-1">
-                                  <span className="text-slate-400 block text-[9px] uppercase font-bold">Official Signature:</span>
+                                  <span
+                                    contentEditable
+                                    suppressContentEditableWarning
+                                    onFocus={saveSelection}
+                                    onInput={(e) => handleFieldInput(el.id, "col2Label", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "col2Label", e.currentTarget.innerText)}
+                                    className="text-slate-400 block text-[9px] uppercase font-bold outline-none hover:bg-amber-50/50 rounded"
+                                  >
+                                    {el.data?.col2Label || "Official Signature:"}
+                                  </span>
                                 </div>
                                 <div className="border-b border-slate-900 pb-1">
-                                  <span className="text-slate-400 block text-[9px] uppercase font-bold">Date &amp; Time Received:</span>
+                                  <span
+                                    contentEditable
+                                    suppressContentEditableWarning
+                                    onFocus={saveSelection}
+                                    onInput={(e) => handleFieldInput(el.id, "col3Label", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "col3Label", e.currentTarget.innerText)}
+                                    className="text-slate-400 block text-[9px] uppercase font-bold outline-none hover:bg-amber-50/50 rounded"
+                                  >
+                                    {el.data?.col3Label || "Date & Time Received:"}
+                                  </span>
                                 </div>
                               </div>
                             </div>
@@ -5230,7 +8303,8 @@ export default function DocumentStudioPanel({
                               <div
                                 contentEditable
                                 suppressContentEditableWarning
-                                onBlur={(e) => updateElementData(el.id, "closeLabel", e.currentTarget.innerText)}
+                                onFocus={saveSelection}
+                                onInput={(e) => handleFieldInput(el.id, "closeLabel", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "closeLabel", e.currentTarget.innerText)}
                                 className="text-slate-800 text-xs font-semibold outline-none hover:bg-amber-50/50 rounded px-1 transition"
                               >
                                 {el.data?.closeLabel || "Sincerely yours,"}
@@ -5240,7 +8314,8 @@ export default function DocumentStudioPanel({
                                   <div
                                     contentEditable
                                     suppressContentEditableWarning
-                                    onBlur={(e) => updateElementData(el.id, "name", e.currentTarget.innerText)}
+                                    onFocus={saveSelection}
+                                    onInput={(e) => handleFieldInput(el.id, "name", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "name", e.currentTarget.innerText)}
                                     className="font-black text-slate-950 uppercase text-xs tracking-wide outline-none hover:bg-amber-50/50 rounded"
                                   >
                                     {el.data?.name || "QUENNIE R. CAPUYAN"}
@@ -5249,7 +8324,8 @@ export default function DocumentStudioPanel({
                                 <div
                                   contentEditable
                                   suppressContentEditableWarning
-                                  onBlur={(e) => updateElementData(el.id, "title", e.currentTarget.innerText)}
+                                  onFocus={saveSelection}
+                                  onInput={(e) => handleFieldInput(el.id, "title", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "title", e.currentTarget.innerText)}
                                   className="text-slate-700 font-semibold text-[11px] mt-0.5 outline-none hover:bg-amber-50/50 rounded"
                                 >
                                   {el.data?.title || "Human Resource Staff"}
@@ -5257,6 +8333,7 @@ export default function DocumentStudioPanel({
                                 <div
                                   contentEditable
                                   suppressContentEditableWarning
+                                  onFocus={saveSelection}
                                   onBlur={(e) => {
                                     const next = e.currentTarget.innerText.trim();
                                     const fallback = (selectedCompany.name || selectedCompany.legalName || "").trim();
@@ -5275,7 +8352,8 @@ export default function DocumentStudioPanel({
                               <div
                                 contentEditable
                                 suppressContentEditableWarning
-                                onBlur={(e) => updateElementData(el.id, "closeLabel", e.currentTarget.innerText)}
+                                onFocus={saveSelection}
+                                onInput={(e) => handleFieldInput(el.id, "closeLabel", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "closeLabel", e.currentTarget.innerText)}
                                 className="text-slate-800 text-xs font-semibold outline-none hover:bg-amber-50/50 rounded px-1 transition"
                               >
                                 {el.data?.closeLabel || "Sincerely,"}
@@ -5284,13 +8362,20 @@ export default function DocumentStudioPanel({
                                 <div
                                   contentEditable
                                   suppressContentEditableWarning
-                                  onBlur={(e) => updateElementData(el.id, "title", e.currentTarget.innerText)}
+                                  onFocus={saveSelection}
+                                  onInput={(e) => handleFieldInput(el.id, "title", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "title", e.currentTarget.innerText)}
                                   className="font-black text-xs uppercase text-slate-950 tracking-wider outline-none hover:bg-amber-50/50 rounded px-1 transition inline-block"
                                 >
                                   {el.data?.title || "OPERATIONS MANAGER"}
                                 </div>
-                                <div className="text-slate-600 font-bold uppercase text-[10px] px-1">
-                                  {selectedCompany.name || selectedCompany.legalName}
+                                <div
+                                  contentEditable
+                                  suppressContentEditableWarning
+                                  onFocus={saveSelection}
+                                  onInput={(e) => handleFieldInput(el.id, "company", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "company", e.currentTarget.innerText)}
+                                  className="text-slate-600 font-bold uppercase text-[10px] px-1 outline-none hover:bg-amber-50/50 rounded"
+                                >
+                                  {resolveCompanyTokens(el.data?.company || selectedCompany.name || selectedCompany.legalName, selectedCompany)}
                                 </div>
                               </div>
                             </div>
@@ -5302,7 +8387,8 @@ export default function DocumentStudioPanel({
                                 <div
                                   contentEditable
                                   suppressContentEditableWarning
-                                  onBlur={(e) => updateElementData(el.id, "issuerName", e.currentTarget.innerText)}
+                                  onFocus={saveSelection}
+                                  onInput={(e) => handleFieldInput(el.id, "issuerName", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "issuerName", e.currentTarget.innerText)}
                                   className="font-black text-xs uppercase text-slate-950 underline decoration-slate-950 decoration-1 underline-offset-2 outline-none hover:bg-amber-50/50 rounded inline-block"
                                 >
                                   {el.data?.issuerName || "JULIE E. ALMANO"}
@@ -5310,13 +8396,20 @@ export default function DocumentStudioPanel({
                                 <div
                                   contentEditable
                                   suppressContentEditableWarning
-                                  onBlur={(e) => updateElementData(el.id, "issuerTitle", e.currentTarget.innerText)}
+                                  onFocus={saveSelection}
+                                  onInput={(e) => handleFieldInput(el.id, "issuerTitle", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "issuerTitle", e.currentTarget.innerText)}
                                   className="text-slate-700 font-semibold text-[11px] outline-none hover:bg-amber-50/50 rounded"
                                 >
                                   {el.data?.issuerTitle || "HR Salesforce Specialist"}
                                 </div>
-                                <div className="text-slate-600 font-bold uppercase text-[10px]">
-                                  {selectedCompany.name || selectedCompany.legalName}
+                                <div
+                                  contentEditable
+                                  suppressContentEditableWarning
+                                  onFocus={saveSelection}
+                                  onInput={(e) => handleFieldInput(el.id, "issuerCompany", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "issuerCompany", e.currentTarget.innerText)}
+                                  className="text-slate-600 font-bold uppercase text-[10px] outline-none hover:bg-amber-50/50 rounded"
+                                >
+                                  {resolveCompanyTokens(el.data?.issuerCompany || selectedCompany.name || selectedCompany.legalName, selectedCompany)}
                                 </div>
                               </div>
 
@@ -5324,7 +8417,8 @@ export default function DocumentStudioPanel({
                                 <div
                                   contentEditable
                                   suppressContentEditableWarning
-                                  onBlur={(e) => updateElementData(el.id, "ackHeading", e.currentTarget.innerText)}
+                                  onFocus={saveSelection}
+                                  onInput={(e) => handleFieldInput(el.id, "ackHeading", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "ackHeading", e.currentTarget.innerText)}
                                   className="text-slate-800 text-xs font-semibold outline-none hover:bg-amber-50/50 rounded"
                                 >
                                   {el.data?.ackHeading || "Received & acknowledged by:"}
@@ -5334,7 +8428,8 @@ export default function DocumentStudioPanel({
                                   <div
                                     contentEditable
                                     suppressContentEditableWarning
-                                    onBlur={(e) => updateElementData(el.id, "recipientName", e.currentTarget.innerText)}
+                                    onFocus={saveSelection}
+                                    onInput={(e) => handleFieldInput(el.id, "recipientName", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "recipientName", e.currentTarget.innerText)}
                                     className="font-black text-xs uppercase text-slate-950 outline-none hover:bg-amber-50/50 rounded inline-block"
                                   >
                                     {el.data?.recipientName || "JOEVERT SUDSUD"}
@@ -5342,7 +8437,8 @@ export default function DocumentStudioPanel({
                                   <div
                                     contentEditable
                                     suppressContentEditableWarning
-                                    onBlur={(e) => updateElementData(el.id, "recipientTitle", e.currentTarget.innerText)}
+                                    onFocus={saveSelection}
+                                    onInput={(e) => handleFieldInput(el.id, "recipientTitle", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "recipientTitle", e.currentTarget.innerText)}
                                     className="text-slate-600 text-[11px] outline-none hover:bg-amber-50/50 rounded"
                                   >
                                     {el.data?.recipientTitle || "Signature Over Printed Name"}
@@ -5350,7 +8446,8 @@ export default function DocumentStudioPanel({
                                   <div
                                     contentEditable
                                     suppressContentEditableWarning
-                                    onBlur={(e) => updateElementData(el.id, "dateLine", e.currentTarget.innerText)}
+                                    onFocus={saveSelection}
+                                    onInput={(e) => handleFieldInput(el.id, "dateLine", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "dateLine", e.currentTarget.innerText)}
                                     className="text-slate-700 font-mono text-[11px] outline-none hover:bg-amber-50/50 rounded"
                                   >
                                     {el.data?.dateLine || "Date: ____________________"}
@@ -5368,7 +8465,8 @@ export default function DocumentStudioPanel({
                                 <div
                                   contentEditable
                                   suppressContentEditableWarning
-                                  onBlur={(e) => updateElementData(el.id, "label", e.currentTarget.innerText)}
+                                  onFocus={saveSelection}
+                                  onInput={(e) => handleFieldInput(el.id, "label", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "label", e.currentTarget.innerText)}
                                   className="text-slate-800 text-xs font-semibold outline-none hover:bg-amber-50/50 rounded px-1 transition inline-block"
                                 >
                                   {el.data?.label || "Certified by:"}
@@ -5378,7 +8476,8 @@ export default function DocumentStudioPanel({
                                   <div
                                     contentEditable
                                     suppressContentEditableWarning
-                                    onBlur={(e) => updateElementData(el.id, "name", e.currentTarget.innerText)}
+                                    onFocus={saveSelection}
+                                    onInput={(e) => handleFieldInput(el.id, "name", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "name", e.currentTarget.innerText)}
                                     className="font-black text-slate-950 uppercase text-xs sm:text-sm tracking-wide outline-none hover:bg-amber-50/50 rounded px-1 inline-block"
                                   >
                                     {el.data?.name || "QUENNIE R. CAPUYAN"}
@@ -5386,7 +8485,8 @@ export default function DocumentStudioPanel({
                                   <div
                                     contentEditable
                                     suppressContentEditableWarning
-                                    onBlur={(e) => updateElementData(el.id, "title", e.currentTarget.innerText)}
+                                    onFocus={saveSelection}
+                                    onInput={(e) => handleFieldInput(el.id, "title", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "title", e.currentTarget.innerText)}
                                     className="text-slate-700 font-semibold text-[11px] sm:text-xs outline-none hover:bg-amber-50/50 rounded px-1"
                                   >
                                     {el.data?.title || "Human Resource Staff"}
@@ -5394,6 +8494,7 @@ export default function DocumentStudioPanel({
                                   <div
                                     contentEditable
                                     suppressContentEditableWarning
+                                    onFocus={saveSelection}
                                     onBlur={(e) => {
                                       const next = e.currentTarget.innerText.trim();
                                       const fallback = (selectedCompany.name || selectedCompany.legalName || "").trim();
@@ -5410,22 +8511,69 @@ export default function DocumentStudioPanel({
                         </div>
                       )}
 
+                      {/* 5. Footers & Notarial */}
                       {el.category === "footer" && (
                         <div>
                           {el.variant === "footer_notary_jurat" && (
                             <div className="pt-4 border-t border-slate-300 text-xs text-slate-700 space-y-1.5 mt-6 select-text">
-                              <p className="font-bold">REPUBLIC OF THE PHILIPPINES )</p>
-                              <p className="font-bold">PROVINCE OF CEBU, MANDAUE CITY ) S.S.</p>
-                              <p className="text-justify leading-relaxed">
-                                SUBSCRIBED AND SWORN to before me this _____ day of _______________ {resolveCompanyTokens(el.data?.docYear || "2026", selectedCompany)} at {resolveCompanyTokens(el.data?.city || "Mandaue City, Cebu", selectedCompany)}, affiant exhibiting competent evidence of identity.
+                              <p
+                                contentEditable
+                                suppressContentEditableWarning
+                                onFocus={saveSelection}
+                                onInput={(e) => handleFieldInput(el.id, "juratCountry", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "juratCountry", e.currentTarget.innerText)}
+                                className="font-bold outline-none hover:bg-amber-50/50 rounded px-1 transition inline-block"
+                              >
+                                {el.data?.juratCountry || "REPUBLIC OF THE PHILIPPINES )"}
+                              </p>
+                              <br />
+                              <p
+                                contentEditable
+                                suppressContentEditableWarning
+                                onFocus={saveSelection}
+                                onInput={(e) => handleFieldInput(el.id, "juratCity", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "juratCity", e.currentTarget.innerText)}
+                                className="font-bold outline-none hover:bg-amber-50/50 rounded px-1 transition inline-block"
+                              >
+                                {el.data?.juratCity || "PROVINCE OF CEBU, MANDAUE CITY ) S.S."}
+                              </p>
+                              <p
+                                contentEditable
+                                suppressContentEditableWarning
+                                onFocus={saveSelection}
+                                onInput={(e) => handleFieldInput(el.id, "juratBody", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "juratBody", e.currentTarget.innerText)}
+                                className="text-justify leading-relaxed outline-none hover:bg-amber-50/50 rounded p-1 transition"
+                              >
+                                {resolveCompanyTokens(el.data?.juratBody || `SUBSCRIBED AND SWORN to before me this _____ day of _______________ ${el.data?.docYear || "2026"} at ${el.data?.city || "Mandaue City, Cebu"}, affiant exhibiting competent evidence of identity.`, selectedCompany)}
                               </p>
                               <div className="flex justify-between items-end pt-5">
-                                <div className="text-[10px] text-slate-500 font-mono">
-                                  <p>Doc. No. ____; Page No. ____;</p>
-                                  <p>Book No. ____; Series of {resolveCompanyTokens(el.data?.docYear || "2026", selectedCompany)}.</p>
+                                <div className="text-[10px] text-slate-500 font-mono space-y-0.5">
+                                  <p
+                                    contentEditable
+                                    suppressContentEditableWarning
+                                    onFocus={saveSelection}
+                                    onInput={(e) => handleFieldInput(el.id, "docLine1", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "docLine1", e.currentTarget.innerText)}
+                                    className="outline-none hover:bg-amber-50/50 rounded px-1 transition inline-block"
+                                  >
+                                    {el.data?.docLine1 || "Doc. No. ____; Page No. ____;"}
+                                  </p>
+                                  <br />
+                                  <p
+                                    contentEditable
+                                    suppressContentEditableWarning
+                                    onFocus={saveSelection}
+                                    onInput={(e) => handleFieldInput(el.id, "docLine2", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "docLine2", e.currentTarget.innerText)}
+                                    className="outline-none hover:bg-amber-50/50 rounded px-1 transition inline-block"
+                                  >
+                                    {resolveCompanyTokens(el.data?.docLine2 || `Book No. ____; Series of ${el.data?.docYear || "2026"}.`, selectedCompany)}
+                                  </p>
                                 </div>
-                                <div className="text-center w-56 border-t border-slate-900 pt-1 font-bold text-xs">
-                                  NOTARY PUBLIC
+                                <div
+                                  contentEditable
+                                  suppressContentEditableWarning
+                                  onFocus={saveSelection}
+                                  onInput={(e) => handleFieldInput(el.id, "notaryTitle", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "notaryTitle", e.currentTarget.innerText)}
+                                  className="text-center w-56 border-t border-slate-900 pt-1 font-bold text-xs outline-none hover:bg-amber-50/50 rounded transition"
+                                >
+                                  {el.data?.notaryTitle || "NOTARY PUBLIC"}
                                 </div>
                               </div>
                             </div>
@@ -5433,34 +8581,83 @@ export default function DocumentStudioPanel({
 
                           {el.variant === "footer_corporate_security" && (
                             <div className="border-t border-slate-200 pt-3 mt-6 flex items-center justify-between gap-3 text-[10px] text-slate-500 font-mono select-text">
-                              <div className="flex items-center gap-1.5">
+                              <div className="flex items-center gap-1.5 flex-1">
                                 <Shield size={12} className="text-emerald-700 shrink-0" />
-                                <span>{resolveCompanyTokens(el.data?.noticeText || "This document is an authentic corporate instrument issued by [COMPANY_NAME] via HrHub Corporate System.", selectedCompany)}</span>
+                                <span
+                                  contentEditable
+                                  suppressContentEditableWarning
+                                  onFocus={saveSelection}
+                                  onInput={(e) => handleFieldInput(el.id, "noticeText", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "noticeText", e.currentTarget.innerText)}
+                                  className="outline-none hover:bg-amber-50/50 rounded px-1 transition flex-1"
+                                >
+                                  {resolveCompanyTokens(el.data?.noticeText || "This document is an authentic corporate instrument issued by [COMPANY_NAME] via HrHub Corporate System.", selectedCompany)}
+                                </span>
                               </div>
-                              <span className="font-bold text-slate-700 shrink-0">{resolveCompanyTokens(el.data?.docCode || "[COMPANY_CODE]-VERIFIED-2026", selectedCompany)}</span>
+                              <span
+                                contentEditable
+                                suppressContentEditableWarning
+                                onFocus={saveSelection}
+                                onInput={(e) => handleFieldInput(el.id, "docCode", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "docCode", e.currentTarget.innerText)}
+                                className="font-bold text-slate-700 shrink-0 outline-none hover:bg-amber-50/50 rounded px-1 transition"
+                              >
+                                {resolveCompanyTokens(el.data?.docCode || "[COMPANY_CODE]-VERIFIED-2026", selectedCompany)}
+                              </span>
                             </div>
                           )}
 
                           {el.variant === "footer_contact_hotline" && (
                             <div className="border-t border-slate-200 pt-2 mt-4 text-center text-[10px] text-slate-500 font-semibold select-text">
-                              <span>{resolveCompanyTokens(el.data?.hotline || selectedCompany.contact || selectedCompany.address, selectedCompany)} • {resolveCompanyTokens(el.data?.email || `${selectedCompany.legalName || selectedCompany.name} Official Records`, selectedCompany)}</span>
+                              <span
+                                contentEditable
+                                suppressContentEditableWarning
+                                onFocus={saveSelection}
+                                onInput={(e) => handleFieldInput(el.id, "footerText", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "footerText", e.currentTarget.innerText)}
+                                className="outline-none hover:bg-amber-50/50 rounded px-1 transition inline-block"
+                              >
+                                {resolveCompanyTokens(el.data?.footerText || `${el.data?.hotline || selectedCompany.contact || selectedCompany.address} • ${el.data?.email || `${selectedCompany.legalName || selectedCompany.name} Official Records`}`, selectedCompany)}
+                              </span>
                             </div>
                           )}
 
                           {el.variant === "footer_page_tracker" && (
                             <div className="border-t border-slate-200 pt-1.5 mt-4 flex justify-between text-[9px] text-slate-400 font-mono select-text">
-                              <span>{resolveCompanyTokens(el.data?.formCode || "[COMPANY_CODE]-FORM-HRD-2026-REV03", selectedCompany)}</span>
-                              <span className="font-semibold text-slate-500">{selectedCompany.name}</span>
-                              <span>{resolveCompanyTokens(el.data?.pageText || "Page 1 of 1", selectedCompany)}</span>
+                              <span
+                                contentEditable
+                                suppressContentEditableWarning
+                                onFocus={saveSelection}
+                                onInput={(e) => handleFieldInput(el.id, "formCode", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "formCode", e.currentTarget.innerText)}
+                                className="outline-none hover:bg-amber-50/50 rounded px-1 transition"
+                              >
+                                {resolveCompanyTokens(el.data?.formCode || "[COMPANY_CODE]-FORM-HRD-2026-REV03", selectedCompany)}
+                              </span>
+                              <span
+                                contentEditable
+                                suppressContentEditableWarning
+                                onFocus={saveSelection}
+                                onInput={(e) => handleFieldInput(el.id, "companyText", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "companyText", e.currentTarget.innerText)}
+                                className="font-semibold text-slate-500 outline-none hover:bg-amber-50/50 rounded px-1 transition"
+                              >
+                                {resolveCompanyTokens(el.data?.companyText || selectedCompany.name, selectedCompany)}
+                              </span>
+                              <span
+                                contentEditable
+                                suppressContentEditableWarning
+                                onFocus={saveSelection}
+                                onInput={(e) => handleFieldInput(el.id, "pageText", e.currentTarget.innerText)} onBlur={(e) => updateElementData(el.id, "pageText", e.currentTarget.innerText)}
+                                className="outline-none hover:bg-amber-50/50 rounded px-1 transition"
+                              >
+                                {resolveCompanyTokens(el.data?.pageText || "Page 1 of 1", selectedCompany)}
+                              </span>
                             </div>
                           )}
 
                           {el.variant === "footer_division_center" && (
-                            <div className="pt-6 mt-6 border-t border-slate-200 text-center text-xs text-slate-500 font-black tracking-widest uppercase select-text">
+                            <div className="pt-2 mt-3 border-t border-slate-300 text-center text-[10.5px] text-slate-500 font-black tracking-widest uppercase select-text">
                               <span
                                 contentEditable
                                 suppressContentEditableWarning
-                                onBlur={(e) => handleTokenAwareBlur(el.id, "divisionText", el.data?.divisionText, e.currentTarget.innerText, "[COMPANY_NAME] • HUMAN RESOURCE MANAGEMENT DIVISION")}
+                                onFocus={saveSelection}
+                                onInput={(e) => handleFieldInput(el.id, "divisionText", e.currentTarget.innerText)} onBlur={(e) => handleTokenAwareBlur(el.id, "divisionText", el.data?.divisionText, e.currentTarget.innerText, "[COMPANY_NAME] • HUMAN RESOURCE MANAGEMENT DIVISION")}
                                 className="outline-none hover:bg-amber-50/50 rounded px-2 transition inline-block"
                               >
                                 {resolveCompanyTokens(el.data?.divisionText || "[COMPANY_NAME] • HUMAN RESOURCE MANAGEMENT DIVISION", selectedCompany)}
@@ -5474,18 +8671,102 @@ export default function DocumentStudioPanel({
                 })}
               </div>
             )}
+
           </div>
         </main>
 
-        <aside className="no-print w-full lg:w-[560px] xl:w-[620px] bg-white border-t lg:border-t-0 lg:border-l border-slate-200 flex flex-col shrink-0 shadow-2xl z-20">
-          <div className="p-3 border-b border-slate-100 flex items-center justify-between gap-1 overflow-x-auto scrollbar-none">
+        {/* Slide-over Palette Drawer Backdrop */}
+        {isPaletteDrawerOpen && (
+          <div
+            className={`no-print fixed inset-0 bg-slate-900/40 backdrop-blur-2xs z-40 transition-opacity duration-300 ${
+              isDraggingItem ? "pointer-events-none opacity-20" : ""
+            }`}
+            onClick={() => setIsPaletteDrawerOpen(false)}
+            onDragOver={handleCanvasDragOver}
+            onDrop={handleCanvasDrop}
+          />
+        )}
+
+        {/* Floating Drawer Trigger Pill when drawer is closed (nudged slightly inward) */}
+        {!isPaletteDrawerOpen && (
+          <button
+            type="button"
+            onClick={() => setIsPaletteDrawerOpen(true)}
+            className="no-print fixed right-1.5 top-1/2 -translate-y-1/2 z-40 bg-gradient-to-b from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 font-black px-2 py-3.5 rounded-l-2xl shadow-2xl border-l-2 border-y-2 border-amber-300 flex flex-col items-center gap-2 transition-all duration-200 cursor-pointer group hover:pr-3"
+            title="Open Elements &amp; Templates Palette Drawer"
+          >
+            <Layers size={17} className="group-hover:scale-110 transition-transform text-slate-950" />
+            <span
+              className="text-[10px] tracking-wider uppercase font-black text-slate-950"
+              style={{ writingMode: "vertical-rl" }}
+            >
+              Elements Palette
+            </span>
+            <span className="w-1.5 h-1.5 rounded-full bg-slate-950 animate-ping" />
+          </button>
+        )}
+
+        <aside
+          className={`no-print fixed inset-y-0 right-0 z-50 w-full ${
+            paletteDrawerWidth === "compact"
+              ? "sm:w-[410px] md:w-[420px] lg:w-[420px]"
+              : "sm:w-[480px] md:w-[500px] lg:w-[510px]"
+          } max-w-full bg-white shadow-2xl border-l border-slate-200 flex flex-col h-full max-h-screen overscroll-contain transform transition-transform duration-300 ease-in-out ${
+            isPaletteDrawerOpen ? "translate-x-0" : "translate-x-full pointer-events-none"
+          }`}
+          onWheel={(e) => e.stopPropagation()}
+        >
+          {isPaletteDrawerOpen && (
+            <button
+              type="button"
+              onClick={() => setIsPaletteDrawerOpen(false)}
+              className="no-print absolute -left-7 top-1/2 -translate-y-1/2 z-50 bg-slate-900 hover:bg-slate-800 text-amber-400 hover:text-white px-1.5 py-3.5 rounded-l-xl shadow-xl border-l border-y border-slate-700 hidden sm:flex items-center justify-center cursor-pointer transition-colors animate-in fade-in duration-200"
+              title="Collapse Palette Drawer"
+            >
+              <ChevronRight size={18} />
+            </button>
+          )}
+          {/* Drawer Top Header with Title, Width Toggle and Close button */}
+          <div className="p-3.5 bg-slate-900 text-white flex items-center justify-between shrink-0 shadow-sm">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-amber-500 text-slate-950 flex items-center justify-center font-black">
+                <Layers size={16} />
+              </div>
+              <div>
+                <h3 className="text-sm font-black text-white leading-tight">Modular Elements Palette</h3>
+                <p className="text-[11px] text-amber-300/90 font-medium">Drag or click &quot;+ Add to Paper&quot;</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => setPaletteDrawerWidth((prev) => (prev === "compact" ? "normal" : "compact"))}
+                className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition cursor-pointer flex items-center gap-1 text-xs font-bold"
+                title={paletteDrawerWidth === "compact" ? "Expand Palette (510px)" : "Compact Palette (410px)"}
+              >
+                <Columns size={14} />
+                <span className="text-[11px] hidden sm:inline">{paletteDrawerWidth === "compact" ? "510px" : "410px"}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsPaletteDrawerOpen(false)}
+                className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition cursor-pointer flex items-center gap-1 text-xs font-bold"
+                title="Close Palette Drawer (Esc)"
+              >
+                <X size={16} />
+                <span className="hidden sm:inline">Close</span>
+              </button>
+            </div>
+          </div>
+          {/* 3-Column x 2-Row Ribbon Tabs: Guarantees Footer & Templates are ALWAYS visible */}
+          <div className="p-2.5 bg-slate-50/90 border-b border-slate-200 grid grid-cols-3 gap-1.5 shrink-0">
             {[
               { id: "header", label: "Header", icon: Building2 },
               { id: "addressing", label: "Addressing", icon: AlignLeft },
               { id: "body", label: "Directives", icon: FileText },
               { id: "signatory", label: "Signatory", icon: UserCheck },
               { id: "footer", label: "Footer", icon: Scale },
-              { id: "custom", label: `⭐ Templates (${customTemplates.length})`, icon: Bookmark }
+              { id: "custom", label: `Templates (${customTemplates.length})`, icon: Bookmark }
             ].map((tab) => {
               const Icon = tab.icon;
               const isActive = paletteActiveCategory === tab.id;
@@ -5494,19 +8775,25 @@ export default function DocumentStudioPanel({
                   key={tab.id}
                   type="button"
                   onClick={() => setPaletteActiveCategory(tab.id)}
-                  className={`px-2.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${isActive
-                    ? "bg-amber-500 text-slate-950 font-black shadow-xs"
-                    : "bg-slate-50 hover:bg-slate-100 text-slate-600"
-                    }`}
+                  className={`px-2 py-2 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer text-center ${
+                    isActive
+                      ? "bg-amber-500 text-slate-950 font-black shadow-xs ring-1 ring-amber-400"
+                      : "bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 hover:border-slate-300"
+                  }`}
+                  title={`Switch to ${tab.label}`}
                 >
-                  <Icon size={13} />
-                  <span>{tab.label}</span>
+                  <Icon size={14} className={isActive ? "text-slate-950 shrink-0" : "text-slate-500 shrink-0"} />
+                  <span className="truncate">{tab.label}</span>
                 </button>
               );
             })}
           </div>
 
-          <div className="flex-1 overflow-y-auto p-4 space-y-3.5">
+          <div
+            className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-4 space-y-3.5 doc-palette-scroll"
+            onWheel={(e) => e.stopPropagation()}
+            onScroll={(e) => e.stopPropagation()}
+          >
             <div className="flex items-center justify-between text-xs text-slate-500 pb-1">
               <span className="font-black uppercase tracking-wider text-[11px] text-slate-800">
                 {paletteActiveCategory === "custom"
@@ -5550,6 +8837,7 @@ export default function DocumentStudioPanel({
                         setHoveredPreview(null);
                         handlePaletteDragStart(e, item);
                       }}
+                      onDragEnd={handlePaletteDragEnd}
                       onMouseEnter={(e) => {
                         const rect = e.currentTarget.getBoundingClientRect();
                         setHoveredPreview({
@@ -5630,6 +8918,7 @@ export default function DocumentStudioPanel({
                       setHoveredPreview(null);
                       handlePaletteDragStart(e, item);
                     }}
+                    onDragEnd={handlePaletteDragEnd}
                     onMouseEnter={(e) => {
                       const rect = e.currentTarget.getBoundingClientRect();
                       setHoveredPreview({
@@ -5710,6 +8999,7 @@ export default function DocumentStudioPanel({
                       setHoveredPreview(null);
                       handlePaletteDragStart(e, { ...item, category: paletteActiveCategory });
                     }}
+                    onDragEnd={handlePaletteDragEnd}
                     onMouseEnter={(e) => {
                       const rect = e.currentTarget.getBoundingClientRect();
                       setHoveredPreview({
@@ -5829,6 +9119,7 @@ export default function DocumentStudioPanel({
 
       {templateEditorModal && (
         <TemplateEditorModal
+          key={`${templateEditorModal.item?.id || "new"}-${templateEditorModal.item?.category || ""}-${templateEditorModal.item?.variant || ""}-${templateEditorModal.item?.name || ""}`}
           isOpen={templateEditorModal.isOpen}
           initialData={templateEditorModal.item}
           selectedCompany={selectedCompany}
@@ -6004,6 +9295,560 @@ export default function DocumentStudioPanel({
           </div>
         );
       })()}
+
+      {/* Full-Page Custom Print Studio Engine (Reference: Condense Remittance / Custom Print Studio Engine) */}
+      {isPrintConfigOpen && typeof document !== "undefined" && createPortal(
+        <div className="no-print fixed inset-0 z-[999999] bg-[#070b14] text-slate-100 flex flex-col w-full h-full overflow-hidden select-none animate-in fade-in duration-150">
+          {/* Top Header Bar */}
+          <header className="h-14 bg-[#0d1527] border-b border-slate-800/90 px-4 sm:px-6 flex items-center justify-between shrink-0 z-20 shadow-md w-full">
+            <div className="flex items-center gap-3 min-w-0 max-w-[36%] shrink">
+              <span className="shrink-0 px-2.5 py-1 rounded-lg bg-blue-600/25 text-blue-300 border border-blue-500/40 font-black text-xs uppercase tracking-wide">
+                Print Format Config
+              </span>
+              <div className="min-w-0 truncate">
+                <div className="flex items-center gap-2 truncate">
+                  <span className="shrink-0 text-[10px] font-black uppercase tracking-wider text-slate-400">
+                    Custom Print Studio Engine
+                  </span>
+                  <span className="shrink-0 text-slate-600">•</span>
+                  <span className="text-xs font-black text-white truncate">
+                    {docRef || "DOCUMENT"} • {selectedCompany?.name || "LUCKY BETPLAY"} • {docDate}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Center Zoom / Scale controls */}
+            <div className="flex items-center gap-1.5 sm:gap-2 bg-slate-900/90 border border-slate-800 rounded-xl px-2 sm:px-3 py-1 text-xs shrink-0">
+              <button
+                type="button"
+                onClick={() => setPreviewFitMode("fit-page")}
+                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
+                  previewFitMode === "fit-page"
+                    ? "bg-blue-600 text-white font-black shadow-xs"
+                    : "text-slate-400 hover:text-white"
+                }`}
+                title="Fit Entire Bond Paper to Screen (Full View)"
+              >
+                <CheckCircle2 size={13} className={previewFitMode === "fit-page" ? "text-emerald-300" : "opacity-0"} />
+                <span>Fit Page ({Math.round(calculatedFitScale * 100)}%)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setPreviewFitMode("actual");
+                  setPrintPreviewZoom(1.0);
+                }}
+                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
+                  previewFitMode === "actual" && printPreviewZoom === 1.0
+                    ? "bg-blue-600 text-white font-black shadow-xs"
+                    : "text-slate-400 hover:text-white"
+                }`}
+                title="100% Actual Print Size"
+              >
+                100% Actual
+              </button>
+
+              <div className="h-4 w-px bg-slate-800 hidden sm:block" />
+
+              <button
+                type="button"
+                onClick={() => {
+                  setPreviewFitMode("actual");
+                  setPrintPreviewZoom((z) => Math.max(0.4, parseFloat((z - 0.1).toFixed(2))));
+                }}
+                className="text-slate-400 hover:text-white font-black text-sm px-1.5 transition cursor-pointer"
+                title="Zoom Out"
+              >
+                −
+              </button>
+              <span className="font-mono font-bold text-amber-400 text-xs min-w-[42px] text-center">
+                {Math.round(effectivePreviewZoom * 100)}%
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setPreviewFitMode("actual");
+                  setPrintPreviewZoom((z) => Math.min(1.5, parseFloat((z + 0.1).toFixed(2))));
+                }}
+                className="text-slate-400 hover:text-white font-black text-sm px-1.5 transition cursor-pointer"
+                title="Zoom In"
+              >
+                +
+              </button>
+            </div>
+
+            {/* Right Action buttons: shrink-0 guaranteed never to be clipped or squished */}
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                disabled={isExportingPdf}
+                onClick={() => {
+                  handleDownloadPdf({
+                    paperDef: selectedPaper,
+                    marginMode: printMarginMode,
+                    reduceTopSpacing: reduceTopSpacingInPrint,
+                    colorMode: printColorMode,
+                    includeLetterhead: includeLetterheadInPrint,
+                    includeSignatures: includeSignaturesInPrint,
+                    includeFooter: includeFooterInPrint,
+                    includeWatermark: includeWatermarkInPrint,
+                    orientation: printOrientation,
+                    scale: printCustomScale,
+                  });
+                }}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-bold transition cursor-pointer disabled:opacity-50 shrink-0"
+                title="Download 1:1 Clean PDF"
+              >
+                <Download size={14} className="text-amber-400" />
+                <span className="hidden sm:inline">{isExportingPdf ? "Generating..." : "Download PDF"}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  handlePrintDocument({
+                    paperDef: selectedPaper,
+                    marginMode: printMarginMode,
+                    reduceTopSpacing: reduceTopSpacingInPrint,
+                    colorMode: printColorMode,
+                    includeLetterhead: includeLetterheadInPrint,
+                    includeSignatures: includeSignaturesInPrint,
+                    includeFooter: includeFooterInPrint,
+                    includeWatermark: includeWatermarkInPrint,
+                    orientation: printOrientation,
+                    scale: printCustomScale,
+                  });
+                }}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-black text-xs shadow-lg shadow-blue-900/40 transition cursor-pointer active:scale-95 shrink-0"
+                title="Send directly to printer or browser print dialog (Ctrl+P)"
+              >
+                <Printer size={15} />
+                <span>Print Document</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setIsPrintConfigOpen(false)}
+                className="p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-white transition cursor-pointer border border-slate-700 shrink-0 ml-1"
+                title="Exit Print Studio (Esc)"
+              >
+                <X size={16} />
+              </button>
+            </div>
+          </header>
+
+          {/* Studio Body: Left Configuration Sidebar + Center Full Bond Paper Canvas */}
+          <div className="flex-1 flex flex-row min-h-0 overflow-hidden bg-[#070b14]">
+            {/* Left Configuration Sidebar */}
+            <aside className="w-80 bg-[#0d1527] border-r border-slate-800/90 flex flex-col h-full shrink-0 overflow-y-auto p-4 space-y-4 text-xs text-slate-300">
+              {/* Card 1: PAPER & MEDIA FORMAT */}
+              <div className="bg-[#111c35] border border-slate-800 rounded-2xl p-3.5 space-y-3">
+                <div className="flex items-center gap-2 text-blue-400 font-black text-xs uppercase tracking-wider">
+                  <FileText size={14} />
+                  <span>Paper &amp; Media Format</span>
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block mb-1">
+                    Paper Size Preset:
+                  </label>
+                  <select
+                    value={paperSize}
+                    onChange={(e) => {
+                      setPaperSize(e.target.value);
+                      const targetPaper = PAPER_SIZES.find((p) => p.id === e.target.value);
+                      if (targetPaper) {
+                        updatePrintModalPreview({ paperDef: targetPaper });
+                      }
+                    }}
+                    className="w-full bg-[#0a1020] border border-slate-700 rounded-xl px-3 py-2 text-white font-bold text-xs focus:outline-none focus:border-blue-500 cursor-pointer"
+                  >
+                    {PAPER_SIZES.map((paper) => (
+                      <option key={paper.id} value={paper.id}>
+                        {paper.label}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-[10px] text-slate-500 mt-1 font-mono">
+                    {selectedPaper.dimensions} • {selectedPaper.desc || ""}
+                  </p>
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block mb-1">
+                    Orientation:
+                  </label>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPrintOrientation("portrait");
+                        updatePrintModalPreview({ orientation: "portrait" });
+                      }}
+                      className={`py-1.5 px-2 rounded-xl text-xs font-bold transition cursor-pointer text-center ${
+                        printOrientation === "portrait"
+                          ? "bg-blue-600 text-white font-black shadow-xs"
+                          : "bg-[#0a1020] text-slate-400 hover:text-white border border-slate-800"
+                      }`}
+                    >
+                      Portrait (Vertical)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPrintOrientation("landscape");
+                        updatePrintModalPreview({ orientation: "landscape" });
+                      }}
+                      className={`py-1.5 px-2 rounded-xl text-xs font-bold transition cursor-pointer text-center ${
+                        printOrientation === "landscape"
+                          ? "bg-blue-600 text-white font-black shadow-xs"
+                          : "bg-[#0a1020] text-slate-400 hover:text-white border border-slate-800"
+                      }`}
+                    >
+                      Landscape
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Card 2: MARGINS & SPACING */}
+              <div className="bg-[#111c35] border border-slate-800 rounded-2xl p-3.5 space-y-3">
+                <div className="flex items-center gap-2 text-emerald-400 font-black text-xs uppercase tracking-wider">
+                  <Sliders size={14} />
+                  <span>Margins &amp; Spacing</span>
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block mb-1">
+                    Page Margins:
+                  </label>
+                  <select
+                    value={printMarginMode}
+                    onChange={(e) => {
+                      setPrintMarginMode(e.target.value);
+                      updatePrintModalPreview({ marginMode: e.target.value });
+                    }}
+                    className="w-full bg-[#0a1020] border border-slate-700 rounded-xl px-3 py-2 text-white font-bold text-xs focus:outline-none focus:border-emerald-500 cursor-pointer"
+                  >
+                    <option value="standard">Standard (1.0 in / 25mm)</option>
+                    <option value="compact">Compact (0.75 in / 19mm)</option>
+                    <option value="narrow">Narrow (0.50 in / 12mm)</option>
+                  </select>
+                </div>
+
+                <label className="flex items-start gap-2 cursor-pointer rounded-lg border border-slate-800 bg-[#0a1020] p-2.5">
+                  <input
+                    type="checkbox"
+                    checked={reduceTopSpacingInPrint}
+                    onChange={(e) => {
+                      const enabled = e.target.checked;
+                      setReduceTopSpacingInPrint(enabled);
+                      updatePrintModalPreview({ reduceTopSpacing: enabled });
+                    }}
+                    className="mt-0.5 rounded text-emerald-500 focus:ring-0 cursor-pointer"
+                  />
+                  <span>
+                    <span className="block text-xs font-bold text-white">Reduce extra space at top</span>
+                    <span className="mt-0.5 block text-[10px] leading-tight text-slate-500">
+                      Keeps the other margins and moves the printed content closer to the top edge.
+                    </span>
+                  </span>
+                </label>
+
+                <div>
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block mb-1">
+                    Line Spacing (Density):
+                  </label>
+                  <div className="grid grid-cols-4 gap-1">
+                    {[
+                      { val: "1.15", label: "1.15" },
+                      { val: "1.25", label: "1.25" },
+                      { val: "1.40", label: "1.40" },
+                      { val: "1.55", label: "1.55" }
+                    ].map((ls) => (
+                      <button
+                        key={ls.val}
+                        type="button"
+                        onClick={() => {
+                          handleSetLineHeight(ls.val);
+                          updatePrintModalPreview();
+                        }}
+                        className={`py-1.5 rounded-lg text-xs font-bold transition cursor-pointer text-center ${
+                          docLineHeight === ls.val
+                            ? "bg-emerald-600 text-white font-black"
+                            : "bg-[#0a1020] text-slate-400 hover:text-white border border-slate-800"
+                        }`}
+                        title={`Line Height ${ls.val}`}
+                      >
+                        {ls.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Card 3: FIT & SCALE MODE */}
+              <div className="bg-[#111c35] border border-slate-800 rounded-2xl p-3.5 space-y-3">
+                <div className="flex items-center gap-2 text-amber-400 font-black text-xs uppercase tracking-wider">
+                  <Layout size={14} />
+                  <span>Fit &amp; Scale Mode</span>
+                </div>
+
+                <label className="flex items-start gap-2.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={printCustomScale === 100}
+                    onChange={(e) => {
+                      const next = e.target.checked ? 100 : 95;
+                      setPrintCustomScale(next);
+                      updatePrintModalPreview({ scale: next });
+                    }}
+                    className="mt-0.5 rounded text-blue-600 focus:ring-0 cursor-pointer"
+                  />
+                  <div>
+                    <span className="font-bold text-white text-xs block">Smart Auto-Fit to 1 Single Page</span>
+                    <span className="text-[10px] text-slate-500 leading-tight block mt-0.5">
+                      Standard 100% scale (Content flows naturally across paper)
+                    </span>
+                  </div>
+                </label>
+
+                <div>
+                  <div className="flex items-center justify-between text-[11px] mb-1">
+                    <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Custom Scale:</span>
+                    <span className="text-amber-400 font-mono font-bold">{printCustomScale}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="75"
+                    max="120"
+                    step="5"
+                    value={printCustomScale}
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value, 10);
+                      setPrintCustomScale(val);
+                      updatePrintModalPreview({ scale: val });
+                    }}
+                    className="w-full accent-amber-500 cursor-pointer"
+                  />
+                </div>
+              </div>
+
+              {/* Card 4: SECTIONS VISIBILITY & STYLE */}
+              <div className="bg-[#111c35] border border-slate-800 rounded-2xl p-3.5 space-y-3">
+                <div className="flex items-center gap-2 text-indigo-400 font-black text-xs uppercase tracking-wider">
+                  <Layers size={14} />
+                  <span>Sections Visibility &amp; Style</span>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={includeLetterheadInPrint}
+                      onChange={(e) => {
+                        const val = e.target.checked;
+                        setIncludeLetterheadInPrint(val);
+                        updatePrintModalPreview({ includeLetterhead: val });
+                      }}
+                      className="rounded text-blue-600 focus:ring-0 cursor-pointer"
+                    />
+                    <span className="text-xs font-semibold text-slate-200">Header Banner &amp; Letterhead</span>
+                  </label>
+
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={includeSignaturesInPrint}
+                      onChange={(e) => {
+                        const val = e.target.checked;
+                        setIncludeSignaturesInPrint(val);
+                        updatePrintModalPreview({ includeSignatures: val });
+                      }}
+                      className="rounded text-blue-600 focus:ring-0 cursor-pointer"
+                    />
+                    <span className="text-xs font-semibold text-slate-200">Signatures Block</span>
+                  </label>
+
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={includeFooterInPrint}
+                      onChange={(e) => {
+                        const val = e.target.checked;
+                        setIncludeFooterInPrint(val);
+                        updatePrintModalPreview({ includeFooter: val });
+                      }}
+                      className="rounded text-blue-600 focus:ring-0 cursor-pointer"
+                    />
+                    <span className="text-xs font-semibold text-slate-200">Audit / Legal Footer Timestamp</span>
+                  </label>
+
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={includeWatermarkInPrint}
+                      onChange={(e) => {
+                        const val = e.target.checked;
+                        setIncludeWatermarkInPrint(val);
+                        updatePrintModalPreview({ includeWatermark: val });
+                      }}
+                      className="rounded text-blue-600 focus:ring-0 cursor-pointer"
+                    />
+                    <span className="text-xs font-semibold text-slate-200">Official Security Watermark</span>
+                  </label>
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block mb-1.5">
+                    Color Output Mode:
+                  </label>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPrintColorMode("color");
+                        updatePrintModalPreview({ colorMode: "color" });
+                      }}
+                      className={`py-1.5 px-2 rounded-xl text-xs font-bold transition cursor-pointer text-center ${
+                        printColorMode === "color"
+                          ? "bg-blue-600 text-white font-black shadow-xs"
+                          : "bg-[#0a1020] text-slate-400 hover:text-white border border-slate-800"
+                      }`}
+                    >
+                      Full Color
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPrintColorMode("monochrome");
+                        updatePrintModalPreview({ colorMode: "monochrome" });
+                      }}
+                      className={`py-1.5 px-2 rounded-xl text-xs font-bold transition cursor-pointer text-center ${
+                        printColorMode === "monochrome"
+                          ? "bg-blue-600 text-white font-black shadow-xs"
+                          : "bg-[#0a1020] text-slate-400 hover:text-white border border-slate-800"
+                      }`}
+                    >
+                      Monochrome / B&amp;W
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Bottom Reset Settings Button */}
+              <button
+                type="button"
+                onClick={() => {
+                  setPaperSize("letter");
+                  setPrintMarginMode("standard");
+                  setReduceTopSpacingInPrint(false);
+                  setPrintColorMode("color");
+                  setPrintOrientation("portrait");
+                  setPrintCustomScale(100);
+                  setPrintPreviewZoom(1.0);
+                  setPreviewFitMode("fit-page");
+                  setIncludeLetterheadInPrint(true);
+                  setIncludeSignaturesInPrint(true);
+                  setIncludeFooterInPrint(true);
+                  setIncludeWatermarkInPrint(true);
+                  handleSetLineHeight("1.55");
+                  triggerToast("✓ Reset settings to default standard bond paper format", "info");
+                }}
+                className="w-full py-2.5 rounded-xl border border-slate-800 bg-[#111c35] hover:bg-slate-800 text-slate-400 hover:text-white text-xs font-bold transition cursor-pointer text-center mt-2"
+              >
+                Reset Settings to Defaults
+              </button>
+            </aside>
+
+            {/* Center Main Canvas: Dynamic Fit or Actual Bond Paper Preview */}
+            <main className="flex-1 h-full overflow-y-auto overflow-x-auto p-4 sm:p-8 flex items-center justify-center bg-[#070b14] overscroll-contain">
+              <div
+                className="flex items-center justify-center transition-all duration-150 shrink-0 my-auto"
+                style={{
+                  width: `${(printOrientation === "landscape" ? effectivePageHeightPx : currentPaperDef.widthPx) * effectivePreviewZoom}px`,
+                  height: `${(printOrientation === "landscape" ? currentPaperDef.widthPx : effectivePageHeightPx) * effectivePreviewZoom}px`,
+                }}
+              >
+                <div
+                  className="relative bg-white shadow-2xl rounded-sm transition-transform duration-150 origin-top-left shrink-0"
+                  style={{
+                    width: `${printOrientation === "landscape" ? effectivePageHeightPx : currentPaperDef.widthPx}px`,
+                    height: `${printOrientation === "landscape" ? currentPaperDef.widthPx : effectivePageHeightPx}px`,
+                    minHeight: `${printOrientation === "landscape" ? currentPaperDef.widthPx : effectivePageHeightPx}px`,
+                    maxHeight: `${printOrientation === "landscape" ? currentPaperDef.widthPx : effectivePageHeightPx}px`,
+                    transform: `scale(${effectivePreviewZoom})`,
+                    transformOrigin: "top left",
+                  }}
+                >
+                  {paperElements.length === 0 ? (
+                    <div className="w-full h-full flex flex-col items-center justify-center p-8 text-center bg-white rounded-sm space-y-4">
+                      <div className="w-16 h-16 rounded-3xl bg-amber-50 text-amber-700 flex items-center justify-center shadow-xs border border-amber-200">
+                        <Layout size={32} />
+                      </div>
+                      <div className="max-w-md space-y-1.5">
+                        <h3 className="text-base font-black text-slate-900">
+                          Document Canvas is Currently Empty
+                        </h3>
+                        <p className="text-xs text-slate-500 leading-relaxed">
+                          No document elements have been placed on the bond paper yet. Load an official template preset below to preview and print immediately:
+                        </p>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2.5 max-w-lg w-full pt-2">
+                        <button
+                          type="button"
+                          onClick={() => handleLoadFullDocumentPreset("non_affiliation_salesforce")}
+                          className="p-2.5 rounded-xl border border-blue-200 bg-blue-50/70 hover:bg-blue-100 text-left font-bold text-xs text-blue-900 transition cursor-pointer flex items-center gap-2"
+                        >
+                          <Shield size={16} className="text-blue-600 shrink-0" />
+                          <span>🛡️ Non-Affiliation Letter</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleLoadFullDocumentPreset("termination_operations")}
+                          className="p-2.5 rounded-xl border border-rose-200 bg-rose-50/70 hover:bg-rose-100 text-left font-bold text-xs text-rose-900 transition cursor-pointer flex items-center gap-2"
+                        >
+                          <ShieldAlert size={16} className="text-rose-600 shrink-0" />
+                          <span>📋 Termination Notice</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleLoadFullDocumentPreset("rewards_voucher")}
+                          className="p-2.5 rounded-xl border border-amber-200 bg-amber-50/70 hover:bg-amber-100 text-left font-bold text-xs text-amber-900 transition cursor-pointer flex items-center gap-2"
+                        >
+                          <Award size={16} className="text-amber-600 shrink-0" />
+                          <span>🏆 Rewards &amp; Voucher</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleLoadFullDocumentPreset("letter_of_explain")}
+                          className="p-2.5 rounded-xl border border-purple-200 bg-purple-50/70 hover:bg-purple-100 text-left font-bold text-xs text-purple-900 transition cursor-pointer flex items-center gap-2"
+                        >
+                          <FileText size={16} className="text-purple-600 shrink-0" />
+                          <span>📝 Explanation Letter</span>
+                        </button>
+                      </div>
+                    </div>
+                  ) : printModalPreviewHtml ? (
+                    <iframe
+                      srcDoc={printModalPreviewHtml}
+                      title="Full Page Live Bond Paper Print Preview"
+                      className="w-full h-full border-0 bg-white pointer-events-none select-none rounded-sm"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-slate-400 text-sm font-bold">
+                      Rendering Live Bond Paper Preview...
+                    </div>
+                  )}
+                </div>
+              </div>
+            </main>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 }

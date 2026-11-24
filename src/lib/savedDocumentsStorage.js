@@ -65,10 +65,18 @@ function getLocalCachedDocs(accountKey) {
     if (raw) {
       const parsed = JSON.parse(raw);
       if (parsed && typeof parsed === "object") {
-        return (parsed[accountKey] || []).map((d) => ({
-          ...d,
-          ref: normalizeDocRef(d.ref)
-        }));
+        const shared = parsed["__all_hr_documents__"] || [];
+        const byAcc = parsed[accountKey] || [];
+        const map = new Map();
+        for (const item of [...shared, ...byAcc]) {
+          if (item && (item.id || item.ref)) {
+            const key = item.id || normalizeDocRef(item.ref);
+            if (!map.has(key)) {
+              map.set(key, { ...item, ref: normalizeDocRef(item.ref) });
+            }
+          }
+        }
+        return Array.from(map.values());
       }
     }
   } catch (e) {
@@ -82,6 +90,7 @@ function setLocalCachedDocs(accountKey, docsList) {
     const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
     const parsed = raw ? JSON.parse(raw) : {};
     parsed[accountKey] = docsList;
+    parsed["__all_hr_documents__"] = docsList;
     localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(parsed));
   } catch (e) {
     console.warn("Failed caching documents locally:", e);
@@ -175,6 +184,10 @@ export async function saveDocumentRecordToDb(currentUser = null, docRecord = {})
   const now = new Date().toISOString();
   const cleanRef = normalizeDocRef(docRecord.ref || `DOC-${new Date().getFullYear()}-01`);
 
+  const serializedElements = (docRecord.paperElements && docRecord.paperElements.length > 0)
+    ? JSON.stringify(docRecord.paperElements)
+    : (docRecord.content || "");
+
   const payload = {
     id,
     user_id: accountKey,
@@ -185,20 +198,33 @@ export async function saveDocumentRecordToDb(currentUser = null, docRecord = {})
     to_field: docRecord.to || "",
     from_field: docRecord.from || "",
     subject: docRecord.subject || docRecord.title || "",
-    content: docRecord.content || "",
+    content: serializedElements,
     company_id: docRecord.companyId || "lucky_betplay",
     company_code: (docRecord.companyCode === "SARG" ? "5ARG" : docRecord.companyCode) || "LBC",
     company_name: docRecord.companyName || "",
     paper_size: docRecord.paperSize || "letter",
-    font_family: docRecord.fontFamily || "inter",
-    font_size: docRecord.fontSize || 14,
+    font_family: docRecord.fontFamily || "Arial, Helvetica, sans-serif",
+    font_size: docRecord.fontSize || 14.6,
     signatory_layout: docRecord.signatoryLayout || "dual",
     signatory_name: docRecord.signatoryName || "",
     signatory_title: docRecord.signatoryTitle || "",
     approver_name: docRecord.approverName || "",
     approver_title: docRecord.approverTitle || "",
     metadata: {
-      templateType: docRecord.templateType,
+      paperElements: docRecord.paperElements || [],
+      paperSize: docRecord.paperSize || "letter",
+      fontFamily: docRecord.fontFamily || "Arial, Helvetica, sans-serif",
+      fontSize: docRecord.fontSize || 14.6,
+      toolbarFontSize: docRecord.toolbarFontSize || null,
+      savedBy: docRecord.savedBy || docRecord.authorName || "HR Officer",
+      savedByEmail: docRecord.savedByEmail || docRecord.authorEmail || "",
+      savedByRole: docRecord.savedByRole || docRecord.authorRole || "HR Administrator",
+      savedByCompany: docRecord.savedByCompany || docRecord.companyName || "",
+      savedAt: docRecord.savedAt || now,
+      companyCode: (docRecord.companyCode === "SARG" ? "5ARG" : docRecord.companyCode) || "LBC",
+      companyName: docRecord.companyName || "",
+      title: docRecord.title || "Official Document",
+      templateType: docRecord.templateType || "non_affiliation",
       signatoryCompany: docRecord.signatoryCompany,
       approverCompany: docRecord.approverCompany,
       signatoryLabel: docRecord.signatoryLabel,
@@ -239,9 +265,9 @@ export async function saveDocumentRecordToDb(currentUser = null, docRecord = {})
         subject: docRecord.title || docRecord.subject || "Official Document",
         category: `DOC_STUDIO:${docRecord.templateType || "general"}`,
         company_id: docRecord.companyId || "lucky_betplay",
-        content: docRecord.content || "",
-        directives_font_family: docRecord.fontFamily || "inter",
-        directives_font_size: docRecord.fontSize || 14,
+        content: serializedElements,
+        directives_font_family: docRecord.fontFamily || "Arial, Helvetica, sans-serif",
+        directives_font_size: docRecord.fontSize || 14.6,
         signatory_layout: docRecord.signatoryLayout || "dual",
         signatory_name: docRecord.signatoryName || "",
         signatory_title: docRecord.signatoryTitle || "",
@@ -249,6 +275,12 @@ export async function saveDocumentRecordToDb(currentUser = null, docRecord = {})
         approver_title: docRecord.approverTitle || "",
         metadata: {
           ...payload.metadata,
+          paperElements: docRecord.paperElements || [],
+          savedBy: docRecord.savedBy || docRecord.authorName || "HR Officer",
+          savedByEmail: docRecord.savedByEmail || docRecord.authorEmail || "",
+          savedByRole: docRecord.savedByRole || docRecord.authorRole || "HR Administrator",
+          savedByCompany: docRecord.savedByCompany || docRecord.companyName || "",
+          savedAt: docRecord.savedAt || now,
           companyCode: payload.company_code,
           companyName: payload.company_name,
           paperSize: payload.paper_size,
@@ -276,6 +308,12 @@ export async function saveDocumentRecordToDb(currentUser = null, docRecord = {})
     ...docRecord,
     id,
     ref: cleanRef,
+    paperElements: docRecord.paperElements || [],
+    savedBy: docRecord.savedBy || "HR Officer",
+    savedByEmail: docRecord.savedByEmail || "",
+    savedByRole: docRecord.savedByRole || "HR Administrator",
+    savedByCompany: docRecord.savedByCompany || "",
+    savedAt: docRecord.savedAt || now,
     updatedAt: now,
     createdAt: docRecord.createdAt || now
   };
@@ -314,8 +352,33 @@ export async function deleteDocumentRecordFromDb(currentUser = null, id) {
   return { success: true };
 }
 
+function extractPaperElementsFromRow(meta, row) {
+  if (Array.isArray(meta?.paperElements) && meta.paperElements.length > 0) {
+    return meta.paperElements;
+  }
+  if (Array.isArray(row?.paper_elements) && row.paper_elements.length > 0) {
+    return row.paper_elements;
+  }
+  if (typeof row?.content === "string" && row.content.trim().startsWith("[")) {
+    try {
+      const parsed = JSON.parse(row.content);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    } catch (error) {
+      console.warn("Could not parse saved document elements:", error);
+    }
+  }
+  return null;
+}
+
 function mapDocRowToModel(row) {
   const meta = row.metadata || {};
+  const paperElements = extractPaperElementsFromRow(meta, row);
+  const savedAt = meta.savedAt || row.updated_at || row.created_at || new Date().toISOString();
+  const savedBy = meta.savedBy || meta.authorName || (row.user_id && row.user_id !== "default" ? row.user_id : "HR Officer");
+  const savedByEmail = meta.savedByEmail || meta.authorEmail || "";
+  const savedByRole = meta.savedByRole || meta.authorRole || "HR Administrator";
+  const savedByCompany = meta.savedByCompany || meta.companyName || row.company_name || "";
+
   return {
     id: row.id,
     ref: normalizeDocRef(row.ref_no),
@@ -329,9 +392,16 @@ function mapDocRowToModel(row) {
     companyId: row.company_id,
     companyCode: normalizeDocRef(row.company_code || "LBC"),
     companyName: row.company_name,
-    paperSize: row.paper_size || "letter",
-    fontFamily: row.font_family || "inter",
-    fontSize: row.font_size || 14,
+    paperSize: row.paper_size || meta.paperSize || "letter",
+    fontFamily: row.font_family || meta.fontFamily || "Arial, Helvetica, sans-serif",
+    fontSize: row.font_size || meta.fontSize || 14.6,
+    toolbarFontSize: meta.toolbarFontSize || null,
+    paperElements,
+    savedBy,
+    savedByEmail,
+    savedByRole,
+    savedByCompany,
+    savedAt,
     signatoryLayout: row.signatory_layout || "dual",
     signatoryName: row.signatory_name,
     signatoryTitle: row.signatory_title,
@@ -353,6 +423,13 @@ function mapDocRowToModel(row) {
 function mapMemoDocRowToModel(row) {
   const meta = row.metadata || {};
   const tType = row.category ? row.category.replace(/^DOC_STUDIO:/i, "") : "non_affiliation";
+  const paperElements = extractPaperElementsFromRow(meta, row);
+  const savedAt = meta.savedAt || row.updated_at || row.created_at || new Date().toISOString();
+  const savedBy = meta.savedBy || meta.authorName || (row.user_id && row.user_id !== "default" ? row.user_id : "HR Officer");
+  const savedByEmail = meta.savedByEmail || meta.authorEmail || "";
+  const savedByRole = meta.savedByRole || meta.authorRole || "HR Administrator";
+  const savedByCompany = meta.savedByCompany || meta.companyName || "";
+
   return {
     id: row.id,
     ref: normalizeDocRef(row.ref_no),
@@ -367,8 +444,15 @@ function mapMemoDocRowToModel(row) {
     companyCode: normalizeDocRef(meta.companyCode || "LBC"),
     companyName: meta.companyName || "",
     paperSize: meta.paperSize || "letter",
-    fontFamily: row.directives_font_family || "inter",
-    fontSize: row.directives_font_size || 14,
+    fontFamily: row.directives_font_family || meta.fontFamily || "Arial, Helvetica, sans-serif",
+    fontSize: row.directives_font_size || meta.fontSize || 14.6,
+    toolbarFontSize: meta.toolbarFontSize || null,
+    paperElements,
+    savedBy,
+    savedByEmail,
+    savedByRole,
+    savedByCompany,
+    savedAt,
     signatoryLayout: row.signatory_layout || "dual",
     signatoryName: row.signatory_name,
     signatoryTitle: row.signatory_title,
@@ -386,4 +470,3 @@ function mapMemoDocRowToModel(row) {
     updatedAt: row.updated_at
   };
 }
-
